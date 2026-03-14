@@ -1,17 +1,25 @@
-import ButtonAccount from "@/components/ButtonAccount";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/libs/next-auth";
+import DashboardHub from "@/components/legal-arena/DashboardHub";
+import {
+  listCaseSessionsForUser,
+  listScenarioOptions,
+} from "@/libs/game/store";
 
 export const dynamic = "force-dynamic";
 
-// This is a private page: It's protected by the layout.js component which ensures the user is authenticated.
-// It's a server compoment which means you can fetch data (like the user profile) before the page is rendered.
-// See https://shipfa.st/docs/tutorials/private-page
 export default async function Dashboard() {
+  const session = await getServerSession(authOptions);
+  const [cases, scenarios] = await Promise.all([
+    listCaseSessionsForUser(session.user.id),
+    Promise.resolve(listScenarioOptions()),
+  ]);
+
   return (
-    <main className="min-h-screen p-8 pb-24">
-      <section className="max-w-xl mx-auto space-y-8">
-        <ButtonAccount />
-        <h1 className="text-3xl md:text-4xl font-extrabold">Private Page</h1>
-      </section>
-    </main>
+    <DashboardHub
+      initialCases={cases}
+      scenarios={scenarios}
+      userName={session.user?.name || session.user?.email}
+    />
   );
 }
