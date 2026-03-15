@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/libs/next-auth";
 import { runCourtroomRound } from "@/libs/game/engine";
+import { applyVerdictToProgression } from "@/libs/game/progression";
 import {
   buildCasePayload,
   getCaseSessionDocumentForUser,
@@ -60,6 +61,7 @@ export async function POST(req, { params }) {
       speaker: "player",
       text: argument,
       citedFacts: result.citedFacts,
+      citedClaimIds: result.citedClaimIds,
       citedRules: result.citedRules,
       judgeNotes: {
         playerDelta: result.playerDelta,
@@ -74,6 +76,7 @@ export async function POST(req, { params }) {
       speaker: "opponent",
       text: result.opponentResponse,
       citedFacts: [],
+      citedClaimIds: [],
       citedRules: [],
       judgeNotes: {
         playerDelta: 0,
@@ -103,6 +106,14 @@ export async function POST(req, { params }) {
           opponent: caseSession.score.opponent,
         },
       };
+
+      await applyVerdictToProgression({
+        userId: session.user.id,
+        primaryCategory: caseSession.primaryCategory,
+        complexity: caseSession.complexity,
+        verdictWinner: result.verdict.winner,
+        highlights: result.verdict.highlights,
+      });
     }
 
     await caseSession.save();

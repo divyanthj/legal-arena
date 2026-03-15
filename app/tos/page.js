@@ -12,14 +12,14 @@ import config from "@/config";
 // You are an excellent lawyer.
 
 // I need your help to write a simple Terms & Services for my website. Here is some context:
-// - Website: https://shipfa.st
-// - Name: ShipFast
-// - Contact information: marc@shipfa.st
-// - Description: A JavaScript code boilerplate to help entrepreneurs launch their startups faster
+// - Website: https://legalarena.app
+// - Name: Legal Arena
+// - Contact information: support@legalarena.app
+// - Description: A legal training platform where users practice client intake, build case files, and argue simulated disputes
 // - Ownership: when buying a package, users can download code to create apps. They own the code but they do not have the right to resell it. They can ask for a full refund within 7 day after the purchase.
 // - User data collected: name, email and payment information
 // - Non-personal data collection: web cookies
-// - Link to privacy-policy: https://shipfa.st/privacy-policy
+// - Link to privacy-policy: https://legalarena.app/privacy-policy
 // - Governing Law: France
 // - Updates to the Terms: users will be updated by email
 
@@ -57,23 +57,23 @@ const TOS = () => {
           className="leading-relaxed whitespace-pre-wrap"
           style={{ fontFamily: "sans-serif" }}
         >
-          {`Last Updated: September 26, 2023
+          {`Last Updated: March 15, 2026
 
-Welcome to ShipFast!
+Welcome to Legal Arena!
 
-These Terms of Service ("Terms") govern your use of the ShipFast website at https://shipfa.st ("Website") and the services provided by ShipFast. By using our Website and services, you agree to these Terms.
+These Terms of Service ("Terms") govern your use of the Legal Arena website at https://legalarena.app ("Website") and the services provided by Legal Arena. By using our Website and services, you agree to these Terms.
 
-1. Description of ShipFast
+1. Description of Legal Arena
 
-ShipFast is a platform that offers a JavaScript code boilerplate to assist entrepreneurs in launching their startups more efficiently.
+Legal Arena is a legal training platform that provides interactive case simulations, client-intake exercises, and courtroom practice tools.
 
 2. Ownership and Usage Rights
 
-When you purchase a package from ShipFast, you gain the right to download and use the code provided for creating applications. You own the code you create but do not have the right to resell it. We offer a full refund within 7 days of purchase, as specified in our refund policy.
+When you purchase or use Legal Arena, you receive access to the training platform and its features for your own internal use. You may not resell, repackage, or redistribute the platform or its underlying content without permission.
 
 3. User Data and Privacy
 
-We collect and store user data, including name, email, and payment information, as necessary to provide our services. For details on how we handle your data, please refer to our Privacy Policy at https://shipfa.st/privacy-policy.
+We collect and store user data, including name, email, and payment information, as necessary to provide our services. For details on how we handle your data, please refer to our Privacy Policy at https://legalarena.app/privacy-policy.
 
 4. Non-Personal Data Collection
 
@@ -87,9 +87,9 @@ These Terms are governed by the laws of France.
 
 We may update these Terms from time to time. Users will be notified of any changes via email.
 
-For any questions or concerns regarding these Terms of Service, please contact us at marc@shipfa.st.
+For any questions or concerns regarding these Terms of Service, please contact us at support@legalarena.app.
 
-Thank you for using ShipFast!`}
+Thank you for using Legal Arena!`}
         </pre>
       </div>
     </main>

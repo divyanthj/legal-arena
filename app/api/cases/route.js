@@ -3,8 +3,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/libs/next-auth";
 import {
   createCaseSession,
-  listCaseSessionsForUser,
-  listScenarioOptions,
+  listDashboardDataForUser,
 } from "@/libs/game/store";
 
 export async function GET() {
@@ -15,11 +14,13 @@ export async function GET() {
   }
 
   try {
-    const cases = await listCaseSessionsForUser(session.user.id);
+    const dashboardData = await listDashboardDataForUser(session.user.id);
 
     return NextResponse.json({
-      cases,
-      scenarios: listScenarioOptions(),
+      cases: dashboardData.cases,
+      templates: dashboardData.templates,
+      categories: dashboardData.categories,
+      progression: dashboardData.progression,
     });
   } catch (error) {
     console.error(error);
@@ -38,7 +39,7 @@ export async function POST(req) {
     const body = await req.json();
     const caseSession = await createCaseSession({
       userId: session.user.id,
-      scenarioId: body?.scenarioId,
+      caseTemplateId: body?.caseTemplateId,
     });
 
     return NextResponse.json({ caseSession });

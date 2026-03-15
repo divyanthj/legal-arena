@@ -1,33 +1,26 @@
-# ShipFast — Javascript
+# Legal Arena
 
-Hey maker 👋 it's Marc from [ShipFast](https://shipfa.st/docs). Let's get your startup off the ground, FAST ⚡️
-
-<sub>**Watch/Star the repo to be notified when updates are pushed**</sub>
+A legal training app where users interview clients, build case files, argue simulated matters, and climb specialty leaderboards.
 
 ## Get Started
 
-1. Follow the [Get Started Tutorial](https://shipfa.st/docs) to clone the repo and run your local server 💻
+1. Install dependencies with `npm install`.
+2. Add your environment variables in `.env.local`.
+3. Run the app with `npm run dev`.
+4. Visit `/dashboard` after signing in.
 
-<sub>**Looking for the /pages router version?** Use this [documentation](https://shipfa.st/docs-old) instead</sub>
+## Environment
 
-2. Follow the [Ship In 5 Minutes Tutorial](https://shipfa.st/docs/tutorials/ship-in-5-minutes) to learn the foundation and ship your app quickly ⚡️
+- `MONGODB_URI`
+- `NEXTAUTH_SECRET`
+- `GOOGLE_ID`
+- `GOOGLE_SECRET`
+- `OPENAI_API_KEY`
+- `ADMINS`
+- `CASE_GENERATOR_API_KEY`
 
-## Links
+## Notes
 
-- [📚 Documentation](https://shipfa.st/docs)
-- [📣 Updates](https://shipfast.beehiiv.com/)
-- [🧑‍💻 Discord](https://shipfa.st/dashboard)
-
-## Support
-
-Reach out to me on [Twitter](https://twitter.com/marc_louvion) or marc@shipfa.st
-
-\_
-
-Let's ship it, FAST ⚡️
-
-P.S.
-
-- Want to showcase your startups? Get your [Indie Page](https://indiepa.ge?ref=shipfast_readme) and share your entrepreneur's journey. Join 3,132 founders ⭐️
-- Don't get banned from Stripe for 1 dispute. Use [ByeDispute](https://byedispute.com/?ref=shipfast_readme) to prevent them from happenening 🛡️
-- Make your launch go viral and get your first customers with [LaunchViral](https://launchvir.al/?ref=shipfast_readme) 🚀
+- The dashboard contains the playable case workflow.
+- `/dashboard/admin` is the admin lab for creating and generating case templates.
+- Generated and manually authored case templates are stored in MongoDB.

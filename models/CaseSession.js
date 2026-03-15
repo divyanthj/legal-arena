@@ -16,6 +16,15 @@ const interviewEntrySchema = mongoose.Schema(
       type: String,
       required: true,
     },
+    sourceType: {
+      type: String,
+      enum: ["question", "claim", "evidence", "system"],
+      default: "question",
+    },
+    relatedFactIds: {
+      type: [String],
+      default: [],
+    },
     createdAt: {
       type: Date,
       default: Date.now,
@@ -40,6 +49,10 @@ const courtroomEntrySchema = mongoose.Schema(
       required: true,
     },
     citedFacts: {
+      type: [String],
+      default: [],
+    },
+    citedClaimIds: {
       type: [String],
       default: [],
     },
@@ -90,15 +103,34 @@ const caseSessionSchema = mongoose.Schema(
       required: true,
       trim: true,
     },
-    scenarioId: {
+    caseTemplateId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "CaseTemplate",
+      required: true,
+    },
+    templateSlug: {
       type: String,
       required: true,
       trim: true,
+    },
+    scenarioId: {
+      type: String,
+      trim: true,
+      default: "",
     },
     practiceArea: {
       type: String,
       required: true,
       trim: true,
+    },
+    primaryCategory: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    complexity: {
+      type: Number,
+      default: 1,
     },
     status: {
       type: String,
@@ -155,7 +187,31 @@ const caseSessionSchema = mongoose.Schema(
         type: [String],
         default: [],
       },
+      knownFacts: {
+        type: [String],
+        default: [],
+      },
+      knownClaims: {
+        type: [String],
+        default: [],
+      },
+      disputedFacts: {
+        type: [String],
+        default: [],
+      },
+      corroboratedFacts: {
+        type: [String],
+        default: [],
+      },
+      sourceLinks: {
+        type: [String],
+        default: [],
+      },
       discoveredFactIds: {
+        type: [String],
+        default: [],
+      },
+      discoveredClaimIds: {
         type: [String],
         default: [],
       },

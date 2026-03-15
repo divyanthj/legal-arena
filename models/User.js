@@ -1,6 +1,49 @@
 import mongoose from "mongoose";
 import toJSON from "./plugins/toJSON";
 
+const categoryProgressSchema = mongoose.Schema(
+  {
+    categorySlug: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    xp: {
+      type: Number,
+      default: 0,
+    },
+    rating: {
+      type: Number,
+      default: 1000,
+    },
+    completedCases: {
+      type: Number,
+      default: 0,
+    },
+    wins: {
+      type: Number,
+      default: 0,
+    },
+    losses: {
+      type: Number,
+      default: 0,
+    },
+    draws: {
+      type: Number,
+      default: 0,
+    },
+    unlockedComplexity: {
+      type: Number,
+      default: 1,
+    },
+    recentPerformance: {
+      type: [String],
+      default: [],
+    },
+  },
+  { _id: false }
+);
+
 // USER SCHEMA
 const userSchema = mongoose.Schema(
   {
@@ -35,6 +78,36 @@ const userSchema = mongoose.Schema(
     hasAccess: {
       type: Boolean,
       default: false,
+    },
+    progression: {
+      overallXp: {
+        type: Number,
+        default: 0,
+      },
+      overallRating: {
+        type: Number,
+        default: 1000,
+      },
+      completedCases: {
+        type: Number,
+        default: 0,
+      },
+      wins: {
+        type: Number,
+        default: 0,
+      },
+      losses: {
+        type: Number,
+        default: 0,
+      },
+      draws: {
+        type: Number,
+        default: 0,
+      },
+      categoryStats: {
+        type: [categoryProgressSchema],
+        default: [],
+      },
     },
   },
   {

@@ -34,7 +34,7 @@ export async function POST(req, { params }) {
 
     const finalized = finalizeFactSheetInput({
       factSheet: body?.factSheet || caseSession.factSheet,
-      scenarioId: caseSession.scenarioId,
+      caseTemplate: caseSession.caseTemplateId,
     });
 
     if (finalized.missing.length) {

@@ -8,7 +8,7 @@ export const legalArenaLawbook = [
       "The side asking the court for relief must point to specific facts, records, or testimony that support the request.",
     guidance:
       "Strong arguments cite dates, documents, and direct observations instead of broad accusations.",
-    tags: ["evidence", "records", "credibility"],
+    tags: ["evidence", "records", "credibility", "criminal"],
   },
   {
     id: "notice-and-fair-warning",
@@ -35,7 +35,7 @@ export const legalArenaLawbook = [
       "Receipts, photos, timestamps, and written messages usually carry more weight than unsupported recollections.",
     guidance:
       "When stories conflict, the side with consistent records gains credibility.",
-    tags: ["records", "evidence", "credibility"],
+    tags: ["records", "evidence", "credibility", "criminal"],
   },
   {
     id: "mitigation-and-reasonableness",
@@ -55,6 +55,33 @@ export const legalArenaLawbook = [
       "Narrow, well-supported remedies usually land better than sweeping demands.",
     tags: ["damages", "remedy", "fairness"],
   },
+  {
+    id: "presumption-and-proof",
+    title: "Rule 7: Suspicion Is Not Proof",
+    principle:
+      "In criminal-style matters, accusation alone is not enough; the record must support each key element with reliable proof.",
+    guidance:
+      "Weak inferences and shaky identifications carry less weight than direct evidence and consistent testimony.",
+    tags: ["criminal", "evidence", "credibility"],
+  },
+  {
+    id: "credibility-under-pressure",
+    title: "Rule 8: Credibility Turns on Consistency",
+    principle:
+      "When timelines shift or witnesses contradict themselves, the court becomes more cautious about accepting the accusation.",
+    guidance:
+      "Arguments are stronger when they identify inconsistencies and tie them to the burden of proof.",
+    tags: ["criminal", "credibility", "records"],
+  },
+  {
+    id: "procedure-shapes-fairness",
+    title: "Rule 9: Procedure Protects Fairness",
+    principle:
+      "The court considers whether investigators, agencies, or accusers followed a fair process before relying on the result.",
+    guidance:
+      "Sloppy notice, weak verification, or rushed procedure can undermine the case even when suspicion exists.",
+    tags: ["criminal", "notice", "fairness", "administrative"],
+  },
 ];
 
 export const getLawbookRules = (tags = []) => {
@@ -62,7 +89,9 @@ export const getLawbookRules = (tags = []) => {
     return legalArenaLawbook;
   }
 
-  return legalArenaLawbook.filter((rule) =>
+  const matchedRules = legalArenaLawbook.filter((rule) =>
     rule.tags.some((tag) => tags.includes(tag))
   );
+
+  return matchedRules.length > 0 ? matchedRules : legalArenaLawbook;
 };

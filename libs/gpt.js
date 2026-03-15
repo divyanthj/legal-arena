@@ -1,7 +1,9 @@
 import "server-only";
 
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
-const DEFAULT_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
+const DEFAULT_MODEL = process.env.OPENAI_MODEL || "gpt-5.4";
+const usesMaxCompletionTokens = (model = "") =>
+  /^gpt-5/i.test(model) || /^o[134]/i.test(model);
 
 const extractJsonObject = (value) => {
   if (!value || typeof value !== "string") {
@@ -34,12 +36,20 @@ export const requestStructuredCompletion = async ({
   model = DEFAULT_MODEL,
   temperature = 0.3,
   maxTokens = 900,
+  throwOnError = false,
 }) => {
   if (!process.env.OPENAI_API_KEY) {
+    if (throwOnError) {
+      throw new Error("OPENAI_API_KEY is not configured.");
+    }
     return null;
   }
 
   try {
+    const tokenPayload = usesMaxCompletionTokens(model)
+      ? { max_completion_tokens: maxTokens }
+      : { max_tokens: maxTokens };
+
     const res = await fetch(OPENAI_URL, {
       method: "POST",
       headers: {
@@ -49,7 +59,7 @@ export const requestStructuredCompletion = async ({
       body: JSON.stringify({
         model,
         temperature,
-        max_tokens: maxTokens,
+        ...tokenPayload,
         response_format: { type: "json_object" },
         user: userId,
         messages: [
@@ -68,6 +78,9 @@ export const requestStructuredCompletion = async ({
     if (!res.ok) {
       const errorBody = await res.text();
       console.error("OpenAI error:", res.status, errorBody);
+      if (throwOnError) {
+        throw new Error(`OpenAI API error ${res.status}: ${errorBody}`);
+      }
       return null;
     }
 
@@ -77,6 +90,9 @@ export const requestStructuredCompletion = async ({
     return extractJsonObject(content);
   } catch (error) {
     console.error("OpenAI request failed:", error);
+    if (throwOnError) {
+      throw error;
+    }
     return null;
   }
 };

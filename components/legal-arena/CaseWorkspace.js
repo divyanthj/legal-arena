@@ -31,6 +31,7 @@ export default function CaseWorkspace({ initialCase }) {
   const [question, setQuestion] = useState("");
   const [argument, setArgument] = useState("");
   const [working, setWorking] = useState(false);
+  const [pendingSpeaker, setPendingSpeaker] = useState("");
   const [factSheetDraft, setFactSheetDraft] = useState({
     summary: initialCase.factSheet.summary || "",
     theory: initialCase.factSheet.theory || "",
@@ -38,6 +39,8 @@ export default function CaseWorkspace({ initialCase }) {
     timeline: joinLines(initialCase.factSheet.timeline),
     supportingFacts: joinLines(initialCase.factSheet.supportingFacts),
     risks: joinLines(initialCase.factSheet.risks),
+    disputedFacts: joinLines(initialCase.factSheet.disputedFacts),
+    corroboratedFacts: joinLines(initialCase.factSheet.corroboratedFacts),
   });
 
   useEffect(() => {
@@ -48,6 +51,8 @@ export default function CaseWorkspace({ initialCase }) {
       timeline: joinLines(caseSession.factSheet.timeline),
       supportingFacts: joinLines(caseSession.factSheet.supportingFacts),
       risks: joinLines(caseSession.factSheet.risks),
+      disputedFacts: joinLines(caseSession.factSheet.disputedFacts),
+      corroboratedFacts: joinLines(caseSession.factSheet.corroboratedFacts),
     });
   }, [caseSession]);
 
@@ -59,6 +64,8 @@ export default function CaseWorkspace({ initialCase }) {
     timeline: splitLines(factSheetDraft.timeline),
     supportingFacts: splitLines(factSheetDraft.supportingFacts),
     risks: splitLines(factSheetDraft.risks),
+    disputedFacts: splitLines(factSheetDraft.disputedFacts),
+    corroboratedFacts: splitLines(factSheetDraft.corroboratedFacts),
   });
 
   const handleInterviewSubmit = async (event) => {
@@ -66,6 +73,7 @@ export default function CaseWorkspace({ initialCase }) {
     if (!question.trim()) return;
 
     setWorking(true);
+    setPendingSpeaker(caseSession.premise.clientName);
 
     try {
       const { caseSession: nextCase } = await apiClient.post(
@@ -78,6 +86,7 @@ export default function CaseWorkspace({ initialCase }) {
     } catch (error) {
       console.error(error);
     } finally {
+      setPendingSpeaker("");
       setWorking(false);
     }
   };
@@ -106,6 +115,7 @@ export default function CaseWorkspace({ initialCase }) {
     if (!argument.trim()) return;
 
     setWorking(true);
+    setPendingSpeaker("Opposing counsel");
 
     try {
       const { caseSession: nextCase } = await apiClient.post(
@@ -118,6 +128,7 @@ export default function CaseWorkspace({ initialCase }) {
     } catch (error) {
       console.error(error);
     } finally {
+      setPendingSpeaker("");
       setWorking(false);
     }
   };
@@ -141,6 +152,12 @@ export default function CaseWorkspace({ initialCase }) {
                   </Link>
                   <span className="badge badge-outline border-primary/40 text-neutral-content">
                     {caseSession.practiceArea}
+                  </span>
+                  <span className="badge badge-outline border-primary/40 text-neutral-content">
+                    {caseSession.primaryCategory}
+                  </span>
+                  <span className="badge badge-outline border-primary/40 text-neutral-content">
+                    Complexity {caseSession.complexity}
                   </span>
                 </div>
                 <h1 className="mt-4 font-serif text-4xl leading-tight md:text-5xl">
@@ -211,6 +228,15 @@ export default function CaseWorkspace({ initialCase }) {
                         </p>
                       </article>
                     ))}
+                    {working && pendingSpeaker && (
+                      <article className="rounded-box bg-base-200 p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="font-semibold">{pendingSpeaker}</p>
+                          <span className="loading loading-dots loading-sm" />
+                        </div>
+                        <p className="mt-2 leading-7">{pendingSpeaker} is typing...</p>
+                      </article>
+                    )}
                   </div>
 
                   <form className="mt-6 space-y-3" onSubmit={handleInterviewSubmit}>
@@ -337,6 +363,15 @@ export default function CaseWorkspace({ initialCase }) {
                             )}
                         </article>
                       ))
+                    )}
+                    {working && pendingSpeaker === "Opposing counsel" && (
+                      <article className="rounded-box bg-base-200 p-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="font-semibold">Opposing counsel</p>
+                          <span className="loading loading-dots loading-sm" />
+                        </div>
+                        <p className="mt-2 leading-7">Opposing counsel is typing...</p>
+                      </article>
                     )}
                   </div>
 
@@ -484,6 +519,36 @@ export default function CaseWorkspace({ initialCase }) {
                         setFactSheetDraft((current) => ({
                           ...current,
                           risks: event.target.value,
+                        }))
+                      }
+                      disabled={!isInterview}
+                    />
+                  </label>
+
+                  <label className="form-control">
+                    <span className="label-text font-semibold">Disputed facts</span>
+                    <textarea
+                      className="textarea textarea-bordered h-24"
+                      value={factSheetDraft.disputedFacts}
+                      onChange={(event) =>
+                        setFactSheetDraft((current) => ({
+                          ...current,
+                          disputedFacts: event.target.value,
+                        }))
+                      }
+                      disabled={!isInterview}
+                    />
+                  </label>
+
+                  <label className="form-control">
+                    <span className="label-text font-semibold">Corroborated facts</span>
+                    <textarea
+                      className="textarea textarea-bordered h-24"
+                      value={factSheetDraft.corroboratedFacts}
+                      onChange={(event) =>
+                        setFactSheetDraft((current) => ({
+                          ...current,
+                          corroboratedFacts: event.target.value,
                         }))
                       }
                       disabled={!isInterview}

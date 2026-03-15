@@ -51,11 +51,15 @@ export async function POST(req, { params }) {
       role: "player",
       speaker: "You",
       text: question,
+      sourceType: "question",
+      relatedFactIds: [],
     });
     caseSession.interviewTranscript.push({
       role: "client",
       speaker: caseSession.premise.clientName,
       text: result.clientResponse,
+      sourceType: "claim",
+      relatedFactIds: result.relatedFactIds || [],
     });
     caseSession.factSheet = result.nextFactSheet;
 
