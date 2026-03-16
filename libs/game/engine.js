@@ -7,6 +7,39 @@ const uniqueList = (items = []) =>
   [...new Set(items.filter(Boolean).map((item) => item.trim()).filter(Boolean))];
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+const tokenize = (value = "") =>
+  String(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((token) => token.length > 2);
+
+const humanizeClaimText = (value = "") => {
+  const text = String(value || "").trim();
+
+  if (!text) {
+    return "";
+  }
+
+  return text
+    .replace(/\bfrom the modeled claims\b/gi, "")
+    .replace(/\bmodeled claims\b/gi, "what I remember")
+    .replace(/\bclient account pending refinement\b/gi, "I need to explain that more clearly")
+    .replace(/\bopponent disputes the client's framing\b/gi, "they're going to dispute my side of it")
+    .replace(/\bthe client\b/gi, "I")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+\./g, ".")
+    .trim();
+};
+
+const toSpokenSentence = (value = "") => {
+  const text = humanizeClaimText(value);
+  if (!text) {
+    return "";
+  }
+
+  return text.charAt(0).toLowerCase() + text.slice(1);
+};
 
 const getTemplate = (caseSession) =>
   caseSession.caseTemplateId?.toJSON
@@ -97,17 +130,26 @@ const mergeFactSheet = (current, patch, template) => {
 };
 
 const scoreFactForQuestion = (fact, question) => {
-  const normalizedQuestion = question.toLowerCase();
+  const questionTokens = tokenize(question);
   const keywords = uniqueList([
     ...(fact.discoverability?.keywords || []),
     ...((fact.claims || []).flatMap((claim) => claim.keywords || [])),
   ]);
+  const searchableTokens = uniqueList([
+    ...keywords.flatMap((keyword) => tokenize(keyword)),
+    ...tokenize(fact.label),
+    ...tokenize(fact.canonicalDetail),
+    ...((fact.claims || []).flatMap((claim) => tokenize(claim.claimedDetail))),
+  ]);
 
-  const matchCount = keywords.filter((keyword) =>
-    normalizedQuestion.includes(keyword.toLowerCase())
+  const exactMatchCount = searchableTokens.filter((token) =>
+    questionTokens.includes(token)
+  ).length;
+  const partialMatchCount = searchableTokens.filter((token) =>
+    question.toLowerCase().includes(token)
   ).length;
 
-  return matchCount + (fact.discoverability?.priority || 0) / 10;
+  return exactMatchCount * 2 + partialMatchCount * 0.5 + (fact.discoverability?.priority || 0) / 10;
 };
 
 const pickRelevantFacts = (template, question, discoveredFactIds = []) => {
@@ -156,34 +198,48 @@ const buildInterviewFallback = ({ template, question, factSheet }) => {
     }))
     .filter((item) => item.clientClaim);
 
+  const remainingFacts = (safeTemplate.canonicalFacts || []).filter(
+    (fact) => !factSheet.discoveredFactIds.includes(fact.factId)
+  );
+  const leadQuestion = buildOpenQuestions(safeTemplate, factSheet.discoveredFactIds)[0];
+  const lastKnownClaim = (factSheet.knownClaims || []).slice(-1)[0];
+
   const clientResponse =
     clientClaims.length > 0
       ? clientClaims
           .map((item, index) =>
             index === 0
-              ? `From my side, ${item.clientClaim.claimedDetail.charAt(0).toLowerCase()}${item.clientClaim.claimedDetail.slice(1)}`
-              : `Also, ${item.clientClaim.claimedDetail.charAt(0).toLowerCase()}${item.clientClaim.claimedDetail.slice(1)}`
+              ? `From my side, ${toSpokenSentence(item.clientClaim.claimedDetail)}`
+              : `Also, ${toSpokenSentence(item.clientClaim.claimedDetail)}`
           )
           .join(" ")
-      : "I need help narrowing that down, but I think the records and timeline will matter most.";
+      : remainingFacts.length === 0
+      ? lastKnownClaim
+        ? `That's still my position. The clearest point I can give you is that ${toSpokenSentence(lastKnownClaim)}`
+        : "I think we've covered the main facts from my side. We may need to lean on the documents and weak spots now."
+      : leadQuestion
+      ? `I'm not sure I can answer that directly yet. It may help if you ask me about ${leadQuestion.charAt(0).toLowerCase()}${leadQuestion.slice(1)}`
+      : "I may be mixing up the details. Ask me about the timeline, the records, or what the other side might challenge.";
 
   const patch = {
     summary: `${safeTemplate.overview} ${safeTemplate.clientName} wants relief and is building the strongest client-side record available.`,
     timeline: clientClaims
       .filter((item) => item.fact.kind === "timeline")
-      .map((item) => item.clientClaim.claimedDetail),
+      .map((item) => humanizeClaimText(item.clientClaim.claimedDetail)),
     supportingFacts: clientClaims
       .filter((item) => item.fact.kind === "supporting")
-      .map((item) => item.clientClaim.claimedDetail),
+      .map((item) => humanizeClaimText(item.clientClaim.claimedDetail)),
     risks: clientClaims
       .filter((item) => item.fact.kind === "risk")
-      .map((item) => item.clientClaim.claimedDetail),
+      .map((item) => humanizeClaimText(item.clientClaim.claimedDetail)),
     theory: safeTemplate.starterTheory,
     desiredRelief: safeTemplate.desiredRelief,
     knownFacts: clientClaims
       .filter((item) => item.fact.truthStatus === "verified" && item.fact.evidenceRefs?.length)
       .map((item) => item.fact.canonicalDetail),
-    knownClaims: clientClaims.map((item) => item.clientClaim.claimedDetail),
+    knownClaims: clientClaims.map((item) =>
+      humanizeClaimText(item.clientClaim.claimedDetail)
+    ),
     disputedFacts: clientClaims
       .filter(
         (item) =>

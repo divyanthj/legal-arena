@@ -53,6 +53,8 @@ const buildGenerationPrompt = ({ category, complexity, prompt }) => ({
       "Each canonical fact must include both a client claim and an opponent claim.",
       "At least one canonical fact should be a risk or disputed point.",
       "Evidence items should correspond to the canonical facts.",
+      "Write claims in natural spoken language that a client or opponent would actually say.",
+      "Do not use meta phrases like 'modeled claims', 'client account pending refinement', 'the client alleges', or other schema-ish wording in any claim text.",
       "Title and subtitle must feel like a polished courtroom game mission, not a generic case caption.",
       "Avoid boring titles like 'State v. Smith', 'Contract Dispute Case', 'Marital Asset Dispute', or other plain docket-style names.",
       "Prefer short, vivid, memorable titles in the style of 'Security Deposit Showdown', 'The Vanishing Invoice', or 'Midnight Tow Trouble'.",
@@ -234,7 +236,7 @@ const ensurePartyCoverage = (claims = []) => {
   if (!parties.includes("client")) {
     normalized.unshift({
       party: "client",
-      claimedDetail: "Client account pending refinement.",
+      claimedDetail: "I need to explain that more clearly.",
       stance: "admits",
       confidence: 0.7,
       accessLevel: "direct",
@@ -246,7 +248,7 @@ const ensurePartyCoverage = (claims = []) => {
   if (!parties.includes("opponent")) {
     normalized.push({
       party: "opponent",
-      claimedDetail: "Opponent disputes the client's framing.",
+      claimedDetail: "They dispute my version of what happened.",
       stance: "distorts",
       confidence: 0.7,
       accessLevel: "partial",
