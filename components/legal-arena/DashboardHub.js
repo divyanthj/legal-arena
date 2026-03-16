@@ -238,12 +238,12 @@ export default function DashboardHub({
                         </p>
                         <div className="mt-4 flex flex-wrap gap-4 text-sm">
                           <span>
-                            <span className="font-semibold">Client:</span>{" "}
-                            {template.clientName}
+                            <span className="font-semibold">Plaintiff:</span>{" "}
+                            {template.plaintiffName || template.clientName}
                           </span>
                           <span>
-                            <span className="font-semibold">Opponent:</span>{" "}
-                            {template.opponentName}
+                            <span className="font-semibold">Defendant:</span>{" "}
+                            {template.defendantName || template.opponentName}
                           </span>
                         </div>
                         <p
@@ -307,9 +307,9 @@ export default function DashboardHub({
                         <div className="mt-4 flex flex-wrap gap-4 text-sm text-base-content/70">
                           <span>{item.primaryCategory}</span>
                           <span>Complexity {item.complexity}</span>
-                          <span>{item.premise?.clientName}</span>
+                          <span>{item.plaintiffName || item.premise?.clientName}</span>
                           <span>vs.</span>
-                          <span>{item.premise?.opponentName}</span>
+                          <span>{item.defendantName || item.premise?.opponentName}</span>
                         </div>
                       </Link>
                     ))

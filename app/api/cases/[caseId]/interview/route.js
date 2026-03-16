@@ -27,7 +27,7 @@ export async function POST(req, { params }) {
 
     if (!question) {
       return NextResponse.json(
-        { error: "A client question is required." },
+        { error: "A party question is required." },
         { status: 400 }
       );
     }
@@ -43,7 +43,7 @@ export async function POST(req, { params }) {
 
     if (caseSession.status !== "interview") {
       return NextResponse.json(
-        { error: "This case has already moved beyond the client interview." },
+        { error: "This case has already moved beyond the interview stage." },
         { status: 400 }
       );
     }
@@ -62,9 +62,12 @@ export async function POST(req, { params }) {
       relatedFactIds: [],
     });
     caseSession.interviewTranscript.push({
-      role: "client",
-      speaker: caseSession.premise.clientName,
-      text: result.clientResponse,
+      role: "party",
+      speaker:
+        caseSession.playerSide === "opponent"
+          ? caseSession.premise.opponentName
+          : caseSession.premise.clientName,
+      text: result.partyResponse,
       sourceType: "claim",
       relatedFactIds: result.relatedFactIds || [],
     });

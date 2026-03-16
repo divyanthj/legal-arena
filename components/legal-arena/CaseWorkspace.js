@@ -27,6 +27,24 @@ const winnerLabel = {
   draw: "The court called it too close",
 };
 
+const getPlayerPartyName = (caseSession) =>
+  caseSession.playerPartyName ||
+  (caseSession.playerSide === "opponent"
+    ? caseSession.premise.opponentName
+    : caseSession.premise.clientName);
+
+const getOpponentPartyName = (caseSession) =>
+  caseSession.opponentPartyName ||
+  (caseSession.playerSide === "opponent"
+    ? caseSession.premise.clientName
+    : caseSession.premise.opponentName);
+
+const getPlaintiffName = (caseSession) =>
+  caseSession.plaintiffName || caseSession.premise.clientName;
+
+const getDefendantName = (caseSession) =>
+  caseSession.defendantName || caseSession.premise.opponentName;
+
 export default function CaseWorkspace({ initialCase }) {
   const router = useRouter();
   const [caseSession, setCaseSession] = useState(initialCase);
@@ -75,7 +93,7 @@ export default function CaseWorkspace({ initialCase }) {
     if (!question.trim()) return;
 
     setWorking(true);
-    setPendingSpeaker(caseSession.premise.clientName);
+    setPendingSpeaker(getPlayerPartyName(caseSession));
 
     try {
       const { caseSession: nextCase } = await apiClient.post(
@@ -117,7 +135,7 @@ export default function CaseWorkspace({ initialCase }) {
     if (!argument.trim()) return;
 
     setWorking(true);
-    setPendingSpeaker("Opposing counsel");
+    setPendingSpeaker(getOpponentPartyName(caseSession));
 
     try {
       const { caseSession: nextCase } = await apiClient.post(
@@ -160,6 +178,12 @@ export default function CaseWorkspace({ initialCase }) {
   const isInterview = caseSession.status === "interview";
   const isVerdict = caseSession.status === "verdict";
   const isExited = caseSession.status === "exited";
+  const playerPartyName = getPlayerPartyName(caseSession);
+  const opponentPartyName = getOpponentPartyName(caseSession);
+  const plaintiffName = getPlaintiffName(caseSession);
+  const defendantName = getDefendantName(caseSession);
+  const sideBadgeLabel =
+    caseSession.playerSide === "opponent" ? "Defendant Side" : "Plaintiff Side";
 
   return (
     <main className="min-h-screen bg-base-200 px-4 py-6 md:px-8 md:py-10">
@@ -184,6 +208,9 @@ export default function CaseWorkspace({ initialCase }) {
                   <span className="badge badge-outline border-primary/40 text-neutral-content">
                     Complexity {caseSession.complexity}
                   </span>
+                  <span className="badge badge-outline border-primary/40 text-neutral-content">
+                    {sideBadgeLabel}
+                  </span>
                 </div>
                 <h1 className="mt-4 font-serif text-4xl leading-tight md:text-5xl">
                   {caseSession.title}
@@ -192,11 +219,14 @@ export default function CaseWorkspace({ initialCase }) {
                   {caseSession.premise.overview}
                 </p>
                 <div className="mt-4 flex flex-wrap gap-4 text-sm text-neutral-content/70">
-                  <span>{caseSession.premise.clientName}</span>
+                  <span>Plaintiff: {plaintiffName}</span>
                   <span>vs.</span>
-                  <span>{caseSession.premise.opponentName}</span>
+                  <span>Defendant: {defendantName}</span>
                   <span>{caseSession.premise.courtName}</span>
                 </div>
+                <p className="mt-3 text-sm text-primary-content/75">
+                  You represent {playerPartyName} against {opponentPartyName}.
+                </p>
               </div>
 
               <div className="flex flex-col items-start gap-3 md:items-end">
@@ -226,11 +256,11 @@ export default function CaseWorkspace({ initialCase }) {
                         Step 1
                       </p>
                       <h2 className="mt-2 text-2xl font-bold">
-                        Collect the client&apos;s facts
+                        Collect your side&apos;s facts
                       </h2>
                     </div>
                     <span className="text-sm text-base-content/55">
-                      Ask focused questions and refine the case file.
+                      Interview {playerPartyName} and refine the case file.
                     </span>
                   </div>
 
@@ -239,7 +269,7 @@ export default function CaseWorkspace({ initialCase }) {
                       <article
                         key={`${entry.createdAt}-${index}`}
                         className={`rounded-box p-4 ${
-                          entry.role === "client"
+                          entry.role !== "player"
                             ? "bg-base-200"
                             : "ml-auto max-w-[90%] bg-primary/10"
                         }`}
@@ -269,7 +299,7 @@ export default function CaseWorkspace({ initialCase }) {
                   <form className="mt-6 space-y-3" onSubmit={handleInterviewSubmit}>
                     <textarea
                       className="textarea textarea-bordered h-32 w-full"
-                      placeholder="Ask the client about documents, dates, witnesses, notice, or any weak spots you need to understand."
+                      placeholder={`Ask ${playerPartyName} about documents, dates, witnesses, notice, or any weak spots you need to understand.`}
                       value={question}
                       onChange={(event) => setQuestion(event.target.value)}
                     />
@@ -291,7 +321,7 @@ export default function CaseWorkspace({ initialCase }) {
                           {working && (
                             <span className="loading loading-spinner loading-xs" />
                           )}
-                          Ask Client
+                          Interview Party
                         </button>
                       </div>
                     </div>
@@ -385,7 +415,7 @@ export default function CaseWorkspace({ initialCase }) {
                             <p className="font-semibold">
                               {entry.speaker === "player"
                                 ? "You"
-                                : caseSession.premise.opponentName}
+                                : opponentPartyName}
                             </p>
                             <p className="text-xs text-base-content/45">
                               Round {entry.round}
@@ -419,25 +449,25 @@ export default function CaseWorkspace({ initialCase }) {
                         </article>
                       ))
                     )}
-                    {working && pendingSpeaker === "Opposing counsel" && (
+                    {working && pendingSpeaker === opponentPartyName && (
                       <article className="rounded-box bg-base-200 p-4">
                         <div className="flex items-center justify-between gap-3">
-                          <p className="font-semibold">Opposing counsel</p>
+                          <p className="font-semibold">{opponentPartyName}</p>
                           <span className="loading loading-dots loading-sm" />
                         </div>
-                        <p className="mt-2 leading-7">Opposing counsel is typing...</p>
+                        <p className="mt-2 leading-7">{opponentPartyName} is typing...</p>
                       </article>
                     )}
                   </div>
 
                   {!isVerdict && (
                     <form className="mt-6 space-y-3" onSubmit={handleCourtroomSubmit}>
-                      <textarea
-                        className="textarea textarea-bordered h-40 w-full"
-                        placeholder="Deliver your argument. Cite the fact sheet, confront the weakest defense point, and tie your remedy to the lawbook."
-                        value={argument}
-                        onChange={(event) => setArgument(event.target.value)}
-                      />
+                    <textarea
+                      className="textarea textarea-bordered h-40 w-full"
+                      placeholder={`Deliver your argument for ${playerPartyName}. Cite the fact sheet, confront the weakest point on ${opponentPartyName}'s side, and tie your position to the lawbook.`}
+                      value={argument}
+                      onChange={(event) => setArgument(event.target.value)}
+                    />
                       <div className="flex items-center justify-end">
                         <button className="btn btn-primary" disabled={working}>
                           {working && (

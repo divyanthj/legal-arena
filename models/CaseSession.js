@@ -5,7 +5,7 @@ const interviewEntrySchema = mongoose.Schema(
   {
     role: {
       type: String,
-      enum: ["player", "client"],
+      enum: ["player", "client", "party"],
       required: true,
     },
     speaker: {
@@ -131,6 +131,11 @@ const caseSessionSchema = mongoose.Schema(
     complexity: {
       type: Number,
       default: 1,
+    },
+    playerSide: {
+      type: String,
+      enum: ["client", "opponent"],
+      default: "client",
     },
     status: {
       type: String,

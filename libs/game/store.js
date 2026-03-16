@@ -14,6 +14,11 @@ import { DEFAULT_CATEGORY_SLUG } from "./categories";
 
 const toPlain = (doc) => (doc?.toJSON ? doc.toJSON() : doc);
 const CASE_EXIT_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_PLAYER_SIDE = "client";
+const OPPOSING_SIDE = {
+  client: "opponent",
+  opponent: "client",
+};
 
 const normalizeClientIntakeStatement = (value = "") => {
   const text = String(value || "").trim();
@@ -28,6 +33,93 @@ const normalizeClientIntakeStatement = (value = "") => {
     .replace(/^\s*counsel[:,]?\s*/i, "")
     .replace(/\s{2,}/g, " ")
     .trim();
+};
+
+const getPlayerSide = (caseSession) =>
+  caseSession?.playerSide === "opponent" ? "opponent" : DEFAULT_PLAYER_SIDE;
+
+const getOpposingSide = (side) => OPPOSING_SIDE[side] || DEFAULT_PLAYER_SIDE;
+
+const getPartyName = (template, side) =>
+  side === "opponent" ? template.opponentName : template.clientName;
+
+const getSideLabel = (side) => (side === "opponent" ? "Defendant" : "Plaintiff");
+
+const humanizePartyClaim = (value = "") =>
+  String(value || "")
+    .trim()
+    .replace(
+      /\bthe opponent would use this point to challenge the client's credibility:\s*/i,
+      ""
+    )
+    .replace(
+      /\bthe opponent is likely to minimize the importance of this event or frame it differently:\s*/i,
+      ""
+    )
+    .replace(
+      /\bthe opponent disputes the client's framing and says the fact does not prove liability:\s*/i,
+      ""
+    )
+    .replace(/\bi don't think this should matter much, but\s*/i, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+const buildOverviewForSide = (template, side) => {
+  if (side === "client") {
+    return template.overview;
+  }
+
+  const requestedRelief = String(template.desiredRelief || "").trim();
+
+  return requestedRelief
+    ? `${template.opponentName} is defending against ${template.clientName}'s request for ${requestedRelief.charAt(0).toLowerCase()}${requestedRelief.slice(
+        1
+      )}`
+    : `${template.opponentName} is defending against ${template.clientName}'s claims in ${template.courtName}.`;
+};
+
+const buildDesiredReliefForSide = (template, side) => {
+  if (side === "client") {
+    return template.desiredRelief;
+  }
+
+  return `Deny or materially reduce ${template.clientName}'s requested relief.`;
+};
+
+const buildStarterTheoryForSide = (template, side) => {
+  if (side === "client") {
+    return template.starterTheory;
+  }
+
+  return `${template.opponentName} should prevail because the record leaves enough dispute, credibility pressure, or proof gaps to defeat ${template.clientName}'s request for relief.`;
+};
+
+const buildOpeningStatementForSide = (template, side) => {
+  if (side === "client") {
+    return normalizeClientIntakeStatement(template.openingStatement);
+  }
+
+  const prioritizedFacts = (template.canonicalFacts || [])
+    .slice()
+    .sort(
+      (left, right) =>
+        (right.discoverability?.priority || 0) - (left.discoverability?.priority || 0)
+    );
+
+  const claim =
+    prioritizedFacts
+      .map((fact) => (fact.claims || []).find((item) => item.party === side))
+      .find((item) => item?.claimedDetail) || null;
+
+  if (claim) {
+    const detail = humanizePartyClaim(claim.claimedDetail);
+
+    if (detail) {
+      return detail;
+    }
+  }
+
+  return `${template.opponentName} disputes ${template.clientName}'s request for relief and wants the court to reject or reduce it.`;
 };
 
 const getTemplateSlugFromSession = (caseSession) =>
@@ -122,6 +214,8 @@ const buildTemplateCard = ({ template, progression, cooldownEndsAt = null }) => 
     courtName: template.courtName,
     clientName: template.clientName,
     opponentName: template.opponentName,
+    plaintiffName: template.clientName,
+    defendantName: template.opponentName,
     practiceArea: template.practiceArea,
     primaryCategory: template.primaryCategory,
     secondaryCategories: template.secondaryCategories || [],
@@ -152,9 +246,23 @@ export const buildCasePayload = (caseSession, templateOverride = null) => {
     plainCase.template ||
     null;
   const templateSlug = getTemplateSlugFromSession(plainCase);
+  const playerSide = getPlayerSide(plainCase);
+  const opponentSide = getOpposingSide(playerSide);
+  const playerPartyName = template ? getPartyName(template, playerSide) : "";
+  const opponentPartyName = template ? getPartyName(template, opponentSide) : "";
+  const playerSideLabel = getSideLabel(playerSide);
+  const opponentSideLabel = getSideLabel(opponentSide);
 
   return {
     ...plainCase,
+    playerSide,
+    opponentSide,
+    playerSideLabel,
+    opponentSideLabel,
+    playerPartyName,
+    opponentPartyName,
+    plaintiffName: template?.clientName || plainCase.premise?.clientName || "",
+    defendantName: template?.opponentName || plainCase.premise?.opponentName || "",
     scenarioId: templateSlug,
     templateSlug,
     template: template
@@ -166,6 +274,8 @@ export const buildCasePayload = (caseSession, templateOverride = null) => {
           courtName: template.courtName,
           clientName: template.clientName,
           opponentName: template.opponentName,
+          plaintiffName: template.clientName,
+          defendantName: template.opponentName,
           overview: template.overview,
           practiceArea: template.practiceArea,
           primaryCategory: template.primaryCategory,
@@ -182,6 +292,8 @@ export const buildCasePayload = (caseSession, templateOverride = null) => {
           courtName: template.courtName,
           clientName: template.clientName,
           opponentName: template.opponentName,
+          plaintiffName: template.clientName,
+          defendantName: template.opponentName,
           overview: template.overview,
           practiceArea: template.practiceArea,
         }
@@ -235,7 +347,8 @@ export const createCaseSession = async ({ userId, caseTemplateId }) => {
   );
   const cooldowns = await getActiveExitCooldowns(userId);
   const cooldownEndsAt = cooldowns.get(String(template._id));
-  const openingStatement = normalizeClientIntakeStatement(template.openingStatement);
+  const playerSide = Math.random() < 0.5 ? "client" : "opponent";
+  const openingStatement = buildOpeningStatementForSide(template, playerSide);
 
   if (template.complexity > allowedComplexity) {
     throw new Error("This case is locked until you gain more experience in that category.");
@@ -260,6 +373,7 @@ export const createCaseSession = async ({ userId, caseTemplateId }) => {
     practiceArea: template.practiceArea,
     primaryCategory: template.primaryCategory,
     complexity: template.complexity,
+    playerSide,
     status: "interview",
     lawbookVersion: LAWBOOK_VERSION,
     maxCourtRounds: Math.max(3, template.complexity + 1),
@@ -267,26 +381,26 @@ export const createCaseSession = async ({ userId, caseTemplateId }) => {
       clientName: template.clientName,
       opponentName: template.opponentName,
       courtName: template.courtName,
-      overview: template.overview,
-      desiredRelief: template.desiredRelief,
+      overview: buildOverviewForSide(template, playerSide),
+      desiredRelief: buildDesiredReliefForSide(template, playerSide),
       openingStatement,
     },
     interviewTranscript: [
       {
-        role: "client",
-        speaker: template.clientName,
+        role: "party",
+        speaker: getPartyName(template, playerSide),
         text: openingStatement,
         sourceType: "claim",
         relatedFactIds: [],
       },
     ],
     factSheet: {
-      summary: template.overview,
+      summary: buildOverviewForSide(template, playerSide),
       timeline: [],
       supportingFacts: [],
       risks: [],
-      theory: template.starterTheory,
-      desiredRelief: template.desiredRelief,
+      theory: buildStarterTheoryForSide(template, playerSide),
+      desiredRelief: buildDesiredReliefForSide(template, playerSide),
       openQuestions: defaultOpenQuestions(template),
       knownFacts: [],
       knownClaims: [],
