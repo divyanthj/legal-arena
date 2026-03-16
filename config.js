@@ -59,9 +59,9 @@ const config = {
     cdn: "https://cdn-id.cloudfront.net/",
   },
   email: {
-    fromNoReply: `Legal Arena <noreply@legalarena.app>`,
-    fromSupport: `Legal Arena <support@legalarena.app>`,
-    supportEmail: "support@legalarena.app",
+    fromNoReply: `Legal Arena <noreply@resend.legalarena.app>`,
+    fromSupport: `Legal Arena <support@resend.legalarena.app>`,
+    supportEmail: "divyanthj@gmail.com",
   },
   colors: {
     theme: "corporate",
