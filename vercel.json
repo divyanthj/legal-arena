@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/internal/email-nudges/run",
+      "schedule": "0 * * * *"
+    }
+  ]
+}

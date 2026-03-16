@@ -19,9 +19,12 @@ A legal training app where users interview clients, build case files, argue simu
 - `ADMINS`
 - `CASE_GENERATOR_API_KEY`
 - `RESEND_API_KEY`
+- `EMAIL_NUDGE_SECRET`
+- `CRON_SECRET` (if using Vercel Cron)
 
 ## Notes
 
 - The dashboard contains the playable case workflow.
 - `/dashboard/admin` is the admin lab for creating and generating case templates.
 - Generated and manually authored case templates are stored in MongoDB.
+- `POST /api/internal/email-nudges/run` runs retention nudges. Pass `dryRun=true` and `limit=<n>` in the query string or JSON body when validating a run.
