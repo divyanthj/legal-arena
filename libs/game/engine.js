@@ -24,12 +24,34 @@ const humanizeClaimText = (value = "") => {
   return text
     .replace(/\bfrom the modeled claims\b/gi, "")
     .replace(/\bmodeled claims\b/gi, "what I remember")
+    .replace(/\bmodelled claims\b/gi, "what I remember")
     .replace(/\bclient account pending refinement\b/gi, "I need to explain that more clearly")
     .replace(/\bopponent disputes the client's framing\b/gi, "they're going to dispute my side of it")
+    .replace(/\bI don't have (a|any) (modeled|modelled) claim here\b/gi, "I do not remember the exact detail")
     .replace(/\bthe client\b/gi, "I")
     .replace(/\s{2,}/g, " ")
     .replace(/\s+\./g, ".")
     .trim();
+};
+
+const isMetaResponse = (value = "") => {
+  const text = String(value || "").trim().toLowerCase();
+
+  if (!text) {
+    return true;
+  }
+
+  return [
+    "modeled claim",
+    "modelled claim",
+    "pending refinement",
+    "schema",
+    "exact words",
+    "i don't have a modeled claim",
+    "i dont have a modeled claim",
+    "i don't have any modeled claim",
+    "i dont have any modeled claim",
+  ].some((pattern) => text.includes(pattern));
 };
 
 const toSpokenSentence = (value = "") => {
@@ -196,7 +218,7 @@ const buildInterviewFallback = ({ template, question, factSheet }) => {
       clientClaim: getClaimForParty(fact, "client"),
       opponentClaim: getClaimForParty(fact, "opponent"),
     }))
-    .filter((item) => item.clientClaim);
+    .filter((item) => item.clientClaim && !isMetaResponse(item.clientClaim.claimedDetail));
 
   const remainingFacts = (safeTemplate.canonicalFacts || []).filter(
     (fact) => !factSheet.discoveredFactIds.includes(fact.factId)
@@ -329,7 +351,10 @@ const normalizeInterviewResult = ({ aiResult, fallback, template }) => {
   };
 
   return {
-    clientResponse: aiResult.clientResponse || fallback.clientResponse,
+    clientResponse:
+      aiResult.clientResponse && !isMetaResponse(aiResult.clientResponse)
+        ? humanizeClaimText(aiResult.clientResponse)
+        : fallback.clientResponse,
     patch,
     nextFactSheet: mergeFactSheet(fallback.nextFactSheet, patch, safeTemplate),
     relatedFactIds:
@@ -637,7 +662,7 @@ export const continueInterview = async ({ caseSession, question, userId }) => {
     temperature: 0.4,
     maxTokens: 1100,
     systemPrompt:
-      "You are roleplaying a legal-game client speaking to the player's lawyer. Stay grounded in the provided claim layer and canonical fact layer, never invent unsupported facts or evidence, and output only valid JSON.",
+      "You are roleplaying a legal-game client speaking to the player's lawyer during intake. Speak like a normal client in first person, not like a lawyer in court. Do not say 'Your Honor', 'Your Honour', 'may it please the court', 'counsel', or use courtroom advocacy language. Stay grounded in the provided claim layer and canonical fact layer, never invent unsupported facts or evidence, and output only valid JSON.",
     userPrompt: JSON.stringify({
       task: "Answer the lawyer's latest question as the client using only the client-side claims that are modeled for the case, then update the structured knowledge sheet.",
       caseTemplate: {

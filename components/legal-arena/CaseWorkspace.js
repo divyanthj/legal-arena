@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import ButtonAccount from "@/components/ButtonAccount";
 import apiClient from "@/libs/api";
 
@@ -27,6 +28,7 @@ const winnerLabel = {
 };
 
 export default function CaseWorkspace({ initialCase }) {
+  const router = useRouter();
   const [caseSession, setCaseSession] = useState(initialCase);
   const [question, setQuestion] = useState("");
   const [argument, setArgument] = useState("");
@@ -133,8 +135,31 @@ export default function CaseWorkspace({ initialCase }) {
     }
   };
 
+  const handleExitCase = async () => {
+    const confirmed = window.confirm(
+      "Exit this case? You will not be able to start the same case again for 24 hours."
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setWorking(true);
+
+    try {
+      await apiClient.post(`/cases/${caseSession.id}/exit`);
+      router.push("/dashboard");
+      router.refresh();
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setWorking(false);
+    }
+  };
+
   const isInterview = caseSession.status === "interview";
   const isVerdict = caseSession.status === "verdict";
+  const isExited = caseSession.status === "exited";
 
   return (
     <main className="min-h-screen bg-base-200 px-4 py-6 md:px-8 md:py-10">
@@ -176,7 +201,9 @@ export default function CaseWorkspace({ initialCase }) {
 
               <div className="flex flex-col items-start gap-3 md:items-end">
                 <div className="badge badge-lg badge-outline border-white/25 text-neutral-content">
-                  {isInterview
+                  {isExited
+                    ? "Exited"
+                    : isInterview
                     ? "Client Intake"
                     : isVerdict
                       ? "Verdict"
@@ -251,14 +278,42 @@ export default function CaseWorkspace({ initialCase }) {
                         Suggested open questions:{" "}
                         {caseSession.factSheet.openQuestions.slice(0, 3).join(" | ")}
                       </div>
-                      <button className="btn btn-primary" disabled={working}>
-                        {working && (
-                          <span className="loading loading-spinner loading-xs" />
-                        )}
-                        Ask Client
-                      </button>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          className="btn btn-ghost text-error"
+                          disabled={working}
+                          onClick={handleExitCase}
+                        >
+                          Exit Case
+                        </button>
+                        <button className="btn btn-primary" disabled={working}>
+                          {working && (
+                            <span className="loading loading-spinner loading-xs" />
+                          )}
+                          Ask Client
+                        </button>
+                      </div>
                     </div>
                   </form>
+                </div>
+              </div>
+            ) : isExited ? (
+              <div className="card border border-warning/30 bg-warning/10 shadow-xl">
+                <div className="card-body p-6">
+                  <p className="text-sm uppercase tracking-[0.25em] text-warning">
+                    Case Exited
+                  </p>
+                  <h2 className="mt-2 text-2xl font-bold">This intake was closed</h2>
+                  <p className="mt-3 max-w-2xl text-base-content/80">
+                    You exited this matter during the interview stage. The same case
+                    stays unavailable for 24 hours before it can be started again.
+                  </p>
+                  <div className="mt-5">
+                    <Link href="/dashboard" className="btn btn-primary">
+                      Back to Cases
+                    </Link>
+                  </div>
                 </div>
               </div>
             ) : (

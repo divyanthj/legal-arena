@@ -13,6 +13,22 @@ import {
 import { DEFAULT_CATEGORY_SLUG } from "./categories";
 
 const toPlain = (doc) => (doc?.toJSON ? doc.toJSON() : doc);
+const CASE_EXIT_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
+const normalizeClientIntakeStatement = (value = "") => {
+  const text = String(value || "").trim();
+
+  if (!text) {
+    return "";
+  }
+
+  return text
+    .replace(/^\s*your honou?r[:,]?\s*/i, "")
+    .replace(/^\s*may it please the court[:,]?\s*/i, "")
+    .replace(/^\s*counsel[:,]?\s*/i, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+};
 
 const getTemplateSlugFromSession = (caseSession) =>
   caseSession.templateSlug || caseSession.scenarioId || "";
@@ -62,11 +78,40 @@ const defaultOpenQuestions = (template) =>
     .slice(0, 3)
     .map((fact) => fact.label);
 
-const buildTemplateCard = ({ template, progression }) => {
+const getActiveExitCooldowns = async (userId) => {
+  const threshold = new Date(Date.now() - CASE_EXIT_COOLDOWN_MS);
+  const exitedSessions = await CaseSession.find({
+    userId,
+    status: "exited",
+    exitedAt: { $gte: threshold },
+  })
+    .select("caseTemplateId exitedAt")
+    .sort({ exitedAt: -1 });
+
+  const cooldowns = new Map();
+
+  exitedSessions.forEach((session) => {
+    const templateId = String(session.caseTemplateId);
+    const cooldownEndsAt = new Date(
+      new Date(session.exitedAt).getTime() + CASE_EXIT_COOLDOWN_MS
+    );
+    const current = cooldowns.get(templateId);
+
+    if (!current || cooldownEndsAt > current) {
+      cooldowns.set(templateId, cooldownEndsAt);
+    }
+  });
+
+  return cooldowns;
+};
+
+const buildTemplateCard = ({ template, progression, cooldownEndsAt = null }) => {
   const eligibleComplexity = getEligibleComplexityForCategory(
     progression,
     template.primaryCategory
   );
+  const cooldownActive = cooldownEndsAt && cooldownEndsAt > new Date();
+  const unlockedByProgression = template.complexity <= eligibleComplexity;
 
   return {
     id: template.id,
@@ -83,9 +128,17 @@ const buildTemplateCard = ({ template, progression }) => {
     complexity: template.complexity,
     sourceType: template.sourceType,
     legalTags: template.legalTags || [],
-    unlocked: template.complexity <= eligibleComplexity,
+    unlocked: unlockedByProgression && !cooldownActive,
+    cooldownEndsAt: cooldownActive ? cooldownEndsAt.toISOString() : null,
     unlockReason:
-      template.complexity <= eligibleComplexity
+      cooldownActive
+        ? `Available again after ${cooldownEndsAt.toLocaleString("en-US", {
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+          })}.`
+        : unlockedByProgression
         ? "Available for your current specialization level."
         : `Unlock ${template.primaryCategory} complexity ${template.complexity} by completing more cases in that category.`,
   };
@@ -143,16 +196,20 @@ export const listScenarioOptions = async (userId) => {
 
   const user = await ensureUserProfile(userId);
   const progression = normalizeProgression(user?.progression);
-  const templates = await CaseTemplate.find({ status: "active" }).sort({
-    primaryCategory: 1,
-    complexity: 1,
-    createdAt: -1,
-  });
+  const [templates, cooldowns] = await Promise.all([
+    CaseTemplate.find({ status: "active" }).sort({
+      primaryCategory: 1,
+      complexity: 1,
+      createdAt: -1,
+    }),
+    getActiveExitCooldowns(userId),
+  ]);
 
   return templates.map((template) =>
     buildTemplateCard({
       template: toPlain(template),
       progression,
+      cooldownEndsAt: cooldowns.get(String(template._id)) || null,
     })
   );
 };
@@ -176,9 +233,22 @@ export const createCaseSession = async ({ userId, caseTemplateId }) => {
     progression,
     template.primaryCategory
   );
+  const cooldowns = await getActiveExitCooldowns(userId);
+  const cooldownEndsAt = cooldowns.get(String(template._id));
+  const openingStatement = normalizeClientIntakeStatement(template.openingStatement);
 
   if (template.complexity > allowedComplexity) {
     throw new Error("This case is locked until you gain more experience in that category.");
+  }
+  if (cooldownEndsAt && cooldownEndsAt > new Date()) {
+    throw new Error(
+      `This case is on cooldown until ${cooldownEndsAt.toLocaleString("en-US", {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      })}.`
+    );
   }
 
   const caseSession = await CaseSession.create({
@@ -199,13 +269,13 @@ export const createCaseSession = async ({ userId, caseTemplateId }) => {
       courtName: template.courtName,
       overview: template.overview,
       desiredRelief: template.desiredRelief,
-      openingStatement: template.openingStatement,
+      openingStatement,
     },
     interviewTranscript: [
       {
         role: "client",
         speaker: template.clientName,
-        text: template.openingStatement,
+        text: openingStatement,
         sourceType: "claim",
         relatedFactIds: [],
       },
@@ -254,7 +324,7 @@ export const listCaseSessionsForUser = async (userId) => {
   await connectMongo();
   await ensureSeedCaseTemplates();
 
-  const cases = await CaseSession.find({ userId })
+  const cases = await CaseSession.find({ userId, status: { $ne: "exited" } })
     .populate("caseTemplateId")
     .sort({ updatedAt: -1 });
 
@@ -342,6 +412,29 @@ export const getCaseSessionDocumentForUser = async ({ userId, caseId }) => {
       }
     }
   }
+
+  return caseSession;
+};
+
+export const exitCaseSessionForUser = async ({ userId, caseId }) => {
+  await connectMongo();
+  await ensureSeedCaseTemplates();
+
+  const caseSession = await CaseSession.findOne({ _id: caseId, userId }).populate(
+    "caseTemplateId"
+  );
+
+  if (!caseSession) {
+    return null;
+  }
+
+  if (caseSession.status !== "interview") {
+    throw new Error("Only interview-stage cases can be exited.");
+  }
+
+  caseSession.status = "exited";
+  caseSession.exitedAt = new Date();
+  await caseSession.save();
 
   return caseSession;
 };

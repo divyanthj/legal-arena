@@ -38,6 +38,72 @@ const slugify = (value = "") =>
     .replace(/^-+|-+$/g, "")
     .slice(0, 60);
 
+const normalizeClientIntakeStatement = (value = "") => {
+  const text = String(value || "").trim();
+
+  if (!text) {
+    return "";
+  }
+
+  return text
+    .replace(/^\s*your honou?r[:,]?\s*/i, "")
+    .replace(/^\s*may it please the court[:,]?\s*/i, "")
+    .replace(/^\s*counsel[:,]?\s*/i, "")
+    .replace(/\bthe plaintiff\b/gi, "I")
+    .replace(/\bthe defendant\b/gi, "they")
+    .replace(/\bour client\b/gi, "I")
+    .replace(/\bmy client\b/gi, "I")
+    .replace(/\bwe will demonstrate that\b/gi, "I can show that")
+    .replace(/\bwe will show that\b/gi, "I can show that")
+    .replace(/\bis entitled to\b/gi, "should receive")
+    .replace(/\bthe fees agreed upon\b/gi, "the agreed fees")
+    .replace(/\bwithout justification\b/gi, "without a real explanation")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+};
+
+const sanitizeClaimText = (value = "") => {
+  const text = String(value || "").trim();
+
+  if (!text) {
+    return "";
+  }
+
+  return text
+    .replace(/\bfrom the modeled claims\b/gi, "")
+    .replace(/\bmodeled claims?\b/gi, "what I remember")
+    .replace(/\bmodelled claims?\b/gi, "what I remember")
+    .replace(/\bclient account pending refinement\b/gi, "I need to explain that more clearly")
+    .replace(/\bthe client alleges\b/gi, "I said")
+    .replace(/\bthe client\b/gi, "I")
+    .replace(/\bthe opponent\b/gi, "they")
+    .replace(/\bI don't have (a|any) (modeled|modelled) claim here\b/gi, "I do not remember the exact detail")
+    .replace(/\s{2,}/g, " ")
+    .replace(/\s+\./g, ".")
+    .trim();
+};
+
+const isLowQualityClaimText = (value = "") => {
+  const text = String(value || "").trim().toLowerCase();
+
+  if (!text) {
+    return true;
+  }
+
+  return [
+    "modeled claim",
+    "modelled claim",
+    "pending refinement",
+    "schema",
+    "exact words",
+    "i do not remember the exact detail",
+    "i don't have a modeled claim",
+    "i dont have a modeled claim",
+    "i don't have any modeled claim",
+    "i dont have any modeled claim",
+  ].some((pattern) => text.includes(pattern));
+};
+
 const buildGenerationPrompt = ({ category, complexity, prompt }) => ({
   task: "Generate a legal case template for a courtroom simulation app.",
   requirements: {
@@ -54,6 +120,8 @@ const buildGenerationPrompt = ({ category, complexity, prompt }) => ({
       "At least one canonical fact should be a risk or disputed point.",
       "Evidence items should correspond to the canonical facts.",
       "Write claims in natural spoken language that a client or opponent would actually say.",
+      "The openingStatement is not courtroom advocacy. It is the client's first intake-style explanation to their lawyer in plain first-person language.",
+      "Do not start openingStatement with phrases like 'Your Honor', 'Your Honour', 'May it please the court', 'counsel', or other courtroom formalities.",
       "Do not use meta phrases like 'modeled claims', 'client account pending refinement', 'the client alleges', or other schema-ish wording in any claim text.",
       "Title and subtitle must feel like a polished courtroom game mission, not a generic case caption.",
       "Avoid boring titles like 'State v. Smith', 'Contract Dispute Case', 'Marital Asset Dispute', or other plain docket-style names.",
@@ -212,7 +280,7 @@ const normalizeEvidenceType = (value = "") => {
 const normalizeClaims = (claims = []) =>
   (Array.isArray(claims) ? claims : []).map((claim) => ({
     party: claim.party === "opponent" ? "opponent" : "client",
-    claimedDetail: String(claim.claimedDetail || "").trim(),
+    claimedDetail: sanitizeClaimText(claim.claimedDetail),
     stance: ["admits", "denies", "distorts", "omits"].includes(claim.stance)
       ? claim.stance
       : "admits",
@@ -229,14 +297,36 @@ const normalizeClaims = (claims = []) =>
       : [],
   }));
 
-const ensurePartyCoverage = (claims = []) => {
-  const normalized = normalizeClaims(claims);
+const buildFallbackClaimText = ({ party, canonicalDetail, kind }) => {
+  if (party === "client") {
+    if (kind === "risk") {
+      return `I know they may use this against me: ${canonicalDetail}`;
+    }
+
+    return canonicalDetail;
+  }
+
+  if (kind === "risk") {
+    return `They will say this hurts my position: ${canonicalDetail}`;
+  }
+
+  return `They are going to dispute this and say it does not prove my side: ${canonicalDetail}`;
+};
+
+const ensurePartyCoverage = (fact) => {
+  const normalized = normalizeClaims(fact.claims).filter(
+    (claim) => !isLowQualityClaimText(claim.claimedDetail)
+  );
   const parties = normalized.map((claim) => claim.party);
 
   if (!parties.includes("client")) {
     normalized.unshift({
       party: "client",
-      claimedDetail: "I need to explain that more clearly.",
+      claimedDetail: buildFallbackClaimText({
+        party: "client",
+        canonicalDetail: String(fact.canonicalDetail || "").trim(),
+        kind: fact.kind,
+      }),
       stance: "admits",
       confidence: 0.7,
       accessLevel: "direct",
@@ -248,7 +338,11 @@ const ensurePartyCoverage = (claims = []) => {
   if (!parties.includes("opponent")) {
     normalized.push({
       party: "opponent",
-      claimedDetail: "They dispute my version of what happened.",
+      claimedDetail: buildFallbackClaimText({
+        party: "opponent",
+        canonicalDetail: String(fact.canonicalDetail || "").trim(),
+        kind: fact.kind,
+      }),
       stance: "distorts",
       confidence: 0.7,
       accessLevel: "partial",
@@ -270,6 +364,7 @@ const normalizeGeneratedPayload = (payload, categorySlug, complexity) => ({
     categorySlug,
   }),
   subtitle: String(payload.subtitle || "").trim(),
+  openingStatement: normalizeClientIntakeStatement(payload.openingStatement),
   primaryCategory: payload.primaryCategory || categorySlug,
   complexity,
   secondaryCategories: Array.isArray(payload.secondaryCategories)
@@ -308,7 +403,7 @@ const normalizeGeneratedPayload = (payload, categorySlug, complexity) => ({
         evidenceRefs: Array.isArray(fact.evidenceRefs)
           ? fact.evidenceRefs.map((item) => String(item).trim()).filter(Boolean)
           : [],
-        claims: ensurePartyCoverage(fact.claims),
+        claims: ensurePartyCoverage(fact),
       }))
     : [],
   evidenceItems: Array.isArray(payload.evidenceItems)

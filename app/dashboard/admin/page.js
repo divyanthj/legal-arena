@@ -4,6 +4,7 @@ import { authOptions } from "@/libs/next-auth";
 import AdminCaseLab from "@/components/legal-arena/AdminCaseLab";
 import connectMongo from "@/libs/mongoose";
 import CaseTemplate from "@/models/CaseTemplate";
+import CaseSession from "@/models/CaseSession";
 import { getAdminEmails, isAdminEmail } from "@/libs/admin";
 import { listCategoryOptions, ensureSeedCaseTemplates } from "@/libs/game/templates";
 
@@ -23,14 +24,54 @@ export default async function AdminPage() {
   await connectMongo();
   await ensureSeedCaseTemplates();
 
-  const templates = await CaseTemplate.find({}).sort({ updatedAt: -1 });
+  const [templates, templateStats] = await Promise.all([
+    CaseTemplate.find({}).sort({ updatedAt: -1 }),
+    CaseSession.aggregate([
+      {
+        $group: {
+          _id: "$caseTemplateId",
+          plays: { $sum: 1 },
+          wins: {
+            $sum: {
+              $cond: [{ $eq: ["$verdict.winner", "player"] }, 1, 0],
+            },
+          },
+          losses: {
+            $sum: {
+              $cond: [{ $eq: ["$verdict.winner", "opponent"] }, 1, 0],
+            },
+          },
+          draws: {
+            $sum: {
+              $cond: [{ $eq: ["$verdict.winner", "draw"] }, 1, 0],
+            },
+          },
+        },
+      },
+    ]),
+  ]);
+
+  const statsByTemplateId = new Map(
+    templateStats.map((entry) => [String(entry._id), entry])
+  );
+
+  const templatesWithStats = templates.map((template) => {
+    const stats = statsByTemplateId.get(String(template._id));
+
+    return {
+      ...template.toJSON(),
+      plays: stats?.plays || 0,
+      wins: stats?.wins || 0,
+      losses: stats?.losses || 0,
+      draws: stats?.draws || 0,
+    };
+  });
 
   return (
     <AdminCaseLab
       categories={listCategoryOptions()}
-      initialTemplates={templates.map((template) => template.toJSON())}
+      initialTemplates={templatesWithStats}
       adminEmails={getAdminEmails()}
     />
   );
 }
-

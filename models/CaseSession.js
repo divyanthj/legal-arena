@@ -134,8 +134,12 @@ const caseSessionSchema = mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["interview", "courtroom", "verdict"],
+      enum: ["interview", "courtroom", "verdict", "exited"],
       default: "interview",
+    },
+    exitedAt: {
+      type: Date,
+      default: null,
     },
     lawbookVersion: {
       type: String,

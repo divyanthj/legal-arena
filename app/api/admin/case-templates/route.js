@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/libs/next-auth";
 import connectMongo from "@/libs/mongoose";
 import CaseTemplate from "@/models/CaseTemplate";
+import CaseSession from "@/models/CaseSession";
 import { isAdminEmail } from "@/libs/admin";
 import {
   ensureSeedCaseTemplates,
@@ -109,6 +110,43 @@ export async function PATCH(req) {
     }
 
     return NextResponse.json({ template });
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
+export async function DELETE(req) {
+  const session = await getServerSession(authOptions);
+
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+  }
+  if (!isAdminEmail(session.user.email)) {
+    return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+  }
+
+  try {
+    await connectMongo();
+    const body = await req.json();
+    const templateId = body?.id?.trim();
+
+    if (!templateId) {
+      return NextResponse.json({ error: "Template id is required" }, { status: 400 });
+    }
+
+    const template = await CaseTemplate.findById(templateId);
+
+    if (!template) {
+      return NextResponse.json({ error: "Template not found" }, { status: 404 });
+    }
+
+    await Promise.all([
+      CaseSession.deleteMany({ caseTemplateId: template._id }),
+      CaseTemplate.deleteOne({ _id: template._id }),
+    ]);
+
+    return NextResponse.json({ success: true, deletedTemplateId: templateId });
   } catch (error) {
     console.error(error);
     return NextResponse.json({ error: error.message }, { status: 500 });

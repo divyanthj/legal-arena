@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/libs/next-auth";
-import { getCaseSessionForUser } from "@/libs/game/store";
+import { exitCaseSessionForUser } from "@/libs/game/store";
 import { hasGameAccess } from "@/libs/admin";
 
-export async function GET(req, { params }) {
+export async function POST(req, { params }) {
   const session = await getServerSession(authOptions);
 
   if (!session?.user?.id) {
@@ -18,7 +18,7 @@ export async function GET(req, { params }) {
   }
 
   try {
-    const caseSession = await getCaseSessionForUser({
+    const caseSession = await exitCaseSessionForUser({
       userId: session.user.id,
       caseId: params.caseId,
     });
@@ -27,7 +27,7 @@ export async function GET(req, { params }) {
       return NextResponse.json({ error: "Case not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ caseSession });
+    return NextResponse.json({ success: true });
   } catch (error) {
     console.error(error);
     return NextResponse.json({ error: error.message }, { status: 500 });

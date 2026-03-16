@@ -2,6 +2,7 @@ import { Inter } from "next/font/google";
 import PlausibleProvider from "next-plausible";
 import { getSEOTags } from "@/libs/seo";
 import ClientLayout from "@/components/LayoutClient";
+import Footer from "@/components/Footer";
 import config from "@/config";
 import "./globals.css";
 
@@ -26,9 +27,14 @@ export default function RootLayout({ children }) {
           <PlausibleProvider domain={config.domainName} />
         </head>
       )}
-      <body>
+      <body className="min-h-screen">
         {/* ClientLayout contains all the client wrappers (Crisp chat support, toast messages, tooltips, etc.) */}
-        <ClientLayout>{children}</ClientLayout>
+        <div className="flex min-h-screen flex-col">
+          <div className="flex-1">
+            <ClientLayout>{children}</ClientLayout>
+          </div>
+          <Footer />
+        </div>
       </body>
     </html>
   );

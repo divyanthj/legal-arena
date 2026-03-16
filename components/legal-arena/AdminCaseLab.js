@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import apiClient from "@/libs/api";
 
@@ -99,21 +99,139 @@ const formatTemplateForForm = (template) => ({
   evidenceItems: JSON.stringify(template.evidenceItems || [], null, 2),
 });
 
+const SORTABLE_COLUMNS = {
+  title: {
+    label: "Title",
+    getValue: (template) => template.title || "",
+  },
+  category: {
+    label: "Category",
+    getValue: (template, categoryMap) =>
+      categoryMap.get(template.primaryCategory) || template.primaryCategory || "",
+  },
+  complexity: {
+    label: "Complexity",
+    getValue: (template) => Number(template.complexity) || 0,
+  },
+  plays: {
+    label: "Plays",
+    getValue: (template) => Number(template.plays) || 0,
+  },
+  wld: {
+    label: "W/L/D",
+    getValue: (template) =>
+      `${template.wins || 0}-${template.losses || 0}-${template.draws || 0}`,
+    compare: (left, right) => {
+      const leftValues = [left.wins || 0, left.losses || 0, left.draws || 0];
+      const rightValues = [right.wins || 0, right.losses || 0, right.draws || 0];
+
+      for (let index = 0; index < leftValues.length; index += 1) {
+        if (leftValues[index] !== rightValues[index]) {
+          return leftValues[index] - rightValues[index];
+        }
+      }
+
+      return 0;
+    },
+  },
+};
+
 export default function AdminCaseLab({
   categories,
   initialTemplates,
   adminEmails,
 }) {
   const defaultCategory = categories[0]?.slug || "contract-violation";
+  const categoryMap = useMemo(
+    () => new Map(categories.map((category) => [category.slug, category.title])),
+    [categories]
+  );
   const [templates, setTemplates] = useState(initialTemplates);
+  const [selectedTemplateId, setSelectedTemplateId] = useState("");
+  const [sortConfig, setSortConfig] = useState({
+    column: "title",
+    direction: "asc",
+  });
   const [manualForm, setManualForm] = useState(emptyManualTemplate(defaultCategory));
   const [editingTemplateId, setEditingTemplateId] = useState("");
   const [generatorForm, setGeneratorForm] = useState({
     primaryCategory: defaultCategory,
-    complexity: 2,
+    complexity: 1,
     prompt: "",
   });
   const [working, setWorking] = useState(false);
+  const [deletingTemplateId, setDeletingTemplateId] = useState("");
+
+  const sortedTemplates = useMemo(() => {
+    const nextTemplates = [...templates];
+    const activeColumn = SORTABLE_COLUMNS[sortConfig.column] || SORTABLE_COLUMNS.title;
+    const direction = sortConfig.direction === "desc" ? -1 : 1;
+
+    nextTemplates.sort((left, right) => {
+      const customCompare = activeColumn.compare?.(left, right, categoryMap);
+      if (typeof customCompare === "number" && customCompare !== 0) {
+        return customCompare * direction;
+      }
+
+      const leftValue = activeColumn.getValue(left, categoryMap);
+      const rightValue = activeColumn.getValue(right, categoryMap);
+
+      if (typeof leftValue === "number" && typeof rightValue === "number") {
+        return (leftValue - rightValue) * direction;
+      }
+
+      return String(leftValue).localeCompare(String(rightValue)) * direction;
+    });
+
+    return nextTemplates;
+  }, [categoryMap, sortConfig, templates]);
+
+  const handleSort = (column) => {
+    setSortConfig((current) => ({
+      column,
+      direction:
+        current.column === column && current.direction === "asc" ? "desc" : "asc",
+    }));
+  };
+
+  const handleSelectTemplate = (template) => {
+    setSelectedTemplateId(template.id);
+    setEditingTemplateId(template.id);
+    setManualForm(formatTemplateForForm(template));
+  };
+
+  const handleDeleteTemplate = async (event, template) => {
+    event.stopPropagation();
+
+    const confirmed = window.confirm(
+      `Delete "${template.title}"? This will also remove any case sessions created from it.`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setDeletingTemplateId(template.id);
+
+    try {
+      await apiClient.delete("/admin/case-templates", {
+        data: { id: template.id },
+      });
+
+      setTemplates((current) => current.filter((item) => item.id !== template.id));
+
+      if (selectedTemplateId === template.id) {
+        setSelectedTemplateId("");
+      }
+
+      if (editingTemplateId === template.id) {
+        setEditingTemplateId("");
+        setManualForm(emptyManualTemplate(defaultCategory));
+      }
+    } finally {
+      setDeletingTemplateId("");
+    }
+  };
 
   const handleManualCreate = async (event) => {
     event.preventDefault();
@@ -143,6 +261,7 @@ export default function AdminCaseLab({
       );
       setManualForm(emptyManualTemplate(defaultCategory));
       setEditingTemplateId("");
+      setSelectedTemplateId("");
     } finally {
       setWorking(false);
     }
@@ -158,9 +277,10 @@ export default function AdminCaseLab({
         complexity: Number(generatorForm.complexity),
       });
       setTemplates((current) => [template, ...current]);
+      setSelectedTemplateId(template.id);
       setGeneratorForm({
         primaryCategory: defaultCategory,
-        complexity: 2,
+        complexity: 1,
         prompt: "",
       });
     } finally {
@@ -310,6 +430,7 @@ export default function AdminCaseLab({
                     className="btn btn-ghost"
                     onClick={() => {
                       setEditingTemplateId("");
+                      setSelectedTemplateId("");
                       setManualForm(emptyManualTemplate(defaultCategory));
                     }}
                   >
@@ -394,31 +515,65 @@ export default function AdminCaseLab({
                   Existing Templates
                 </p>
                 <h2 className="mt-2 text-2xl font-bold">Library</h2>
-                <div className="mt-5 space-y-3">
-                  {templates.map((template) => (
-                    <article key={template.id} className="rounded-box bg-base-200 p-4">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="badge badge-outline">{template.primaryCategory}</span>
-                        <span className="badge badge-outline">Complexity {template.complexity}</span>
-                        <span className="badge badge-outline">{template.sourceType}</span>
-                      </div>
-                      <h3 className="mt-3 text-lg font-bold">{template.title}</h3>
-                      <p className="mt-1 text-sm text-base-content/70">{template.overview}</p>
-                      <div className="mt-4">
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-outline"
-                          onClick={() => {
-                            setEditingTemplateId(template.id);
-                            setManualForm(formatTemplateForForm(template));
-                          }}
+                <p className="mt-2 text-sm text-base-content/65">
+                  {templates.length} total cases in the library
+                </p>
+                <div className="mt-5 overflow-x-auto rounded-box border border-base-300">
+                  <table className="table table-zebra">
+                    <thead>
+                      <tr>
+                        {Object.entries(SORTABLE_COLUMNS).map(([key, column]) => {
+                          const isActive = sortConfig.column === key;
+                          const directionLabel =
+                            isActive && sortConfig.direction === "asc" ? "^" : "v";
+
+                          return (
+                            <th key={key}>
+                              <button
+                                type="button"
+                                className="btn btn-ghost btn-xs px-0 normal-case"
+                                onClick={() => handleSort(key)}
+                              >
+                                {column.label} {isActive ? directionLabel : ""}
+                              </button>
+                            </th>
+                          );
+                        })}
+                        <th className="text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sortedTemplates.map((template) => (
+                        <tr
+                          key={`stats-${template.id}`}
+                          className={selectedTemplateId === template.id ? "active" : "cursor-pointer"}
+                          onClick={() => handleSelectTemplate(template)}
                         >
-                          Edit
-                        </button>
-                      </div>
-                    </article>
-                  ))}
+                          <td className="font-semibold">{template.title}</td>
+                          <td>{categoryMap.get(template.primaryCategory) || template.primaryCategory}</td>
+                          <td>{template.complexity}</td>
+                          <td>{template.plays || 0}</td>
+                          <td>
+                            {template.wins || 0}/{template.losses || 0}/{template.draws || 0}
+                          </td>
+                          <td className="text-right">
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-xs text-error"
+                              disabled={deletingTemplateId === template.id}
+                              onClick={(event) => handleDeleteTemplate(event, template)}
+                            >
+                              {deletingTemplateId === template.id ? "Deleting..." : "Delete"}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
+                <p className="mt-3 text-sm text-base-content/60">
+                  Select a row to load that case into the editor.
+                </p>
               </div>
             </div>
           </div>

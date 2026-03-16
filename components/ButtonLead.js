@@ -8,9 +8,14 @@ import apiClient from "@/libs/api";
 // You'd use this if your product isn't ready yet or you want to collect leads
 // For instance: A popup to send a freebie, joining a waitlist, etc.
 // It calls the /api/lead/route.js route and store a Lead document in the database
-const ButtonLead = ({ extraStyle }) => {
+const ButtonLead = ({
+  extraStyle,
+  initialEmail = "",
+  buttonLabel = "Join waitlist",
+  successMessage = "Thanks for joining the waitlist!",
+}) => {
   const inputRef = useRef(null);
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(initialEmail);
   const [isLoading, setIsLoading] = useState(false);
   const [isDisabled, setIsDisabled] = useState(false);
 
@@ -21,7 +26,7 @@ const ButtonLead = ({ extraStyle }) => {
     try {
       await apiClient.post("/lead", { email });
 
-      toast.success("Thanks for joining the waitlist!");
+      toast.success(successMessage);
 
       // just remove the focus on the input
       inputRef.current.blur();
@@ -54,7 +59,7 @@ const ButtonLead = ({ extraStyle }) => {
         type="submit"
         disabled={isDisabled}
       >
-        Join waitlist
+        {buttonLabel}
         {isLoading ? (
           <span className="loading loading-spinner loading-xs"></span>
         ) : (

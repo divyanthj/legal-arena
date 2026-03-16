@@ -6,12 +6,19 @@ import {
   buildCasePayload,
   getCaseSessionDocumentForUser,
 } from "@/libs/game/store";
+import { hasGameAccess } from "@/libs/admin";
 
 export async function POST(req, { params }) {
   const session = await getServerSession(authOptions);
 
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+  }
+  if (!hasGameAccess(session.user?.email)) {
+    return NextResponse.json(
+      { error: "Legal Arena is still in development. Access is currently limited." },
+      { status: 403 }
+    );
   }
 
   try {
