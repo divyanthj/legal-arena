@@ -3,6 +3,7 @@ import EmailProvider from "next-auth/providers/email";
 import { MongoDBAdapter } from "@auth/mongodb-adapter";
 import config from "@/config";
 import connectMongo from "./mongo";
+import { sendMagicLinkEmail } from "@/libs/emailSender";
 
 export const authOptions = {
   // Set any random key in .env.local
@@ -22,13 +23,14 @@ export const authOptions = {
         };
       },
     }),
-    // Follow the "Login with Email" tutorial to set up your email server
-    // Requires a MongoDB database. Set MONOGODB_URI env variable.
+    // Email sign-in is sent through Resend.
     ...(connectMongo
       ? [
           EmailProvider({
-            server: process.env.EMAIL_SERVER,
-            from: config.mailgun.fromNoReply,
+            from: config.email.fromNoReply,
+            sendVerificationRequest: async ({ identifier, url }) => {
+              await sendMagicLinkEmail({ email: identifier, url });
+            },
           }),
         ]
       : []),

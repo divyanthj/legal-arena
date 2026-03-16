@@ -18,6 +18,7 @@ A legal training app where users interview clients, build case files, argue simu
 - `OPENAI_API_KEY`
 - `ADMINS`
 - `CASE_GENERATOR_API_KEY`
+- `RESEND_API_KEY`
 
 ## Notes
 
