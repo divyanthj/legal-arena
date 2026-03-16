@@ -4,11 +4,14 @@ import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Crisp } from "crisp-sdk-web";
+import { initDataFast } from "datafast";
 import { SessionProvider } from "next-auth/react";
 import NextTopLoader from "nextjs-toploader";
 import { Toaster } from "react-hot-toast";
 import { Tooltip } from "react-tooltip";
 import config from "@/config";
+
+let datafastInitPromise = null;
 
 // Crisp customer chat support:
 // This component is separated from ClientLayout because it needs to be wrapped with <SessionProvider> to use useSession() hook
@@ -45,12 +48,29 @@ const CrispChat = () => {
   return null;
 };
 
+const DataFastProvider = () => {
+  useEffect(() => {
+    if (!datafastInitPromise) {
+      datafastInitPromise = initDataFast({
+        websiteId: "dfid_jj19izF8dJN5YpCrXoA2G",
+      }).catch((error) => {
+        datafastInitPromise = null;
+        console.error("DataFast init failed:", error);
+        throw error;
+      });
+    }
+  }, []);
+
+  return null;
+};
+
 // All the client wrappers are here (they can't be in server components)
 // 1. SessionProvider: Allow the useSession from next-auth (find out if user is auth or not)
 // 2. NextTopLoader: Show a progress bar at the top when navigating between pages
 // 3. Toaster: Show Success/Error messages anywhere from the app with toast()
 // 4. Tooltip: Show tooltips if any JSX elements has these 2 attributes: data-tooltip-id="tooltip" data-tooltip-content=""
 // 5. CrispChat: Set Crisp customer chat support (see above)
+// 6. DataFastProvider: Initialize DataFast analytics once on the client
 const ClientLayout = ({ children }) => {
   return (
     <>
@@ -76,6 +96,9 @@ const ClientLayout = ({ children }) => {
 
         {/* Set Crisp customer chat support */}
         <CrispChat />
+
+        {/* Initialize DataFast analytics */}
+        <DataFastProvider />
       </SessionProvider>
     </>
   );
