@@ -42,6 +42,9 @@ const Footer = () => {
               </div>
 
               <div className="mb-10 flex flex-col items-center justify-center gap-2 text-sm md:items-start">
+                <Link href="/faq" className="link link-hover">
+                  FAQ
+                </Link>
                 <Link href="/tos" className="link link-hover">
                   Terms and Conditions
                 </Link>

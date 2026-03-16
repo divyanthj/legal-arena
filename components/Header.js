@@ -18,7 +18,7 @@ const links = [
     label: "Reviews",
   },
   {
-    href: "/#faq",
+    href: "/faq",
     label: "FAQ",
   },
 ];
