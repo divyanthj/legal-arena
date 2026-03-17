@@ -601,7 +601,8 @@ export const generateCaseTemplatePayload = async ({
     userId,
     model,
     temperature: 0.9,
-    maxTokens: 2200,
+    maxTokens: 5000,
+    retryAttempts: 2,
     throwOnError: true,
     systemPrompt:
       "You generate structured legal simulation cases. This is phase 1 of 2. Output valid JSON only. Keep cases realistic, internally consistent, and grounded in ordinary evidence and witness behavior.",
@@ -609,7 +610,9 @@ export const generateCaseTemplatePayload = async ({
   });
 
   if (!aiResult) {
-    throw new Error("Case generation is unavailable. Check OPENAI_API_KEY.");
+    throw new Error(
+      "Case generation failed because the model returned no structured payload."
+    );
   }
 
   let payload = normalizeGeneratedPayload(aiResult, category.slug, complexity);
@@ -618,7 +621,8 @@ export const generateCaseTemplatePayload = async ({
     userId,
     model,
     temperature: 0.4,
-    maxTokens: 1800,
+    maxTokens: 5000,
+    retryAttempts: 2,
     systemPrompt:
       "You refine legal simulation cases into interview-ready templates. This is phase 2 of 2. Output valid JSON only. Preserve the underlying dispute, but distinguish confirmed proof from leads, missing records, and disputed evidence.",
     userPrompt: JSON.stringify(
