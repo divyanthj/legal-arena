@@ -4,6 +4,8 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import apiClient from "@/libs/api";
 
+const ALL_FILTER_OPTION = "all";
+
 const emptyManualTemplate = (defaultCategory) => ({
   title: "",
   subtitle: "",
@@ -152,6 +154,10 @@ export default function AdminCaseLab({
     column: "title",
     direction: "asc",
   });
+  const [inventoryFilters, setInventoryFilters] = useState({
+    category: ALL_FILTER_OPTION,
+    complexity: ALL_FILTER_OPTION,
+  });
   const [manualForm, setManualForm] = useState(emptyManualTemplate(defaultCategory));
   const [editingTemplateId, setEditingTemplateId] = useState("");
   const [generatorForm, setGeneratorForm] = useState({
@@ -162,8 +168,37 @@ export default function AdminCaseLab({
   const [working, setWorking] = useState(false);
   const [deletingTemplateId, setDeletingTemplateId] = useState("");
 
+  const complexityOptions = useMemo(
+    () =>
+      [...new Set(templates.map((template) => Number(template.complexity) || 0).filter(Boolean))]
+        .sort((left, right) => left - right),
+    [templates]
+  );
+
+  const filteredTemplates = useMemo(
+    () =>
+      templates.filter((template) => {
+        if (
+          inventoryFilters.category !== ALL_FILTER_OPTION &&
+          template.primaryCategory !== inventoryFilters.category
+        ) {
+          return false;
+        }
+
+        if (
+          inventoryFilters.complexity !== ALL_FILTER_OPTION &&
+          Number(template.complexity) !== Number(inventoryFilters.complexity)
+        ) {
+          return false;
+        }
+
+        return true;
+      }),
+    [inventoryFilters, templates]
+  );
+
   const sortedTemplates = useMemo(() => {
-    const nextTemplates = [...templates];
+    const nextTemplates = [...filteredTemplates];
     const activeColumn = SORTABLE_COLUMNS[sortConfig.column] || SORTABLE_COLUMNS.title;
     const direction = sortConfig.direction === "desc" ? -1 : 1;
 
@@ -184,7 +219,11 @@ export default function AdminCaseLab({
     });
 
     return nextTemplates;
-  }, [categoryMap, sortConfig, templates]);
+  }, [categoryMap, filteredTemplates, sortConfig]);
+
+  const hasActiveInventoryFilters =
+    inventoryFilters.category !== ALL_FILTER_OPTION ||
+    inventoryFilters.complexity !== ALL_FILTER_OPTION;
 
   const handleSort = (column) => {
     setSortConfig((current) => ({
@@ -515,9 +554,77 @@ export default function AdminCaseLab({
                   Existing Templates
                 </p>
                 <h2 className="mt-2 text-2xl font-bold">Library</h2>
-                <p className="mt-2 text-sm text-base-content/65">
-                  {templates.length} total cases in the library
-                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-base-content/65">
+                  <p>
+                    {hasActiveInventoryFilters
+                      ? `${sortedTemplates.length} / ${templates.length} cases shown`
+                      : `${templates.length} total cases in the library`}
+                  </p>
+                  {hasActiveInventoryFilters && (
+                    <span className="badge badge-outline">
+                      Filtered total: {sortedTemplates.length}
+                    </span>
+                  )}
+                </div>
+                <div className="mt-5 grid gap-4 md:grid-cols-[minmax(0,1fr)_180px_auto]">
+                  <label className="form-control">
+                    <span className="label-text font-semibold">Filter by category</span>
+                    <select
+                      className="select select-bordered"
+                      value={inventoryFilters.category}
+                      onChange={(event) =>
+                        setInventoryFilters((current) => ({
+                          ...current,
+                          category: event.target.value,
+                        }))
+                      }
+                    >
+                      <option value={ALL_FILTER_OPTION}>All categories</option>
+                      {categories.map((category) => (
+                        <option key={category.slug} value={category.slug}>
+                          {category.title}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="form-control">
+                    <span className="label-text font-semibold">Filter by complexity</span>
+                    <select
+                      className="select select-bordered"
+                      value={inventoryFilters.complexity}
+                      onChange={(event) =>
+                        setInventoryFilters((current) => ({
+                          ...current,
+                          complexity: event.target.value,
+                        }))
+                      }
+                    >
+                      <option value={ALL_FILTER_OPTION}>All levels</option>
+                      {complexityOptions.map((complexity) => (
+                        <option key={complexity} value={complexity}>
+                          Complexity {complexity}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <div className="flex items-end">
+                    <button
+                      type="button"
+                      className="btn btn-ghost"
+                      disabled={!hasActiveInventoryFilters}
+                      onClick={() =>
+                        setInventoryFilters({
+                          category: ALL_FILTER_OPTION,
+                          complexity: ALL_FILTER_OPTION,
+                        })
+                      }
+                    >
+                      Clear Filters
+                    </button>
+                  </div>
+                </div>
                 <div className="mt-5 overflow-x-auto rounded-box border border-base-300">
                   <table className="table table-zebra">
                     <thead>
@@ -543,31 +650,39 @@ export default function AdminCaseLab({
                       </tr>
                     </thead>
                     <tbody>
-                      {sortedTemplates.map((template) => (
-                        <tr
-                          key={`stats-${template.id}`}
-                          className={selectedTemplateId === template.id ? "active" : "cursor-pointer"}
-                          onClick={() => handleSelectTemplate(template)}
-                        >
-                          <td className="font-semibold">{template.title}</td>
-                          <td>{categoryMap.get(template.primaryCategory) || template.primaryCategory}</td>
-                          <td>{template.complexity}</td>
-                          <td>{template.plays || 0}</td>
-                          <td>
-                            {template.wins || 0}/{template.losses || 0}/{template.draws || 0}
-                          </td>
-                          <td className="text-right">
-                            <button
-                              type="button"
-                              className="btn btn-ghost btn-xs text-error"
-                              disabled={deletingTemplateId === template.id}
-                              onClick={(event) => handleDeleteTemplate(event, template)}
-                            >
-                              {deletingTemplateId === template.id ? "Deleting..." : "Delete"}
-                            </button>
+                      {sortedTemplates.length === 0 ? (
+                        <tr>
+                          <td colSpan="6" className="py-8 text-center text-sm text-base-content/60">
+                            No case templates match the current filters.
                           </td>
                         </tr>
-                      ))}
+                      ) : (
+                        sortedTemplates.map((template) => (
+                          <tr
+                            key={`stats-${template.id}`}
+                            className={selectedTemplateId === template.id ? "active" : "cursor-pointer"}
+                            onClick={() => handleSelectTemplate(template)}
+                          >
+                            <td className="font-semibold">{template.title}</td>
+                            <td>{categoryMap.get(template.primaryCategory) || template.primaryCategory}</td>
+                            <td>{template.complexity}</td>
+                            <td>{template.plays || 0}</td>
+                            <td>
+                              {template.wins || 0}/{template.losses || 0}/{template.draws || 0}
+                            </td>
+                            <td className="text-right">
+                              <button
+                                type="button"
+                                className="btn btn-ghost btn-xs text-error"
+                                disabled={deletingTemplateId === template.id}
+                                onClick={(event) => handleDeleteTemplate(event, template)}
+                              >
+                                {deletingTemplateId === template.id ? "Deleting..." : "Delete"}
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
