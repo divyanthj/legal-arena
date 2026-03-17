@@ -68,7 +68,21 @@ const evidenceSchema = mongoose.Schema(
       enum: ["document", "photo", "message", "invoice", "witness", "record", "other"],
       default: "document",
     },
+    availabilityStatus: {
+      type: String,
+      enum: ["confirmed", "mentioned", "unknown", "missing", "contested"],
+      default: "",
+    },
+    holderSide: {
+      type: String,
+      enum: ["client", "opponent", "shared", "third-party", "unknown", ""],
+      default: "",
+    },
     linkedFactIds: {
+      type: [String],
+      default: [],
+    },
+    followUpQuestions: {
       type: [String],
       default: [],
     },
@@ -121,6 +135,10 @@ const canonicalFactSchema = mongoose.Schema(
       },
     },
     evidenceRefs: {
+      type: [String],
+      default: [],
+    },
+    followUpQuestions: {
       type: [String],
       default: [],
     },
@@ -228,6 +246,48 @@ const caseTemplateSchema = mongoose.Schema(
       default: "",
       trim: true,
     },
+    interviewBlueprint: {
+      client: {
+        opening: {
+          type: String,
+          default: "",
+          trim: true,
+        },
+        posture: {
+          type: String,
+          default: "",
+          trim: true,
+        },
+        priorityFactIds: {
+          type: [String],
+          default: [],
+        },
+        suggestedQuestions: {
+          type: [String],
+          default: [],
+        },
+      },
+      opponent: {
+        opening: {
+          type: String,
+          default: "",
+          trim: true,
+        },
+        posture: {
+          type: String,
+          default: "",
+          trim: true,
+        },
+        priorityFactIds: {
+          type: [String],
+          default: [],
+        },
+        suggestedQuestions: {
+          type: [String],
+          default: [],
+        },
+      },
+    },
     canonicalFacts: {
       type: [canonicalFactSchema],
       default: [],
@@ -250,4 +310,3 @@ caseTemplateSchema.plugin(toJSON);
 
 export default mongoose.models.CaseTemplate ||
   mongoose.model("CaseTemplate", caseTemplateSchema);
-

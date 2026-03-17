@@ -6,6 +6,13 @@ import CaseTemplate from "@/models/CaseTemplate";
 import { LAWBOOK_VERSION, getLawbookRules } from "@/data/legalArenaLawbook";
 import { listCategoryOptions, ensureSeedCaseTemplates } from "./templates";
 import {
+  buildMissingEvidenceNotesForSide,
+  buildSuggestedQuestionsForSide,
+  cleanPartyClaimText,
+  enrichTemplateForGameplay,
+  getSideOpeningStatement,
+} from "./templateInterview";
+import {
   ensureUserProfile,
   getEligibleComplexityForCategory,
   normalizeProgression,
@@ -18,6 +25,64 @@ const DEFAULT_PLAYER_SIDE = "client";
 const OPPOSING_SIDE = {
   client: "opponent",
   opponent: "client",
+};
+const MONGO_ID_PATTERN = /^[a-f0-9]{24}$/i;
+
+const slugify = (value = "") =>
+  String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+
+const buildCaseSessionSlug = (title = "", id = "") => {
+  const base = slugify(title) || "case";
+  const suffix = String(id || "").slice(-6).toLowerCase();
+
+  return suffix ? `${base}-${suffix}` : base;
+};
+
+const ensureCaseSessionSlug = (caseSession) => {
+  if (!caseSession || String(caseSession.slug || "").trim()) {
+    return false;
+  }
+
+  const sourceId = caseSession._id || caseSession.id;
+
+  if (!sourceId) {
+    return false;
+  }
+
+  caseSession.slug = buildCaseSessionSlug(caseSession.title, sourceId);
+  return true;
+};
+
+const persistCaseSessionSlug = async (caseSession) => {
+  if (!caseSession?.slug || !caseSession?._id) {
+    return;
+  }
+
+  await CaseSession.updateOne(
+    { _id: caseSession._id },
+    { $set: { slug: caseSession.slug } }
+  );
+};
+
+const buildCaseLookupQuery = ({ userId, caseId }) => {
+  const normalizedCaseId = String(caseId || "").trim();
+
+  if (!normalizedCaseId) {
+    return { userId, _id: null };
+  }
+
+  if (!MONGO_ID_PATTERN.test(normalizedCaseId)) {
+    return { userId, slug: normalizedCaseId };
+  }
+
+  return {
+    userId,
+    $or: [{ _id: normalizedCaseId }, { slug: normalizedCaseId }],
+  };
 };
 
 const normalizeClientIntakeStatement = (value = "") => {
@@ -44,25 +109,6 @@ const getPartyName = (template, side) =>
   side === "opponent" ? template.opponentName : template.clientName;
 
 const getSideLabel = (side) => (side === "opponent" ? "Defendant" : "Plaintiff");
-
-const humanizePartyClaim = (value = "") =>
-  String(value || "")
-    .trim()
-    .replace(
-      /\bthe opponent would use this point to challenge the client's credibility:\s*/i,
-      ""
-    )
-    .replace(
-      /\bthe opponent is likely to minimize the importance of this event or frame it differently:\s*/i,
-      ""
-    )
-    .replace(
-      /\bthe opponent disputes the client's framing and says the fact does not prove liability:\s*/i,
-      ""
-    )
-    .replace(/\bi don't think this should matter much, but\s*/i, "")
-    .replace(/\s{2,}/g, " ")
-    .trim();
 
 const buildOverviewForSide = (template, side) => {
   if (side === "client") {
@@ -95,6 +141,12 @@ const buildStarterTheoryForSide = (template, side) => {
 };
 
 const buildOpeningStatementForSide = (template, side) => {
+  const interviewOpening = getSideOpeningStatement(template, side);
+
+  if (interviewOpening) {
+    return normalizeClientIntakeStatement(interviewOpening);
+  }
+
   if (side === "client") {
     return normalizeClientIntakeStatement(template.openingStatement);
   }
@@ -112,7 +164,7 @@ const buildOpeningStatementForSide = (template, side) => {
       .find((item) => item?.claimedDetail) || null;
 
   if (claim) {
-    const detail = humanizePartyClaim(claim.claimedDetail);
+    const detail = cleanPartyClaimText(claim.claimedDetail);
 
     if (detail) {
       return detail;
@@ -160,15 +212,8 @@ const applyTemplateMetadataToSession = (caseSession, template) => {
   return changed;
 };
 
-const defaultOpenQuestions = (template) =>
-  ((template && template.canonicalFacts) || [])
-    .slice()
-    .sort(
-      (left, right) =>
-        (right.discoverability?.priority || 0) - (left.discoverability?.priority || 0)
-    )
-    .slice(0, 3)
-    .map((fact) => fact.label);
+const defaultOpenQuestions = (template, side) =>
+  buildSuggestedQuestionsForSide(template, side);
 
 const getActiveExitCooldowns = async (userId) => {
   const threshold = new Date(Date.now() - CASE_EXIT_COOLDOWN_MS);
@@ -226,12 +271,7 @@ const buildTemplateCard = ({ template, progression, cooldownEndsAt = null }) => 
     cooldownEndsAt: cooldownActive ? cooldownEndsAt.toISOString() : null,
     unlockReason:
       cooldownActive
-        ? `Available again after ${cooldownEndsAt.toLocaleString("en-US", {
-            month: "short",
-            day: "numeric",
-            hour: "numeric",
-            minute: "2-digit",
-          })}.`
+        ? "Available again soon."
         : unlockedByProgression
         ? "Available for your current specialization level."
         : `Unlock ${template.primaryCategory} complexity ${template.complexity} by completing more cases in that category.`,
@@ -240,11 +280,8 @@ const buildTemplateCard = ({ template, progression, cooldownEndsAt = null }) => 
 
 export const buildCasePayload = (caseSession, templateOverride = null) => {
   const plainCase = toPlain(caseSession);
-  const template =
-    templateOverride ||
-    plainCase.caseTemplateId ||
-    plainCase.template ||
-    null;
+  const templateSource = templateOverride || plainCase.caseTemplateId || plainCase.template || null;
+  const template = templateSource ? enrichTemplateForGameplay(toPlain(templateSource)) : null;
   const templateSlug = getTemplateSlugFromSession(plainCase);
   const playerSide = getPlayerSide(plainCase);
   const opponentSide = getOpposingSide(playerSide);
@@ -255,6 +292,9 @@ export const buildCasePayload = (caseSession, templateOverride = null) => {
 
   return {
     ...plainCase,
+    slug:
+      plainCase.slug ||
+      buildCaseSessionSlug(plainCase.title, plainCase.id || plainCase._id || ""),
     playerSide,
     opponentSide,
     playerSideLabel,
@@ -330,14 +370,16 @@ export const createCaseSession = async ({ userId, caseTemplateId }) => {
   await connectMongo();
   await ensureSeedCaseTemplates();
 
-  const template = await CaseTemplate.findOne({
+  const templateDocument = await CaseTemplate.findOne({
     _id: caseTemplateId,
     status: "active",
   });
 
-  if (!template) {
+  if (!templateDocument) {
     throw new Error("Case template not found");
   }
+
+  const template = enrichTemplateForGameplay(toPlain(templateDocument));
 
   const user = await ensureUserProfile(userId);
   const progression = normalizeProgression(user?.progression);
@@ -346,7 +388,7 @@ export const createCaseSession = async ({ userId, caseTemplateId }) => {
     template.primaryCategory
   );
   const cooldowns = await getActiveExitCooldowns(userId);
-  const cooldownEndsAt = cooldowns.get(String(template._id));
+  const cooldownEndsAt = cooldowns.get(String(templateDocument._id));
   const playerSide = Math.random() < 0.5 ? "client" : "opponent";
   const openingStatement = buildOpeningStatementForSide(template, playerSide);
 
@@ -364,10 +406,10 @@ export const createCaseSession = async ({ userId, caseTemplateId }) => {
     );
   }
 
-  const caseSession = await CaseSession.create({
+  const caseSession = new CaseSession({
     userId,
     title: template.title,
-    caseTemplateId: template._id,
+    caseTemplateId: templateDocument._id,
     templateSlug: template.slug,
     scenarioId: template.slug,
     practiceArea: template.practiceArea,
@@ -401,14 +443,16 @@ export const createCaseSession = async ({ userId, caseTemplateId }) => {
       risks: [],
       theory: buildStarterTheoryForSide(template, playerSide),
       desiredRelief: buildDesiredReliefForSide(template, playerSide),
-      openQuestions: defaultOpenQuestions(template),
+      openQuestions: defaultOpenQuestions(template, playerSide),
       knownFacts: [],
       knownClaims: [],
       disputedFacts: [],
       corroboratedFacts: [],
       sourceLinks: [],
+      missingEvidence: buildMissingEvidenceNotesForSide(template, playerSide),
       discoveredFactIds: [],
       discoveredClaimIds: [],
+      discoveredEvidenceIds: [],
       ready: false,
     },
     score: {
@@ -431,7 +475,10 @@ export const createCaseSession = async ({ userId, caseTemplateId }) => {
     },
   });
 
-  return buildCasePayload(caseSession, toPlain(template));
+  ensureCaseSessionSlug(caseSession);
+  await caseSession.save();
+
+  return buildCasePayload(caseSession, template);
 };
 
 export const listCaseSessionsForUser = async (userId) => {
@@ -457,6 +504,14 @@ export const listCaseSessionsForUser = async (userId) => {
     fallbackTemplates.map((template) => [template.slug, toPlain(template)])
   );
 
+  const sessionsNeedingSlug = cases.filter((caseSession) => ensureCaseSessionSlug(caseSession));
+
+  if (sessionsNeedingSlug.length > 0) {
+    await Promise.all(
+      sessionsNeedingSlug.map((caseSession) => persistCaseSessionSlug(caseSession))
+    );
+  }
+
   return cases.map((caseSession) => {
     const template =
       toPlain(caseSession.caseTemplateId) ||
@@ -471,14 +526,18 @@ export const getCaseSessionForUser = async ({ userId, caseId }) => {
   await connectMongo();
   await ensureSeedCaseTemplates();
 
-  const caseSession = await CaseSession.findOne({ _id: caseId, userId }).populate(
-    "caseTemplateId"
-  );
+  const caseSession = await CaseSession.findOne(
+    buildCaseLookupQuery({ userId, caseId })
+  ).populate("caseTemplateId");
 
   const fallbackTemplate =
     caseSession && !caseSession.caseTemplateId
       ? await CaseTemplate.findOne({ slug: getTemplateSlugFromSession(caseSession) })
       : null;
+
+  if (caseSession && ensureCaseSessionSlug(caseSession)) {
+    await persistCaseSessionSlug(caseSession);
+  }
 
   return caseSession
     ? buildCasePayload(
@@ -492,13 +551,15 @@ export const getCaseSessionDocumentForUser = async ({ userId, caseId }) => {
   await connectMongo();
   await ensureSeedCaseTemplates();
 
-  const caseSession = await CaseSession.findOne({ _id: caseId, userId }).populate(
-    "caseTemplateId"
-  );
+  const caseSession = await CaseSession.findOne(
+    buildCaseLookupQuery({ userId, caseId })
+  ).populate("caseTemplateId");
 
   if (!caseSession) {
     return null;
   }
+
+  const slugChanged = ensureCaseSessionSlug(caseSession);
 
   if (!caseSession.caseTemplateId) {
     const fallbackTemplate = await CaseTemplate.findOne({
@@ -527,6 +588,10 @@ export const getCaseSessionDocumentForUser = async ({ userId, caseId }) => {
     }
   }
 
+  if (slugChanged) {
+    await persistCaseSessionSlug(caseSession);
+  }
+
   return caseSession;
 };
 
@@ -534,13 +599,15 @@ export const exitCaseSessionForUser = async ({ userId, caseId }) => {
   await connectMongo();
   await ensureSeedCaseTemplates();
 
-  const caseSession = await CaseSession.findOne({ _id: caseId, userId }).populate(
-    "caseTemplateId"
-  );
+  const caseSession = await CaseSession.findOne(
+    buildCaseLookupQuery({ userId, caseId })
+  ).populate("caseTemplateId");
 
   if (!caseSession) {
     return null;
   }
+
+  ensureCaseSessionSlug(caseSession);
 
   if (caseSession.status !== "interview") {
     throw new Error("Only interview-stage cases can be exited.");

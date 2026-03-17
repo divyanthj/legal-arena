@@ -103,6 +103,12 @@ const caseSessionSchema = mongoose.Schema(
       required: true,
       trim: true,
     },
+    slug: {
+      type: String,
+      trim: true,
+      default: "",
+      index: true,
+    },
     caseTemplateId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "CaseTemplate",
@@ -216,11 +222,19 @@ const caseSessionSchema = mongoose.Schema(
         type: [String],
         default: [],
       },
+      missingEvidence: {
+        type: [String],
+        default: [],
+      },
       discoveredFactIds: {
         type: [String],
         default: [],
       },
       discoveredClaimIds: {
+        type: [String],
+        default: [],
+      },
+      discoveredEvidenceIds: {
         type: [String],
         default: [],
       },

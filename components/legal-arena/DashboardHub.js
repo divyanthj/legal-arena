@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import ButtonAccount from "@/components/ButtonAccount";
 import apiClient from "@/libs/api";
@@ -25,6 +25,45 @@ const formatDate = (value) =>
     year: "numeric",
   }).format(new Date(value));
 
+const formatCooldownTime = (value, timeZone) => {
+  if (!value) {
+    return "";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  const formatOptions = {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  };
+
+  if (timeZone) {
+    formatOptions.timeZone = timeZone;
+  }
+
+  return new Intl.DateTimeFormat("en", formatOptions).format(date);
+};
+
+const getTemplateUnlockMessage = (template, timeZone) => {
+  if (template.unlocked) {
+    return template.unlockReason;
+  }
+
+  if (template.cooldownEndsAt) {
+    const formatted = formatCooldownTime(template.cooldownEndsAt, timeZone);
+
+    return formatted ? `Available again after ${formatted}.` : "Available again soon.";
+  }
+
+  return template.unlockReason;
+};
+
 export default function DashboardHub({
   initialCases,
   templates,
@@ -36,6 +75,7 @@ export default function DashboardHub({
   userName = "Counsel",
 }) {
   const router = useRouter();
+  const [browserTimeZone, setBrowserTimeZone] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState(
     categories[0]?.slug || ""
   );
@@ -47,29 +87,29 @@ export default function DashboardHub({
       ),
     [selectedCategory, templates]
   );
-  const [selectedTemplateId, setSelectedTemplateId] = useState(
-    filteredTemplates[0]?.id || templates[0]?.id || ""
-  );
   const [creating, setCreating] = useState(false);
-  const selectedTemplate =
-    templates.find((template) => template.id === selectedTemplateId) || null;
 
   const selectedLeaderboard = categoryLeaderboards[selectedCategory] || [];
   const categoryProgress =
     progression.categoryStats.find((item) => item.categorySlug === selectedCategory) ||
     null;
 
-  const handleCreateCase = async () => {
-    if (!selectedTemplateId) return;
+  useEffect(() => {
+    const detectedTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    setBrowserTimeZone(detectedTimeZone || null);
+  }, []);
+
+  const handleCreateCase = async (caseTemplateId) => {
+    if (!caseTemplateId) return;
 
     setCreating(true);
 
     try {
       const { caseSession } = await apiClient.post("/cases", {
-        caseTemplateId: selectedTemplateId,
+        caseTemplateId,
       });
 
-      router.push(`/dashboard/cases/${caseSession.id}`);
+      router.push(`/dashboard/cases/${caseSession.slug || caseSession.id}`);
     } catch (error) {
       console.error(error);
     } finally {
@@ -155,21 +195,11 @@ export default function DashboardHub({
           <div className="space-y-6">
             <div className="card border border-base-300 bg-base-100 shadow-xl">
               <div className="card-body p-6">
-                <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-                  <div>
-                    <p className="text-sm uppercase tracking-[0.25em] text-base-content/50">
-                      New Case
-                    </p>
-                    <h2 className="mt-2 text-2xl font-bold">Choose a dispute</h2>
-                  </div>
-                  <button
-                    className="btn btn-primary"
-                    onClick={handleCreateCase}
-                    disabled={creating || !selectedTemplateId || !selectedTemplate?.unlocked}
-                  >
-                    {creating && <span className="loading loading-spinner loading-xs" />}
-                    Start Case
-                  </button>
+                <div>
+                  <p className="text-sm uppercase tracking-[0.25em] text-base-content/50">
+                    New Case
+                  </p>
+                  <h2 className="mt-2 text-2xl font-bold">Choose a dispute</h2>
                 </div>
 
                 <div className="mt-5 flex flex-wrap gap-2">
@@ -181,20 +211,7 @@ export default function DashboardHub({
                           ? "border-primary bg-primary/10"
                           : "border-base-300 bg-base-100"
                       }`}
-                      onClick={() => {
-                        setSelectedCategory(category.slug);
-                        const nextTemplate =
-                          templates.find(
-                            (item) =>
-                              item.primaryCategory === category.slug && item.unlocked
-                          ) ||
-                          templates.find(
-                            (item) => item.primaryCategory === category.slug
-                          );
-                        if (nextTemplate) {
-                          setSelectedTemplateId(nextTemplate.id);
-                        }
-                      }}
+                      onClick={() => setSelectedCategory(category.slug)}
                     >
                       {category.title}
                     </button>
@@ -202,19 +219,13 @@ export default function DashboardHub({
                 </div>
 
                 <div className="mt-5 grid gap-4">
-                  {visibleTemplates.map((template) => {
-                    const selected = template.id === selectedTemplateId;
-
-                    return (
-                      <button
-                        key={template.id}
-                        className={`rounded-box border p-5 text-left transition ${
-                          selected
-                            ? "border-primary bg-primary/10 shadow-lg"
-                            : "border-base-300 bg-base-100 hover:border-primary/40 hover:bg-base-200"
-                        }`}
-                        onClick={() => setSelectedTemplateId(template.id)}
-                      >
+                  {visibleTemplates.map((template) => (
+                    <div
+                      key={template.id}
+                      className="rounded-box border border-base-300 bg-base-100 p-5 transition hover:border-primary/40 hover:bg-base-200"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-4">
+                        <div className="flex-1">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="badge badge-outline">
                             {template.practiceArea}
@@ -251,11 +262,20 @@ export default function DashboardHub({
                             template.unlocked ? "text-success" : "text-warning"
                           }`}
                         >
-                          {template.unlockReason}
+                          {getTemplateUnlockMessage(template, browserTimeZone)}
                         </p>
-                      </button>
-                    );
-                  })}
+                        </div>
+                        <button
+                          className="btn btn-primary"
+                          onClick={() => handleCreateCase(template.id)}
+                          disabled={creating || !template.unlocked}
+                        >
+                          {creating && <span className="loading loading-spinner loading-xs" />}
+                          Start Case
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
@@ -287,7 +307,7 @@ export default function DashboardHub({
                     initialCases.map((item) => (
                       <Link
                         key={item.id}
-                        href={`/dashboard/cases/${item.id}`}
+                        href={`/dashboard/cases/${item.slug || item.id}`}
                         className="block rounded-box border border-base-300 bg-base-100 p-5 transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg"
                       >
                         <div className="flex flex-wrap items-center justify-between gap-3">

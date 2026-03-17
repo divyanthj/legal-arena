@@ -36,7 +36,9 @@ const createRetentionEmailContent = ({
   recommendedTemplate = null,
 }) => {
   const name = getUserDisplayName(user);
-  const caseUrl = buildAppUrl(`/dashboard/cases/${caseSession.id || caseSession._id}`);
+  const caseUrl = buildAppUrl(
+    `/dashboard/cases/${caseSession.slug || caseSession.id || caseSession._id}`
+  );
   const dashboardUrl = buildAppUrl("/dashboard");
   const categoryUnlockLevel = getCategoryUnlockLevel({
     progression,

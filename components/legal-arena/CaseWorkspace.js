@@ -45,6 +45,8 @@ const getPlaintiffName = (caseSession) =>
 const getDefendantName = (caseSession) =>
   caseSession.defendantName || caseSession.premise.opponentName;
 
+const getCaseRouteRef = (caseSession) => caseSession.slug || caseSession.id;
+
 export default function CaseWorkspace({ initialCase }) {
   const router = useRouter();
   const [caseSession, setCaseSession] = useState(initialCase);
@@ -52,6 +54,7 @@ export default function CaseWorkspace({ initialCase }) {
   const [argument, setArgument] = useState("");
   const [working, setWorking] = useState(false);
   const [pendingSpeaker, setPendingSpeaker] = useState("");
+  const [optimisticTranscriptEntry, setOptimisticTranscriptEntry] = useState(null);
   const [factSheetDraft, setFactSheetDraft] = useState({
     summary: initialCase.factSheet.summary || "",
     theory: initialCase.factSheet.theory || "",
@@ -61,6 +64,7 @@ export default function CaseWorkspace({ initialCase }) {
     risks: joinLines(initialCase.factSheet.risks),
     disputedFacts: joinLines(initialCase.factSheet.disputedFacts),
     corroboratedFacts: joinLines(initialCase.factSheet.corroboratedFacts),
+    missingEvidence: joinLines(initialCase.factSheet.missingEvidence || []),
   });
 
   useEffect(() => {
@@ -73,6 +77,7 @@ export default function CaseWorkspace({ initialCase }) {
       risks: joinLines(caseSession.factSheet.risks),
       disputedFacts: joinLines(caseSession.factSheet.disputedFacts),
       corroboratedFacts: joinLines(caseSession.factSheet.corroboratedFacts),
+      missingEvidence: joinLines(caseSession.factSheet.missingEvidence || []),
     });
   }, [caseSession]);
 
@@ -86,26 +91,45 @@ export default function CaseWorkspace({ initialCase }) {
     risks: splitLines(factSheetDraft.risks),
     disputedFacts: splitLines(factSheetDraft.disputedFacts),
     corroboratedFacts: splitLines(factSheetDraft.corroboratedFacts),
+    missingEvidence: splitLines(factSheetDraft.missingEvidence),
   });
+
+  const visibleInterviewTranscript = optimisticTranscriptEntry
+    ? [...caseSession.interviewTranscript, optimisticTranscriptEntry]
+    : caseSession.interviewTranscript;
+
+  const visibleCourtroomTranscript = optimisticTranscriptEntry
+    ? [...caseSession.courtroomTranscript, optimisticTranscriptEntry]
+    : caseSession.courtroomTranscript;
 
   const handleInterviewSubmit = async (event) => {
     event.preventDefault();
     if (!question.trim()) return;
 
+    const submittedQuestion = question.trim();
+
+    setOptimisticTranscriptEntry({
+      role: "player",
+      speaker: "You",
+      text: submittedQuestion,
+      createdAt: new Date().toISOString(),
+    });
+    setQuestion("");
     setWorking(true);
     setPendingSpeaker(getPlayerPartyName(caseSession));
 
     try {
       const { caseSession: nextCase } = await apiClient.post(
-        `/cases/${caseSession.id}/interview`,
-        { question }
+        `/cases/${getCaseRouteRef(caseSession)}/interview`,
+        { question: submittedQuestion }
       );
 
       setCaseSession(nextCase);
-      setQuestion("");
     } catch (error) {
+      setQuestion(submittedQuestion);
       console.error(error);
     } finally {
+      setOptimisticTranscriptEntry(null);
       setPendingSpeaker("");
       setWorking(false);
     }
@@ -116,7 +140,7 @@ export default function CaseWorkspace({ initialCase }) {
 
     try {
       const { caseSession: nextCase } = await apiClient.post(
-        `/cases/${caseSession.id}/finalize`,
+        `/cases/${getCaseRouteRef(caseSession)}/finalize`,
         {
           factSheet: buildFactSheetPayload(),
         }
@@ -134,20 +158,30 @@ export default function CaseWorkspace({ initialCase }) {
     event.preventDefault();
     if (!argument.trim()) return;
 
+    const submittedArgument = argument.trim();
+
+    setOptimisticTranscriptEntry({
+      round: caseSession.score.roundsCompleted + 1,
+      speaker: "player",
+      text: submittedArgument,
+      createdAt: new Date().toISOString(),
+    });
+    setArgument("");
     setWorking(true);
     setPendingSpeaker(getOpponentPartyName(caseSession));
 
     try {
       const { caseSession: nextCase } = await apiClient.post(
-        `/cases/${caseSession.id}/courtroom`,
-        { argument }
+        `/cases/${getCaseRouteRef(caseSession)}/courtroom`,
+        { argument: submittedArgument }
       );
 
       setCaseSession(nextCase);
-      setArgument("");
     } catch (error) {
+      setArgument(submittedArgument);
       console.error(error);
     } finally {
+      setOptimisticTranscriptEntry(null);
       setPendingSpeaker("");
       setWorking(false);
     }
@@ -165,7 +199,7 @@ export default function CaseWorkspace({ initialCase }) {
     setWorking(true);
 
     try {
-      await apiClient.post(`/cases/${caseSession.id}/exit`);
+      await apiClient.post(`/cases/${getCaseRouteRef(caseSession)}/exit`);
       router.push("/dashboard");
       router.refresh();
     } catch (error) {
@@ -224,7 +258,7 @@ export default function CaseWorkspace({ initialCase }) {
                   <span>Defendant: {defendantName}</span>
                   <span>{caseSession.premise.courtName}</span>
                 </div>
-                <p className="mt-3 text-sm text-primary-content/75">
+                <p className="mt-3 text-sm text-neutral-content/75">
                   You represent {playerPartyName} against {opponentPartyName}.
                 </p>
               </div>
@@ -234,7 +268,7 @@ export default function CaseWorkspace({ initialCase }) {
                   {isExited
                     ? "Exited"
                     : isInterview
-                    ? "Client Intake"
+                    ? "Party Intake"
                     : isVerdict
                       ? "Verdict"
                       : `Courtroom Round ${caseSession.score.roundsCompleted + 1}`}
@@ -265,7 +299,7 @@ export default function CaseWorkspace({ initialCase }) {
                   </div>
 
                   <div className="mt-5 space-y-4">
-                    {caseSession.interviewTranscript.map((entry, index) => (
+                    {visibleInterviewTranscript.map((entry, index) => (
                       <article
                         key={`${entry.createdAt}-${index}`}
                         className={`rounded-box p-4 ${
@@ -299,14 +333,26 @@ export default function CaseWorkspace({ initialCase }) {
                   <form className="mt-6 space-y-3" onSubmit={handleInterviewSubmit}>
                     <textarea
                       className="textarea textarea-bordered h-32 w-full"
-                      placeholder={`Ask ${playerPartyName} about documents, dates, witnesses, notice, or any weak spots you need to understand.`}
+                      placeholder={`Ask ${playerPartyName} about dates, records, witnesses, notice, or any proof gaps you need to pin down.`}
                       value={question}
                       onChange={(event) => setQuestion(event.target.value)}
                     />
                     <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div className="text-sm text-base-content/60">
-                        Suggested open questions:{" "}
-                        {caseSession.factSheet.openQuestions.slice(0, 3).join(" | ")}
+                      <div className="space-y-1 text-sm text-base-content/60">
+                        <div>
+                          Suggested open questions:{" "}
+                          {(caseSession.factSheet.openQuestions || [])
+                            .slice(0, 3)
+                            .join(" | ")}
+                        </div>
+                        {caseSession.factSheet.missingEvidence?.length > 0 && (
+                          <div>
+                            Proof gaps:{" "}
+                            {caseSession.factSheet.missingEvidence
+                              .slice(0, 2)
+                              .join(" | ")}
+                          </div>
+                        )}
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
                         <button
@@ -321,7 +367,7 @@ export default function CaseWorkspace({ initialCase }) {
                           {working && (
                             <span className="loading loading-spinner loading-xs" />
                           )}
-                          Interview Party
+                          Continue Intake
                         </button>
                       </div>
                     </div>
@@ -393,7 +439,7 @@ export default function CaseWorkspace({ initialCase }) {
                   </div>
 
                   <div className="mt-5 space-y-4">
-                    {caseSession.courtroomTranscript.length === 0 ? (
+                    {visibleCourtroomTranscript.length === 0 ? (
                       <div className="rounded-box bg-base-200 p-5">
                         <p className="font-semibold">Court is now in session.</p>
                         <p className="mt-2 text-sm text-base-content/70">
@@ -402,7 +448,7 @@ export default function CaseWorkspace({ initialCase }) {
                         </p>
                       </div>
                     ) : (
-                      caseSession.courtroomTranscript.map((entry, index) => (
+                      visibleCourtroomTranscript.map((entry, index) => (
                         <article
                           key={`${entry.round}-${entry.speaker}-${index}`}
                           className={`rounded-box p-4 ${
@@ -634,6 +680,23 @@ export default function CaseWorkspace({ initialCase }) {
                         setFactSheetDraft((current) => ({
                           ...current,
                           corroboratedFacts: event.target.value,
+                        }))
+                      }
+                      disabled={!isInterview}
+                    />
+                  </label>
+
+                  <label className="form-control">
+                    <span className="label-text font-semibold">
+                      Missing evidence / proof gaps
+                    </span>
+                    <textarea
+                      className="textarea textarea-bordered h-24"
+                      value={factSheetDraft.missingEvidence}
+                      onChange={(event) =>
+                        setFactSheetDraft((current) => ({
+                          ...current,
+                          missingEvidence: event.target.value,
                         }))
                       }
                       disabled={!isInterview}

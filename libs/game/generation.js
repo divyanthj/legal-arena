@@ -3,6 +3,11 @@ import "server-only";
 import CaseTemplate from "@/models/CaseTemplate";
 import { requestStructuredCompletion } from "@/libs/gpt";
 import { DEFAULT_CATEGORY_SLUG, getCategoryBySlug } from "./categories";
+import {
+  enrichTemplateForGameplay,
+  normalizeEvidenceAvailabilityStatus,
+  normalizeEvidenceHolderSide,
+} from "./templateInterview";
 import { validateCaseTemplatePayload } from "./templates";
 
 const DEFAULT_GENERATION_MODEL =
@@ -105,7 +110,7 @@ const isLowQualityClaimText = (value = "") => {
 };
 
 const buildGenerationPrompt = ({ category, complexity, prompt }) => ({
-  task: "Generate a legal case template for a courtroom simulation app.",
+  task: "Generate the base layer of a legal case template for a courtroom simulation app.",
   requirements: {
     category: category.slug,
     categoryTitle: category.title,
@@ -119,6 +124,7 @@ const buildGenerationPrompt = ({ category, complexity, prompt }) => ({
       "Each canonical fact must include both a client claim and an opponent claim.",
       "At least one canonical fact should be a risk or disputed point.",
       "Evidence items should correspond to the canonical facts.",
+      "Do not assume every possible record is already in hand. Some evidence can be uncertain or still need confirmation.",
       "Write claims in natural spoken language that a client or opponent would actually say.",
       "The openingStatement is not courtroom advocacy. It is the client's first intake-style explanation to their lawyer in plain first-person language.",
       "Do not start openingStatement with phrases like 'Your Honor', 'Your Honour', 'May it please the court', 'counsel', or other courtroom formalities.",
@@ -172,6 +178,7 @@ const buildGenerationPrompt = ({ category, complexity, prompt }) => ({
           priority: "number",
         },
         evidenceRefs: ["string"],
+        followUpQuestions: ["string"],
         claims: [
           {
             party: "client|opponent",
@@ -191,9 +198,69 @@ const buildGenerationPrompt = ({ category, complexity, prompt }) => ({
         label: "string",
         detail: "string",
         type: "document|photo|message|invoice|witness|record|other",
+        availabilityStatus: "confirmed|mentioned|unknown|missing|contested",
+        holderSide: "client|opponent|shared|third-party|unknown",
         linkedFactIds: ["string"],
+        followUpQuestions: ["string"],
       },
     ],
+  },
+});
+
+const buildInterviewPlanningPrompt = ({
+  category,
+  complexity,
+  prompt,
+  basePayload,
+}) => ({
+  task: "Refine the generated case into an interview-ready template with staged proof and side-specific intake guidance.",
+  requirements: {
+    category: category.slug,
+    categoryTitle: category.title,
+    complexity,
+    additionalPrompt: prompt || "",
+    rules: [
+      "Keep the same dispute, parties, and overall theory from the base case.",
+      "Do not rewrite the whole case. Only refine proof status and interview guidance.",
+      "Use evidence availability statuses carefully.",
+      "Use confirmed only when the record is realistically in hand or clearly available.",
+      "Use mentioned when a party plausibly thinks a record exists but cannot confidently prove that yet.",
+      "Use unknown or missing when the interview should surface a proof gap.",
+      "Write follow-up questions that a lawyer would naturally ask during intake.",
+      "Write a natural opening for both sides so the interview works whether the player draws claimant-side or defense-side.",
+    ],
+  },
+  baseTemplate: basePayload,
+  outputSchema: {
+    canonicalFacts: [
+      {
+        factId: "string",
+        truthStatus: "verified|probable|uncertain",
+        followUpQuestions: ["string"],
+      },
+    ],
+    evidenceItems: [
+      {
+        id: "string",
+        availabilityStatus: "confirmed|mentioned|unknown|missing|contested",
+        holderSide: "client|opponent|shared|third-party|unknown",
+        followUpQuestions: ["string"],
+      },
+    ],
+    interviewBlueprint: {
+      client: {
+        opening: "string",
+        posture: "string",
+        priorityFactIds: ["string"],
+        suggestedQuestions: ["string"],
+      },
+      opponent: {
+        opening: "string",
+        posture: "string",
+        priorityFactIds: ["string"],
+        suggestedQuestions: ["string"],
+      },
+    },
   },
 });
 
@@ -354,70 +421,173 @@ const ensurePartyCoverage = (fact) => {
   return normalized;
 };
 
-const normalizeGeneratedPayload = (payload, categorySlug, complexity) => ({
-  ...payload,
-  sourceType: "generated",
-  status: "active",
-  title: buildInterestingTitle({
-    title: payload.title,
-    subtitle: payload.subtitle,
-    categorySlug,
-  }),
-  subtitle: String(payload.subtitle || "").trim(),
-  openingStatement: normalizeClientIntakeStatement(payload.openingStatement),
-  primaryCategory: payload.primaryCategory || categorySlug,
-  complexity,
-  secondaryCategories: Array.isArray(payload.secondaryCategories)
-    ? payload.secondaryCategories.map((item) => String(item).trim()).filter(Boolean)
+const normalizeBlueprintSide = (value = {}) => ({
+  opening: normalizeClientIntakeStatement(value.opening),
+  posture: String(value.posture || "").trim(),
+  priorityFactIds: Array.isArray(value.priorityFactIds)
+    ? value.priorityFactIds.map((item) => String(item).trim()).filter(Boolean)
     : [],
-  legalTags:
-    Array.isArray(payload.legalTags) &&
-    payload.legalTags.map((item) => String(item).trim()).filter(Boolean).length > 0
-      ? payload.legalTags.map((item) => String(item).trim()).filter(Boolean)
-      : categoryLegalTagDefaults[categorySlug] || ["records", "evidence", "credibility"],
-  canonicalFacts: Array.isArray(payload.canonicalFacts)
-    ? payload.canonicalFacts.map((fact, index) => ({
-        factId: String(fact.factId || `fact-${index + 1}`).trim(),
-        label: String(fact.label || `Fact ${index + 1}`).trim(),
-        kind: ["timeline", "supporting", "risk", "dispute", "evidence"].includes(
-          fact.kind
-        )
-          ? fact.kind
-          : "supporting",
-        truthStatus: ["verified", "probable", "uncertain"].includes(fact.truthStatus)
-          ? fact.truthStatus
-          : "verified",
-        canonicalDetail: String(fact.canonicalDetail || "").trim(),
-        discoverability: {
-          keywords: Array.isArray(fact.discoverability?.keywords)
-            ? fact.discoverability.keywords.map((item) => String(item).trim()).filter(Boolean)
-            : [],
-          phase: ["interview", "courtroom"].includes(fact.discoverability?.phase)
-            ? fact.discoverability.phase
-            : "interview",
-          priority:
-            typeof fact.discoverability?.priority === "number"
-              ? Math.max(1, Math.min(5, fact.discoverability.priority))
-              : 3,
-        },
-        evidenceRefs: Array.isArray(fact.evidenceRefs)
-          ? fact.evidenceRefs.map((item) => String(item).trim()).filter(Boolean)
-          : [],
-        claims: ensurePartyCoverage(fact),
-      }))
-    : [],
-  evidenceItems: Array.isArray(payload.evidenceItems)
-    ? payload.evidenceItems.map((item, index) => ({
-        id: String(item.id || `evidence-${index + 1}`).trim(),
-        label: String(item.label || `Evidence ${index + 1}`).trim(),
-        detail: String(item.detail || "").trim(),
-        type: normalizeEvidenceType(item.type),
-        linkedFactIds: Array.isArray(item.linkedFactIds)
-          ? item.linkedFactIds.map((factId) => String(factId).trim()).filter(Boolean)
-          : [],
-      }))
+  suggestedQuestions: Array.isArray(value.suggestedQuestions)
+    ? value.suggestedQuestions.map((item) => String(item).trim()).filter(Boolean)
     : [],
 });
+
+const normalizeBlueprintPatchSide = (value = {}) => {
+  const normalized = {};
+
+  if (typeof value.opening === "string" && value.opening.trim()) {
+    normalized.opening = normalizeClientIntakeStatement(value.opening);
+  }
+  if (typeof value.posture === "string" && value.posture.trim()) {
+    normalized.posture = String(value.posture).trim();
+  }
+  if (Array.isArray(value.priorityFactIds)) {
+    normalized.priorityFactIds = value.priorityFactIds
+      .map((item) => String(item).trim())
+      .filter(Boolean);
+  }
+  if (Array.isArray(value.suggestedQuestions)) {
+    normalized.suggestedQuestions = value.suggestedQuestions
+      .map((item) => String(item).trim())
+      .filter(Boolean);
+  }
+
+  return normalized;
+};
+
+const normalizeGeneratedPayload = (payload, categorySlug, complexity) =>
+  enrichTemplateForGameplay({
+    ...payload,
+    sourceType: "generated",
+    status: "active",
+    title: buildInterestingTitle({
+      title: payload.title,
+      subtitle: payload.subtitle,
+      categorySlug,
+    }),
+    subtitle: String(payload.subtitle || "").trim(),
+    openingStatement: normalizeClientIntakeStatement(payload.openingStatement),
+    primaryCategory: payload.primaryCategory || categorySlug,
+    complexity,
+    secondaryCategories: Array.isArray(payload.secondaryCategories)
+      ? payload.secondaryCategories.map((item) => String(item).trim()).filter(Boolean)
+      : [],
+    legalTags:
+      Array.isArray(payload.legalTags) &&
+      payload.legalTags.map((item) => String(item).trim()).filter(Boolean).length > 0
+        ? payload.legalTags.map((item) => String(item).trim()).filter(Boolean)
+        : categoryLegalTagDefaults[categorySlug] || ["records", "evidence", "credibility"],
+    canonicalFacts: Array.isArray(payload.canonicalFacts)
+      ? payload.canonicalFacts.map((fact, index) => ({
+          factId: String(fact.factId || `fact-${index + 1}`).trim(),
+          label: String(fact.label || `Fact ${index + 1}`).trim(),
+          kind: ["timeline", "supporting", "risk", "dispute", "evidence"].includes(
+            fact.kind
+          )
+            ? fact.kind
+            : "supporting",
+          truthStatus: ["verified", "probable", "uncertain"].includes(fact.truthStatus)
+            ? fact.truthStatus
+            : "verified",
+          canonicalDetail: String(fact.canonicalDetail || "").trim(),
+          discoverability: {
+            keywords: Array.isArray(fact.discoverability?.keywords)
+              ? fact.discoverability.keywords.map((item) => String(item).trim()).filter(Boolean)
+              : [],
+            phase: ["interview", "courtroom"].includes(fact.discoverability?.phase)
+              ? fact.discoverability.phase
+              : "interview",
+            priority:
+              typeof fact.discoverability?.priority === "number"
+                ? Math.max(1, Math.min(5, fact.discoverability.priority))
+                : 3,
+          },
+          evidenceRefs: Array.isArray(fact.evidenceRefs)
+            ? fact.evidenceRefs.map((item) => String(item).trim()).filter(Boolean)
+            : [],
+          followUpQuestions: Array.isArray(fact.followUpQuestions)
+            ? fact.followUpQuestions.map((item) => String(item).trim()).filter(Boolean)
+            : [],
+          claims: ensurePartyCoverage(fact),
+        }))
+      : [],
+    evidenceItems: Array.isArray(payload.evidenceItems)
+      ? payload.evidenceItems.map((item, index) => ({
+          id: String(item.id || `evidence-${index + 1}`).trim(),
+          label: String(item.label || `Evidence ${index + 1}`).trim(),
+          detail: String(item.detail || "").trim(),
+          type: normalizeEvidenceType(item.type),
+          availabilityStatus:
+            normalizeEvidenceAvailabilityStatus(item.availabilityStatus) || "",
+          holderSide: normalizeEvidenceHolderSide(item.holderSide) || "",
+          linkedFactIds: Array.isArray(item.linkedFactIds)
+            ? item.linkedFactIds.map((factId) => String(factId).trim()).filter(Boolean)
+            : [],
+          followUpQuestions: Array.isArray(item.followUpQuestions)
+            ? item.followUpQuestions.map((value) => String(value).trim()).filter(Boolean)
+            : [],
+        }))
+      : [],
+    interviewBlueprint: {
+      client: normalizeBlueprintSide(payload.interviewBlueprint?.client),
+      opponent: normalizeBlueprintSide(payload.interviewBlueprint?.opponent),
+    },
+  });
+
+const mergeInterviewPlanningPayload = (payload, plan = {}) => {
+  const factPatchMap = new Map(
+    (Array.isArray(plan.canonicalFacts) ? plan.canonicalFacts : [])
+      .filter((item) => item?.factId)
+      .map((item) => [String(item.factId).trim(), item])
+  );
+  const evidencePatchMap = new Map(
+    (Array.isArray(plan.evidenceItems) ? plan.evidenceItems : [])
+      .filter((item) => item?.id)
+      .map((item) => [String(item.id).trim(), item])
+  );
+
+  return enrichTemplateForGameplay({
+    ...payload,
+    canonicalFacts: (payload.canonicalFacts || []).map((fact) => {
+      const patch = factPatchMap.get(fact.factId) || {};
+      const truthStatus = ["verified", "probable", "uncertain"].includes(patch.truthStatus)
+        ? patch.truthStatus
+        : fact.truthStatus;
+
+      return {
+        ...fact,
+        truthStatus,
+        followUpQuestions: Array.isArray(patch.followUpQuestions)
+          ? patch.followUpQuestions.map((item) => String(item).trim()).filter(Boolean)
+          : fact.followUpQuestions,
+      };
+    }),
+    evidenceItems: (payload.evidenceItems || []).map((item) => {
+      const patch = evidencePatchMap.get(item.id) || {};
+
+      return {
+        ...item,
+        availabilityStatus:
+          normalizeEvidenceAvailabilityStatus(patch.availabilityStatus) ||
+          item.availabilityStatus,
+        holderSide: normalizeEvidenceHolderSide(patch.holderSide) || item.holderSide,
+        followUpQuestions: Array.isArray(patch.followUpQuestions)
+          ? patch.followUpQuestions.map((value) => String(value).trim()).filter(Boolean)
+          : item.followUpQuestions,
+      };
+    }),
+    interviewBlueprint: {
+      client: {
+        ...(payload.interviewBlueprint?.client || {}),
+        ...normalizeBlueprintPatchSide(plan.interviewBlueprint?.client),
+      },
+      opponent: {
+        ...(payload.interviewBlueprint?.opponent || {}),
+        ...normalizeBlueprintPatchSide(plan.interviewBlueprint?.opponent),
+      },
+    },
+  });
+};
 
 export const generateCaseTemplatePayload = async ({
   categorySlug,
@@ -434,7 +604,7 @@ export const generateCaseTemplatePayload = async ({
     maxTokens: 2200,
     throwOnError: true,
     systemPrompt:
-      "You generate structured legal simulation cases. Output valid JSON only. Keep cases realistic, internally consistent, and grounded in ordinary evidence and witness behavior.",
+      "You generate structured legal simulation cases. This is phase 1 of 2. Output valid JSON only. Keep cases realistic, internally consistent, and grounded in ordinary evidence and witness behavior.",
     userPrompt: JSON.stringify(buildGenerationPrompt({ category, complexity, prompt })),
   });
 
@@ -442,7 +612,28 @@ export const generateCaseTemplatePayload = async ({
     throw new Error("Case generation is unavailable. Check OPENAI_API_KEY.");
   }
 
-  const payload = normalizeGeneratedPayload(aiResult, category.slug, complexity);
+  let payload = normalizeGeneratedPayload(aiResult, category.slug, complexity);
+
+  const interviewPlan = await requestStructuredCompletion({
+    userId,
+    model,
+    temperature: 0.4,
+    maxTokens: 1800,
+    systemPrompt:
+      "You refine legal simulation cases into interview-ready templates. This is phase 2 of 2. Output valid JSON only. Preserve the underlying dispute, but distinguish confirmed proof from leads, missing records, and disputed evidence.",
+    userPrompt: JSON.stringify(
+      buildInterviewPlanningPrompt({
+        category,
+        complexity,
+        prompt,
+        basePayload: payload,
+      })
+    ),
+  });
+
+  if (interviewPlan && typeof interviewPlan === "object") {
+    payload = mergeInterviewPlanningPayload(payload, interviewPlan);
+  }
 
   payload.slug =
     payload.slug?.trim() ||
