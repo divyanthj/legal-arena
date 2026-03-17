@@ -28,3 +28,47 @@ progress::-webkit-progress-value {
     @apply !border-black !bg-black !text-white hover:!border-neutral hover:!bg-neutral;
   }
 }
+
+@layer components {
+  .help-prose {
+    @apply max-w-none text-base text-base-content/80;
+  }
+
+  .help-prose h2 {
+    @apply mt-14 font-serif text-4xl leading-tight text-base-content md:text-5xl;
+  }
+
+  .help-prose h3 {
+    @apply mt-10 text-2xl font-bold text-base-content;
+  }
+
+  .help-prose p {
+    @apply mt-5 max-w-4xl leading-8;
+  }
+
+  .help-prose ol,
+  .help-prose ul {
+    @apply mt-5 max-w-4xl space-y-3 pl-6;
+  }
+
+  .help-prose ol {
+    list-style: decimal;
+  }
+
+  .help-prose ul {
+    list-style: disc;
+  }
+
+  .help-prose li {
+    @apply pl-1 leading-7;
+  }
+
+  .help-prose li > ol,
+  .help-prose li > ul {
+    @apply mt-3;
+  }
+
+  .help-prose strong {
+    @apply font-semibold text-base-content;
+  }
+}

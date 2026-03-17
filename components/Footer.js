@@ -45,6 +45,9 @@ const Footer = () => {
                 <Link href="/faq" className="link link-hover">
                   FAQ
                 </Link>
+                <Link href="/help" className="link link-hover">
+                  Tutorials
+                </Link>
                 <Link href="/tos" className="link link-hover">
                   Terms and Conditions
                 </Link>
