@@ -334,7 +334,11 @@ const pickRelevantFacts = (template, question, discoveredFactIds = []) => {
   const matched = ranked.filter((entry) => entry.score > 0).map((entry) => entry.fact);
 
   if (matched.length > 0) {
-    return matched.slice(0, 2);
+    const freshMatches = matched.filter(
+      (fact) => !discoveredFactIds.includes(fact.factId)
+    );
+
+    return (freshMatches.length > 0 ? freshMatches : matched).slice(0, 2);
   }
 
   return interviewFacts
@@ -384,7 +388,11 @@ const pickRelevantEvidence = (template, question, discoveredEvidenceIds = []) =>
   const matched = ranked.filter((entry) => entry.score > 0).map((entry) => entry.item);
 
   if (matched.length > 0) {
-    return matched.slice(0, 2);
+    const freshMatches = matched.filter(
+      (item) => !discoveredEvidenceIds.includes(item.id)
+    );
+
+    return (freshMatches.length > 0 ? freshMatches : matched).slice(0, 2);
   }
 
   return evidenceItems
@@ -436,10 +444,36 @@ const buildEvidenceResponseSegment = (item, side) => {
   }
 };
 
+const buildEvidenceHolderResponseSegment = (item) => {
+  const label = String(item.label || item.detail || "that record").trim();
+  const lowerLabel = label.charAt(0).toLowerCase() + label.slice(1);
+
+  switch (item.holderSide) {
+    case "third-party":
+      return item.availabilityStatus === "confirmed"
+        ? `A third party has ${lowerLabel}, but I do not know which one yet.`
+        : `I do not know which third party has ${lowerLabel} yet. I only know a third party may have it, but I have not confirmed who.`;
+    case "shared":
+      return `Both sides should be able to access ${lowerLabel}.`;
+    case "client":
+      return `From my side, I should be the one with ${lowerLabel}.`;
+    case "opponent":
+      return `The other side should be the one holding ${lowerLabel}.`;
+    default:
+      return `I do not know who has ${lowerLabel} yet.`;
+  }
+};
+
 const buildInterviewFallback = ({ caseSession, template, question, factSheet }) => {
   const safeTemplate = ensureTemplate(template);
   const playerSide = getPlayerSide(caseSession);
   const opponentSide = getOpposingSide(playerSide);
+  const lowerQuestion = String(question || "").trim().toLowerCase();
+  const recentPartyResponses = caseSession.interviewTranscript
+    .filter((entry) => entry.role === "party")
+    .slice(-3)
+    .map((entry) => entry.text?.trim())
+    .filter(Boolean);
   const matchedFacts = pickRelevantFacts(
     safeTemplate,
     question,
@@ -484,7 +518,7 @@ const buildInterviewFallback = ({ caseSession, template, question, factSheet }) 
     .map((item) => buildEvidenceResponseSegment(item, playerSide))
     .join(" ");
 
-  const partyResponse =
+  let partyResponse =
     partyClaims.length > 0
       ? [
           partyClaims
@@ -507,6 +541,34 @@ const buildInterviewFallback = ({ caseSession, template, question, factSheet }) 
       : leadQuestion
       ? `I'm not sure I can answer that directly yet. Try asking me: ${leadQuestion}`
       : "I may be mixing up the details. Ask me about the timeline, the records, or what the other side might challenge.";
+
+  const repeatedFallbackReply = recentPartyResponses.includes(partyResponse.trim());
+  const holderQuestion =
+    /\b(who|which)\b/.test(lowerQuestion) &&
+    (lowerQuestion.includes("third party") ||
+      lowerQuestion.includes("has it") ||
+      lowerQuestion.includes("holds it") ||
+      lowerQuestion.includes("who has"));
+  const proofQuestion =
+    lowerQuestion.includes("concrete") ||
+    lowerQuestion.includes("specific") ||
+    lowerQuestion.includes("proof") ||
+    lowerQuestion.includes("evidence") ||
+    lowerQuestion.includes("record");
+  const thirdPartyEvidence = matchedEvidence.find(
+    (item) => item.holderSide === "third-party"
+  );
+
+  if (repeatedFallbackReply && holderQuestion && thirdPartyEvidence) {
+    partyResponse = buildEvidenceHolderResponseSegment(thirdPartyEvidence);
+  } else if (repeatedFallbackReply && proofQuestion && matchedEvidence[0]) {
+    partyResponse = `The most concrete thing I can tell you right now is this: ${buildEvidenceResponseSegment(
+      matchedEvidence[0],
+      playerSide
+    )}`;
+  } else if (repeatedFallbackReply && leadQuestion) {
+    partyResponse = `I do not have a different detail on that point yet. The next thing we should pin down is: ${leadQuestion}`;
+  }
 
   const corroboratedClaims = partyClaims.filter(
     (item) =>
@@ -959,6 +1021,7 @@ export const continueInterview = async ({ caseSession, question, userId }) => {
     userId,
     temperature: 0.4,
     maxTokens: 1100,
+    retryAttempts: 1,
     systemPrompt:
       "You are roleplaying a legal-game party speaking to the player's lawyer during intake. Speak like a normal person in first person, not like a lawyer in court. Do not say 'Your Honor', 'Your Honour', 'may it please the court', 'counsel', or use courtroom advocacy language. Stay grounded in the provided claim layer, canonical fact layer, and evidence availability layer. Never invent unsupported facts or pretend uncertain evidence is confirmed. If a record is only mentioned, missing, or unknown, say so plainly. Output only valid JSON. Keep the fact sheet aligned to the represented side's perspective: supporting facts, risks, summary, theory, and relief should be framed for that side, while disputed facts should be phrased as what the other side is likely to argue.",
     userPrompt: JSON.stringify({
@@ -1024,6 +1087,7 @@ export const runCourtroomRound = async ({ caseSession, argument, userId }) => {
     userId,
     temperature: 0.5,
     maxTokens: 1200,
+    retryAttempts: 1,
     systemPrompt:
       "You are running a courtroom game turn. Produce JSON only. Keep the opposing lawyer grounded in the modeled claim layer for the side opposite the player, while scoring the player's use of corroborated facts, dispute handling, and lawbook support.",
     userPrompt: JSON.stringify({

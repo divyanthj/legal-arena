@@ -1,7 +1,7 @@
 import "server-only";
 
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
-const DEFAULT_MODEL = process.env.OPENAI_MODEL || "gpt-5.4";
+const DEFAULT_MODEL = process.env.OPENAI_MODEL?.trim() || "gpt-5.4";
 const usesMaxCompletionTokens = (model = "") =>
   /^gpt-5/i.test(model) || /^o[134]/i.test(model);
 const buildTokenPayload = (model, maxTokens) =>

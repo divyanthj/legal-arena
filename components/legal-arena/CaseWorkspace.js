@@ -21,6 +21,13 @@ const splitLines = (value) =>
     .map((item) => item.trim())
     .filter(Boolean);
 
+const normalizeCourtroomEntry = (entry = {}) => ({
+  ...entry,
+  citedFacts: Array.isArray(entry.citedFacts) ? entry.citedFacts : [],
+  citedRules: Array.isArray(entry.citedRules) ? entry.citedRules : [],
+  citedClaimIds: Array.isArray(entry.citedClaimIds) ? entry.citedClaimIds : [],
+});
+
 const winnerLabel = {
   player: "You prevailed",
   opponent: "Opposing counsel prevailed",
@@ -101,6 +108,8 @@ export default function CaseWorkspace({ initialCase }) {
   const visibleCourtroomTranscript = optimisticTranscriptEntry
     ? [...caseSession.courtroomTranscript, optimisticTranscriptEntry]
     : caseSession.courtroomTranscript;
+  const normalizedCourtroomTranscript =
+    visibleCourtroomTranscript.map(normalizeCourtroomEntry);
 
   const handleInterviewSubmit = async (event) => {
     event.preventDefault();
@@ -164,6 +173,9 @@ export default function CaseWorkspace({ initialCase }) {
       round: caseSession.score.roundsCompleted + 1,
       speaker: "player",
       text: submittedArgument,
+      citedFacts: [],
+      citedRules: [],
+      citedClaimIds: [],
       createdAt: new Date().toISOString(),
     });
     setArgument("");
@@ -439,7 +451,7 @@ export default function CaseWorkspace({ initialCase }) {
                   </div>
 
                   <div className="mt-5 space-y-4">
-                    {visibleCourtroomTranscript.length === 0 ? (
+                    {normalizedCourtroomTranscript.length === 0 ? (
                       <div className="rounded-box bg-base-200 p-5">
                         <p className="font-semibold">Court is now in session.</p>
                         <p className="mt-2 text-sm text-base-content/70">
@@ -448,7 +460,7 @@ export default function CaseWorkspace({ initialCase }) {
                         </p>
                       </div>
                     ) : (
-                      visibleCourtroomTranscript.map((entry, index) => (
+                      normalizedCourtroomTranscript.map((entry, index) => (
                         <article
                           key={`${entry.round}-${entry.speaker}-${index}`}
                           className={`rounded-box p-4 ${

@@ -9,19 +9,6 @@ A legal training app where users interview clients, build case files, argue simu
 3. Run the app with `npm run dev`.
 4. Visit `/dashboard` after signing in.
 
-## Environment
-
-- `MONGODB_URI`
-- `NEXTAUTH_SECRET`
-- `GOOGLE_ID`
-- `GOOGLE_SECRET`
-- `OPENAI_API_KEY`
-- `ADMINS`
-- `CASE_GENERATOR_API_KEY`
-- `RESEND_API_KEY`
-- `EMAIL_NUDGE_SECRET`
-- `CRON_SECRET` (if using Vercel Cron)
-
 ## Notes
 
 - The dashboard contains the playable case workflow.
