@@ -5,10 +5,7 @@ import connectMongo from "@/libs/mongoose";
 import CaseTemplate from "@/models/CaseTemplate";
 import CaseSession from "@/models/CaseSession";
 import { isAdminEmail } from "@/libs/admin";
-import {
-  ensureSeedCaseTemplates,
-  validateCaseTemplatePayload,
-} from "@/libs/game/templates";
+import { validateCaseTemplatePayload } from "@/libs/game/templates";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -22,7 +19,6 @@ export async function GET() {
 
   try {
     await connectMongo();
-    await ensureSeedCaseTemplates();
 
     const templates = await CaseTemplate.find({}).sort({ updatedAt: -1 });
     return NextResponse.json({ templates });

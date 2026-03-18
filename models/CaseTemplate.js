@@ -9,7 +9,7 @@ const claimSchema = mongoose.Schema(
   {
     party: {
       type: String,
-      enum: ["client", "opponent"],
+      enum: ["plaintiff", "defendant"],
       required: true,
     },
     claimedDetail: {
@@ -71,12 +71,12 @@ const evidenceSchema = mongoose.Schema(
     availabilityStatus: {
       type: String,
       enum: ["confirmed", "mentioned", "unknown", "missing", "contested"],
-      default: "",
+      default: "unknown",
     },
     holderSide: {
       type: String,
-      enum: ["client", "opponent", "shared", "third-party", "unknown", ""],
-      default: "",
+      enum: ["plaintiff", "defendant", "shared", "third-party", "unknown", ""],
+      default: "unknown",
     },
     linkedFactIds: {
       type: [String],
@@ -147,8 +147,68 @@ const canonicalFactSchema = mongoose.Schema(
       default: [],
       validate(value) {
         const parties = value.map((item) => item.party);
-        return parties.includes("client") && parties.includes("opponent");
+        return parties.includes("plaintiff") && parties.includes("defendant");
       },
+    },
+  },
+  { _id: false }
+);
+
+const partyProfileSchema = mongoose.Schema(
+  {
+    role: {
+      type: String,
+      enum: ["plaintiff", "defendant"],
+      required: true,
+    },
+    occupation: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    educationOrTraining: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    communicationStyle: {
+      type: String,
+      enum: ["plain", "precise", "guarded", "rambling", "combative", "measured"],
+      default: "plain",
+    },
+    intelligence: {
+      type: Number,
+      min: 0,
+      max: 1,
+      default: 0.5,
+    },
+    memoryDiscipline: {
+      type: Number,
+      min: 0,
+      max: 1,
+      default: 0.5,
+    },
+    honesty: {
+      type: Number,
+      min: 0,
+      max: 1,
+      default: 0.7,
+    },
+    emotionalControl: {
+      type: Number,
+      min: 0,
+      max: 1,
+      default: 0.5,
+    },
+    speechDeterminism: {
+      type: Number,
+      min: 0,
+      max: 1,
+      default: 0.5,
+    },
+    backgroundNotes: {
+      type: [String],
+      default: [],
     },
   },
   { _id: false }
@@ -227,12 +287,12 @@ const caseTemplateSchema = mongoose.Schema(
       required: true,
       trim: true,
     },
-    clientName: {
+    plaintiffName: {
       type: String,
       required: true,
       trim: true,
     },
-    opponentName: {
+    defendantName: {
       type: String,
       required: true,
       trim: true,
@@ -246,8 +306,18 @@ const caseTemplateSchema = mongoose.Schema(
       default: "",
       trim: true,
     },
+    partyProfiles: {
+      plaintiff: {
+        type: partyProfileSchema,
+        default: () => ({ role: "plaintiff" }),
+      },
+      defendant: {
+        type: partyProfileSchema,
+        default: () => ({ role: "defendant" }),
+      },
+    },
     interviewBlueprint: {
-      client: {
+      plaintiff: {
         opening: {
           type: String,
           default: "",
@@ -267,7 +337,7 @@ const caseTemplateSchema = mongoose.Schema(
           default: [],
         },
       },
-      opponent: {
+      defendant: {
         opening: {
           type: String,
           default: "",
@@ -307,6 +377,16 @@ const caseTemplateSchema = mongoose.Schema(
 );
 
 caseTemplateSchema.plugin(toJSON);
+
+const existingCaseTemplateModel = mongoose.models.CaseTemplate;
+
+if (
+  existingCaseTemplateModel &&
+  (!existingCaseTemplateModel.schema?.obj?.plaintiffName ||
+    !existingCaseTemplateModel.schema?.obj?.partyProfiles)
+) {
+  mongoose.deleteModel("CaseTemplate");
+}
 
 export default mongoose.models.CaseTemplate ||
   mongoose.model("CaseTemplate", caseTemplateSchema);

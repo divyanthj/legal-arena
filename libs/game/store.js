@@ -4,13 +4,14 @@ import connectMongo from "@/libs/mongoose";
 import CaseSession from "@/models/CaseSession";
 import CaseTemplate from "@/models/CaseTemplate";
 import { LAWBOOK_VERSION, getLawbookRules } from "@/data/legalArenaLawbook";
-import { listCategoryOptions, ensureSeedCaseTemplates } from "./templates";
+import { listCategoryOptions } from "./templates";
 import {
   buildMissingEvidenceNotesForSide,
   buildSuggestedQuestionsForSide,
   cleanPartyClaimText,
   enrichTemplateForGameplay,
   getSideOpeningStatement,
+  normalizeTemplateParty,
 } from "./templateInterview";
 import {
   ensureUserProfile,
@@ -104,6 +105,8 @@ const getPlayerSide = (caseSession) =>
   caseSession?.playerSide === "opponent" ? "opponent" : DEFAULT_PLAYER_SIDE;
 
 const getOpposingSide = (side) => OPPOSING_SIDE[side] || DEFAULT_PLAYER_SIDE;
+const getTemplatePartyForSessionSide = (side) =>
+  normalizeTemplateParty(side === "opponent" ? "defendant" : "plaintiff");
 
 const getPartyName = (template, side) =>
   side === "opponent" ? template.opponentName : template.clientName;
@@ -160,7 +163,11 @@ const buildOpeningStatementForSide = (template, side) => {
 
   const claim =
     prioritizedFacts
-      .map((fact) => (fact.claims || []).find((item) => item.party === side))
+      .map((fact) =>
+        (fact.claims || []).find(
+          (item) => item.party === getTemplatePartyForSessionSide(side)
+        )
+      )
       .find((item) => item?.claimedDetail) || null;
 
   if (claim) {
@@ -257,10 +264,10 @@ const buildTemplateCard = ({ template, progression, cooldownEndsAt = null }) => 
     subtitle: template.subtitle,
     overview: template.overview,
     courtName: template.courtName,
-    clientName: template.clientName,
-    opponentName: template.opponentName,
-    plaintiffName: template.clientName,
-    defendantName: template.opponentName,
+    clientName: template.plaintiffName || template.clientName,
+    opponentName: template.defendantName || template.opponentName,
+    plaintiffName: template.plaintiffName || template.clientName,
+    defendantName: template.defendantName || template.opponentName,
     practiceArea: template.practiceArea,
     primaryCategory: template.primaryCategory,
     secondaryCategories: template.secondaryCategories || [],
@@ -344,7 +351,6 @@ export const buildCasePayload = (caseSession, templateOverride = null) => {
 
 export const listScenarioOptions = async (userId) => {
   await connectMongo();
-  await ensureSeedCaseTemplates();
 
   const user = await ensureUserProfile(userId);
   const progression = normalizeProgression(user?.progression);
@@ -368,7 +374,6 @@ export const listScenarioOptions = async (userId) => {
 
 export const createCaseSession = async ({ userId, caseTemplateId }) => {
   await connectMongo();
-  await ensureSeedCaseTemplates();
 
   const templateDocument = await CaseTemplate.findOne({
     _id: caseTemplateId,
@@ -437,19 +442,19 @@ export const createCaseSession = async ({ userId, caseTemplateId }) => {
       },
     ],
     factSheet: {
-      summary: buildOverviewForSide(template, playerSide),
+      summary: "",
       timeline: [],
       supportingFacts: [],
       risks: [],
-      theory: buildStarterTheoryForSide(template, playerSide),
-      desiredRelief: buildDesiredReliefForSide(template, playerSide),
+      theory: "",
+      desiredRelief: "",
       openQuestions: defaultOpenQuestions(template, playerSide),
       knownFacts: [],
       knownClaims: [],
       disputedFacts: [],
       corroboratedFacts: [],
       sourceLinks: [],
-      missingEvidence: buildMissingEvidenceNotesForSide(template, playerSide),
+      missingEvidence: [],
       discoveredFactIds: [],
       discoveredClaimIds: [],
       discoveredEvidenceIds: [],
@@ -483,7 +488,6 @@ export const createCaseSession = async ({ userId, caseTemplateId }) => {
 
 export const listCaseSessionsForUser = async (userId) => {
   await connectMongo();
-  await ensureSeedCaseTemplates();
 
   const cases = await CaseSession.find({ userId, status: { $ne: "exited" } })
     .populate("caseTemplateId")
@@ -524,7 +528,6 @@ export const listCaseSessionsForUser = async (userId) => {
 
 export const getCaseSessionForUser = async ({ userId, caseId }) => {
   await connectMongo();
-  await ensureSeedCaseTemplates();
 
   const caseSession = await CaseSession.findOne(
     buildCaseLookupQuery({ userId, caseId })
@@ -549,7 +552,6 @@ export const getCaseSessionForUser = async ({ userId, caseId }) => {
 
 export const getCaseSessionDocumentForUser = async ({ userId, caseId }) => {
   await connectMongo();
-  await ensureSeedCaseTemplates();
 
   const caseSession = await CaseSession.findOne(
     buildCaseLookupQuery({ userId, caseId })
@@ -597,7 +599,6 @@ export const getCaseSessionDocumentForUser = async ({ userId, caseId }) => {
 
 export const exitCaseSessionForUser = async ({ userId, caseId }) => {
   await connectMongo();
-  await ensureSeedCaseTemplates();
 
   const caseSession = await CaseSession.findOne(
     buildCaseLookupQuery({ userId, caseId })

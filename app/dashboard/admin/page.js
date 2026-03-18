@@ -6,7 +6,7 @@ import connectMongo from "@/libs/mongoose";
 import CaseTemplate from "@/models/CaseTemplate";
 import CaseSession from "@/models/CaseSession";
 import { getAdminEmails, isAdminEmail } from "@/libs/admin";
-import { listCategoryOptions, ensureSeedCaseTemplates } from "@/libs/game/templates";
+import { listCategoryOptions } from "@/libs/game/templates";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +22,6 @@ export default async function AdminPage() {
   }
 
   await connectMongo();
-  await ensureSeedCaseTemplates();
 
   const [templates, templateStats] = await Promise.all([
     CaseTemplate.find({}).sort({ updatedAt: -1 }),

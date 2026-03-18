@@ -1,4 +1,4 @@
-const SIDE_VALUES = ["client", "opponent"];
+const SIDE_VALUES = ["plaintiff", "defendant"];
 const EVIDENCE_AVAILABILITY_VALUES = [
   "confirmed",
   "mentioned",
@@ -7,12 +7,20 @@ const EVIDENCE_AVAILABILITY_VALUES = [
   "contested",
 ];
 const EVIDENCE_HOLDER_VALUES = [
-  "client",
-  "opponent",
+  "plaintiff",
+  "defendant",
   "shared",
   "third-party",
   "unknown",
 ];
+
+const normalizeTemplateParty = (value = "") => {
+  const normalized = String(value || "").trim().toLowerCase();
+
+  if (normalized === "client") return "plaintiff";
+  if (normalized === "opponent") return "defendant";
+  return normalized;
+};
 
 const uniqueList = (items = []) =>
   [...new Set((items || []).map((item) => String(item || "").trim()).filter(Boolean))];
@@ -28,8 +36,8 @@ export const normalizeEvidenceAvailabilityStatus = (value = "") =>
     : "";
 
 export const normalizeEvidenceHolderSide = (value = "") =>
-  EVIDENCE_HOLDER_VALUES.includes(String(value || "").trim())
-    ? String(value || "").trim()
+  EVIDENCE_HOLDER_VALUES.includes(normalizeTemplateParty(String(value || "").trim()))
+    ? normalizeTemplateParty(String(value || "").trim())
     : "";
 
 export const cleanPartyClaimText = (value = "") =>
@@ -153,6 +161,14 @@ const normalizeFact = (fact = {}, index = 0, evidenceById = new Map()) => {
     label: String(fact.label || `Fact ${index + 1}`).trim(),
     canonicalDetail: String(fact.canonicalDetail || "").trim(),
     evidenceRefs,
+    claims: Array.isArray(fact.claims)
+      ? fact.claims.map((claim) => ({
+          ...claim,
+          party: SIDE_VALUES.includes(normalizeTemplateParty(claim.party))
+            ? normalizeTemplateParty(claim.party)
+            : "plaintiff",
+        }))
+      : [],
     followUpQuestions: uniqueList(
       normalizeStringList(fact.followUpQuestions).length
         ? normalizeStringList(fact.followUpQuestions)
@@ -176,14 +192,16 @@ const getTopClaimForSide = (template, side) => {
 
 const buildFallbackOpening = (template, side) => {
   const claim = getTopClaimForSide(template, side);
-  const playerName = side === "opponent" ? template.opponentName : template.clientName;
-  const otherName = side === "opponent" ? template.clientName : template.opponentName;
+  const playerName =
+    side === "defendant" ? template.defendantName : template.plaintiffName;
+  const otherName =
+    side === "defendant" ? template.plaintiffName : template.defendantName;
 
   if (claim?.claimedDetail) {
     return cleanPartyClaimText(claim.claimedDetail);
   }
 
-  if (side === "client") {
+  if (side === "plaintiff") {
     return String(template.openingStatement || "").trim();
   }
 
@@ -197,7 +215,42 @@ const normalizeBlueprintSide = (value = {}, template, side) => ({
   suggestedQuestions: uniqueList(value.suggestedQuestions || []),
 });
 
+const normalizeProfileScalar = (value, fallback) => {
+  const raw =
+    typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : fallback;
+  const softened =
+    raw >= 0.95 ? 0.85 : raw <= 0.05 ? 0.15 : raw;
+
+  return Math.round(softened * 20) / 20;
+};
+
+const normalizePartyProfile = (value = {}, role) => ({
+  role,
+  occupation: String(value.occupation || "").trim(),
+  educationOrTraining: String(value.educationOrTraining || "").trim(),
+  communicationStyle: [
+    "plain",
+    "precise",
+    "guarded",
+    "rambling",
+    "combative",
+    "measured",
+  ].includes(value.communicationStyle)
+    ? value.communicationStyle
+    : "plain",
+  intelligence: normalizeProfileScalar(value.intelligence, 0.5),
+  memoryDiscipline: normalizeProfileScalar(value.memoryDiscipline, 0.5),
+  honesty: normalizeProfileScalar(value.honesty, 0.7),
+  emotionalControl: normalizeProfileScalar(value.emotionalControl, 0.5),
+  speechDeterminism: normalizeProfileScalar(value.speechDeterminism, 0.5),
+  backgroundNotes: uniqueList(value.backgroundNotes || []),
+});
+
 export const enrichTemplateForGameplay = (template = {}) => {
+  const plaintiffName =
+    String(template.plaintiffName || template.clientName || "").trim();
+  const defendantName =
+    String(template.defendantName || template.opponentName || "").trim();
   const baseFacts = Array.isArray(template.canonicalFacts) ? template.canonicalFacts : [];
   const factsById = new Map(
     baseFacts.map((fact, index) => [
@@ -216,15 +269,27 @@ export const enrichTemplateForGameplay = (template = {}) => {
   const canonicalFacts = baseFacts.map((fact, index) => normalizeFact(fact, index, evidenceById));
   const normalizedTemplate = {
     ...template,
+    plaintiffName,
+    defendantName,
+    clientName: plaintiffName,
+    opponentName: defendantName,
+    partyProfiles: {
+      plaintiff: normalizePartyProfile(template.partyProfiles?.plaintiff, "plaintiff"),
+      defendant: normalizePartyProfile(template.partyProfiles?.defendant, "defendant"),
+    },
     canonicalFacts,
     evidenceItems,
   };
   const interviewBlueprint = {
-    client: normalizeBlueprintSide(template.interviewBlueprint?.client, normalizedTemplate, "client"),
-    opponent: normalizeBlueprintSide(
-      template.interviewBlueprint?.opponent,
+    plaintiff: normalizeBlueprintSide(
+      template.interviewBlueprint?.plaintiff || template.interviewBlueprint?.client,
       normalizedTemplate,
-      "opponent"
+      "plaintiff"
+    ),
+    defendant: normalizeBlueprintSide(
+      template.interviewBlueprint?.defendant || template.interviewBlueprint?.opponent,
+      normalizedTemplate,
+      "defendant"
     ),
   };
 
@@ -234,18 +299,23 @@ export const enrichTemplateForGameplay = (template = {}) => {
   };
 };
 
-export const getInterviewBlueprintForSide = (template = {}, side = "client") => {
+export const getInterviewBlueprintForSide = (template = {}, side = "plaintiff") => {
   const safeTemplate = enrichTemplateForGameplay(template);
-  return safeTemplate.interviewBlueprint?.[side] || safeTemplate.interviewBlueprint?.client;
+  const normalizedSide = normalizeTemplateParty(side);
+  return (
+    safeTemplate.interviewBlueprint?.[normalizedSide] ||
+    safeTemplate.interviewBlueprint?.plaintiff
+  );
 };
 
 export const buildSuggestedQuestionsForSide = (
   template = {},
-  side = "client",
+  side = "plaintiff",
   { excludedFactIds = [], excludedEvidenceIds = [], limit = 3 } = {}
 ) => {
   const safeTemplate = enrichTemplateForGameplay(template);
-  const blueprint = getInterviewBlueprintForSide(safeTemplate, side);
+  const normalizedSide = normalizeTemplateParty(side);
+  const blueprint = getInterviewBlueprintForSide(safeTemplate, normalizedSide);
   const useBlueprintDirectly =
     excludedFactIds.length === 0 &&
     excludedEvidenceIds.length === 0 &&
@@ -289,8 +359,8 @@ const describeEvidenceHolder = (holderSide, side) => {
       return "both sides";
     case "third-party":
       return "a third party";
-    case "client":
-    case "opponent":
+    case "plaintiff":
+    case "defendant":
       return "the other side";
     default:
       return "someone";
@@ -315,12 +385,13 @@ const buildMissingEvidenceNote = (item, side) => {
   }
 };
 
-export const buildMissingEvidenceNotesForSide = (template = {}, side = "client") => {
+export const buildMissingEvidenceNotesForSide = (template = {}, side = "plaintiff") => {
   const safeTemplate = enrichTemplateForGameplay(template);
+  const normalizedSide = normalizeTemplateParty(side);
 
   return uniqueList(
     (safeTemplate.evidenceItems || [])
-      .map((item) => buildMissingEvidenceNote(item, side))
+      .map((item) => buildMissingEvidenceNote(item, normalizedSide))
       .filter(Boolean)
   );
 };
@@ -336,7 +407,7 @@ export const getEvidenceItemsForFact = (template = {}, fact = {}) => {
 export const isFactCorroborated = (template = {}, fact = {}) =>
   getEvidenceItemsForFact(template, fact).some((item) => item.availabilityStatus === "confirmed");
 
-export const getSideOpeningStatement = (template = {}, side = "client") =>
+export const getSideOpeningStatement = (template = {}, side = "plaintiff") =>
   getInterviewBlueprintForSide(template, side)?.opening || "";
 
-export { SIDE_VALUES, EVIDENCE_AVAILABILITY_VALUES, EVIDENCE_HOLDER_VALUES };
+export { SIDE_VALUES, EVIDENCE_AVAILABILITY_VALUES, EVIDENCE_HOLDER_VALUES, normalizeTemplateParty };

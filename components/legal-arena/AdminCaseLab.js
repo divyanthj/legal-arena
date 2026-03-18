@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { toast } from "react-hot-toast";
 import apiClient from "@/libs/api";
 
 const ALL_FILTER_OPTION = "all";
@@ -17,8 +18,8 @@ const emptyManualTemplate = (defaultCategory) => ({
   primaryCategory: defaultCategory,
   complexity: 2,
   courtName: "",
-  clientName: "",
-  opponentName: "",
+  plaintiffName: "",
+  defendantName: "",
   legalTags: "",
   authoringNotes: "",
   canonicalFacts: JSON.stringify(
@@ -37,7 +38,7 @@ const emptyManualTemplate = (defaultCategory) => ({
         evidenceRefs: ["evidence-1"],
         claims: [
           {
-            party: "client",
+            party: "plaintiff",
             claimedDetail: "Client version of this fact.",
             stance: "admits",
             confidence: 0.9,
@@ -46,7 +47,7 @@ const emptyManualTemplate = (defaultCategory) => ({
             keywords: ["date", "event"],
           },
           {
-            party: "opponent",
+            party: "defendant",
             claimedDetail: "Opponent version of this fact.",
             stance: "distorts",
             confidence: 0.7,
@@ -93,8 +94,8 @@ const formatTemplateForForm = (template) => ({
   primaryCategory: template.primaryCategory || "contract-violation",
   complexity: template.complexity || 2,
   courtName: template.courtName || "",
-  clientName: template.clientName || "",
-  opponentName: template.opponentName || "",
+  plaintiffName: template.plaintiffName || template.clientName || "",
+  defendantName: template.defendantName || template.opponentName || "",
   legalTags: (template.legalTags || []).join(", "),
   authoringNotes: template.authoringNotes || "",
   canonicalFacts: JSON.stringify(template.canonicalFacts || [], null, 2),
@@ -164,9 +165,19 @@ export default function AdminCaseLab({
     primaryCategory: defaultCategory,
     complexity: 1,
     prompt: "",
+    batchCount: 1,
   });
   const [working, setWorking] = useState(false);
   const [deletingTemplateId, setDeletingTemplateId] = useState("");
+  const [generationProgress, setGenerationProgress] = useState({
+    total: 0,
+    completed: 0,
+    successes: 0,
+    failures: 0,
+    activeIndex: 0,
+    currentStep: "",
+    items: [],
+  });
 
   const complexityOptions = useMemo(
     () =>
@@ -308,20 +319,126 @@ export default function AdminCaseLab({
 
   const handleGenerate = async (event) => {
     event.preventDefault();
+    const total = Math.max(1, Number(generatorForm.batchCount) || 1);
+
+    setGenerationProgress({
+      total,
+      completed: 0,
+      successes: 0,
+      failures: 0,
+      activeIndex: 1,
+      currentStep: total > 1 ? "Starting batch run" : "Starting generation",
+      items: Array.from({ length: total }, (_, index) => ({
+        index: index + 1,
+        title: "",
+        status: "queued",
+        message: "Waiting to start",
+      })),
+    });
     setWorking(true);
 
     try {
-      const { template } = await apiClient.post("/admin/case-templates/generate", {
-        ...generatorForm,
-        complexity: Number(generatorForm.complexity),
-      });
-      setTemplates((current) => [template, ...current]);
-      setSelectedTemplateId(template.id);
+      let latestTemplateId = "";
+      let successCount = 0;
+      let failureCount = 0;
+
+      for (let index = 0; index < total; index += 1) {
+        const caseNumber = index + 1;
+
+        setGenerationProgress((current) => ({
+          ...current,
+          activeIndex: caseNumber,
+          currentStep: `Generating case ${caseNumber} of ${total}`,
+          items: current.items.map((item) =>
+            item.index === caseNumber
+              ? {
+                  ...item,
+                  status: "running",
+                  message:
+                    "Calling the generator. This will create the base case, refine the interview plan, then save it.",
+                }
+              : item
+          ),
+        }));
+
+        try {
+          const { template } = await apiClient.post("/admin/case-templates/generate", {
+            primaryCategory: generatorForm.primaryCategory,
+            complexity: Number(generatorForm.complexity),
+            prompt: generatorForm.prompt,
+          });
+
+          latestTemplateId = template.id;
+          successCount += 1;
+          setTemplates((current) => [template, ...current]);
+          setSelectedTemplateId(template.id);
+
+          setGenerationProgress((current) => ({
+            ...current,
+            completed: caseNumber,
+            successes: successCount,
+            failures: failureCount,
+            currentStep:
+              caseNumber < total
+                ? `Saved "${template.title}". Preparing the next case.`
+                : `Saved "${template.title}". Batch complete.`,
+            items: current.items.map((item) =>
+              item.index === caseNumber
+                ? {
+                    ...item,
+                    title: template.title,
+                    status: "completed",
+                    message: "Saved to the library and available immediately.",
+                  }
+                : item
+            ),
+          }));
+        } catch (error) {
+          failureCount += 1;
+          setGenerationProgress((current) => ({
+            ...current,
+            completed: caseNumber,
+            successes: successCount,
+            failures: failureCount,
+            currentStep:
+              caseNumber < total
+                ? `Case ${caseNumber} failed. Continuing with the next case.`
+                : "Batch finished with errors.",
+            items: current.items.map((item) =>
+              item.index === caseNumber
+                ? {
+                    ...item,
+                    status: "failed",
+                    message: error.message || "Generation failed.",
+                  }
+                : item
+            ),
+          }));
+        }
+      }
+
+      if (latestTemplateId) {
+        setSelectedTemplateId(latestTemplateId);
+      }
+
       setGeneratorForm({
         primaryCategory: defaultCategory,
         complexity: 1,
         prompt: "",
+        batchCount: 1,
       });
+
+      if (failureCount === 0) {
+        toast.success(
+          successCount === 1
+            ? "1 case template generated."
+            : `${successCount} case templates generated.`
+        );
+      } else {
+        toast.success(
+          `${successCount} generated, ${failureCount} failed. Review the run log for details.`
+        );
+      }
     } finally {
       setWorking(false);
     }
@@ -374,8 +491,8 @@ export default function AdminCaseLab({
                   ["starterTheory", "Starter theory"],
                   ["practiceArea", "Practice area"],
                   ["courtName", "Court name"],
-                  ["clientName", "Client name"],
-                  ["opponentName", "Opponent name"],
+                  ["plaintiffName", "Plaintiff name"],
+                  ["defendantName", "Defendant name"],
                   ["legalTags", "Legal tags (comma separated)"],
                   ["authoringNotes", "Authoring notes"],
                 ].map(([key, label]) => (
@@ -540,13 +657,127 @@ export default function AdminCaseLab({
                     />
                   </label>
 
+                  <label className="form-control">
+                    <span className="label-text font-semibold">How many cases</span>
+                    <input
+                      className="input input-bordered"
+                      type="number"
+                      min="1"
+                      max="25"
+                      value={generatorForm.batchCount}
+                      onChange={(event) =>
+                        setGeneratorForm((current) => ({
+                          ...current,
+                          batchCount: event.target.value,
+                        }))
+                      }
+                    />
+                    <span className="label-text-alt text-base-content/60">
+                      Cases are generated one by one so each completed template appears in
+                      the library immediately.
+                    </span>
+                  </label>
+
                   <button className="btn btn-secondary" disabled={working}>
                     {working && <span className="loading loading-spinner loading-xs" />}
-                    Generate Template
+                    {Number(generatorForm.batchCount) > 1
+                      ? "Generate Batch"
+                      : "Generate Template"}
                   </button>
                 </div>
               </div>
             </form>
+
+            {(working || generationProgress.total > 0) && (
+              <div className="card border border-base-300 bg-base-100 shadow-xl">
+                <div className="card-body p-6">
+                  <p className="text-sm uppercase tracking-[0.25em] text-base-content/50">
+                    Batch Progress
+                  </p>
+                  <h2 className="mt-2 text-2xl font-bold">
+                    {generationProgress.completed >= generationProgress.total &&
+                    generationProgress.total > 0
+                      ? "Latest generation run"
+                      : "Generation in progress"}
+                  </h2>
+                  <p className="mt-3 text-sm text-base-content/70">
+                    {generationProgress.currentStep ||
+                      "Waiting for the next generation run."}
+                  </p>
+                  <progress
+                    className="progress progress-secondary mt-4 w-full"
+                    value={generationProgress.completed}
+                    max={Math.max(generationProgress.total, 1)}
+                  />
+                  <div className="mt-4 grid gap-3 md:grid-cols-4">
+                    <div className="rounded-box border border-base-300 bg-base-200 p-3">
+                      <p className="text-xs uppercase tracking-[0.2em] text-base-content/45">
+                        Total
+                      </p>
+                      <p className="mt-1 text-2xl font-bold">{generationProgress.total}</p>
+                    </div>
+                    <div className="rounded-box border border-base-300 bg-base-200 p-3">
+                      <p className="text-xs uppercase tracking-[0.2em] text-base-content/45">
+                        Completed
+                      </p>
+                      <p className="mt-1 text-2xl font-bold">
+                        {generationProgress.completed}
+                      </p>
+                    </div>
+                    <div className="rounded-box border border-base-300 bg-base-200 p-3">
+                      <p className="text-xs uppercase tracking-[0.2em] text-base-content/45">
+                        Saved
+                      </p>
+                      <p className="mt-1 text-2xl font-bold text-success">
+                        {generationProgress.successes}
+                      </p>
+                    </div>
+                    <div className="rounded-box border border-base-300 bg-base-200 p-3">
+                      <p className="text-xs uppercase tracking-[0.2em] text-base-content/45">
+                        Failed
+                      </p>
+                      <p className="mt-1 text-2xl font-bold text-error">
+                        {generationProgress.failures}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-5 space-y-3">
+                    {generationProgress.items.map((item) => (
+                      <div
+                        key={`generation-progress-${item.index}`}
+                        className="rounded-box border border-base-300 bg-base-200/70 p-4"
+                      >
+                        <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                          <div>
+                            <p className="text-sm font-semibold">
+                              Case {item.index}
+                              {item.title ? `: ${item.title}` : ""}
+                            </p>
+                            <p className="mt-1 text-sm text-base-content/65">
+                              {item.message}
+                            </p>
+                          </div>
+                          <span
+                            className={[
+                              "badge badge-outline",
+                              item.status === "completed"
+                                ? "badge-success"
+                                : item.status === "failed"
+                                  ? "badge-error"
+                                  : item.status === "running"
+                                    ? "badge-secondary"
+                                    : "badge-ghost",
+                            ].join(" ")}
+                          >
+                            {item.status}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="card border border-base-300 bg-base-100 shadow-xl">
               <div className="card-body p-6">

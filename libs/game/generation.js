@@ -5,6 +5,7 @@ import { requestStructuredCompletion } from "@/libs/gpt";
 import { DEFAULT_CATEGORY_SLUG, getCategoryBySlug } from "./categories";
 import {
   enrichTemplateForGameplay,
+  normalizeTemplateParty,
   normalizeEvidenceAvailabilityStatus,
   normalizeEvidenceHolderSide,
 } from "./templateInterview";
@@ -121,18 +122,21 @@ const buildGenerationPrompt = ({ category, complexity, prompt }) => ({
       "Do not invent magic evidence or supernatural facts.",
       "Return a reusable case template, not a one-off transcript.",
       "Include at least 5 canonical facts.",
-      "Each canonical fact must include both a client claim and an opponent claim.",
+      "Each canonical fact must include both a plaintiff claim and a defendant claim.",
       "At least one canonical fact should be a risk or disputed point.",
       "Evidence items should correspond to the canonical facts.",
       "Do not assume every possible record is already in hand. Some evidence can be uncertain or still need confirmation.",
-      "Write claims in natural spoken language that a client or opponent would actually say.",
-      "The openingStatement is not courtroom advocacy. It is the client's first intake-style explanation to their lawyer in plain first-person language.",
+      "Write claims in natural spoken language that a plaintiff or defendant would actually say.",
+      "The openingStatement is not courtroom advocacy. It is the plaintiff's first intake-style explanation to their lawyer in plain first-person language.",
       "Do not start openingStatement with phrases like 'Your Honor', 'Your Honour', 'May it please the court', 'counsel', or other courtroom formalities.",
-      "Do not use meta phrases like 'modeled claims', 'client account pending refinement', 'the client alleges', or other schema-ish wording in any claim text.",
+      "Do not use meta phrases like 'modeled claims', 'client account pending refinement', 'the plaintiff alleges', or other schema-ish wording in any claim text.",
       "Title and subtitle must feel like a polished courtroom game mission, not a generic case caption.",
       "Avoid boring titles like 'State v. Smith', 'Contract Dispute Case', 'Marital Asset Dispute', or other plain docket-style names.",
       "Prefer short, vivid, memorable titles in the style of 'Security Deposit Showdown', 'The Vanishing Invoice', or 'Midnight Tow Trouble'.",
       "Use the subtitle to explain the concrete dispute in one crisp sentence.",
+      "Party profile numbers must vary by person and should usually land between 0.25 and 0.85.",
+      "Avoid setting all party profile values to 1, 0, or the same repeated number unless the facts truly justify an extreme personality.",
+      "speechDeterminism measures how patterned and consistent a person's speech is. Most people should be around 0.35 to 0.7, not 1.",
     ],
     titleStyleExamples: [
       {
@@ -161,10 +165,36 @@ const buildGenerationPrompt = ({ category, complexity, prompt }) => ({
     secondaryCategories: ["string"],
     complexity: "number",
     courtName: "string",
-    clientName: "string",
-    opponentName: "string",
+    plaintiffName: "string",
+    defendantName: "string",
     legalTags: ["string"],
     authoringNotes: "string",
+    partyProfiles: {
+      plaintiff: {
+        role: "plaintiff",
+        occupation: "string",
+        educationOrTraining: "string",
+        communicationStyle: "plain|precise|guarded|rambling|combative|measured",
+        intelligence: "number",
+        memoryDiscipline: "number",
+        honesty: "number",
+        emotionalControl: "number",
+        speechDeterminism: "number",
+        backgroundNotes: ["string"],
+      },
+      defendant: {
+        role: "defendant",
+        occupation: "string",
+        educationOrTraining: "string",
+        communicationStyle: "plain|precise|guarded|rambling|combative|measured",
+        intelligence: "number",
+        memoryDiscipline: "number",
+        honesty: "number",
+        emotionalControl: "number",
+        speechDeterminism: "number",
+        backgroundNotes: ["string"],
+      },
+    },
     canonicalFacts: [
       {
         factId: "string",
@@ -181,7 +211,7 @@ const buildGenerationPrompt = ({ category, complexity, prompt }) => ({
         followUpQuestions: ["string"],
         claims: [
           {
-            party: "client|opponent",
+            party: "plaintiff|defendant",
             claimedDetail: "string",
             stance: "admits|denies|distorts|omits",
             confidence: "number",
@@ -199,7 +229,7 @@ const buildGenerationPrompt = ({ category, complexity, prompt }) => ({
         detail: "string",
         type: "document|photo|message|invoice|witness|record|other",
         availabilityStatus: "confirmed|mentioned|unknown|missing|contested",
-        holderSide: "client|opponent|shared|third-party|unknown",
+        holderSide: "plaintiff|defendant|shared|third-party|unknown",
         linkedFactIds: ["string"],
         followUpQuestions: ["string"],
       },
@@ -228,6 +258,8 @@ const buildInterviewPlanningPrompt = ({
       "Use unknown or missing when the interview should surface a proof gap.",
       "Write follow-up questions that a lawyer would naturally ask during intake.",
       "Write a natural opening for both sides so the interview works whether the player draws claimant-side or defense-side.",
+      "Add partyProfiles for plaintiff and defendant so speech, recall quality, and disclosure style can vary by person.",
+      "Keep party profile numbers realistic and differentiated. Avoid defaulting every attribute to 1 or making both parties feel identical.",
     ],
   },
   baseTemplate: basePayload,
@@ -243,22 +275,42 @@ const buildInterviewPlanningPrompt = ({
       {
         id: "string",
         availabilityStatus: "confirmed|mentioned|unknown|missing|contested",
-        holderSide: "client|opponent|shared|third-party|unknown",
+        holderSide: "plaintiff|defendant|shared|third-party|unknown",
         followUpQuestions: ["string"],
       },
     ],
     interviewBlueprint: {
-      client: {
+      plaintiff: {
         opening: "string",
         posture: "string",
         priorityFactIds: ["string"],
         suggestedQuestions: ["string"],
       },
-      opponent: {
+      defendant: {
         opening: "string",
         posture: "string",
         priorityFactIds: ["string"],
         suggestedQuestions: ["string"],
+      },
+    },
+    partyProfiles: {
+      plaintiff: {
+        communicationStyle: "plain|precise|guarded|rambling|combative|measured",
+        intelligence: "number",
+        memoryDiscipline: "number",
+        honesty: "number",
+        emotionalControl: "number",
+        speechDeterminism: "number",
+        backgroundNotes: ["string"],
+      },
+      defendant: {
+        communicationStyle: "plain|precise|guarded|rambling|combative|measured",
+        intelligence: "number",
+        memoryDiscipline: "number",
+        honesty: "number",
+        emotionalControl: "number",
+        speechDeterminism: "number",
+        backgroundNotes: ["string"],
       },
     },
   },
@@ -346,7 +398,9 @@ const normalizeEvidenceType = (value = "") => {
 
 const normalizeClaims = (claims = []) =>
   (Array.isArray(claims) ? claims : []).map((claim) => ({
-    party: claim.party === "opponent" ? "opponent" : "client",
+    party: ["plaintiff", "defendant"].includes(normalizeTemplateParty(claim.party))
+      ? normalizeTemplateParty(claim.party)
+      : "plaintiff",
     claimedDetail: sanitizeClaimText(claim.claimedDetail),
     stance: ["admits", "denies", "distorts", "omits"].includes(claim.stance)
       ? claim.stance
@@ -365,7 +419,7 @@ const normalizeClaims = (claims = []) =>
   }));
 
 const buildFallbackClaimText = ({ party, canonicalDetail, kind }) => {
-  if (party === "client") {
+  if (party === "plaintiff") {
     if (kind === "risk") {
       return `I know they may use this against me: ${canonicalDetail}`;
     }
@@ -386,11 +440,11 @@ const ensurePartyCoverage = (fact) => {
   );
   const parties = normalized.map((claim) => claim.party);
 
-  if (!parties.includes("client")) {
+  if (!parties.includes("plaintiff")) {
     normalized.unshift({
-      party: "client",
+      party: "plaintiff",
       claimedDetail: buildFallbackClaimText({
-        party: "client",
+        party: "plaintiff",
         canonicalDetail: String(fact.canonicalDetail || "").trim(),
         kind: fact.kind,
       }),
@@ -402,11 +456,11 @@ const ensurePartyCoverage = (fact) => {
     });
   }
 
-  if (!parties.includes("opponent")) {
+  if (!parties.includes("defendant")) {
     normalized.push({
-      party: "opponent",
+      party: "defendant",
       claimedDetail: buildFallbackClaimText({
-        party: "opponent",
+        party: "defendant",
         canonicalDetail: String(fact.canonicalDetail || "").trim(),
         kind: fact.kind,
       }),
@@ -455,6 +509,41 @@ const normalizeBlueprintPatchSide = (value = {}) => {
   return normalized;
 };
 
+const normalizeProfileScalar = (value, fallback) => {
+  const raw =
+    typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : fallback;
+
+  // Pull extreme/generated values back toward believable ranges.
+  const softened =
+    raw >= 0.95 ? 0.85 : raw <= 0.05 ? 0.15 : raw;
+
+  return Math.round(softened * 20) / 20;
+};
+
+const normalizePartyProfile = (value = {}, role) => ({
+  role,
+  occupation: String(value.occupation || "").trim(),
+  educationOrTraining: String(value.educationOrTraining || "").trim(),
+  communicationStyle: [
+    "plain",
+    "precise",
+    "guarded",
+    "rambling",
+    "combative",
+    "measured",
+  ].includes(value.communicationStyle)
+    ? value.communicationStyle
+    : "plain",
+  intelligence: normalizeProfileScalar(value.intelligence, 0.5),
+  memoryDiscipline: normalizeProfileScalar(value.memoryDiscipline, 0.5),
+  honesty: normalizeProfileScalar(value.honesty, 0.7),
+  emotionalControl: normalizeProfileScalar(value.emotionalControl, 0.5),
+  speechDeterminism: normalizeProfileScalar(value.speechDeterminism, 0.5),
+  backgroundNotes: Array.isArray(value.backgroundNotes)
+    ? value.backgroundNotes.map((item) => String(item).trim()).filter(Boolean)
+    : [],
+});
+
 const normalizeGeneratedPayload = (payload, categorySlug, complexity) =>
   enrichTemplateForGameplay({
     ...payload,
@@ -467,6 +556,8 @@ const normalizeGeneratedPayload = (payload, categorySlug, complexity) =>
     }),
     subtitle: String(payload.subtitle || "").trim(),
     openingStatement: normalizeClientIntakeStatement(payload.openingStatement),
+    plaintiffName: String(payload.plaintiffName || payload.clientName || "").trim(),
+    defendantName: String(payload.defendantName || payload.opponentName || "").trim(),
     primaryCategory: payload.primaryCategory || categorySlug,
     complexity,
     secondaryCategories: Array.isArray(payload.secondaryCategories)
@@ -477,6 +568,10 @@ const normalizeGeneratedPayload = (payload, categorySlug, complexity) =>
       payload.legalTags.map((item) => String(item).trim()).filter(Boolean).length > 0
         ? payload.legalTags.map((item) => String(item).trim()).filter(Boolean)
         : categoryLegalTagDefaults[categorySlug] || ["records", "evidence", "credibility"],
+    partyProfiles: {
+      plaintiff: normalizePartyProfile(payload.partyProfiles?.plaintiff, "plaintiff"),
+      defendant: normalizePartyProfile(payload.partyProfiles?.defendant, "defendant"),
+    },
     canonicalFacts: Array.isArray(payload.canonicalFacts)
       ? payload.canonicalFacts.map((fact, index) => ({
           factId: String(fact.factId || `fact-${index + 1}`).trim(),
@@ -518,8 +613,8 @@ const normalizeGeneratedPayload = (payload, categorySlug, complexity) =>
           detail: String(item.detail || "").trim(),
           type: normalizeEvidenceType(item.type),
           availabilityStatus:
-            normalizeEvidenceAvailabilityStatus(item.availabilityStatus) || "",
-          holderSide: normalizeEvidenceHolderSide(item.holderSide) || "",
+            normalizeEvidenceAvailabilityStatus(item.availabilityStatus) || "unknown",
+          holderSide: normalizeEvidenceHolderSide(item.holderSide) || "unknown",
           linkedFactIds: Array.isArray(item.linkedFactIds)
             ? item.linkedFactIds.map((factId) => String(factId).trim()).filter(Boolean)
             : [],
@@ -529,8 +624,12 @@ const normalizeGeneratedPayload = (payload, categorySlug, complexity) =>
         }))
       : [],
     interviewBlueprint: {
-      client: normalizeBlueprintSide(payload.interviewBlueprint?.client),
-      opponent: normalizeBlueprintSide(payload.interviewBlueprint?.opponent),
+      plaintiff: normalizeBlueprintSide(
+        payload.interviewBlueprint?.plaintiff || payload.interviewBlueprint?.client
+      ),
+      defendant: normalizeBlueprintSide(
+        payload.interviewBlueprint?.defendant || payload.interviewBlueprint?.opponent
+      ),
     },
   });
 
@@ -569,22 +668,44 @@ const mergeInterviewPlanningPayload = (payload, plan = {}) => {
         ...item,
         availabilityStatus:
           normalizeEvidenceAvailabilityStatus(patch.availabilityStatus) ||
-          item.availabilityStatus,
-        holderSide: normalizeEvidenceHolderSide(patch.holderSide) || item.holderSide,
+          item.availabilityStatus ||
+          "unknown",
+        holderSide:
+          normalizeEvidenceHolderSide(patch.holderSide) ||
+          item.holderSide ||
+          "unknown",
         followUpQuestions: Array.isArray(patch.followUpQuestions)
           ? patch.followUpQuestions.map((value) => String(value).trim()).filter(Boolean)
           : item.followUpQuestions,
       };
     }),
     interviewBlueprint: {
-      client: {
-        ...(payload.interviewBlueprint?.client || {}),
-        ...normalizeBlueprintPatchSide(plan.interviewBlueprint?.client),
+      plaintiff: {
+        ...(payload.interviewBlueprint?.plaintiff ||
+          payload.interviewBlueprint?.client ||
+          {}),
+        ...normalizeBlueprintPatchSide(
+          plan.interviewBlueprint?.plaintiff || plan.interviewBlueprint?.client
+        ),
       },
-      opponent: {
-        ...(payload.interviewBlueprint?.opponent || {}),
-        ...normalizeBlueprintPatchSide(plan.interviewBlueprint?.opponent),
+      defendant: {
+        ...(payload.interviewBlueprint?.defendant ||
+          payload.interviewBlueprint?.opponent ||
+          {}),
+        ...normalizeBlueprintPatchSide(
+          plan.interviewBlueprint?.defendant || plan.interviewBlueprint?.opponent
+        ),
       },
+    },
+    partyProfiles: {
+      plaintiff: normalizePartyProfile(
+        plan.partyProfiles?.plaintiff || payload.partyProfiles?.plaintiff || {},
+        "plaintiff"
+      ),
+      defendant: normalizePartyProfile(
+        plan.partyProfiles?.defendant || payload.partyProfiles?.defendant || {},
+        "defendant"
+      ),
     },
   });
 };

@@ -2,7 +2,6 @@ import Link from "next/link";
 import ButtonSignin from "@/components/ButtonSignin";
 import connectMongo from "@/libs/mongoose";
 import CaseTemplate from "@/models/CaseTemplate";
-import { ensureSeedCaseTemplates } from "@/libs/game/templates";
 import { getCategoryTitle } from "@/libs/game/categories";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +9,6 @@ export const dynamic = "force-dynamic";
 const loadFeaturedCases = async () => {
   try {
     await connectMongo();
-    await ensureSeedCaseTemplates();
 
     const templates = await CaseTemplate.find({ status: "active" })
       .sort({ updatedAt: -1 })
@@ -23,10 +21,10 @@ const loadFeaturedCases = async () => {
   }
 };
 
-const getClientClaim = (template) =>
+const getPlaintiffClaim = (template) =>
   template.canonicalFacts
     ?.flatMap((fact) =>
-      (fact.claims || []).filter((claim) => claim.party === "client")
+      (fact.claims || []).filter((claim) => claim.party === "plaintiff")
     )
     .find((claim) => claim.claimedDetail?.trim())?.claimedDetail || "";
 
@@ -144,11 +142,11 @@ export default async function Page() {
 
               <div className="space-y-4">
                 <div className="rounded-box bg-base-200 p-5 shadow-sm">
-                  <p className="font-semibold">Client says</p>
+                  <p className="font-semibold">Plaintiff says</p>
                   <p className="mt-2 text-sm leading-6 text-base-content/75">
                     {heroCase
-                      ? `"${getClientClaim(heroCase) || heroCase.openingStatement}"`
-                      : "Real client-side claims from the active case library appear here."}
+                      ? `"${getPlaintiffClaim(heroCase) || heroCase.openingStatement}"`
+                      : "Real plaintiff-side claims from the active case library appear here."}
                   </p>
                 </div>
                 <div className="rounded-box bg-primary/10 p-5 shadow-sm">
@@ -218,9 +216,9 @@ export default async function Page() {
                     </p>
                     {template ? (
                       <div className="mt-4 flex flex-wrap gap-2 text-xs text-base-content/60">
-                        <span>{template.clientName}</span>
+                        <span>{template.plaintiffName || template.clientName}</span>
                         <span>vs.</span>
-                        <span>{template.opponentName}</span>
+                        <span>{template.defendantName || template.opponentName}</span>
                       </div>
                     ) : null}
                   </div>

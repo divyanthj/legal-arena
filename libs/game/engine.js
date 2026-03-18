@@ -8,13 +8,40 @@ import {
   cleanPartyClaimText,
   enrichTemplateForGameplay,
   getEvidenceItemsForFact,
-  isFactCorroborated,
+  getInterviewBlueprintForSide,
+  normalizeTemplateParty,
 } from "./templateInterview";
 
 const uniqueList = (items = []) =>
   [...new Set(items.filter(Boolean).map((item) => String(item).trim()).filter(Boolean))];
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+const lowerFirst = (value = "") =>
+  value ? `${value.charAt(0).toLowerCase()}${value.slice(1)}` : "";
+const LOW_SIGNAL_TOKENS = new Set([
+  "about",
+  "after",
+  "before",
+  "does",
+  "have",
+  "kind",
+  "landlord",
+  "person",
+  "questions",
+  "reasons",
+  "repairs",
+  "send",
+  "sent",
+  "tell",
+  "that",
+  "what",
+  "when",
+  "where",
+  "which",
+  "with",
+  "would",
+  "your",
+]);
 const DEFAULT_PLAYER_SIDE = "client";
 const OPPOSING_SIDE = {
   client: "opponent",
@@ -25,7 +52,31 @@ const tokenize = (value = "") =>
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, " ")
     .split(/\s+/)
-    .filter((token) => token.length > 2);
+    .filter((token) => token.length > 2 && !LOW_SIGNAL_TOKENS.has(token));
+
+const countSharedTokens = (left = "", right = "") => {
+  const leftTokens = new Set(tokenize(left));
+  const rightTokens = new Set(tokenize(right));
+
+  let matches = 0;
+  leftTokens.forEach((token) => {
+    if (rightTokens.has(token)) {
+      matches += 1;
+    }
+  });
+
+  return matches;
+};
+
+const hashString = (value = "") => {
+  let hash = 0;
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
+  }
+
+  return hash;
+};
 
 const humanizeClaimText = (value = "") => {
   const text = String(value || "").trim();
@@ -117,9 +168,15 @@ const ensureTemplate = (template) => ({
 });
 
 const getClaimId = (factId, party) => `${party}:${factId}`;
+const getTemplatePartyForSessionSide = (side) =>
+  normalizeTemplateParty(side === "opponent" ? "defendant" : "plaintiff");
+const getOtherTemplateParty = (templateSide) =>
+  templateSide === "defendant" ? "plaintiff" : "defendant";
 
 const getClaimForParty = (fact, party) =>
-  (fact.claims || []).find((claim) => claim.party === party) || null;
+  (fact.claims || []).find(
+    (claim) => claim.party === getTemplatePartyForSessionSide(party)
+  ) || null;
 
 const getPlayerSide = (caseSession) =>
   caseSession?.playerSide === "opponent" ? "opponent" : DEFAULT_PLAYER_SIDE;
@@ -128,6 +185,15 @@ const getOpposingSide = (side) => OPPOSING_SIDE[side] || DEFAULT_PLAYER_SIDE;
 
 const getPartyName = (template, side) =>
   side === "opponent" ? template.opponentName : template.clientName;
+const getPartyProfileForSide = (template, side) =>
+  template.partyProfiles?.[getTemplatePartyForSessionSide(side)] || {
+    communicationStyle: "plain",
+    intelligence: 0.5,
+    memoryDiscipline: 0.5,
+    honesty: 0.7,
+    emotionalControl: 0.5,
+    speechDeterminism: 0.5,
+  };
 
 const buildDesiredReliefForSide = (template, side) =>
   side === "client"
@@ -158,6 +224,123 @@ const buildSummaryForSide = (template, side) => {
   const sideLabel = side === "client" ? "claimant-side" : "defense-side";
 
   return `${buildOverviewForSide(template, side)} ${playerPartyName} is building the strongest ${sideLabel} record available.`;
+};
+
+const buildInterviewDisputeNote = (item) => {
+  const label = String(item.fact.label || item.fact.canonicalDetail || "this point").trim();
+  return `The other side may dispute ${lowerFirst(label)}.`;
+};
+
+const sortClaimsByRecallPriority = (claims = []) =>
+  [...claims].sort((left, right) => {
+    const leftScore =
+      (left.fact.discoverability?.priority || 0) +
+      (left.playerClaim.confidence || 0) * 2 +
+      (left.playerClaim.accessLevel === "direct"
+        ? 1
+        : left.playerClaim.accessLevel === "partial"
+        ? 0.4
+        : 0);
+    const rightScore =
+      (right.fact.discoverability?.priority || 0) +
+      (right.playerClaim.confidence || 0) * 2 +
+      (right.playerClaim.accessLevel === "direct"
+        ? 1
+        : right.playerClaim.accessLevel === "partial"
+        ? 0.4
+        : 0);
+
+    return rightScore - leftScore;
+  });
+
+const buildMemoryStyleClaimText = (claim, fact, profile = {}, question = "") => {
+  const detail = humanizeClaimText(claim?.claimedDetail || "");
+
+  if (!detail) {
+    return "";
+  }
+
+  const confidence = claim?.confidence ?? 0.75;
+  const accessLevel = claim?.accessLevel || "direct";
+  const stance = claim?.stance || "admits";
+  const communicationStyle = profile.communicationStyle || "plain";
+  const speechDeterminism = profile.speechDeterminism ?? 0.5;
+  const memoryDiscipline = profile.memoryDiscipline ?? 0.5;
+  const honesty = profile.honesty ?? 0.7;
+  const styleKey = `${question}:${fact?.factId || ""}:${claim?.claimedDetail || ""}`;
+  const variantIndex = hashString(styleKey) % 3;
+
+  if (speechDeterminism < 0.4 && variantIndex === 1 && confidence < 0.75) {
+    return `I think ${lowerFirst(detail)}`;
+  }
+
+  if (stance === "omits" || confidence < 0.45 || memoryDiscipline < 0.4) {
+    return variantIndex === 0
+      ? `I may not have this exactly right, but ${lowerFirst(detail)}`
+      : `I am not totally sure I have this straight, but ${lowerFirst(detail)}`;
+  }
+
+  if (accessLevel === "hearsay") {
+    return variantIndex === 0
+      ? `What I heard was that ${lowerFirst(detail)}`
+      : `From what I was told, ${lowerFirst(detail)}`;
+  }
+
+  if (accessLevel === "partial" || confidence < 0.7) {
+    return variantIndex === 0
+      ? `As I remember it, ${lowerFirst(detail)}`
+      : `As best as I can recall, ${lowerFirst(detail)}`;
+  }
+
+  if (fact?.kind === "risk") {
+    return communicationStyle === "guarded" || honesty < 0.55
+      ? `I guess what worries me is that ${lowerFirst(detail)}`
+      : `What worries me is that ${lowerFirst(detail)}`;
+  }
+
+  if (communicationStyle === "precise" && confidence >= 0.75) {
+    return detail;
+  }
+
+  if (communicationStyle === "rambling" && speechDeterminism < 0.6) {
+    return variantIndex === 0
+      ? `I mean, from where I sit, ${lowerFirst(detail)}`
+      : `The way I remember it, ${lowerFirst(detail)}`;
+  }
+
+  if (communicationStyle === "guarded") {
+    return `From what I can say for sure, ${lowerFirst(detail)}`;
+  }
+
+  if (communicationStyle === "combative") {
+    return `Look, ${lowerFirst(detail)}`;
+  }
+
+  return detail;
+};
+
+const buildRelevantMissingEvidenceNotes = ({
+  safeTemplate,
+  playerSide,
+  partyClaims = [],
+  matchedEvidence = [],
+}) => {
+  const linkedEvidence = uniqueList([
+    ...matchedEvidence.map((item) => item.id),
+    ...partyClaims.flatMap((item) =>
+      getEvidenceItemsForFact(safeTemplate, item.fact).map((evidenceItem) => evidenceItem.id)
+    ),
+  ])
+    .map((id) => (safeTemplate.evidenceItems || []).find((item) => item.id === id))
+    .filter(Boolean)
+    .filter((item) => item.availabilityStatus !== "confirmed");
+
+  return uniqueList(
+    linkedEvidence.map((item) => buildMissingEvidenceNotesForSide({
+      ...safeTemplate,
+      evidenceItems: [item],
+    }, playerSide)[0]).filter(Boolean)
+  );
 };
 
 const formatOpponentPosition = (value = "") => {
@@ -295,17 +478,19 @@ const mergeFactSheet = (current, patch, template) => {
   return next;
 };
 
-const scoreFactForQuestion = (fact, question) => {
+const scoreFactForQuestion = (fact, question, playerSide, template) => {
+  const templateSide = getTemplatePartyForSessionSide(playerSide);
+  const playerClaim = (fact.claims || []).find((claim) => claim.party === templateSide);
+  const blueprint = getInterviewBlueprintForSide(template, templateSide);
+  const priorityBoost = (blueprint?.priorityFactIds || []).includes(fact.factId) ? 3 : 0;
   const questionTokens = tokenize(question);
   const keywords = uniqueList([
-    ...(fact.discoverability?.keywords || []),
-    ...((fact.claims || []).flatMap((claim) => claim.keywords || [])),
+    ...(playerClaim?.keywords || []),
   ]);
   const searchableTokens = uniqueList([
     ...keywords.flatMap((keyword) => tokenize(keyword)),
-    ...tokenize(fact.label),
-    ...tokenize(fact.canonicalDetail),
-    ...((fact.claims || []).flatMap((claim) => tokenize(claim.claimedDetail))),
+    ...tokenize(playerClaim?.claimedDetail || ""),
+    ...((fact.followUpQuestions || []).flatMap((value) => tokenize(value))),
   ]);
 
   const exactMatchCount = searchableTokens.filter((token) =>
@@ -314,55 +499,75 @@ const scoreFactForQuestion = (fact, question) => {
   const partialMatchCount = searchableTokens.filter((token) =>
     question.toLowerCase().includes(token)
   ).length;
+  const minimumSignal =
+    exactMatchCount > 0 || partialMatchCount >= 2 || questionTokens.length <= 2;
 
-  return exactMatchCount * 2 + partialMatchCount * 0.5 + (fact.discoverability?.priority || 0) / 10;
+  if (!minimumSignal) {
+    return 0;
+  }
+
+  return (
+    exactMatchCount * 2 +
+    partialMatchCount * 0.5 +
+    (fact.discoverability?.priority || 0) / 10 +
+    priorityBoost
+  );
 };
 
-const pickRelevantFacts = (template, question, discoveredFactIds = []) => {
+const pickRelevantFacts = (template, question, playerSide, discoveredFactIds = []) => {
   const safeTemplate = ensureTemplate(template);
+  const templateSide = getTemplatePartyForSessionSide(playerSide);
+  const blueprint = getInterviewBlueprintForSide(safeTemplate, templateSide);
   const interviewFacts = (safeTemplate.canonicalFacts || []).filter(
-    (fact) => fact.discoverability?.phase !== "courtroom"
+    (fact) =>
+      fact.discoverability?.phase !== "courtroom" &&
+      (fact.claims || []).some((claim) => claim.party === templateSide)
   );
 
   const ranked = interviewFacts
     .map((fact) => ({
       fact,
-      score: scoreFactForQuestion(fact, question),
+      score: scoreFactForQuestion(fact, question, playerSide, safeTemplate),
     }))
     .sort((left, right) => right.score - left.score);
 
-  const matched = ranked.filter((entry) => entry.score > 0).map((entry) => entry.fact);
+  const topScore = ranked[0]?.score || 0;
+  const relevanceThreshold =
+    topScore >= 4 ? Math.max(2.5, topScore * 0.6) : topScore >= 2 ? 2 : Infinity;
+  const matched = ranked
+    .filter((entry) => entry.score >= relevanceThreshold)
+    .map((entry) => entry.fact);
 
   if (matched.length > 0) {
     const freshMatches = matched.filter(
       (fact) => !discoveredFactIds.includes(fact.factId)
     );
 
-    return (freshMatches.length > 0 ? freshMatches : matched).slice(0, 2);
+    return freshMatches.length > 0 ? freshMatches : matched;
   }
 
-  return interviewFacts
-    .filter((fact) => !discoveredFactIds.includes(fact.factId))
-    .slice()
-    .sort(
-      (left, right) =>
-        (right.discoverability?.priority || 0) - (left.discoverability?.priority || 0)
-    )
-    .slice(0, 2);
+  return [];
 };
 
-const scoreEvidenceForQuestion = (item, question, template) => {
+const scoreEvidenceForQuestion = (item, question, template, playerSide) => {
   const safeTemplate = ensureTemplate(template);
+  const templateSide = getTemplatePartyForSessionSide(playerSide);
+  const otherTemplateSide = getOtherTemplateParty(templateSide);
   const linkedFacts = (safeTemplate.canonicalFacts || []).filter((fact) =>
     (item.linkedFactIds || []).includes(fact.factId)
   );
+  const playerClaims = linkedFacts
+    .map((fact) => (fact.claims || []).find((claim) => claim.party === templateSide))
+    .filter(Boolean);
+  const canSeeEvidenceDetail =
+    item.holderSide !== otherTemplateSide || item.availabilityStatus !== "confirmed";
   const questionTokens = tokenize(question);
   const searchableTokens = uniqueList([
-    ...tokenize(item.label),
-    ...tokenize(item.detail),
     ...((item.followUpQuestions || []).flatMap((value) => tokenize(value))),
-    ...linkedFacts.flatMap((fact) => tokenize(fact.label)),
-    ...linkedFacts.flatMap((fact) => tokenize(fact.canonicalDetail)),
+    ...playerClaims.flatMap((claim) => tokenize(claim.claimedDetail)),
+    ...playerClaims.flatMap((claim) => claim.keywords || []).flatMap((value) => tokenize(value)),
+    ...(canSeeEvidenceDetail ? tokenize(item.label) : []),
+    ...(canSeeEvidenceDetail ? tokenize(item.detail) : []),
   ]);
 
   const exactMatchCount = searchableTokens.filter((token) =>
@@ -371,49 +576,57 @@ const scoreEvidenceForQuestion = (item, question, template) => {
   const partialMatchCount = searchableTokens.filter((token) =>
     question.toLowerCase().includes(token)
   ).length;
+  const minimumSignal =
+    exactMatchCount > 0 || partialMatchCount >= 2 || questionTokens.length <= 2;
+
+  if (!minimumSignal) {
+    return 0;
+  }
 
   return exactMatchCount * 2 + partialMatchCount * 0.5;
 };
 
-const pickRelevantEvidence = (template, question, discoveredEvidenceIds = []) => {
+const pickRelevantEvidence = (
+  template,
+  question,
+  playerSide,
+  discoveredEvidenceIds = []
+) => {
   const safeTemplate = ensureTemplate(template);
   const evidenceItems = safeTemplate.evidenceItems || [];
   const ranked = evidenceItems
     .map((item) => ({
       item,
-      score: scoreEvidenceForQuestion(item, question, safeTemplate),
+      score: scoreEvidenceForQuestion(item, question, safeTemplate, playerSide),
     }))
     .sort((left, right) => right.score - left.score);
 
-  const matched = ranked.filter((entry) => entry.score > 0).map((entry) => entry.item);
+  const topScore = ranked[0]?.score || 0;
+  const relevanceThreshold =
+    topScore >= 3 ? Math.max(2, topScore * 0.6) : topScore >= 1.5 ? 1.5 : Infinity;
+  const matched = ranked
+    .filter((entry) => entry.score >= relevanceThreshold)
+    .map((entry) => entry.item);
 
   if (matched.length > 0) {
     const freshMatches = matched.filter(
       (item) => !discoveredEvidenceIds.includes(item.id)
     );
 
-    return (freshMatches.length > 0 ? freshMatches : matched).slice(0, 2);
+    return freshMatches.length > 0 ? freshMatches : matched;
   }
 
-  return evidenceItems
-    .filter((item) => !discoveredEvidenceIds.includes(item.id))
-    .slice()
-    .sort((left, right) => {
-      const leftWeight = left.availabilityStatus === "confirmed" ? 0 : 1;
-      const rightWeight = right.availabilityStatus === "confirmed" ? 0 : 1;
-
-      return rightWeight - leftWeight;
-    })
-    .slice(0, 2);
+  return [];
 };
 
 const buildEvidenceResponseSegment = (item, side) => {
   const label = String(item.label || item.detail || "that record").trim();
   const lowerLabel = label.charAt(0).toLowerCase() + label.slice(1);
-  const holderIsSelf = item.holderSide === side || item.holderSide === "shared";
+  const templateSide = getTemplatePartyForSessionSide(side);
+  const holderIsSelf = item.holderSide === templateSide || item.holderSide === "shared";
   const holderIsOtherParty =
-    (side === "client" && item.holderSide === "opponent") ||
-    (side === "opponent" && item.holderSide === "client");
+    (side === "client" && item.holderSide === "defendant") ||
+    (side === "opponent" && item.holderSide === "plaintiff");
 
   switch (item.availabilityStatus) {
     case "confirmed":
@@ -444,6 +657,83 @@ const buildEvidenceResponseSegment = (item, side) => {
   }
 };
 
+const buildEvidencePossessionResponse = (item, side) => {
+  const label = String(item.label || item.detail || "that record").trim();
+  const lowerLabel = lowerFirst(label);
+  const templateSide = getTemplatePartyForSessionSide(side);
+  const holderIsSelf = item.holderSide === templateSide || item.holderSide === "shared";
+  const holderIsOtherParty =
+    (side === "client" && item.holderSide === "defendant") ||
+    (side === "opponent" && item.holderSide === "plaintiff");
+
+  if (holderIsOtherParty) {
+    return `No, I do not have ${lowerLabel}. The other side should be the one with it.`;
+  }
+
+  if (item.holderSide === "third-party") {
+    return `No, I do not have ${lowerLabel}. A third party is more likely to have it.`;
+  }
+
+  switch (item.availabilityStatus) {
+    case "confirmed":
+      return holderIsSelf
+        ? `Yes, I have ${lowerLabel}.`
+        : `Yes, ${lowerLabel} should be available to both sides.`;
+    case "missing":
+      return `No, I do not have ${lowerLabel}.`;
+    case "mentioned":
+    case "unknown":
+      return holderIsSelf
+        ? `No, I cannot say that I have ${lowerLabel} right now.`
+        : `No, I do not have ${lowerLabel} right now.`;
+    case "contested":
+      return holderIsSelf
+        ? `Yes, I have ${lowerLabel}, but there may be a fight about what it really shows.`
+        : `There is ${lowerLabel}, but there may be a fight about what it really shows.`;
+    default:
+      return `No, I do not have ${lowerLabel} right now.`;
+  }
+};
+
+const evidenceIsHeldByOtherParty = (item, side) =>
+  (side === "client" && item.holderSide === "defendant") ||
+  (side === "opponent" && item.holderSide === "plaintiff");
+
+const findSupportingEvidenceForClaims = ({
+  matchedEvidence = [],
+  partyClaims = [],
+  playerSide,
+}) => {
+  const linkedFactIds = new Set(partyClaims.map((item) => item.fact.factId));
+  const claimCorpus = partyClaims
+    .map((item) =>
+      [
+        item.playerClaim?.claimedDetail || "",
+        item.fact?.canonicalDetail || "",
+        item.fact?.label || "",
+      ].join(" ")
+    )
+    .join(" ");
+
+  return matchedEvidence.filter((item) => {
+    if (item.availabilityStatus !== "confirmed") {
+      return false;
+    }
+
+    if (evidenceIsHeldByOtherParty(item, playerSide)) {
+      return false;
+    }
+
+    const linkedToClaim = (item.linkedFactIds || []).some((factId) => linkedFactIds.has(factId));
+    if (!linkedToClaim) {
+      return false;
+    }
+
+    const evidenceCorpus = [item.label || "", item.detail || ""].join(" ");
+    return countSharedTokens(evidenceCorpus, claimCorpus) > 0;
+  });
+};
+
 const buildEvidenceHolderResponseSegment = (item) => {
   const label = String(item.label || item.detail || "that record").trim();
   const lowerLabel = label.charAt(0).toLowerCase() + label.slice(1);
@@ -455,19 +745,196 @@ const buildEvidenceHolderResponseSegment = (item) => {
         : `I do not know which third party has ${lowerLabel} yet. I only know a third party may have it, but I have not confirmed who.`;
     case "shared":
       return `Both sides should be able to access ${lowerLabel}.`;
-    case "client":
+    case "plaintiff":
       return `From my side, I should be the one with ${lowerLabel}.`;
-    case "opponent":
+    case "defendant":
       return `The other side should be the one holding ${lowerLabel}.`;
     default:
       return `I do not know who has ${lowerLabel} yet.`;
   }
 };
 
+const MONTH_NAME_PATTERN =
+  /\b(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\b/i;
+const EXACT_DATE_PATTERN =
+  /\b\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?\b|\b\d{4}-\d{2}-\d{2}\b|\b\d{1,2}(st|nd|rd|th)\b/i;
+const CONTACT_METHOD_PATTERN =
+  /\b(phone|email|e-mail|text|sms|call|called|voicemail|letter|mail|mailed|portal|chat|in person|in-person)\b/i;
+const AMOUNT_PATTERN =
+  /\$\s?\d[\d,]*(?:\.\d{2})?|\b\d[\d,]*(?:\.\d{2})?\s?(dollars?|usd|bucks)\b/i;
+
+const questionAsksForExactDate = (lowerQuestion = "") =>
+  lowerQuestion.includes("exact date") ||
+  lowerQuestion.includes("exact dates") ||
+  lowerQuestion.includes("what date") ||
+  lowerQuestion.includes("what dates") ||
+  lowerQuestion.includes("which date") ||
+  lowerQuestion.includes("which dates") ||
+  lowerQuestion.includes("end date") ||
+  lowerQuestion.includes("start date") ||
+  lowerQuestion.includes("lease end") ||
+  lowerQuestion.includes("lease start") ||
+  lowerQuestion.includes("when exactly") ||
+  (lowerQuestion.includes("date") &&
+    (lowerQuestion.includes("pay") ||
+      lowerQuestion.includes("paid") ||
+      lowerQuestion.includes("due") ||
+      lowerQuestion.includes("notice") ||
+      lowerQuestion.includes("contact"))) ||
+  (/\bwhen\b/.test(lowerQuestion) &&
+    (lowerQuestion.includes("pay") ||
+      lowerQuestion.includes("paid") ||
+      lowerQuestion.includes("due") ||
+      lowerQuestion.includes("served") ||
+      lowerQuestion.includes("contacted")));
+
+const questionAsksForContactMethod = (lowerQuestion = "") =>
+  lowerQuestion.includes("contact method") ||
+  lowerQuestion.includes("how did") ||
+  lowerQuestion.includes("what method") ||
+  lowerQuestion.includes("which method") ||
+  lowerQuestion.includes("phone or email") ||
+  (lowerQuestion.includes("contact") &&
+    (lowerQuestion.includes("phone") ||
+      lowerQuestion.includes("email") ||
+      lowerQuestion.includes("text") ||
+      lowerQuestion.includes("call") ||
+      lowerQuestion.includes("method")));
+
+const questionAsksForAmount = (lowerQuestion = "") =>
+  lowerQuestion.includes("how much") ||
+  lowerQuestion.includes("what amount") ||
+  lowerQuestion.includes("what was the amount") ||
+  lowerQuestion.includes("exact amount") ||
+  lowerQuestion.includes("how many dollars");
+
+const hasExactDateDetail = (value = "") =>
+  MONTH_NAME_PATTERN.test(value) || EXACT_DATE_PATTERN.test(value);
+
+const hasContactMethodDetail = (value = "") => CONTACT_METHOD_PATTERN.test(value);
+
+const hasAmountDetail = (value = "") => AMOUNT_PATTERN.test(value);
+
+const hasUncertaintyLanguage = (value = "") =>
+  /\b(i do not|i don't|cannot|can't|not sure|do not have|don't have|do not know|don't know)\b/i.test(
+    value
+  );
+
+const isResponsiveInterviewAnswer = (question = "", answer = "") => {
+  const lowerQuestion = String(question || "").trim().toLowerCase();
+  const normalizedAnswer = String(answer || "").trim();
+
+  if (!normalizedAnswer) {
+    return false;
+  }
+
+  if (questionAsksForExactDate(lowerQuestion)) {
+    return hasExactDateDetail(normalizedAnswer) || hasUncertaintyLanguage(normalizedAnswer);
+  }
+
+  if (questionAsksForContactMethod(lowerQuestion)) {
+    return (
+      hasContactMethodDetail(normalizedAnswer) || hasUncertaintyLanguage(normalizedAnswer)
+    );
+  }
+
+  if (questionAsksForAmount(lowerQuestion)) {
+    return hasAmountDetail(normalizedAnswer) || hasUncertaintyLanguage(normalizedAnswer);
+  }
+
+  return true;
+};
+
+const buildSpecificDetailFallback = ({
+  lowerQuestion,
+  corpus,
+  bestKnownDetail,
+  matchedEvidence,
+  supportingEvidence,
+  leadQuestion,
+  playerSide,
+}) => {
+  const proofQuestion =
+    lowerQuestion.includes("concrete") ||
+    lowerQuestion.includes("specific") ||
+    lowerQuestion.includes("proof") ||
+    lowerQuestion.includes("evidence") ||
+    lowerQuestion.includes("record");
+  const possessionQuestion =
+    (lowerQuestion.includes("do you have") ||
+      lowerQuestion.includes("did you have") ||
+      lowerQuestion.includes("do you got") ||
+      lowerQuestion.includes("have the") ||
+      lowerQuestion.includes("have any") ||
+      lowerQuestion.includes("have a") ||
+      lowerQuestion.includes("got the") ||
+      lowerQuestion.includes("got any") ||
+      lowerQuestion.includes("did you take") ||
+      lowerQuestion.includes("did you get") ||
+      lowerQuestion.includes("is there a")) &&
+    (lowerQuestion.includes("photo") ||
+      lowerQuestion.includes("photos") ||
+      lowerQuestion.includes("picture") ||
+      lowerQuestion.includes("pictures") ||
+      lowerQuestion.includes("video") ||
+      lowerQuestion.includes("videos") ||
+      lowerQuestion.includes("document") ||
+      lowerQuestion.includes("documents") ||
+      lowerQuestion.includes("record") ||
+      lowerQuestion.includes("records") ||
+      lowerQuestion.includes("email") ||
+      lowerQuestion.includes("emails") ||
+      lowerQuestion.includes("text") ||
+      lowerQuestion.includes("texts") ||
+      lowerQuestion.includes("message") ||
+      lowerQuestion.includes("messages"));
+  const asksForExactDate = questionAsksForExactDate(lowerQuestion);
+  const asksForContactMethod = questionAsksForContactMethod(lowerQuestion);
+  const asksForAmount = questionAsksForAmount(lowerQuestion);
+  const bestEvidence = matchedEvidence[0] || null;
+
+  if (asksForExactDate && !hasExactDateDetail(corpus)) {
+    return `I do not have the exact date${lowerQuestion.includes("dates") ? "s" : ""} in front of me right now. The best I can say from what I have is that ${toSpokenSentence(
+      bestKnownDetail
+    ) || "I only remember the general sequence, not the exact day"}.${
+      leadQuestion ? ` The next thing we should pin down is: ${leadQuestion}` : ""
+    }`;
+  }
+
+  if (asksForContactMethod && !hasContactMethodDetail(corpus)) {
+    return `I cannot confirm whether that was by phone, email, text, or something else from what I have right now.${
+      supportingEvidence[0]
+        ? ` ${buildEvidenceResponseSegment(supportingEvidence[0], playerSide)}`
+        : leadQuestion
+        ? ` The next thing we should pin down is: ${leadQuestion}`
+        : ""
+    }`;
+  }
+
+  if (asksForAmount && !hasAmountDetail(corpus)) {
+    return `I do not have the exact amount in front of me right now.${
+      leadQuestion ? ` The next thing we should pin down is: ${leadQuestion}` : ""
+    }`;
+  }
+
+  if (proofQuestion && supportingEvidence.length === 0) {
+    return `I do not have confirmed proof in hand on that point right now.${
+      leadQuestion ? ` The next thing we should pin down is: ${leadQuestion}` : ""
+    }`;
+  }
+
+  if (possessionQuestion && bestEvidence) {
+    return buildEvidencePossessionResponse(bestEvidence, playerSide);
+  }
+
+  return "";
+};
+
 const buildInterviewFallback = ({ caseSession, template, question, factSheet }) => {
   const safeTemplate = ensureTemplate(template);
   const playerSide = getPlayerSide(caseSession);
   const opponentSide = getOpposingSide(playerSide);
+  const partyProfile = getPartyProfileForSide(safeTemplate, playerSide);
   const lowerQuestion = String(question || "").trim().toLowerCase();
   const recentPartyResponses = caseSession.interviewTranscript
     .filter((entry) => entry.role === "party")
@@ -477,16 +944,19 @@ const buildInterviewFallback = ({ caseSession, template, question, factSheet }) 
   const matchedFacts = pickRelevantFacts(
     safeTemplate,
     question,
+    playerSide,
     factSheet.discoveredFactIds
   );
 
-  const partyClaims = matchedFacts
+  const partyClaims = sortClaimsByRecallPriority(
+    matchedFacts
     .map((fact) => ({
       fact,
       playerClaim: getClaimForParty(fact, playerSide),
       opposingClaim: getClaimForParty(fact, opponentSide),
     }))
-    .filter((item) => item.playerClaim && !isMetaResponse(item.playerClaim.claimedDetail));
+    .filter((item) => item.playerClaim && !isMetaResponse(item.playerClaim.claimedDetail))
+  );
 
   const factLinkedEvidence = uniqueList(
     partyClaims.flatMap((item) =>
@@ -497,12 +967,22 @@ const buildInterviewFallback = ({ caseSession, template, question, factSheet }) 
     .filter(Boolean);
   const matchedEvidence = uniqueList([
     ...factLinkedEvidence.map((item) => item.id),
-    ...pickRelevantEvidence(safeTemplate, question, factSheet.discoveredEvidenceIds).map(
+    ...pickRelevantEvidence(
+      safeTemplate,
+      question,
+      playerSide,
+      factSheet.discoveredEvidenceIds
+    ).map(
       (item) => item.id
     ),
   ])
     .map((id) => (safeTemplate.evidenceItems || []).find((item) => item.id === id))
     .filter(Boolean);
+  const supportingEvidence = findSupportingEvidenceForClaims({
+    matchedEvidence,
+    partyClaims,
+    playerSide,
+  });
   const remainingFacts = (safeTemplate.canonicalFacts || []).filter(
     (fact) => !factSheet.discoveredFactIds.includes(fact.factId)
   );
@@ -512,22 +992,36 @@ const buildInterviewFallback = ({ caseSession, template, question, factSheet }) 
     factSheet.discoveredFactIds,
     factSheet.discoveredEvidenceIds
   )[0];
-  const lastKnownClaim = (factSheet.knownClaims || []).slice(-1)[0];
-  const evidenceResponse = matchedEvidence
-    .slice(0, partyClaims.length > 0 ? 1 : 2)
+  const evidenceResponse = supportingEvidence
+    .slice(0, 1)
     .map((item) => buildEvidenceResponseSegment(item, playerSide))
     .join(" ");
+  const responseCorpus = uniqueList([
+    ...partyClaims.map((item) => humanizeClaimText(item.playerClaim.claimedDetail)),
+    ...matchedEvidence.flatMap((item) => [item.label, item.detail]),
+  ]).join(" ");
+
+  const primaryClaim = partyClaims[0] || null;
+  const secondaryClaim = partyClaims[1] || null;
 
   let partyResponse =
-    partyClaims.length > 0
+    primaryClaim
       ? [
-          partyClaims
-            .map((item, index) =>
-              index === 0
-                ? `From my side, ${toSpokenSentence(item.playerClaim.claimedDetail)}`
-                : `Also, ${toSpokenSentence(item.playerClaim.claimedDetail)}`
-            )
-            .join(" "),
+          buildMemoryStyleClaimText(
+            primaryClaim.playerClaim,
+            primaryClaim.fact,
+            partyProfile,
+            question
+          ),
+          secondaryClaim &&
+          countSharedTokens(
+            primaryClaim.playerClaim.claimedDetail,
+            secondaryClaim.playerClaim.claimedDetail
+          ) > 1
+            ? `I also remember that ${toSpokenSentence(
+                secondaryClaim.playerClaim.claimedDetail
+              )}`
+            : "",
           evidenceResponse,
         ]
           .filter(Boolean)
@@ -535,12 +1029,19 @@ const buildInterviewFallback = ({ caseSession, template, question, factSheet }) 
       : evidenceResponse
       ? evidenceResponse
       : remainingFacts.length === 0
-      ? lastKnownClaim
-        ? `That's still my position. The clearest point I can give you is that ${toSpokenSentence(lastKnownClaim)}`
-        : "I think we've covered the main facts from my side. We may need to lean on the documents and weak spots now."
+      ? "I do not know anything more specific about that right now."
       : leadQuestion
-      ? `I'm not sure I can answer that directly yet. Try asking me: ${leadQuestion}`
-      : "I may be mixing up the details. Ask me about the timeline, the records, or what the other side might challenge.";
+      ? `I do not know that detail right now. The next thing we should pin down is: ${leadQuestion}`
+      : "I do not know that detail right now.";
+  const specificDetailFallback = buildSpecificDetailFallback({
+    lowerQuestion,
+    corpus: responseCorpus,
+    bestKnownDetail: partyClaims[0]?.playerClaim?.claimedDetail || "",
+    matchedEvidence,
+    supportingEvidence,
+    leadQuestion,
+    playerSide,
+  });
 
   const repeatedFallbackReply = recentPartyResponses.includes(partyResponse.trim());
   const holderQuestion =
@@ -559,43 +1060,38 @@ const buildInterviewFallback = ({ caseSession, template, question, factSheet }) 
     (item) => item.holderSide === "third-party"
   );
 
-  if (repeatedFallbackReply && holderQuestion && thirdPartyEvidence) {
+  if (specificDetailFallback) {
+    partyResponse = specificDetailFallback;
+  } else if (repeatedFallbackReply && holderQuestion && thirdPartyEvidence) {
     partyResponse = buildEvidenceHolderResponseSegment(thirdPartyEvidence);
-  } else if (repeatedFallbackReply && proofQuestion && matchedEvidence[0]) {
+  } else if (repeatedFallbackReply && proofQuestion && supportingEvidence[0]) {
     partyResponse = `The most concrete thing I can tell you right now is this: ${buildEvidenceResponseSegment(
-      matchedEvidence[0],
+      supportingEvidence[0],
       playerSide
     )}`;
   } else if (repeatedFallbackReply && leadQuestion) {
-    partyResponse = `I do not have a different detail on that point yet. The next thing we should pin down is: ${leadQuestion}`;
+    partyResponse = `I do not know anything more specific about that right now. The next thing we should pin down is: ${leadQuestion}`;
+  } else if (repeatedFallbackReply) {
+    partyResponse = "I do not know anything more specific about that right now.";
   }
 
-  const corroboratedClaims = partyClaims.filter(
-    (item) =>
-      item.fact.truthStatus === "verified" &&
-      item.playerClaim.stance === "admits" &&
-      isFactCorroborated(safeTemplate, item.fact)
-  );
-
   const patch = {
-    summary: buildSummaryForSide(safeTemplate, playerSide),
+    summary: factSheet.summary || "",
     timeline: partyClaims
       .filter((item) => item.fact.kind === "timeline")
+      .slice(0, 1)
       .map((item) => humanizeClaimText(item.playerClaim.claimedDetail)),
     supportingFacts: partyClaims
       .filter((item) => item.fact.kind === "supporting")
+      .slice(0, 1)
       .map((item) => humanizeClaimText(item.playerClaim.claimedDetail)),
     risks: partyClaims
       .filter((item) => item.fact.kind === "risk")
+      .slice(0, 1)
       .map((item) => humanizeClaimText(item.playerClaim.claimedDetail)),
-    theory: buildTheoryForSide(safeTemplate, playerSide),
-    desiredRelief: buildDesiredReliefForSide(safeTemplate, playerSide),
-    knownFacts: partyClaims
-      .filter(
-        (item) =>
-          item.fact.truthStatus === "verified" && isFactCorroborated(safeTemplate, item.fact)
-      )
-      .map((item) => item.fact.canonicalDetail),
+    theory: factSheet.theory || "",
+    desiredRelief: factSheet.desiredRelief || "",
+    knownFacts: [],
     knownClaims: partyClaims.map((item) =>
       humanizeClaimText(item.playerClaim.claimedDetail)
     ),
@@ -605,14 +1101,16 @@ const buildInterviewFallback = ({ caseSession, template, question, factSheet }) 
           item.opposingClaim &&
           item.opposingClaim.claimedDetail !== item.playerClaim.claimedDetail
       )
-      .map((item) => item.opposingClaim.claimedDetail),
-    corroboratedFacts: corroboratedClaims.map((item) => item.fact.canonicalDetail),
-    sourceLinks: corroboratedClaims.flatMap((item) =>
-      getEvidenceItemsForFact(safeTemplate, item.fact)
-        .filter((evidenceItem) => evidenceItem.availabilityStatus === "confirmed")
-        .map((evidenceItem) => `${item.fact.label}: ${evidenceItem.label}`)
-    ),
-    missingEvidence: buildMissingEvidenceNotesForSide(safeTemplate, playerSide),
+      .slice(0, 1)
+      .map((item) => buildInterviewDisputeNote(item)),
+    corroboratedFacts: [],
+    sourceLinks: [],
+    missingEvidence: buildRelevantMissingEvidenceNotes({
+      safeTemplate,
+      playerSide,
+      partyClaims,
+      matchedEvidence,
+    }),
     openQuestions: buildOpenQuestions(
       safeTemplate,
       playerSide,
@@ -624,7 +1122,7 @@ const buildInterviewFallback = ({ caseSession, template, question, factSheet }) 
         ...factSheet.discoveredEvidenceIds,
         ...matchedEvidence.map((item) => item.id),
       ])
-    ),
+    ).slice(0, 2),
     discoveredFactIds: partyClaims.map((item) => item.fact.factId),
     discoveredClaimIds: partyClaims.map((item) =>
       getClaimId(item.fact.factId, playerSide)
@@ -647,61 +1145,36 @@ const buildInterviewFallback = ({ caseSession, template, question, factSheet }) 
   };
 };
 
-const normalizeInterviewResult = ({ aiResult, fallback, template }) => {
+const normalizeInterviewResult = ({ aiResult, fallback, template, question }) => {
   const safeTemplate = ensureTemplate(template);
   if (!aiResult || typeof aiResult !== "object") {
     return fallback;
   }
 
   const patch = normalizeFactSheetPatch({
-    summary: aiResult.summary || fallback.patch.summary,
-    timeline: Array.isArray(aiResult.timeline)
-      ? aiResult.timeline
-      : fallback.patch.timeline,
-    supportingFacts: Array.isArray(aiResult.supportingFacts)
-      ? aiResult.supportingFacts
-      : fallback.patch.supportingFacts,
-    risks: Array.isArray(aiResult.risks) ? aiResult.risks : fallback.patch.risks,
-    theory: aiResult.theory || fallback.patch.theory || safeTemplate.starterTheory,
-    desiredRelief:
-      aiResult.desiredRelief ||
-      fallback.patch.desiredRelief ||
-      safeTemplate.desiredRelief,
-    knownFacts: Array.isArray(aiResult.knownFacts)
-      ? aiResult.knownFacts
-      : fallback.patch.knownFacts,
-    knownClaims: Array.isArray(aiResult.knownClaims)
-      ? aiResult.knownClaims
-      : fallback.patch.knownClaims,
-    disputedFacts: Array.isArray(aiResult.disputedFacts)
-      ? aiResult.disputedFacts
-      : fallback.patch.disputedFacts,
-    corroboratedFacts: Array.isArray(aiResult.corroboratedFacts)
-      ? aiResult.corroboratedFacts
-      : fallback.patch.corroboratedFacts,
-    sourceLinks: Array.isArray(aiResult.sourceLinks)
-      ? aiResult.sourceLinks
-      : fallback.patch.sourceLinks,
-    missingEvidence: Array.isArray(aiResult.missingEvidence)
-      ? aiResult.missingEvidence
-      : fallback.patch.missingEvidence,
-    openQuestions: Array.isArray(aiResult.openQuestions)
-      ? aiResult.openQuestions
-      : fallback.patch.openQuestions,
-    discoveredFactIds: Array.isArray(aiResult.discoveredFactIds)
-      ? aiResult.discoveredFactIds
-      : fallback.patch.discoveredFactIds,
-    discoveredClaimIds: Array.isArray(aiResult.discoveredClaimIds)
-      ? aiResult.discoveredClaimIds
-      : fallback.patch.discoveredClaimIds,
-    discoveredEvidenceIds: Array.isArray(aiResult.discoveredEvidenceIds)
-      ? aiResult.discoveredEvidenceIds
-      : fallback.patch.discoveredEvidenceIds,
+    summary: fallback.patch.summary,
+    timeline: fallback.patch.timeline,
+    supportingFacts: fallback.patch.supportingFacts,
+    risks: fallback.patch.risks,
+    theory: fallback.patch.theory,
+    desiredRelief: fallback.patch.desiredRelief,
+    knownFacts: fallback.patch.knownFacts,
+    knownClaims: fallback.patch.knownClaims,
+    disputedFacts: fallback.patch.disputedFacts,
+    corroboratedFacts: fallback.patch.corroboratedFacts,
+    sourceLinks: fallback.patch.sourceLinks,
+    missingEvidence: fallback.patch.missingEvidence,
+    openQuestions: fallback.patch.openQuestions,
+    discoveredFactIds: fallback.patch.discoveredFactIds,
+    discoveredClaimIds: fallback.patch.discoveredClaimIds,
+    discoveredEvidenceIds: fallback.patch.discoveredEvidenceIds,
   });
 
   return {
     partyResponse:
-      aiResult.partyResponse && !isMetaResponse(aiResult.partyResponse)
+      aiResult.partyResponse &&
+      !isMetaResponse(aiResult.partyResponse) &&
+      isResponsiveInterviewAnswer(question, aiResult.partyResponse)
         ? humanizeClaimText(aiResult.partyResponse)
         : fallback.partyResponse,
     patch,
@@ -1033,9 +1506,11 @@ export const continueInterview = async ({ caseSession, question, userId }) => {
         representedPartyName: playerPartyName,
         opposingPartyName,
         representedSide: playerSide,
+        representedPartyProfile: getPartyProfileForSide(template, playerSide),
         overview: buildOverviewForSide(template, playerSide),
         desiredRelief: buildDesiredReliefForSide(template, playerSide),
         interviewBlueprint: template.interviewBlueprint,
+        partyProfiles: template.partyProfiles,
         canonicalFacts: template.canonicalFacts,
         evidenceItems: template.evidenceItems,
       },
@@ -1065,7 +1540,7 @@ export const continueInterview = async ({ caseSession, question, userId }) => {
     }),
   });
 
-  return normalizeInterviewResult({ aiResult, fallback, template });
+  return normalizeInterviewResult({ aiResult, fallback, template, question });
 };
 
 export const runCourtroomRound = async ({ caseSession, argument, userId }) => {
@@ -1096,11 +1571,13 @@ export const runCourtroomRound = async ({ caseSession, argument, userId }) => {
         : "Generate the opponent lawyer response and hidden bench scoring for this round.",
       caseTemplate: {
         ...template,
-        representedSide: playerSide,
-        representedPartyName: getPartyName(template, playerSide),
-        opposingSide: opponentSide,
-        opposingPartyName: getPartyName(template, opponentSide),
-        desiredRelief: buildDesiredReliefForSide(template, playerSide),
+        representedSide: opponentSide,
+        representedPartyName: getPartyName(template, opponentSide),
+        opposingSide: playerSide,
+        opposingPartyName: getPartyName(template, playerSide),
+        desiredRelief: buildDesiredReliefForSide(template, opponentSide),
+        playerSide,
+        playerPartyName: getPartyName(template, playerSide),
       },
       lawbookRules: rules,
       factSheet: caseSession.factSheet,

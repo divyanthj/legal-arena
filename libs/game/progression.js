@@ -56,9 +56,12 @@ export const normalizeProgression = (rawProgression) => {
 export const ensureUserProfile = async (userId) => {
   await connectMongo();
 
-  const user = await User.findById(userId);
+  let user = await User.findById(userId);
   if (!user) {
-    return null;
+    user = await User.create({
+      _id: userId,
+      progression: getDefaultProgression(),
+    });
   }
 
   const nextProgression = normalizeProgression(user.progression);
