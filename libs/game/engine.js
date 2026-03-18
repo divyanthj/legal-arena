@@ -403,10 +403,7 @@ const mergeFactSheet = (current, patch, template) => {
   const normalizedPatch = normalizeFactSheetPatch(patch);
   const next = {
     ...current,
-    summary:
-      normalizedPatch.summary?.trim() ||
-      normalizedCurrent.summary ||
-      safeTemplate.overview,
+    summary: normalizedPatch.summary?.trim() || normalizedCurrent.summary || "",
     timeline: uniqueList([
       ...(normalizedCurrent.timeline || []),
       ...(normalizedPatch.timeline || []),
@@ -419,19 +416,18 @@ const mergeFactSheet = (current, patch, template) => {
       ...(normalizedCurrent.risks || []),
       ...(normalizedPatch.risks || []),
     ]),
-    theory:
-      normalizedPatch.theory?.trim() ||
-      normalizedCurrent.theory ||
-      safeTemplate.starterTheory,
+    theory: normalizedPatch.theory?.trim() || normalizedCurrent.theory || "",
     desiredRelief:
-      normalizedPatch.desiredRelief?.trim() ||
-      normalizedCurrent.desiredRelief ||
-      safeTemplate.desiredRelief,
-    openQuestions: uniqueList(
-      normalizedPatch.openQuestions ||
-        normalizedCurrent.openQuestions ||
-        buildOpenQuestions(safeTemplate, DEFAULT_PLAYER_SIDE)
-    ),
+      normalizedPatch.desiredRelief?.trim() || normalizedCurrent.desiredRelief || "",
+    openQuestions: uniqueList([
+      ...(normalizedPatch.openQuestions || []),
+      ...(normalizedCurrent.openQuestions || []),
+    ]).length
+      ? uniqueList([
+          ...(normalizedPatch.openQuestions || []),
+          ...(normalizedCurrent.openQuestions || []),
+        ])
+      : buildOpenQuestions(safeTemplate, DEFAULT_PLAYER_SIDE),
     knownFacts: uniqueList([
       ...(normalizedCurrent.knownFacts || []),
       ...(normalizedPatch.knownFacts || []),
@@ -476,6 +472,211 @@ const mergeFactSheet = (current, patch, template) => {
     (next.supportingFacts.length >= 2 || next.corroboratedFacts.length >= 1);
 
   return next;
+};
+
+const coerceString = (value = "") =>
+  typeof value === "string" ? value.trim() : "";
+
+const coerceStringList = (value, limit = Infinity) =>
+  uniqueList((Array.isArray(value) ? value : []).map((item) => coerceString(item))).slice(
+    0,
+    limit
+  );
+
+const sanitizeIdList = (value, validIds = [], limit = 8) => {
+  const validSet = new Set(validIds);
+
+  return coerceStringList(value, limit * 2)
+    .filter((item) => validSet.has(item))
+    .slice(0, limit);
+};
+
+const buildEvidencePromptPacket = (item = {}, discoveredEvidenceIds = []) => ({
+  id: item.id,
+  label: item.label,
+  detail: item.detail,
+  type: item.type,
+  availabilityStatus: item.availabilityStatus,
+  holderSide: item.holderSide,
+  linkedFactIds: item.linkedFactIds || [],
+  surfacedToLawyer: discoveredEvidenceIds.includes(item.id),
+});
+
+const buildClaimPromptPacket = (claim = null) =>
+  claim
+    ? {
+        claimedDetail: claim.claimedDetail,
+        stance: claim.stance,
+        confidence: claim.confidence,
+        accessLevel: claim.accessLevel,
+        deceptionProfile: claim.deceptionProfile,
+        keywords: claim.keywords || [],
+      }
+    : null;
+
+const buildRoleFactPacket = ({
+  template,
+  fact,
+  playerSide,
+  discoveredFactIds = [],
+  discoveredEvidenceIds = [],
+}) => {
+  const playerClaim = getClaimForParty(fact, playerSide);
+  const opposingClaim = getClaimForParty(fact, getOpposingSide(playerSide));
+
+  return {
+    factId: fact.factId,
+    label: fact.label,
+    kind: fact.kind,
+    truthStatus: fact.truthStatus,
+    phase: fact.discoverability?.phase || "interview",
+    priority: fact.discoverability?.priority || 3,
+    canonicalTruth: fact.canonicalDetail,
+    surfacedToLawyer: discoveredFactIds.includes(fact.factId),
+    myVersion: buildClaimPromptPacket(playerClaim),
+    otherSideVersion: buildClaimPromptPacket(opposingClaim),
+    linkedEvidence: getEvidenceItemsForFact(template, fact).map((item) =>
+      buildEvidencePromptPacket(item, discoveredEvidenceIds)
+    ),
+  };
+};
+
+const buildCanonicalWorldPacket = (template, discoveredFactIds = [], discoveredEvidenceIds = []) => ({
+  facts: (template.canonicalFacts || []).map((fact) => ({
+    factId: fact.factId,
+    label: fact.label,
+    kind: fact.kind,
+    truthStatus: fact.truthStatus,
+    canonicalDetail: fact.canonicalDetail,
+    phase: fact.discoverability?.phase || "interview",
+    priority: fact.discoverability?.priority || 3,
+    evidenceRefs: fact.evidenceRefs || [],
+    surfacedToLawyer: discoveredFactIds.includes(fact.factId),
+  })),
+  evidence: (template.evidenceItems || []).map((item) =>
+    buildEvidencePromptPacket(item, discoveredEvidenceIds)
+  ),
+});
+
+const buildInterviewAgentContext = ({ template, playerSide, factSheet }) => {
+  const safeTemplate = ensureTemplate(template);
+  const templateSide = getTemplatePartyForSessionSide(playerSide);
+  const blueprint = getInterviewBlueprintForSide(safeTemplate, templateSide);
+
+  return {
+    representedParty: {
+      side: templateSide,
+      name: getPartyName(safeTemplate, playerSide),
+      objective: buildDesiredReliefForSide(safeTemplate, playerSide),
+      profile: getPartyProfileForSide(safeTemplate, playerSide),
+      opening: blueprint?.opening || "",
+      posture: blueprint?.posture || "",
+      suggestedQuestions: blueprint?.suggestedQuestions || [],
+      priorityFactIds: blueprint?.priorityFactIds || [],
+    },
+    otherParty: {
+      side: getTemplatePartyForSessionSide(getOpposingSide(playerSide)),
+      name: getPartyName(safeTemplate, getOpposingSide(playerSide)),
+    },
+    canonicalWorld: buildCanonicalWorldPacket(
+      safeTemplate,
+      factSheet.discoveredFactIds || [],
+      factSheet.discoveredEvidenceIds || []
+    ),
+    representedPartyMemory: (safeTemplate.canonicalFacts || []).map((fact) =>
+      buildRoleFactPacket({
+        template: safeTemplate,
+        fact,
+        playerSide,
+        discoveredFactIds: factSheet.discoveredFactIds || [],
+        discoveredEvidenceIds: factSheet.discoveredEvidenceIds || [],
+      })
+    ),
+  };
+};
+
+const buildCounselContext = ({ caseSession, template, rules }) => {
+  const safeTemplate = ensureTemplate(template);
+  const playerSide = getPlayerSide(caseSession);
+
+  return {
+    representedParty: {
+      side: getTemplatePartyForSessionSide(playerSide),
+      name: getPartyName(safeTemplate, playerSide),
+      objective: buildDesiredReliefForSide(safeTemplate, playerSide),
+    },
+    opposingParty: {
+      side: getTemplatePartyForSessionSide(getOpposingSide(playerSide)),
+      name: getPartyName(safeTemplate, getOpposingSide(playerSide)),
+    },
+    publicCaseFile: caseSession.factSheet,
+    lawbookRules: rules,
+    recentCourtroomTranscript: caseSession.courtroomTranscript.slice(-6),
+  };
+};
+
+const normalizeCounselAnalysis = ({ aiResult, caseSession, rules }) => {
+  const validClaimIds = caseSession.factSheet.discoveredClaimIds || [];
+  const validRuleIds = new Set((rules || []).map((rule) => rule.id));
+
+  return {
+    playerTheory: coerceString(aiResult?.playerTheory),
+    citedFacts: coerceStringList(aiResult?.citedFacts, 4),
+    citedClaimIds: sanitizeIdList(aiResult?.citedClaimIds, validClaimIds, 4),
+    citedRules: coerceStringList(aiResult?.citedRules, 4).filter((item) =>
+      validRuleIds.has(item)
+    ),
+    strengths: coerceStringList(aiResult?.strengths, 3),
+    weaknesses: coerceStringList(aiResult?.weaknesses, 3),
+  };
+};
+
+const buildCourtroomAgentContext = ({
+  caseSession,
+  template,
+  rules,
+  counselAnalysis,
+  shouldReturnVerdict,
+}) => {
+  const safeTemplate = ensureTemplate(template);
+  const playerSide = getPlayerSide(caseSession);
+  const opponentSide = getOpposingSide(playerSide);
+
+  return {
+    shouldReturnVerdict,
+    representedCounsel: {
+      side: getTemplatePartyForSessionSide(playerSide),
+      partyName: getPartyName(safeTemplate, playerSide),
+      objective: buildDesiredReliefForSide(safeTemplate, playerSide),
+      publicCaseFile: caseSession.factSheet,
+      analysis: counselAnalysis,
+    },
+    opposingCounsel: {
+      side: getTemplatePartyForSessionSide(opponentSide),
+      partyName: getPartyName(safeTemplate, opponentSide),
+      objective: buildDesiredReliefForSide(safeTemplate, opponentSide),
+      profile: getPartyProfileForSide(safeTemplate, opponentSide),
+      memory: (safeTemplate.canonicalFacts || []).map((fact) =>
+        buildRoleFactPacket({
+          template: safeTemplate,
+          fact,
+          playerSide: opponentSide,
+          discoveredFactIds: caseSession.factSheet.discoveredFactIds || [],
+          discoveredEvidenceIds: caseSession.factSheet.discoveredEvidenceIds || [],
+        })
+      ),
+    },
+    canonicalWorld: buildCanonicalWorldPacket(
+      safeTemplate,
+      caseSession.factSheet.discoveredFactIds || [],
+      caseSession.factSheet.discoveredEvidenceIds || []
+    ),
+    bench: {
+      lawbookRules: rules,
+      score: caseSession.score,
+      recentCourtroomTranscript: caseSession.courtroomTranscript.slice(-6),
+    },
+  };
 };
 
 const scoreFactForQuestion = (fact, question, playerSide, template) => {
@@ -695,6 +896,44 @@ const buildEvidencePossessionResponse = (item, side) => {
   }
 };
 
+const buildEvidenceProductionResponse = (item, side) => {
+  const label = String(item.label || item.detail || "that record").trim();
+  const lowerLabel = lowerFirst(label);
+  const templateSide = getTemplatePartyForSessionSide(side);
+  const holderIsSelf = item.holderSide === templateSide || item.holderSide === "shared";
+  const holderIsOtherParty =
+    (side === "client" && item.holderSide === "defendant") ||
+    (side === "opponent" && item.holderSide === "plaintiff");
+
+  if (holderIsOtherParty) {
+    return `No, I cannot send you ${lowerLabel}. The other side should be the one with it.`;
+  }
+
+  if (item.holderSide === "third-party") {
+    return `No, I cannot send you ${lowerLabel}. A third party is more likely to have it.`;
+  }
+
+  switch (item.availabilityStatus) {
+    case "confirmed":
+      return holderIsSelf
+        ? `Yes, I have ${lowerLabel}, and I can send it over.`
+        : `Yes, ${lowerLabel} should be available, and we should be able to get it.`;
+    case "mentioned":
+    case "unknown":
+      return holderIsSelf
+        ? `I may still have ${lowerLabel} in my records, but I need to look for it before I can send it over.`
+        : `I cannot send you ${lowerLabel} right now. I would need to confirm where it is first.`;
+    case "missing":
+      return `No, I cannot send you ${lowerLabel} because I do not have it.`;
+    case "contested":
+      return holderIsSelf
+        ? `I can send you ${lowerLabel}, but there may be a fight about what it really shows.`
+        : `There is ${lowerLabel}, but I cannot promise I am the one who can produce it directly.`;
+    default:
+      return `I cannot tell you yet whether I can send you ${lowerLabel}. I need to confirm whether I still have it.`;
+  }
+};
+
 const evidenceIsHeldByOtherParty = (item, side) =>
   (side === "client" && item.holderSide === "defendant") ||
   (side === "opponent" && item.holderSide === "plaintiff");
@@ -888,6 +1127,33 @@ const buildSpecificDetailFallback = ({
       lowerQuestion.includes("texts") ||
       lowerQuestion.includes("message") ||
       lowerQuestion.includes("messages"));
+  const productionQuestion =
+    (lowerQuestion.includes("can you provide") ||
+      lowerQuestion.includes("can you send") ||
+      lowerQuestion.includes("can you share") ||
+      lowerQuestion.includes("can you show") ||
+      lowerQuestion.includes("send it over") ||
+      lowerQuestion.includes("send over") ||
+      lowerQuestion.includes("provide the") ||
+      lowerQuestion.includes("provide that") ||
+      lowerQuestion.includes("show me") ||
+      lowerQuestion.includes("let me see")) &&
+    (lowerQuestion.includes("breakdown") ||
+      lowerQuestion.includes("itemized") ||
+      lowerQuestion.includes("invoice") ||
+      lowerQuestion.includes("receipt") ||
+      lowerQuestion.includes("photo") ||
+      lowerQuestion.includes("photos") ||
+      lowerQuestion.includes("document") ||
+      lowerQuestion.includes("documents") ||
+      lowerQuestion.includes("record") ||
+      lowerQuestion.includes("records") ||
+      lowerQuestion.includes("email") ||
+      lowerQuestion.includes("emails") ||
+      lowerQuestion.includes("text") ||
+      lowerQuestion.includes("texts") ||
+      lowerQuestion.includes("message") ||
+      lowerQuestion.includes("messages"));
   const asksForExactDate = questionAsksForExactDate(lowerQuestion);
   const asksForContactMethod = questionAsksForContactMethod(lowerQuestion);
   const asksForAmount = questionAsksForAmount(lowerQuestion);
@@ -925,6 +1191,10 @@ const buildSpecificDetailFallback = ({
 
   if (possessionQuestion && bestEvidence) {
     return buildEvidencePossessionResponse(bestEvidence, playerSide);
+  }
+
+  if (productionQuestion && bestEvidence) {
+    return buildEvidenceProductionResponse(bestEvidence, playerSide);
   }
 
   return "";
@@ -1145,29 +1415,56 @@ const buildInterviewFallback = ({ caseSession, template, question, factSheet }) 
   };
 };
 
-const normalizeInterviewResult = ({ aiResult, fallback, template, question }) => {
+const normalizeInterviewResult = ({
+  aiResult,
+  fallback,
+  template,
+  question,
+  factSheet,
+  playerSide,
+}) => {
   const safeTemplate = ensureTemplate(template);
   if (!aiResult || typeof aiResult !== "object") {
     return fallback;
   }
 
+  const validFactIds = (safeTemplate.canonicalFacts || []).map((fact) => fact.factId);
+  const validEvidenceIds = (safeTemplate.evidenceItems || []).map((item) => item.id);
+  const revealedFactIds = sanitizeIdList(
+    aiResult.revealedFactIds || aiResult.discoveredFactIds || aiResult.relatedFactIds,
+    validFactIds,
+    6
+  );
+  const revealedEvidenceIds = sanitizeIdList(
+    aiResult.revealedEvidenceIds || aiResult.discoveredEvidenceIds,
+    validEvidenceIds,
+    6
+  );
+  const relatedFactIds = uniqueList([
+    ...sanitizeIdList(aiResult.relatedFactIds, validFactIds, 6),
+    ...revealedFactIds,
+    ...revealedEvidenceIds.flatMap((id) => {
+      const item = (safeTemplate.evidenceItems || []).find((entry) => entry.id === id);
+      return item?.linkedFactIds || [];
+    }),
+  ]);
   const patch = normalizeFactSheetPatch({
-    summary: fallback.patch.summary,
-    timeline: fallback.patch.timeline,
-    supportingFacts: fallback.patch.supportingFacts,
-    risks: fallback.patch.risks,
-    theory: fallback.patch.theory,
-    desiredRelief: fallback.patch.desiredRelief,
-    knownFacts: fallback.patch.knownFacts,
-    knownClaims: fallback.patch.knownClaims,
-    disputedFacts: fallback.patch.disputedFacts,
-    corroboratedFacts: fallback.patch.corroboratedFacts,
-    sourceLinks: fallback.patch.sourceLinks,
-    missingEvidence: fallback.patch.missingEvidence,
-    openQuestions: fallback.patch.openQuestions,
-    discoveredFactIds: fallback.patch.discoveredFactIds,
-    discoveredClaimIds: fallback.patch.discoveredClaimIds,
-    discoveredEvidenceIds: fallback.patch.discoveredEvidenceIds,
+    summary: "",
+    timeline: coerceStringList(aiResult.timeline, 3),
+    supportingFacts: coerceStringList(aiResult.supportingFacts, 3),
+    risks: coerceStringList(aiResult.risks, 3),
+    theory: "",
+    desiredRelief: "",
+    knownFacts: [],
+    knownClaims: coerceStringList(aiResult.knownClaims, 4),
+    disputedFacts: coerceStringList(aiResult.disputedFacts, 3),
+    corroboratedFacts: coerceStringList(aiResult.corroboratedFacts, 3),
+    sourceLinks: coerceStringList(aiResult.sourceLinks, 3),
+    missingEvidence: coerceStringList(aiResult.missingEvidence, 3),
+    openQuestions: coerceStringList(aiResult.openQuestions, 3),
+    discoveredFactIds: revealedFactIds,
+    discoveredClaimIds: revealedFactIds.map((factId) => getClaimId(factId, playerSide)),
+    discoveredEvidenceIds: revealedEvidenceIds,
   });
 
   return {
@@ -1178,15 +1475,11 @@ const normalizeInterviewResult = ({ aiResult, fallback, template, question }) =>
         ? humanizeClaimText(aiResult.partyResponse)
         : fallback.partyResponse,
     patch,
-    nextFactSheet: mergeFactSheet(fallback.nextFactSheet, patch, safeTemplate),
-    relatedFactIds:
-      Array.isArray(aiResult.relatedFactIds) && aiResult.relatedFactIds.length > 0
-        ? aiResult.relatedFactIds
-        : fallback.relatedFactIds,
+    nextFactSheet: mergeFactSheet(factSheet, patch, safeTemplate),
+    relatedFactIds: relatedFactIds.length > 0 ? relatedFactIds : fallback.relatedFactIds,
     discoveredClaimIds:
-      Array.isArray(aiResult.discoveredClaimIds) &&
-      aiResult.discoveredClaimIds.length > 0
-        ? aiResult.discoveredClaimIds
+      patch.discoveredClaimIds.length > 0
+        ? patch.discoveredClaimIds
         : fallback.discoveredClaimIds,
   };
 };
@@ -1398,11 +1691,17 @@ const buildVerdictFallback = ({ updatedScore, rules, factSheet, template, player
 const normalizeCourtResult = ({
   aiResult,
   fallback,
+  counselAnalysis,
   shouldReturnVerdict,
   caseSession,
   rules,
   template,
 }) => {
+  const normalizedCounsel = normalizeCounselAnalysis({
+    aiResult: counselAnalysis,
+    caseSession,
+    rules,
+  });
   const fallbackVerdict = shouldReturnVerdict
       ? buildVerdictFallback({
         updatedScore: {
@@ -1421,6 +1720,21 @@ const normalizeCourtResult = ({
   if (!aiResult || typeof aiResult !== "object") {
     return {
       ...fallback,
+      citedFacts: normalizedCounsel.citedFacts.length
+        ? normalizedCounsel.citedFacts
+        : fallback.citedFacts,
+      citedRules: normalizedCounsel.citedRules.length
+        ? normalizedCounsel.citedRules
+        : fallback.citedRules,
+      citedClaimIds: normalizedCounsel.citedClaimIds.length
+        ? normalizedCounsel.citedClaimIds
+        : fallback.citedClaimIds,
+      strengths: normalizedCounsel.strengths.length
+        ? normalizedCounsel.strengths
+        : fallback.strengths,
+      weaknesses: normalizedCounsel.weaknesses.length
+        ? normalizedCounsel.weaknesses
+        : fallback.weaknesses,
       verdict: fallbackVerdict,
     };
   }
@@ -1437,18 +1751,28 @@ const normalizeCourtResult = ({
         : fallback.opponentDelta,
     citedFacts: Array.isArray(aiResult.citedFacts)
       ? aiResult.citedFacts
+      : normalizedCounsel.citedFacts.length
+      ? normalizedCounsel.citedFacts
       : fallback.citedFacts,
     citedRules: Array.isArray(aiResult.citedRules)
       ? aiResult.citedRules
+      : normalizedCounsel.citedRules.length
+      ? normalizedCounsel.citedRules
       : fallback.citedRules,
     citedClaimIds: Array.isArray(aiResult.citedClaimIds)
       ? aiResult.citedClaimIds
+      : normalizedCounsel.citedClaimIds.length
+      ? normalizedCounsel.citedClaimIds
       : fallback.citedClaimIds,
     strengths: Array.isArray(aiResult.strengths)
       ? aiResult.strengths
+      : normalizedCounsel.strengths.length
+      ? normalizedCounsel.strengths
       : fallback.strengths,
     weaknesses: Array.isArray(aiResult.weaknesses)
       ? aiResult.weaknesses
+      : normalizedCounsel.weaknesses.length
+      ? normalizedCounsel.weaknesses
       : fallback.weaknesses,
     benchSignal: aiResult.benchSignal || fallback.benchSignal,
   };
@@ -1483,6 +1807,11 @@ export const continueInterview = async ({ caseSession, question, userId }) => {
   const playerSide = getPlayerSide(caseSession);
   const playerPartyName = getPartyName(template, playerSide);
   const opposingPartyName = getPartyName(template, getOpposingSide(playerSide));
+  const interviewContext = buildInterviewAgentContext({
+    template,
+    playerSide,
+    factSheet: caseSession.factSheet,
+  });
   const fallback = buildInterviewFallback({
     caseSession,
     template,
@@ -1492,55 +1821,51 @@ export const continueInterview = async ({ caseSession, question, userId }) => {
 
   const aiResult = await requestStructuredCompletion({
     userId,
-    temperature: 0.4,
-    maxTokens: 1100,
+    temperature: 0.7,
+    maxTokens: 1500,
     retryAttempts: 1,
     systemPrompt:
-      "You are roleplaying a legal-game party speaking to the player's lawyer during intake. Speak like a normal person in first person, not like a lawyer in court. Do not say 'Your Honor', 'Your Honour', 'may it please the court', 'counsel', or use courtroom advocacy language. Stay grounded in the provided claim layer, canonical fact layer, and evidence availability layer. Never invent unsupported facts or pretend uncertain evidence is confirmed. If a record is only mentioned, missing, or unknown, say so plainly. Output only valid JSON. Keep the fact sheet aligned to the represented side's perspective: supporting facts, risks, summary, theory, and relief should be framed for that side, while disputed facts should be phrased as what the other side is likely to argue.",
+      "You are simulating a legal-case party speaking to their own lawyer during intake. Treat this as a role actor, not a script expander. You know the full hidden world state, but you speak only as the represented party from memory, bias, confidence, access, and personality. Decide what to reveal, hedge, minimize, or withhold based on the latest question and the party profile. Answer directly when the lawyer asks a yes/no possession question. Also answer directly when the lawyer asks whether you can provide, send, share, or show a record: say yes, no, or that you need to look for it before sending it. Do not hide behind vague uncertainty if the real answer is about possession or ability to produce the record. It is completely acceptable to say you do not know, do not remember, have not seen something yourself, or only heard about it. Speak like a normal person in first person. Never mention internal schemas, canonical truth, or metadata. Only update the fact sheet with information that actually surfaced in this turn, and keep those updates sparse. Do not auto-draft a full case memo. Leave summary, theory, and desiredRelief blank unless the lawyer explicitly asks for them. Output valid JSON only.",
     userPrompt: JSON.stringify({
-      task: `Answer the lawyer's latest question as ${playerPartyName}, the represented ${playerSide} side, using only the ${playerSide}-side claims that are modeled for the case, then update the structured knowledge sheet.`,
-      caseTemplate: {
-        title: template.title,
-        clientName: template.clientName,
-        opponentName: template.opponentName,
+      task: `Answer the lawyer's latest question as ${playerPartyName}. You are the represented ${playerSide} side. Use the hidden canonical world and your side-specific memory to choose what this person would naturally say and what they would keep back for now.`,
+      stage: "interview",
+      roleArchitecture: {
         representedPartyName: playerPartyName,
         opposingPartyName,
         representedSide: playerSide,
-        representedPartyProfile: getPartyProfileForSide(template, playerSide),
         overview: buildOverviewForSide(template, playerSide),
         desiredRelief: buildDesiredReliefForSide(template, playerSide),
-        interviewBlueprint: template.interviewBlueprint,
-        partyProfiles: template.partyProfiles,
-        canonicalFacts: template.canonicalFacts,
-        evidenceItems: template.evidenceItems,
+        actorContext: interviewContext,
       },
       currentFactSheet: caseSession.factSheet,
       recentTranscript: caseSession.interviewTranscript.slice(-6),
       latestQuestion: question,
       outputSchema: {
         partyResponse: "string",
-        summary: "string",
+        revealedFactIds: ["string"],
+        revealedEvidenceIds: ["string"],
         timeline: ["string"],
         supportingFacts: ["string"],
         risks: ["string"],
-        theory: "string",
-        desiredRelief: "string",
-        knownFacts: ["string"],
         knownClaims: ["string"],
         disputedFacts: ["string"],
         corroboratedFacts: ["string"],
         sourceLinks: ["string"],
         missingEvidence: ["string"],
         openQuestions: ["string"],
-        discoveredFactIds: ["string"],
-        discoveredClaimIds: ["string"],
-        discoveredEvidenceIds: ["string"],
         relatedFactIds: ["string"],
       },
     }),
   });
 
-  return normalizeInterviewResult({ aiResult, fallback, template, question });
+  return normalizeInterviewResult({
+    aiResult,
+    fallback,
+    template,
+    question,
+    factSheet: caseSession.factSheet,
+    playerSide,
+  });
 };
 
 export const runCourtroomRound = async ({ caseSession, argument, userId }) => {
@@ -1558,31 +1883,53 @@ export const runCourtroomRound = async ({ caseSession, argument, userId }) => {
     template,
   });
 
-  const aiResult = await requestStructuredCompletion({
+  const counselAnalysisResult = await requestStructuredCompletion({
     userId,
-    temperature: 0.5,
-    maxTokens: 1200,
+    temperature: 0.6,
+    maxTokens: 900,
     retryAttempts: 1,
     systemPrompt:
-      "You are running a courtroom game turn. Produce JSON only. Keep the opposing lawyer grounded in the modeled claim layer for the side opposite the player, while scoring the player's use of corroborated facts, dispute handling, and lawbook support.",
+      "You are simulating the player's side counsel in a legal game. Your job is not to invent new facts. Read the player's latest courtroom argument as an attempted advocacy move, then interpret the strongest responsible version of it using only the public case file and lawbook rules already available to the player. Output valid JSON only.",
+    userPrompt: JSON.stringify({
+      task: "Interpret the player's courtroom move as a counsel-side position statement before the opponent responds.",
+      stage: "courtroom",
+      counselContext: buildCounselContext({ caseSession, template, rules }),
+      latestPlayerArgument: argument,
+      outputSchema: {
+        playerTheory: "string",
+        citedFacts: ["string"],
+        citedClaimIds: ["string"],
+        citedRules: ["string"],
+        strengths: ["string"],
+        weaknesses: ["string"],
+      },
+    }),
+  });
+  const counselAnalysis = normalizeCounselAnalysis({
+    aiResult: counselAnalysisResult,
+    caseSession,
+    rules,
+  });
+
+  const aiResult = await requestStructuredCompletion({
+    userId,
+    temperature: 0.65,
+    maxTokens: 1500,
+    retryAttempts: 1,
+    systemPrompt:
+      "You are simulating a courtroom exchange in a legal strategy game. Use role actors, not deterministic scripts. One hidden role is the player's counsel position, one hidden role is opposing counsel, and one hidden role is the bench. The opponent should argue from that side's claim layer, memory, incentives, and evidence posture. The bench should score the exchange based on the player's actual argument, the public case file, the lawbook, and the hidden world state. Do not narrate metadata or internal schemas. Output JSON only.",
     userPrompt: JSON.stringify({
       task: shouldReturnVerdict
-        ? "Generate the opponent lawyer response, hidden bench scoring, and a final verdict."
-        : "Generate the opponent lawyer response and hidden bench scoring for this round.",
-      caseTemplate: {
-        ...template,
-        representedSide: opponentSide,
-        representedPartyName: getPartyName(template, opponentSide),
-        opposingSide: playerSide,
-        opposingPartyName: getPartyName(template, playerSide),
-        desiredRelief: buildDesiredReliefForSide(template, opponentSide),
-        playerSide,
-        playerPartyName: getPartyName(template, playerSide),
-      },
-      lawbookRules: rules,
-      factSheet: caseSession.factSheet,
-      score: caseSession.score,
-      courtroomTranscript: caseSession.courtroomTranscript.slice(-6),
+        ? "Generate the opposing counsel response, the bench scoring, and the final verdict."
+        : "Generate the opposing counsel response and the bench scoring for this round.",
+      stage: "courtroom",
+      courtroomArchitecture: buildCourtroomAgentContext({
+        caseSession,
+        template,
+        rules,
+        counselAnalysis,
+        shouldReturnVerdict,
+      }),
       latestPlayerArgument: argument,
       outputSchema: {
         opponentResponse: "string",
@@ -1609,6 +1956,7 @@ export const runCourtroomRound = async ({ caseSession, argument, userId }) => {
   return normalizeCourtResult({
     aiResult,
     fallback,
+    counselAnalysis,
     shouldReturnVerdict,
     caseSession,
     rules,
