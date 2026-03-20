@@ -34,6 +34,124 @@ const winnerLabel = {
   draw: "The court called it too close",
 };
 
+const verdictTone = {
+  player: {
+    card: "border-success/30 bg-success/10",
+    eyebrow: "text-success",
+  },
+  opponent: {
+    card: "border-error/30 bg-error/10",
+    eyebrow: "text-error",
+  },
+  draw: {
+    card: "border-warning/30 bg-warning/10",
+    eyebrow: "text-warning",
+  },
+};
+
+const ruleExplainers = {
+  "burden-of-proof":
+    "This rule tracks who had to prove the point at issue and whether the record actually met that burden.",
+  "reliable-records":
+    "This rule rewards records and concrete documentation over speculation, rough memory, or unsupported estimates.",
+  "presumption-and-proof":
+    "This rule measures whether the argument overcame the starting presumption with actual proof rather than inference alone.",
+  "ordinary-wear-vs-damage":
+    "This rule focuses on whether the condition described sounds like routine use or chargeable damage.",
+  "notice-and-fair-warning":
+    "This rule looks at whether the other side received clear notice of the claimed basis, charges, or theory.",
+  "proportional-remedy":
+    "This rule asks whether the requested outcome matches what the record actually supports.",
+  "credibility-under-pressure":
+    "This rule weighs whether the witness's story stayed believable once pressed on specifics and weak spots.",
+};
+
+const helpText = {
+  playerPressure:
+    "Your pressure is the strength your side has built with the court so far. Higher usually means your arguments are landing more effectively.",
+  opponentPressure:
+    "Opponent pressure is the force the other side is building against you. Higher means the court is currently finding their position more persuasive.",
+  helpedYourSide:
+    "These are the points the court thought genuinely helped your side's argument or credibility.",
+  weakenedYourSide:
+    "These are the gaps, mistakes, or unresolved issues the court thought weakened your side.",
+  factsUsed:
+    "These badges mark facts your argument relied on. Hover to see the specific fact that was picked up from the record.",
+  rulesUsed:
+    "These badges mark lawbook concepts the round appears to have engaged. Hover to see what each one means.",
+};
+
+const InfoDot = ({ content, label }) => (
+  <span
+    className="inline-flex cursor-pointer items-center justify-center text-base-content/55 transition hover:text-base-content"
+    data-tooltip-id="tooltip"
+    data-tooltip-content={content}
+    aria-label={label || "More information"}
+    tabIndex={0}
+  >
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      fill="none"
+      viewBox="0 0 24 24"
+      strokeWidth={1.5}
+      stroke="currentColor"
+      className="h-4 w-4"
+      aria-hidden="true"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z"
+      />
+    </svg>
+  </span>
+);
+
+const getRuleTooltip = (rule) =>
+  ruleExplainers[rule] ||
+  `${rule
+    .split("-")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ")} is one of the lawbook lenses the court used to evaluate this round.`;
+
+const normalizeFactKey = (value = "") => String(value || "").trim().toLowerCase();
+
+const buildCanonicalFactLookup = (caseSession) =>
+  new Map(
+    ((caseSession.template && caseSession.template.canonicalFacts) || []).flatMap((fact) => {
+      const key = normalizeFactKey(fact.factId);
+      if (!key) return [];
+      return [[key, fact]];
+    })
+  );
+
+const resolveFactReference = (factReference, canonicalFactLookup) => {
+  const trimmed = String(factReference || "").trim();
+  if (!trimmed) {
+    return {
+      badge: "Fact",
+      tooltip: helpText.factsUsed,
+    };
+  }
+
+  const canonicalFact = canonicalFactLookup.get(normalizeFactKey(trimmed));
+
+  if (canonicalFact) {
+    return {
+      badge: "Fact",
+      tooltip:
+        canonicalFact.canonicalDetail ||
+        canonicalFact.label ||
+        trimmed,
+    };
+  }
+
+  return {
+    badge: "Fact",
+    tooltip: trimmed,
+  };
+};
+
 const getPlayerPartyName = (caseSession) =>
   caseSession.playerPartyName ||
   (caseSession.playerSide === "opponent"
@@ -230,6 +348,9 @@ export default function CaseWorkspace({ initialCase }) {
   const defendantName = getDefendantName(caseSession);
   const sideBadgeLabel =
     caseSession.playerSide === "opponent" ? "Defendant Side" : "Plaintiff Side";
+  const verdictStyle =
+    verdictTone[caseSession.verdict?.winner] || verdictTone.draw;
+  const canonicalFactLookup = buildCanonicalFactLookup(caseSession);
 
   return (
     <main className="min-h-screen bg-base-200 px-4 py-6 md:px-8 md:py-10">
@@ -424,17 +545,29 @@ export default function CaseWorkspace({ initialCase }) {
 
                   <div className="mt-5 grid gap-4 md:grid-cols-3">
                     <div className="stat rounded-box bg-base-200">
-                      <p className="text-sm uppercase tracking-[0.2em] text-base-content/45">
-                        Your Pressure
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm uppercase tracking-[0.2em] text-base-content/45">
+                          Your Pressure
+                        </p>
+                        <InfoDot
+                          content={helpText.playerPressure}
+                          label="Explain your pressure"
+                        />
+                      </div>
                       <p className="mt-2 text-3xl font-bold">
                         {caseSession.score.player}
                       </p>
                     </div>
                     <div className="stat rounded-box bg-base-200">
-                      <p className="text-sm uppercase tracking-[0.2em] text-base-content/45">
-                        Opponent Pressure
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm uppercase tracking-[0.2em] text-base-content/45">
+                          Opponent Pressure
+                        </p>
+                        <InfoDot
+                          content={helpText.opponentPressure}
+                          label="Explain opponent pressure"
+                        />
+                      </div>
                       <p className="mt-2 text-3xl font-bold">
                         {caseSession.score.opponent}
                       </p>
@@ -486,18 +619,29 @@ export default function CaseWorkspace({ initialCase }) {
                             (entry.citedFacts.length > 0 ||
                               entry.citedRules.length > 0) && (
                               <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                                {entry.citedFacts.map((fact) => (
-                                  <span
-                                    key={fact}
-                                    className="badge badge-outline badge-sm"
-                                  >
-                                    Fact
-                                  </span>
-                                ))}
+                                {entry.citedFacts.map((fact, factIndex) => {
+                                  const resolvedFact = resolveFactReference(
+                                    fact,
+                                    canonicalFactLookup
+                                  );
+
+                                  return (
+                                    <span
+                                      key={`${fact}-${factIndex}`}
+                                      className="badge badge-outline badge-sm max-w-[18rem] truncate"
+                                      data-tooltip-id="tooltip"
+                                      data-tooltip-content={resolvedFact.tooltip}
+                                    >
+                                      {resolvedFact.badge}
+                                    </span>
+                                  );
+                                })}
                                 {entry.citedRules.map((rule) => (
                                   <span
                                     key={rule}
                                     className="badge badge-warning badge-sm"
+                                    data-tooltip-id="tooltip"
+                                    data-tooltip-content={getRuleTooltip(rule)}
                                   >
                                     {rule}
                                   </span>
@@ -541,9 +685,11 @@ export default function CaseWorkspace({ initialCase }) {
             )}
 
             {isVerdict && (
-              <div className="card border border-success/30 bg-success/10 shadow-xl">
+              <div className={`card border shadow-xl ${verdictStyle.card}`}>
                 <div className="card-body p-6">
-                  <p className="text-sm uppercase tracking-[0.25em] text-success">
+                  <p
+                    className={`text-sm uppercase tracking-[0.25em] ${verdictStyle.eyebrow}`}
+                  >
                     Final Ruling
                   </p>
                   <h2 className="mt-2 text-3xl font-bold text-base-content">
@@ -554,7 +700,15 @@ export default function CaseWorkspace({ initialCase }) {
                   </p>
                   <div className="mt-5 grid gap-4 md:grid-cols-2">
                     <div className="rounded-box bg-base-100/90 p-4">
-                      <p className="font-semibold text-base-content">What landed</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-base-content">
+                          What Helped Your Side
+                        </p>
+                        <InfoDot
+                          content={helpText.helpedYourSide}
+                          label="Explain what helped your side"
+                        />
+                      </div>
                       <ul className="mt-3 space-y-2 text-sm text-base-content/80">
                         {caseSession.verdict.highlights.map((item) => (
                           <li key={item}>- {item}</li>
@@ -562,9 +716,15 @@ export default function CaseWorkspace({ initialCase }) {
                       </ul>
                     </div>
                     <div className="rounded-box bg-base-100/90 p-4">
-                      <p className="font-semibold text-base-content">
-                        What still hurt
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-base-content">
+                          What Weakened Your Side
+                        </p>
+                        <InfoDot
+                          content={helpText.weakenedYourSide}
+                          label="Explain what weakened your side"
+                        />
+                      </div>
                       <ul className="mt-3 space-y-2 text-sm text-base-content/80">
                         {caseSession.verdict.concerns.map((item) => (
                           <li key={item}>- {item}</li>

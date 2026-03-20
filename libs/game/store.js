@@ -329,6 +329,11 @@ export const buildCasePayload = (caseSession, templateOverride = null) => {
           secondaryCategories: template.secondaryCategories || [],
           complexity: template.complexity,
           sourceType: template.sourceType,
+          canonicalFacts: (template.canonicalFacts || []).map((fact) => ({
+            factId: fact.factId,
+            label: fact.label,
+            canonicalDetail: fact.canonicalDetail,
+          })),
         }
       : null,
     scenario: template
