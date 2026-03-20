@@ -369,6 +369,11 @@ const caseTemplateSchema = mongoose.Schema(
       type: [evidenceSchema],
       default: [],
     },
+    generationArtifactId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "GenerationArtifact",
+      default: null,
+    },
   },
   {
     timestamps: true,
@@ -383,7 +388,8 @@ const existingCaseTemplateModel = mongoose.models.CaseTemplate;
 if (
   existingCaseTemplateModel &&
   (!existingCaseTemplateModel.schema?.obj?.plaintiffName ||
-    !existingCaseTemplateModel.schema?.obj?.partyProfiles)
+    !existingCaseTemplateModel.schema?.obj?.partyProfiles ||
+    !existingCaseTemplateModel.schema?.obj?.generationArtifactId)
 ) {
   mongoose.deleteModel("CaseTemplate");
 }

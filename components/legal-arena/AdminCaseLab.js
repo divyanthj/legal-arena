@@ -83,12 +83,16 @@ const splitCsv = (value) =>
     .filter(Boolean);
 
 const GENERATION_STAGES = [
-  "Writing story",
-  "Adding details",
-  "Checking plausibility",
+  "Writing canon",
+  "Writing plaintiff draft",
+  "Writing defendant draft",
+  "Detailing plaintiff",
+  "Checking plaintiff plausibility",
+  "Detailing defendant",
+  "Checking defendant plausibility",
   "Building template",
-  "Repairing issues",
-  "Verifying interview plan",
+  "Repairing template",
+  "Planning interview",
 ];
 
 const parseSseEventBlocks = (buffer, onEvent) => {
@@ -201,6 +205,7 @@ export default function AdminCaseLab({
     complexity: 1,
     prompt: "",
     batchCount: 1,
+    purgePreviousWork: false,
   });
   const [working, setWorking] = useState(false);
   const [deletingTemplateId, setDeletingTemplateId] = useState("");
@@ -408,6 +413,7 @@ export default function AdminCaseLab({
               primaryCategory: generatorForm.primaryCategory,
               complexity: Number(generatorForm.complexity),
               prompt: generatorForm.prompt,
+              purgePreviousWork: Boolean(generatorForm.purgePreviousWork),
               stream: true,
             }),
           });
@@ -429,6 +435,7 @@ export default function AdminCaseLab({
           const decoder = new TextDecoder();
           let buffer = "";
           let template = null;
+          let artifactId = "";
           let streamError = "";
           let streamDone = false;
 
@@ -467,6 +474,7 @@ export default function AdminCaseLab({
 
               if (eventName === "complete") {
                 template = payload.template;
+                artifactId = payload.artifactId || "";
               }
 
               if (eventName === "error") {
@@ -493,7 +501,9 @@ export default function AdminCaseLab({
                 ? {
                     ...item,
                     status: "running",
-                    message: "Saving template to the library.",
+                    message: artifactId
+                      ? `Saving template to the library (artifact ${artifactId}).`
+                      : "Saving template to the library.",
                   }
                 : item
             ),
@@ -520,7 +530,9 @@ export default function AdminCaseLab({
                     ...item,
                     title: template.title,
                     status: "completed",
-                    message: "Saved to the library and available immediately.",
+                    message: artifactId
+                      ? `Saved to the library and linked to artifact ${artifactId}.`
+                      : "Saved to the library and available immediately.",
                   }
                 : item
             ),
@@ -559,6 +571,7 @@ export default function AdminCaseLab({
         complexity: 1,
         prompt: "",
         batchCount: 1,
+        purgePreviousWork: false,
       });
 
       if (failureCount === 0) {
@@ -808,6 +821,23 @@ export default function AdminCaseLab({
                     <span className="label-text-alt text-base-content/60">
                       Cases are generated one by one so each completed template appears in
                       the library immediately.
+                    </span>
+                  </label>
+
+                  <label className="label cursor-pointer justify-start gap-3 rounded-box border border-base-300 bg-base-200 px-4 py-3">
+                    <input
+                      type="checkbox"
+                      className="checkbox checkbox-sm"
+                      checked={Boolean(generatorForm.purgePreviousWork)}
+                      onChange={(event) =>
+                        setGeneratorForm((current) => ({
+                          ...current,
+                          purgePreviousWork: event.target.checked,
+                        }))
+                      }
+                    />
+                    <span className="text-sm">
+                      Start fresh and purge unfinished matching generation artifacts
                     </span>
                   </label>
 

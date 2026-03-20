@@ -27,12 +27,14 @@ export async function POST(req) {
       categorySlug: body?.primaryCategory || DEFAULT_CATEGORY_SLUG,
       complexity: Number(body?.complexity || 2),
       prompt: body?.prompt || "",
+      resumeArtifactId: body?.artifactId || "",
+      purgePreviousWork: Boolean(body?.purgePreviousWork),
       userId: session?.user?.id || "api-generator",
     };
 
     if (!wantsStream) {
-      const template = await createGeneratedCaseTemplate(options);
-      return NextResponse.json({ template }, { status: 201 });
+      const { template, artifactId } = await createGeneratedCaseTemplate(options);
+      return NextResponse.json({ template, artifactId }, { status: 201 });
     }
 
     const encoder = new TextEncoder();
@@ -47,7 +49,7 @@ export async function POST(req) {
         try {
           send("start", { ok: true });
 
-          const template = await createGeneratedCaseTemplate({
+          const { template, artifactId } = await createGeneratedCaseTemplate({
             ...options,
             onProgress: async (progress) => {
               console.log("[case-generator]", progress.stage, progress.result);
@@ -55,11 +57,14 @@ export async function POST(req) {
             },
           });
 
-          send("complete", { template });
+          send("complete", { template, artifactId });
           controller.close();
         } catch (error) {
           console.error(error);
-          send("error", { error: error.message || "Generation failed" });
+          send("error", {
+            error: error.message || "Generation failed",
+            artifactId: error?.artifactId || options.resumeArtifactId || null,
+          });
           controller.close();
         }
       },
@@ -74,6 +79,9 @@ export async function POST(req) {
     });
   } catch (error) {
     console.error(error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { error: error.message, artifactId: error?.artifactId || null },
+      { status: 500 }
+    );
   }
 }
