@@ -82,6 +82,41 @@ const splitCsv = (value) =>
     .map((item) => item.trim())
     .filter(Boolean);
 
+const GENERATION_STAGES = [
+  "Writing story",
+  "Adding details",
+  "Checking plausibility",
+  "Building template",
+  "Repairing issues",
+  "Verifying interview plan",
+];
+
+const parseSseEventBlocks = (buffer, onEvent) => {
+  const blocks = buffer.split("\n\n");
+  const remainder = blocks.pop() || "";
+
+  blocks.forEach((block) => {
+    const lines = block.split("\n");
+    const eventLine = lines.find((line) => line.startsWith("event:"));
+    const dataLines = lines.filter((line) => line.startsWith("data:"));
+
+    if (!eventLine || dataLines.length === 0) {
+      return;
+    }
+
+    const event = eventLine.replace("event:", "").trim();
+    const data = dataLines.map((line) => line.replace("data:", "").trim()).join("\n");
+
+    try {
+      onEvent(event, JSON.parse(data));
+    } catch (error) {
+      console.error("Failed to parse generator stream event", event, error);
+    }
+  });
+
+  return remainder;
+};
+
 const formatTemplateForForm = (template) => ({
   id: template.id || "",
   title: template.title || "",
@@ -176,6 +211,7 @@ export default function AdminCaseLab({
     failures: 0,
     activeIndex: 0,
     currentStep: "",
+    currentStageIndex: -1,
     items: [],
   });
 
@@ -328,6 +364,7 @@ export default function AdminCaseLab({
       failures: 0,
       activeIndex: 1,
       currentStep: total > 1 ? "Starting batch run" : "Starting generation",
+      currentStageIndex: 0,
       items: Array.from({ length: total }, (_, index) => ({
         index: index + 1,
         title: "",
@@ -348,25 +385,119 @@ export default function AdminCaseLab({
         setGenerationProgress((current) => ({
           ...current,
           activeIndex: caseNumber,
-          currentStep: `Generating case ${caseNumber} of ${total}`,
+          currentStageIndex: -1,
+          currentStep: `Starting case ${caseNumber} of ${total}`,
           items: current.items.map((item) =>
             item.index === caseNumber
               ? {
                   ...item,
                   status: "running",
-                  message:
-                    "Calling the generator. This will create the base case, refine the interview plan, then save it.",
+                  message: "Waiting for live generator updates from the server.",
                 }
               : item
           ),
         }));
 
         try {
-          const { template } = await apiClient.post("/admin/case-templates/generate", {
-            primaryCategory: generatorForm.primaryCategory,
-            complexity: Number(generatorForm.complexity),
-            prompt: generatorForm.prompt,
+          const response = await fetch("/api/admin/case-templates/generate", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              primaryCategory: generatorForm.primaryCategory,
+              complexity: Number(generatorForm.complexity),
+              prompt: generatorForm.prompt,
+              stream: true,
+            }),
           });
+
+          if (!response.ok || !response.body) {
+            let errorMessage = "Generation failed.";
+
+            try {
+              const errorPayload = await response.json();
+              errorMessage = errorPayload?.error || errorMessage;
+            } catch (_error) {
+              // Ignore JSON parse failure and fall back to default message.
+            }
+
+            throw new Error(errorMessage);
+          }
+
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
+          let template = null;
+          let streamError = "";
+          let streamDone = false;
+
+          while (!streamDone) {
+            const { value, done } = await reader.read();
+
+            if (done) {
+              streamDone = true;
+              continue;
+            }
+
+            buffer += decoder.decode(value, { stream: true });
+            buffer = parseSseEventBlocks(buffer, (eventName, payload) => {
+              if (eventName === "stage") {
+                const stageLabel = payload.label || payload.stage || "Working";
+                const nextStageIndex = GENERATION_STAGES.indexOf(stageLabel);
+
+                console.log(`[generator][case ${caseNumber}] ${stageLabel}`, payload.result);
+
+                setGenerationProgress((current) => ({
+                  ...current,
+                  activeIndex: caseNumber,
+                  currentStageIndex: nextStageIndex,
+                  currentStep: `${stageLabel} for case ${caseNumber} of ${total}`,
+                  items: current.items.map((item) =>
+                    item.index === caseNumber
+                      ? {
+                          ...item,
+                          status: "running",
+                          message: stageLabel,
+                        }
+                      : item
+                  ),
+                }));
+              }
+
+              if (eventName === "complete") {
+                template = payload.template;
+              }
+
+              if (eventName === "error") {
+                streamError = payload.error || "Generation failed.";
+              }
+            });
+          }
+
+          if (streamError) {
+            throw new Error(streamError);
+          }
+
+          if (!template) {
+            throw new Error("Generation finished without a template.");
+          }
+
+          setGenerationProgress((current) => ({
+            ...current,
+            activeIndex: caseNumber,
+            currentStageIndex: GENERATION_STAGES.length - 1,
+            currentStep: `Saving "${template.title}" from case ${caseNumber} of ${total}`,
+            items: current.items.map((item) =>
+              item.index === caseNumber
+                ? {
+                    ...item,
+                    status: "running",
+                    message: "Saving template to the library.",
+                  }
+                : item
+            ),
+          }));
 
           latestTemplateId = template.id;
           successCount += 1;
@@ -382,6 +513,7 @@ export default function AdminCaseLab({
               caseNumber < total
                 ? `Saved "${template.title}". Preparing the next case.`
                 : `Saved "${template.title}". Batch complete.`,
+            currentStageIndex: GENERATION_STAGES.length - 1,
             items: current.items.map((item) =>
               item.index === caseNumber
                 ? {
@@ -400,6 +532,7 @@ export default function AdminCaseLab({
             completed: caseNumber,
             successes: successCount,
             failures: failureCount,
+            currentStageIndex: current.currentStageIndex,
             currentStep:
               caseNumber < total
                 ? `Case ${caseNumber} failed. Continuing with the next case.`
@@ -410,8 +543,8 @@ export default function AdminCaseLab({
                     ...item,
                     status: "failed",
                     message: error.message || "Generation failed.",
-                  }
-                : item
+                }
+              : item
             ),
           }));
         }
@@ -704,6 +837,29 @@ export default function AdminCaseLab({
                     {generationProgress.currentStep ||
                       "Waiting for the next generation run."}
                   </p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {GENERATION_STAGES.map((stage, index) => {
+                      const isActive = index === generationProgress.currentStageIndex;
+                      const isPassed =
+                        generationProgress.currentStageIndex > index &&
+                        generationProgress.activeIndex > 0;
+
+                      return (
+                        <span
+                          key={stage}
+                          className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] ${
+                            isActive
+                              ? "border-secondary bg-secondary text-secondary-content"
+                              : isPassed
+                              ? "border-success/40 bg-success/10 text-success"
+                              : "border-base-300 bg-base-200 text-base-content/45"
+                          }`}
+                        >
+                          {stage}
+                        </span>
+                      );
+                    })}
+                  </div>
                   <progress
                     className="progress progress-secondary mt-4 w-full"
                     value={generationProgress.completed}

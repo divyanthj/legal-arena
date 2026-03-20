@@ -1,13 +1,18 @@
 import "server-only";
 
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
+const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 const DEFAULT_MODEL = process.env.OPENAI_MODEL?.trim() || "gpt-5.4";
+const usesResponsesApi = (model = "") => /^gpt-5/i.test(model);
 const usesMaxCompletionTokens = (model = "") =>
   /^gpt-5/i.test(model) || /^o[134]/i.test(model);
 const buildTokenPayload = (model, maxTokens) =>
   usesMaxCompletionTokens(model)
     ? { max_completion_tokens: maxTokens }
     : { max_tokens: maxTokens };
+const buildResponsesStructuredFormat = () => ({
+  type: "json_object",
+});
 
 const extractMessageText = (value) => {
   if (typeof value === "string") {
@@ -59,23 +64,127 @@ const extractJsonObject = (value) => {
     return null;
   }
 
-  const trimmed = value.trim();
+  const trimmed = value
+    .trim()
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
 
-  try {
-    return JSON.parse(trimmed);
-  } catch (error) {
-    const match = trimmed.match(/\{[\s\S]*\}/);
-
-    if (!match) {
+  const tryParse = (candidate) => {
+    if (!candidate || typeof candidate !== "string") {
       return null;
     }
 
     try {
-      return JSON.parse(match[0]);
-    } catch (nestedError) {
+      return JSON.parse(candidate);
+    } catch (error) {
       return null;
     }
+  };
+
+  const direct = tryParse(trimmed);
+  if (direct) {
+    return direct;
   }
+
+  const matchedObject = trimmed.match(/\{[\s\S]*\}/);
+  const matchedParsed = tryParse(matchedObject?.[0]);
+  if (matchedParsed) {
+    return matchedParsed;
+  }
+
+  const objectStart = trimmed.indexOf("{");
+  if (objectStart === -1) {
+    return null;
+  }
+
+  const candidate = trimmed.slice(objectStart);
+  let inString = false;
+  let escaping = false;
+  let curlyDepth = 0;
+  let squareDepth = 0;
+
+  for (const char of candidate) {
+    if (escaping) {
+      escaping = false;
+      continue;
+    }
+
+    if (char === "\\" && inString) {
+      escaping = true;
+      continue;
+    }
+
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+
+    if (inString) {
+      continue;
+    }
+
+    if (char === "{") {
+      curlyDepth += 1;
+    } else if (char === "}") {
+      curlyDepth = Math.max(0, curlyDepth - 1);
+    } else if (char === "[") {
+      squareDepth += 1;
+    } else if (char === "]") {
+      squareDepth = Math.max(0, squareDepth - 1);
+    }
+  }
+
+  const repairedCandidate =
+    candidate +
+    (inString ? '"' : "") +
+    "]".repeat(squareDepth) +
+    "}".repeat(curlyDepth);
+
+  return tryParse(repairedCandidate);
+};
+
+const extractResponsesText = (response = {}) => {
+  if (typeof response?.output_text === "string" && response.output_text.trim()) {
+    return response.output_text;
+  }
+
+  return (Array.isArray(response?.output) ? response.output : [])
+    .flatMap((item) =>
+      item?.type === "message" && Array.isArray(item.content) ? item.content : []
+    )
+    .map((part) => {
+      if (typeof part?.text === "string") {
+        return part.text;
+      }
+
+      if (typeof part?.text?.value === "string") {
+        return part.text.value;
+      }
+
+      if (typeof part?.refusal === "string") {
+        return part.refusal;
+      }
+
+      return "";
+    })
+    .filter(Boolean)
+    .join("\n");
+};
+
+const ensureJsonInstruction = (value = "") => {
+  const text = String(value || "").trim();
+
+  if (!text) {
+    return "Return a valid JSON object only.";
+  }
+
+  if (/\bjson\b/i.test(text)) {
+    return text;
+  }
+
+  return `Return a valid JSON object only.\n\n${text}`;
 };
 
 const isLikelyTruncatedJson = (value, finishReason = "") => {
@@ -87,6 +196,28 @@ const isLikelyTruncatedJson = (value, finishReason = "") => {
 
   return finishReason === "length" || (trimmed.startsWith("{") && !trimmed.endsWith("}"));
 };
+
+const shouldRetryStructuredParse = ({ content, finishReason = "", parsed }) => {
+  if (parsed) {
+    return false;
+  }
+
+  const text = String(content || "").trim();
+
+  if (!text) {
+    return true;
+  }
+
+  return (
+    isLikelyTruncatedJson(text, finishReason) ||
+    text.startsWith("{") ||
+    text.startsWith("```json") ||
+    finishReason === "incomplete"
+  );
+};
+
+const isRetryableApiErrorStatus = (status) =>
+  [408, 409, 429, 500, 502, 503, 504].includes(Number(status));
 
 export const requestStructuredCompletion = async ({
   systemPrompt,
@@ -109,16 +240,22 @@ export const requestStructuredCompletion = async ({
 
   for (let attempt = 0; attempt <= retryAttempts; attempt += 1) {
     const attemptMaxTokens =
-      attempt === 0 ? maxTokens : Math.ceil(maxTokens * (1 + 0.5 * attempt));
-
-    try {
-      const res = await fetch(OPENAI_URL, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
+      attempt === 0 ? maxTokens : Math.ceil(maxTokens * (1 + attempt));
+    const useResponsesApi = usesResponsesApi(model);
+    const endpoint = useResponsesApi ? OPENAI_RESPONSES_URL : OPENAI_URL;
+    const requestBody = useResponsesApi
+      ? {
+          model,
+          temperature,
+          max_output_tokens: attemptMaxTokens,
+          instructions: ensureJsonInstruction(systemPrompt),
+          input: ensureJsonInstruction(userPrompt),
+          text: {
+            format: buildResponsesStructuredFormat(),
+          },
+          user: userId,
+        }
+      : {
           model,
           temperature,
           ...buildTokenPayload(model, attemptMaxTokens),
@@ -134,7 +271,16 @@ export const requestStructuredCompletion = async ({
               content: userPrompt,
             },
           ],
-        }),
+        };
+
+    try {
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
       });
 
       if (!res.ok) {
@@ -144,6 +290,15 @@ export const requestStructuredCompletion = async ({
         console.error("OpenAI error:", res.status, errorBody);
         lastError = apiError;
 
+        if (attempt < retryAttempts && isRetryableApiErrorStatus(res.status)) {
+          console.warn("Retrying structured completion after retryable API error.", {
+            nextAttempt: attempt + 2,
+            status: res.status,
+            model,
+          });
+          continue;
+        }
+
         if (throwOnError) {
           throw apiError;
         }
@@ -152,8 +307,14 @@ export const requestStructuredCompletion = async ({
       }
 
       const data = await res.json();
-      const finishReason = data?.choices?.[0]?.finish_reason || "";
-      const content = extractMessageText(data?.choices?.[0]?.message?.content);
+      const finishReason = useResponsesApi
+        ? data?.status === "incomplete"
+          ? String(data?.incomplete_details?.reason || "incomplete")
+          : String(data?.status || "")
+        : data?.choices?.[0]?.finish_reason || "";
+      const content = useResponsesApi
+        ? extractResponsesText(data)
+        : extractMessageText(data?.choices?.[0]?.message?.content);
       const parsed = extractJsonObject(content);
 
       if (parsed) {
@@ -171,14 +332,25 @@ export const requestStructuredCompletion = async ({
         attempt: attempt + 1,
         finishReason,
         preview,
+        model,
+        api: useResponsesApi ? "responses" : "chat_completions",
       });
       lastError = parseError;
 
-      if (attempt < retryAttempts && isLikelyTruncatedJson(content, finishReason)) {
-        console.warn("Retrying structured completion after likely truncation.", {
+      if (
+        attempt < retryAttempts &&
+        shouldRetryStructuredParse({
+          content,
+          finishReason,
+          parsed,
+        })
+      ) {
+        console.warn("Retrying structured completion after empty or incomplete structured output.", {
           nextAttempt: attempt + 2,
           attemptMaxTokens,
           finishReason,
+          model,
+          api: useResponsesApi ? "responses" : "chat_completions",
         });
         continue;
       }

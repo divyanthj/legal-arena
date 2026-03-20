@@ -12,7 +12,9 @@ import {
 import { validateCaseTemplatePayload } from "./templates";
 
 const DEFAULT_GENERATION_MODEL =
-  process.env.OPENAI_GENERATION_MODEL || "gpt-4o-mini";
+  process.env.OPENAI_GENERATION_MODEL?.trim() ||
+  process.env.OPENAI_MODEL?.trim() ||
+  "gpt-5.4";
 
 const categoryLegalTagDefaults = {
   "rental-dispute": ["housing", "notice", "records", "damage", "remedy"],
@@ -36,6 +38,26 @@ const ALLOWED_EVIDENCE_TYPES = new Set([
   "record",
   "other",
 ]);
+
+const uniqueList = (items = []) =>
+  [...new Set((items || []).map((item) => String(item || "").trim()).filter(Boolean))];
+const normalizeLookupKey = (value = "") =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const GENERATION_STAGE_LABELS = {
+  story: "Writing story",
+  details: "Adding details",
+  plausibility: "Checking plausibility",
+  template: "Building template",
+  repair: "Repairing issues",
+  interview: "Verifying interview plan",
+  complete: "Complete",
+};
 
 const slugify = (value = "") =>
   value
@@ -76,6 +98,10 @@ const sanitizeClaimText = (value = "") => {
   }
 
   return text
+    .replace(
+      /\bthey are going to dispute this and say it does not prove my side:\s*/gi,
+      ""
+    )
     .replace(/\bfrom the modeled claims\b/gi, "")
     .replace(/\bmodeled claims?\b/gi, "what I remember")
     .replace(/\bmodelled claims?\b/gi, "what I remember")
@@ -84,6 +110,10 @@ const sanitizeClaimText = (value = "") => {
     .replace(/\bthe client\b/gi, "I")
     .replace(/\bthe opponent\b/gi, "they")
     .replace(/\bI don't have (a|any) (modeled|modelled) claim here\b/gi, "I do not remember the exact detail")
+    .replace(/\bI know they may use this against me:\s*/gi, "")
+    .replace(/\bI know this point could be used against me:\s*/gi, "")
+    .replace(/\bFrom my side, that point is being framed against me:\s*/gi, "")
+    .replace(/\bMy side is that\s*/gi, "")
     .replace(/\s{2,}/g, " ")
     .replace(/\s+\./g, ".")
     .trim();
@@ -110,6 +140,73 @@ const isLowQualityClaimText = (value = "") => {
   ].some((pattern) => text.includes(pattern));
 };
 
+const DOCUMENTATION_GAP_PATTERN =
+  /\b(itemized|itemised|documentation|documented|breakdown|notice|receipt|invoice|record|records|list)\b/i;
+const OMISSION_PATTERN =
+  /\b(no|not|never|without|missing|failed to|did not|didn't|wasn't|weren't|has not|have not)\b/i;
+const LEGAL_CONCLUSION_PATTERN =
+  /\b(required to|entitled to|violat(?:e|ed|ing)|obligated to|duty to|must provide|should provide)\b/i;
+const REPAIR_INACTION_PATTERN =
+  /\b(repair|heater|heating|heat|leak|leaking|mold|mould|rodent|rats|mice|damp|plumbing)\b/i;
+const LANDLORD_NONRESPONSE_PATTERN =
+  /\b(no action|no response|ignored|did not respond|didn't respond|failed to fix|never fixed|refused to fix|unaddressed)\b/i;
+
+const isDocumentationGapFact = (fact = {}) => {
+  const corpus = [
+    fact.label || "",
+    fact.canonicalDetail || "",
+    ...(fact.discoverability?.keywords || []),
+  ].join(" ");
+
+  return DOCUMENTATION_GAP_PATTERN.test(corpus) && OMISSION_PATTERN.test(corpus);
+};
+
+const isRepairInactionFact = (fact = {}) => {
+  const corpus = [
+    fact.label || "",
+    fact.canonicalDetail || "",
+    ...(fact.discoverability?.keywords || []),
+  ].join(" ");
+
+  return REPAIR_INACTION_PATTERN.test(corpus) && LANDLORD_NONRESPONSE_PATTERN.test(corpus);
+};
+
+const inferGeneratedFactKind = (fact = {}) => {
+  const rawKind = ["timeline", "supporting", "risk", "dispute", "evidence"].includes(fact.kind)
+    ? fact.kind
+    : "supporting";
+
+  if (rawKind === "risk" && isDocumentationGapFact(fact)) {
+    return "supporting";
+  }
+
+  if (rawKind === "risk" && isRepairInactionFact(fact)) {
+    return "supporting";
+  }
+
+  return rawKind;
+};
+
+const buildDocumentationGapClaim = ({ party, canonicalDetail = "" }) => {
+  const detail = String(canonicalDetail || "").trim();
+
+  if (!detail) {
+    return party === "plaintiff"
+      ? "I never got the detailed itemized documentation."
+      : "I do not agree that I failed to provide the proper documentation.";
+  }
+
+  if (party === "plaintiff") {
+    if (/did not provide/i.test(detail)) {
+      return detail.replace(/the landlord did not provide/gi, "I never got");
+    }
+
+    return `I never got a proper itemized list or comparable documentation from the landlord.`;
+  }
+
+  return `I do not agree that I failed to provide a proper itemized list or comparable documentation.`;
+};
+
 const buildGenerationPrompt = ({ category, complexity, prompt }) => ({
   task: "Generate the base layer of a legal case template for a courtroom simulation app.",
   requirements: {
@@ -127,6 +224,9 @@ const buildGenerationPrompt = ({ category, complexity, prompt }) => ({
       "Evidence items should correspond to the canonical facts.",
       "Do not assume every possible record is already in hand. Some evidence can be uncertain or still need confirmation.",
       "Write claims in natural spoken language that a plaintiff or defendant would actually say.",
+      "Keep factual propositions separate from legal conclusions. A claim should sound like something a witness would say, not a rule statement.",
+      "If the issue is that a party did not provide an itemized list, notice, receipt, or other documentation, model that as a factual proof-gap point. Do not call it corroborated unless confirmed evidence already proves the omission.",
+      "Never use meta scaffolding like 'They are going to dispute this', 'I know they may use this against me', 'My side is that', or similar template-construction language in claims or openings.",
       "The openingStatement is not courtroom advocacy. It is the plaintiff's first intake-style explanation to their lawyer in plain first-person language.",
       "Do not start openingStatement with phrases like 'Your Honor', 'Your Honour', 'May it please the court', 'counsel', or other courtroom formalities.",
       "Do not use meta phrases like 'modeled claims', 'client account pending refinement', 'the plaintiff alleges', or other schema-ish wording in any claim text.",
@@ -237,6 +337,173 @@ const buildGenerationPrompt = ({ category, complexity, prompt }) => ({
   },
 });
 
+const buildCanonicalStoryPrompt = ({ category, complexity, prompt }) => ({
+  task: "Create the canonical story packet for a legal simulation case before any schema-heavy template extraction.",
+  requirements: {
+    category: category.slug,
+    categoryTitle: category.title,
+    complexity,
+    additionalPrompt: prompt || "",
+    rules: [
+      "Write one coherent underlying story of what happened in plain language.",
+      "Anchor the story with concrete people, actions, time markers, money, and disputed conduct.",
+      "Keep legal conclusions secondary. The story should focus on events, communications, records, omissions, and motives.",
+      "Make the plaintiff opening statement sound like a real client talking to their lawyer during intake.",
+      "Include likely records or witnesses that exist, may exist, or are missing.",
+      "Distinguish clearly between what is settled, what is disputed, and what is still a proof gap.",
+      "Do not output canonicalFacts, evidenceItems, or interviewBlueprint yet.",
+      "Keep the story realistic and suitable for ordinary civil or criminal disputes in this category.",
+    ],
+  },
+  outputSchema: {
+    title: "string",
+    subtitle: "string",
+    overview: "string",
+    desiredRelief: "string",
+    openingStatement: "string",
+    starterTheory: "string",
+    practiceArea: "string",
+    primaryCategory: category.slug,
+    secondaryCategories: ["string"],
+    complexity: "number",
+    courtName: "string",
+    plaintiffName: "string",
+    defendantName: "string",
+    legalTags: ["string"],
+    authoringNotes: "string",
+    canonicalStory: "string",
+    storyBeats: [
+      {
+        beatId: "string",
+        order: "number",
+        label: "string",
+        detail: "string",
+        status: "settled|disputed|unknown",
+      },
+    ],
+    likelyEvidence: [
+      {
+        label: "string",
+        detail: "string",
+        type: "document|photo|message|invoice|witness|record|other",
+        holderSide: "plaintiff|defendant|shared|third-party|unknown",
+        availabilityStatus: "confirmed|mentioned|unknown|missing|contested",
+      },
+    ],
+    disputedIssues: ["string"],
+  },
+});
+
+const buildSpecificityExpansionPrompt = ({
+  category,
+  complexity,
+  prompt,
+  storyPacket,
+}) => ({
+  task: "Expand the canonical story packet into a more concrete, gameplay-ready story packet with specific but consistent details.",
+  requirements: {
+    category: category.slug,
+    categoryTitle: category.title,
+    complexity,
+    additionalPrompt: prompt || "",
+    rules: [
+      "Keep the same core story, liability posture, and requested relief.",
+      "You may invent concrete specifics that the original story left vague if they help gameplay.",
+      "Good specifics include exact dates, addresses, unit numbers, names, message timing, invoice labels, and sequence details.",
+      "Do not invent specifics that materially change who is right, what happened, or what records actually exist.",
+      "When filling in specifics, keep them realistic and internally consistent with the story packet.",
+      "Keep the dispute grounded in ordinary evidence, omissions, and witness behavior.",
+    ],
+  },
+  storyPacket,
+  outputSchema: buildCanonicalStoryPrompt({ category, complexity, prompt }).outputSchema,
+});
+
+const buildStoryPlausibilityReviewPrompt = ({
+  category,
+  complexity,
+  prompt,
+  storyPacket,
+}) => ({
+  task: "Review the expanded story packet for plausibility and internal consistency, then return a repaired final version if needed.",
+  requirements: {
+    category: category.slug,
+    categoryTitle: category.title,
+    complexity,
+    additionalPrompt: prompt || "",
+    rules: [
+      "Check whether the dates, timeline, money, evidence, and witness details fit together plausibly.",
+      "Repair contradictions, impossible sequencing, unrealistic records, or details that feel legally or factually off.",
+      "Keep as much of the expanded story packet as possible.",
+      "Do not collapse the story back into vagueness. Preserve useful specifics unless they are implausible.",
+      "Do not materially change the core dispute unless a contradiction forces a narrow repair.",
+    ],
+  },
+  storyPacket,
+  outputSchema: buildCanonicalStoryPrompt({ category, complexity, prompt }).outputSchema,
+});
+
+const buildTemplateFromStoryPrompt = ({
+  category,
+  complexity,
+  prompt,
+  storyPacket,
+}) => ({
+  task: "Convert the canonical story packet into a structured legal case template for gameplay.",
+  requirements: {
+    category: category.slug,
+    categoryTitle: category.title,
+    complexity,
+    additionalPrompt: prompt || "",
+    rules: [
+      "Stay faithful to the canonical story packet. Do not change the core events, parties, timeline, or requested relief without a strong internal reason.",
+      "Derive the template from the story rather than inventing unrelated facts.",
+      "Canonical facts should be factual propositions or disputed propositions, not legal-rule slogans.",
+      "Party claims should sound like witness-style statements each side would naturally say.",
+      "Use supporting for facts that help a side, risk for weaknesses that hurt that side, and dispute for genuinely contested propositions.",
+      "If a fact is about ignored repair requests, landlord inaction, or unaddressed habitability problems, do not classify that fact as a plaintiff risk.",
+      "If the story says a notice, itemized list, receipt, or document was not provided, model that as a factual proof-gap point rather than automatically as corroborated proof.",
+      "Only mark evidence confirmed when the story packet really indicates it is in hand or clearly available.",
+      "Make follow-up questions feel like real intake questions a lawyer would ask next.",
+      "Keep the result internally consistent with the story packet's records, omissions, and disputed issues.",
+    ],
+  },
+  storyPacket,
+  outputSchema: buildGenerationPrompt({ category, complexity, prompt }).outputSchema,
+});
+
+const buildTemplateRepairPrompt = ({
+  category,
+  complexity,
+  prompt,
+  storyPacket,
+  templateDraft,
+  detectedIssues,
+}) => ({
+  task: "Repair a generated legal case template so it is internally consistent, playable, and faithful to the canonical story.",
+  requirements: {
+    category: category.slug,
+    categoryTitle: category.title,
+    complexity,
+    additionalPrompt: prompt || "",
+    detectedIssues,
+    rules: [
+      "Keep the same core story, parties, and requested relief unless an issue requires a narrow repair.",
+      "Fix meta or schema-like claim text so every claim and opening sounds like something the party would actually say.",
+      "Repair money inconsistencies across desired relief, story, facts, and evidence.",
+      "Link evidenceItems and canonicalFacts consistently using evidenceRefs and linkedFactIds when the relationship is apparent.",
+      "evidenceRefs must use evidence item ids, not evidence labels or paraphrases.",
+      "If a fact is about ignored repair requests, landlord inaction, or unaddressed habitability problems, do not leave it classified as a plaintiff risk.",
+      "Repair title or subtitle wording if it conflicts with the actual story details.",
+      "Preserve useful specific details unless they contradict the canonical story or the rest of the template.",
+      "Output a full corrected template payload, not a patch.",
+    ],
+  },
+  storyPacket,
+  templateDraft,
+  outputSchema: buildGenerationPrompt({ category, complexity, prompt }).outputSchema,
+});
+
 const buildInterviewPlanningPrompt = ({
   category,
   complexity,
@@ -327,6 +594,7 @@ const titleLooksGeneric = (title = "") => {
     /^state\s+v\.?/,
     /^the state\s+v\.?/,
     /^people\s+v\.?/,
+    /\brental dispute\b/,
     /^marital asset dispute/,
     /^contract dispute/,
     /^business dispute/,
@@ -336,6 +604,9 @@ const titleLooksGeneric = (title = "") => {
     /^employment dispute/,
     /^administrative dispute/,
     /^consumer dispute/,
+    /\blease agreement\b/,
+    /\blease dispute\b/,
+    /\bhabitability issues?\b/,
     /\bcase$/
   ].some((pattern) => pattern.test(normalized));
 };
@@ -353,22 +624,341 @@ const categoryTitleFallbacks = {
   administrative: "Red Tape Reckoning",
 };
 
-const buildInterestingTitle = ({ title, subtitle, categorySlug }) => {
+const buildInterestingTitle = ({ title, subtitle, categorySlug, story = "", overview = "" }) => {
   if (!titleLooksGeneric(title)) {
     return String(title || "").trim();
   }
 
   const fallback = categoryTitleFallbacks[categorySlug] || "Docket Under Fire";
-  const subtitleText = String(subtitle || "").trim().toLowerCase();
+  const corpus = [subtitle || "", story || "", overview || ""].join(" ").trim().toLowerCase();
 
-  if (subtitleText.includes("deposit")) return "Deposit Day Reckoning";
-  if (subtitleText.includes("invoice")) return "The Missing Final Payment";
-  if (subtitleText.includes("burglary")) return "Burglary Before Dawn";
-  if (subtitleText.includes("towed") || subtitleText.includes("tow")) return "Tow Lot Twist";
-  if (subtitleText.includes("lease")) return "Leasehold Lockup";
-  if (subtitleText.includes("fired") || subtitleText.includes("termination")) return "Termination Tangle";
+  if (corpus.includes("deposit")) return "Deposit Day Reckoning";
+  if (corpus.includes("invoice")) return "The Missing Final Payment";
+  if (corpus.includes("burglary")) return "Burglary Before Dawn";
+  if (corpus.includes("towed") || corpus.includes("tow")) return "Tow Lot Twist";
+  if (corpus.includes("mold") || corpus.includes("damp")) return "Mold Behind the Walls";
+  if (corpus.includes("heat") || corpus.includes("heating")) return "Cold Keys, Cold Nights";
+  if (corpus.includes("rodent") || corpus.includes("rats") || corpus.includes("mice"))
+    return "The Rodent Clause";
+  if (corpus.includes("lease")) return "Leasehold Lockup";
+  if (corpus.includes("fired") || corpus.includes("termination")) return "Termination Tangle";
 
   return fallback;
+};
+
+const finalizeTemplatePresentation = (payload = {}, categorySlug, storyPacket = {}) => {
+  const story = String(storyPacket?.canonicalStory || "").trim();
+  const nextTitle = buildInterestingTitle({
+    title: payload.title,
+    subtitle: payload.subtitle,
+    categorySlug,
+    story,
+    overview: payload.overview,
+  });
+
+  return {
+    ...payload,
+    title: nextTitle,
+    subtitle: String(payload.subtitle || "").trim(),
+  };
+};
+
+const META_SCAFFOLDING_PATTERN =
+  /\b(they are going to dispute this and say it does not prove my side|modeled claim|modelled claim|pending refinement|schema|i know they may use this against me|i know this point could be used against me|from my side, that point is being framed against me|my side is that)\b/i;
+const MONEY_PATTERN = /\$\s?\d[\d,]*(?:\.\d{2})?|\b\d[\d,]*(?:\.\d{2})?\s?dollars?\b/gi;
+
+const extractMoneyValues = (value = "") =>
+  [...String(value || "").matchAll(MONEY_PATTERN)].map((match) =>
+    String(match[0]).replace(/[^0-9.]/g, "")
+  );
+
+const tokenizeEvidenceText = (value = "") =>
+  uniqueList(
+    String(value || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .split(/\s+/)
+      .filter((token) => token.length > 3)
+  );
+
+const countSharedEvidenceTokens = (left = "", right = "") => {
+  const rightTokens = new Set(tokenizeEvidenceText(right));
+  return tokenizeEvidenceText(left).filter((token) => rightTokens.has(token)).length;
+};
+
+const reconcileEvidenceGraph = (payload = {}) => {
+  const facts = Array.isArray(payload.canonicalFacts) ? payload.canonicalFacts : [];
+  const evidenceItems = Array.isArray(payload.evidenceItems) ? payload.evidenceItems : [];
+
+  const factIdLookup = new Map(
+    facts.flatMap((fact) => {
+      const factId = String(fact.factId || "").trim();
+      const factLabel = String(fact.label || "").trim();
+      return [
+        [normalizeLookupKey(factId), factId],
+        [normalizeLookupKey(factLabel), factId],
+      ].filter(([key, value]) => key && value);
+    })
+  );
+  const evidenceIdLookup = new Map(
+    evidenceItems.flatMap((item) => {
+      const id = String(item.id || "").trim();
+      const label = String(item.label || "").trim();
+      return [
+        [normalizeLookupKey(id), id],
+        [normalizeLookupKey(label), id],
+      ].filter(([key, value]) => key && value);
+    })
+  );
+
+  const normalizedFacts = facts.map((fact) => ({
+    ...fact,
+    evidenceRefs: uniqueList(
+      (fact.evidenceRefs || [])
+        .map((ref) => evidenceIdLookup.get(normalizeLookupKey(ref)) || "")
+        .filter(Boolean)
+    ),
+  }));
+  const normalizedEvidenceItems = evidenceItems.map((item) => ({
+    ...item,
+    linkedFactIds: uniqueList(
+      (item.linkedFactIds || [])
+        .map((factId) => factIdLookup.get(normalizeLookupKey(factId)) || "")
+        .filter(Boolean)
+    ),
+  }));
+
+  const evidenceRefsByFactId = new Map(
+    normalizedFacts.map((fact) => [String(fact.factId || "").trim(), new Set(fact.evidenceRefs || [])])
+  );
+  const linkedFactIdsByEvidenceId = new Map(
+    normalizedEvidenceItems.map((item) => [
+      String(item.id || "").trim(),
+      new Set(item.linkedFactIds || []),
+    ])
+  );
+
+  normalizedEvidenceItems.forEach((item) => {
+    const evidenceId = String(item.id || "").trim();
+    (item.linkedFactIds || []).forEach((factId) => {
+      if (!evidenceRefsByFactId.has(factId)) {
+        evidenceRefsByFactId.set(factId, new Set());
+      }
+      evidenceRefsByFactId.get(factId).add(evidenceId);
+    });
+  });
+
+  normalizedFacts.forEach((fact) => {
+    const factId = String(fact.factId || "").trim();
+    (fact.evidenceRefs || []).forEach((evidenceId) => {
+      if (!linkedFactIdsByEvidenceId.has(evidenceId)) {
+        linkedFactIdsByEvidenceId.set(evidenceId, new Set());
+      }
+      linkedFactIdsByEvidenceId.get(evidenceId).add(factId);
+    });
+  });
+
+  return {
+    ...payload,
+    canonicalFacts: normalizedFacts.map((fact) => ({
+      ...fact,
+      evidenceRefs: uniqueList([...(evidenceRefsByFactId.get(String(fact.factId || "").trim()) || [])]),
+    })),
+    evidenceItems: normalizedEvidenceItems.map((item) => ({
+      ...item,
+      linkedFactIds: uniqueList([
+        ...(linkedFactIdsByEvidenceId.get(String(item.id || "").trim()) || []),
+      ]),
+    })),
+  };
+};
+
+const BLOCKING_REPAIR_PATTERNS = [
+  /meta\/scaffolded/i,
+  /does not resolve to an evidence item id/i,
+  /not linked back to the fact/i,
+  /not linked to any canonical fact/i,
+  /missing evidencerefs even though evidence links to it/i,
+  /does not appear semantically related/i,
+  /misclassified as a risk/i,
+];
+
+const hasBlockingTemplateIssues = (issues = []) =>
+  (issues || []).some((issue) =>
+    BLOCKING_REPAIR_PATTERNS.some((pattern) => pattern.test(String(issue || "")))
+  );
+
+const detectTemplateRepairIssues = (payload = {}, storyPacket = {}) => {
+  const issues = [];
+  const title = String(payload.title || "").trim();
+  const subtitle = String(payload.subtitle || "").trim();
+  const story = String(storyPacket?.canonicalStory || payload.authoringNotes || "").trim();
+  const desiredRelief = String(payload.desiredRelief || "").trim();
+
+  if (
+    [title, subtitle].some((text) => /cool/i.test(text)) &&
+    /heat/i.test(story) &&
+    !/cool/i.test(story)
+  ) {
+    issues.push(
+      "The title or subtitle references cooling, but the canonical story is about heating problems."
+    );
+  }
+
+  if (titleLooksGeneric(title)) {
+    issues.push("The title is generic and should be replaced with a story-specific title.");
+  }
+
+  const allOpenings = [
+    payload.interviewBlueprint?.plaintiff?.opening,
+    payload.interviewBlueprint?.defendant?.opening,
+  ].filter(Boolean);
+  if (allOpenings.some((value) => META_SCAFFOLDING_PATTERN.test(String(value)))) {
+    issues.push("Interview blueprint openings contain meta/scaffolded text instead of party voice.");
+  }
+
+  (payload.canonicalFacts || []).forEach((fact, index) => {
+    (fact.claims || []).forEach((claim) => {
+      if (META_SCAFFOLDING_PATTERN.test(String(claim.claimedDetail || ""))) {
+        issues.push(
+          `canonicalFacts[${index}] contains meta/scaffolded claim text for ${claim.party}.`
+        );
+      }
+    });
+
+    if (fact.kind === "risk" && isRepairInactionFact(fact)) {
+      issues.push(
+        `canonicalFacts[${index}] is misclassified as a risk even though it describes ignored repairs or landlord inaction.`
+      );
+    }
+  });
+
+  const evidenceItems = payload.evidenceItems || [];
+  const evidenceById = new Map(
+    evidenceItems.map((item) => [String(item.id || "").trim(), item])
+  );
+  const evidenceLinkedFactIds = new Set(
+    evidenceItems.flatMap((item) => (item.linkedFactIds || []).map((factId) => String(factId)))
+  );
+
+  evidenceItems.forEach((item, index) => {
+    if (!(item.linkedFactIds || []).length) {
+      issues.push(`evidenceItems[${index}] is not linked to any canonical fact.`);
+    }
+  });
+
+  (payload.canonicalFacts || []).forEach((fact, index) => {
+    const factId = String(fact.factId || "");
+    if ((fact.evidenceRefs || []).length === 0 && evidenceLinkedFactIds.has(factId)) {
+      issues.push(`canonicalFacts[${index}] is missing evidenceRefs even though evidence links to it.`);
+    }
+
+    (fact.evidenceRefs || []).forEach((ref) => {
+      const evidenceItem = evidenceById.get(String(ref || "").trim());
+
+      if (!evidenceItem) {
+        issues.push(`canonicalFacts[${index}] references evidenceRef "${ref}" that does not resolve to an evidence item id.`);
+        return;
+      }
+
+      if (
+        Array.isArray(evidenceItem.linkedFactIds) &&
+        evidenceItem.linkedFactIds.length > 0 &&
+        !evidenceItem.linkedFactIds.map((id) => String(id)).includes(factId)
+      ) {
+        issues.push(
+          `canonicalFacts[${index}] references evidence "${evidenceItem.label}" but that evidence is not linked back to the fact.`
+        );
+        return;
+      }
+
+      const factCorpus = [
+        fact.label || "",
+        fact.canonicalDetail || "",
+        ...(fact.discoverability?.keywords || []),
+      ].join(" ");
+      const evidenceCorpus = [evidenceItem.label || "", evidenceItem.detail || ""].join(" ");
+
+      if (
+        countSharedEvidenceTokens(factCorpus, evidenceCorpus) === 0 &&
+        String(evidenceItem.type || "").trim() !== "witness"
+      ) {
+        issues.push(
+          `canonicalFacts[${index}] references evidence "${evidenceItem.label}" that does not appear semantically related.`
+        );
+      }
+    });
+  });
+
+  const reliefAmounts = extractMoneyValues(desiredRelief);
+  const storyAmounts = extractMoneyValues(story);
+  const factAmounts = (payload.canonicalFacts || []).flatMap((fact) =>
+    extractMoneyValues(fact.canonicalDetail || "")
+  );
+  const distinctAmounts = uniqueList([...reliefAmounts, ...storyAmounts, ...factAmounts]);
+
+  if (distinctAmounts.length >= 3) {
+    issues.push(
+      "There are multiple distinct money amounts across desired relief, canonical story, and facts; verify the deposit and damage amounts are consistent."
+    );
+  }
+
+  if (
+    /full security deposit/i.test(desiredRelief) &&
+    /\bhas not received (her|his|their) deposit\b/i.test(story) &&
+    factAmounts.some((amount) => amount && !reliefAmounts.includes(amount))
+  ) {
+    issues.push(
+      "The story says the plaintiff has not received the deposit, but at least one fact introduces a different deposit or damages amount that may conflict."
+    );
+  }
+
+  const factCountWithoutEvidence = (payload.canonicalFacts || []).filter((fact) => {
+    const factId = String(fact.factId || "");
+    return !evidenceLinkedFactIds.has(factId) && !(fact.evidenceRefs || []).length;
+  }).length;
+  if (factCountWithoutEvidence >= 3 && evidenceItems.length > 0) {
+    issues.push("Too many canonical facts are disconnected from the available evidence graph.");
+  }
+
+  return uniqueList(issues);
+};
+
+const hasUsableCanonicalFacts = (payload = {}) =>
+  Array.isArray(payload.canonicalFacts) &&
+  payload.canonicalFacts.some(
+    (fact) =>
+      String(fact?.canonicalDetail || "").trim() &&
+      Array.isArray(fact?.claims) &&
+      fact.claims.some((claim) => claim.party === "plaintiff") &&
+      fact.claims.some((claim) => claim.party === "defendant")
+  );
+
+const withCanonicalStoryNote = (payload = {}, storyPacket = {}) => {
+  if (!storyPacket?.canonicalStory) {
+    return payload;
+  }
+
+  return {
+    ...payload,
+    authoringNotes: uniqueList([
+      payload.authoringNotes,
+      `Canonical story: ${String(storyPacket.canonicalStory).trim()}`,
+    ]).join("\n\n"),
+  };
+};
+
+const emitGenerationProgress = async (onProgress, stage, result, extra = {}) => {
+  if (typeof onProgress !== "function") {
+    return;
+  }
+
+  await onProgress({
+    stage,
+    label: GENERATION_STAGE_LABELS[stage] || stage,
+    result,
+    ...extra,
+  });
 };
 
 const normalizeEvidenceType = (value = "") => {
@@ -419,19 +1009,27 @@ const normalizeClaims = (claims = []) =>
   }));
 
 const buildFallbackClaimText = ({ party, canonicalDetail, kind }) => {
-  if (party === "plaintiff") {
-    if (kind === "risk") {
-      return `I know they may use this against me: ${canonicalDetail}`;
-    }
+  const detail = String(canonicalDetail || "").trim();
 
-    return canonicalDetail;
+  if (!detail) {
+    return party === "defendant"
+      ? "I do not agree with that version of events."
+      : "That is what happened from my side.";
+  }
+
+  if (party === "plaintiff") {
+    return detail;
+  }
+
+  if (kind === "dispute") {
+    return "I do not agree with that version of events.";
   }
 
   if (kind === "risk") {
-    return `They will say this hurts my position: ${canonicalDetail}`;
+    return "That leaves out my side of what happened.";
   }
 
-  return `They are going to dispute this and say it does not prove my side: ${canonicalDetail}`;
+  return "That is not the whole story from my side.";
 };
 
 const ensurePartyCoverage = (fact) => {
@@ -443,11 +1041,16 @@ const ensurePartyCoverage = (fact) => {
   if (!parties.includes("plaintiff")) {
     normalized.unshift({
       party: "plaintiff",
-      claimedDetail: buildFallbackClaimText({
-        party: "plaintiff",
-        canonicalDetail: String(fact.canonicalDetail || "").trim(),
-        kind: fact.kind,
-      }),
+      claimedDetail: isDocumentationGapFact(fact)
+        ? buildDocumentationGapClaim({
+            party: "plaintiff",
+            canonicalDetail: String(fact.canonicalDetail || "").trim(),
+          })
+        : buildFallbackClaimText({
+            party: "plaintiff",
+            canonicalDetail: String(fact.canonicalDetail || "").trim(),
+            kind: fact.kind,
+          }),
       stance: "admits",
       confidence: 0.7,
       accessLevel: "direct",
@@ -459,11 +1062,16 @@ const ensurePartyCoverage = (fact) => {
   if (!parties.includes("defendant")) {
     normalized.push({
       party: "defendant",
-      claimedDetail: buildFallbackClaimText({
-        party: "defendant",
-        canonicalDetail: String(fact.canonicalDetail || "").trim(),
-        kind: fact.kind,
-      }),
+      claimedDetail: isDocumentationGapFact(fact)
+        ? buildDocumentationGapClaim({
+            party: "defendant",
+            canonicalDetail: String(fact.canonicalDetail || "").trim(),
+          })
+        : buildFallbackClaimText({
+            party: "defendant",
+            canonicalDetail: String(fact.canonicalDetail || "").trim(),
+            kind: fact.kind,
+          }),
       stance: "distorts",
       confidence: 0.7,
       accessLevel: "partial",
@@ -476,7 +1084,7 @@ const ensurePartyCoverage = (fact) => {
 };
 
 const normalizeBlueprintSide = (value = {}) => ({
-  opening: normalizeClientIntakeStatement(value.opening),
+  opening: sanitizeClaimText(normalizeClientIntakeStatement(value.opening)),
   posture: String(value.posture || "").trim(),
   priorityFactIds: Array.isArray(value.priorityFactIds)
     ? value.priorityFactIds.map((item) => String(item).trim()).filter(Boolean)
@@ -490,7 +1098,9 @@ const normalizeBlueprintPatchSide = (value = {}) => {
   const normalized = {};
 
   if (typeof value.opening === "string" && value.opening.trim()) {
-    normalized.opening = normalizeClientIntakeStatement(value.opening);
+    normalized.opening = sanitizeClaimText(
+      normalizeClientIntakeStatement(value.opening)
+    );
   }
   if (typeof value.posture === "string" && value.posture.trim()) {
     normalized.posture = String(value.posture).trim();
@@ -544,16 +1154,12 @@ const normalizePartyProfile = (value = {}, role) => ({
     : [],
 });
 
-const normalizeGeneratedPayload = (payload, categorySlug, complexity) =>
-  enrichTemplateForGameplay({
+const normalizeGeneratedPayload = (payload, categorySlug, complexity) => {
+  const normalizedPayload = enrichTemplateForGameplay({
     ...payload,
     sourceType: "generated",
     status: "active",
-    title: buildInterestingTitle({
-      title: payload.title,
-      subtitle: payload.subtitle,
-      categorySlug,
-    }),
+    title: String(payload.title || "").trim(),
     subtitle: String(payload.subtitle || "").trim(),
     openingStatement: normalizeClientIntakeStatement(payload.openingStatement),
     plaintiffName: String(payload.plaintiffName || payload.clientName || "").trim(),
@@ -576,11 +1182,7 @@ const normalizeGeneratedPayload = (payload, categorySlug, complexity) =>
       ? payload.canonicalFacts.map((fact, index) => ({
           factId: String(fact.factId || `fact-${index + 1}`).trim(),
           label: String(fact.label || `Fact ${index + 1}`).trim(),
-          kind: ["timeline", "supporting", "risk", "dispute", "evidence"].includes(
-            fact.kind
-          )
-            ? fact.kind
-            : "supporting",
+          kind: inferGeneratedFactKind(fact),
           truthStatus: ["verified", "probable", "uncertain"].includes(fact.truthStatus)
             ? fact.truthStatus
             : "verified",
@@ -603,7 +1205,21 @@ const normalizeGeneratedPayload = (payload, categorySlug, complexity) =>
           followUpQuestions: Array.isArray(fact.followUpQuestions)
             ? fact.followUpQuestions.map((item) => String(item).trim()).filter(Boolean)
             : [],
-          claims: ensurePartyCoverage(fact),
+          claims: ensurePartyCoverage({
+            ...fact,
+            kind: inferGeneratedFactKind(fact),
+            claims: normalizeClaims(fact.claims).map((claim) => ({
+              ...claim,
+              claimedDetail:
+                isDocumentationGapFact(fact) &&
+                LEGAL_CONCLUSION_PATTERN.test(String(claim.claimedDetail || ""))
+                  ? buildDocumentationGapClaim({
+                      party: normalizeTemplateParty(claim.party),
+                      canonicalDetail: fact.canonicalDetail,
+                    })
+                  : claim.claimedDetail,
+            })),
+          }),
         }))
       : [],
     evidenceItems: Array.isArray(payload.evidenceItems)
@@ -632,6 +1248,9 @@ const normalizeGeneratedPayload = (payload, categorySlug, complexity) =>
       ),
     },
   });
+
+  return reconcileEvidenceGraph(normalizedPayload);
+};
 
 const mergeInterviewPlanningPayload = (payload, plan = {}) => {
   const factPatchMap = new Map(
@@ -716,27 +1335,181 @@ export const generateCaseTemplatePayload = async ({
   prompt = "",
   userId = "system",
   model = DEFAULT_GENERATION_MODEL,
+  onProgress,
 }) => {
   const category = getCategoryBySlug(categorySlug) || getCategoryBySlug(DEFAULT_CATEGORY_SLUG);
-  const aiResult = await requestStructuredCompletion({
+  const initialStoryPacket = await requestStructuredCompletion({
     userId,
     model,
-    temperature: 0.9,
+    temperature: 0.95,
+    maxTokens: 4000,
+    retryAttempts: 2,
+    throwOnError: true,
+    systemPrompt:
+      "You generate canonical legal case stories for a courtroom simulation app. This is phase 1 of 6. Output valid JSON only. Prioritize coherence, realism, and concrete event detail over schema cleverness.",
+    userPrompt: JSON.stringify(buildCanonicalStoryPrompt({ category, complexity, prompt })),
+  });
+
+  if (!initialStoryPacket) {
+    throw new Error(
+      "Case generation failed because the model returned no canonical story packet."
+    );
+  }
+  await emitGenerationProgress(onProgress, "story", initialStoryPacket);
+
+  const expandedStoryPacket = await requestStructuredCompletion({
+    userId,
+    model,
+    temperature: 0.7,
+    maxTokens: 4500,
+    retryAttempts: 2,
+    throwOnError: true,
+    systemPrompt:
+      "You expand legal case stories into more concrete gameplay-ready story packets. This is phase 2 of 6. Output valid JSON only. Add useful specific details while preserving the same underlying world.",
+    userPrompt: JSON.stringify(
+      buildSpecificityExpansionPrompt({
+        category,
+        complexity,
+        prompt,
+        storyPacket: initialStoryPacket,
+      })
+    ),
+  });
+
+  const storyPacket = expandedStoryPacket || initialStoryPacket;
+  await emitGenerationProgress(onProgress, "details", storyPacket);
+
+  const reviewedStoryPacket = await requestStructuredCompletion({
+    userId,
+    model,
+    temperature: 0.25,
+    maxTokens: 4500,
+    retryAttempts: 2,
+    systemPrompt:
+      "You review expanded legal case stories for plausibility and consistency. This is phase 3 of 6. Output valid JSON only. Keep useful specifics, but repair contradictions and implausible details.",
+    userPrompt: JSON.stringify(
+      buildStoryPlausibilityReviewPrompt({
+        category,
+        complexity,
+        prompt,
+        storyPacket,
+      })
+    ),
+  });
+
+  const finalStoryPacket =
+    reviewedStoryPacket && typeof reviewedStoryPacket === "object"
+      ? reviewedStoryPacket
+      : storyPacket;
+  await emitGenerationProgress(onProgress, "plausibility", finalStoryPacket);
+
+  const templateDraft = await requestStructuredCompletion({
+    userId,
+    model,
+    temperature: 0.55,
     maxTokens: 5000,
     retryAttempts: 2,
     throwOnError: true,
     systemPrompt:
-      "You generate structured legal simulation cases. This is phase 1 of 2. Output valid JSON only. Keep cases realistic, internally consistent, and grounded in ordinary evidence and witness behavior.",
-    userPrompt: JSON.stringify(buildGenerationPrompt({ category, complexity, prompt })),
+      "You convert canonical legal case stories into structured gameplay templates. This is phase 4 of 6. Output valid JSON only. Be faithful to the story packet and keep facts, claims, and evidence consistent with it.",
+    userPrompt: JSON.stringify(
+      buildTemplateFromStoryPrompt({
+        category,
+        complexity,
+        prompt,
+        storyPacket: finalStoryPacket,
+      })
+    ),
   });
 
-  if (!aiResult) {
+  if (!templateDraft) {
     throw new Error(
-      "Case generation failed because the model returned no structured payload."
+      "Case generation failed because the model returned no structured template draft."
+    );
+  }
+  await emitGenerationProgress(onProgress, "template", templateDraft);
+
+  let payload = withCanonicalStoryNote(
+    normalizeGeneratedPayload(templateDraft, category.slug, complexity),
+    finalStoryPacket
+  );
+
+  if (!hasUsableCanonicalFacts(payload)) {
+    throw new Error(
+      "Case generation failed because the structured template draft did not contain usable canonical facts."
     );
   }
 
-  let payload = normalizeGeneratedPayload(aiResult, category.slug, complexity);
+  let detectedIssues = detectTemplateRepairIssues(payload, finalStoryPacket);
+  if (detectedIssues.length > 0) {
+    let repairAttempts = 0;
+
+    while (detectedIssues.length > 0 && repairAttempts < 2) {
+      repairAttempts += 1;
+      const repairedTemplate = await requestStructuredCompletion({
+        userId,
+        model,
+        temperature: 0.25,
+        maxTokens: 5000,
+        retryAttempts: 2,
+        systemPrompt:
+          "You repair generated legal case templates before gameplay metadata is added. This is phase 5 of 6. Output valid JSON only. Fix the detected issues while staying faithful to the canonical story.",
+        userPrompt: JSON.stringify(
+          buildTemplateRepairPrompt({
+            category,
+            complexity,
+            prompt,
+            storyPacket: finalStoryPacket,
+            templateDraft: payload,
+            detectedIssues,
+          })
+        ),
+      });
+
+      if (repairedTemplate && typeof repairedTemplate === "object") {
+        const repairedPayload = withCanonicalStoryNote(
+          normalizeGeneratedPayload(repairedTemplate, category.slug, complexity),
+          finalStoryPacket
+        );
+
+        if (hasUsableCanonicalFacts(repairedPayload)) {
+          payload = repairedPayload;
+        }
+      }
+
+      const remainingIssues = detectTemplateRepairIssues(payload, finalStoryPacket);
+      if (
+        remainingIssues.length === detectedIssues.length &&
+        remainingIssues.every((issue, index) => issue === detectedIssues[index])
+      ) {
+        detectedIssues = remainingIssues;
+        break;
+      }
+
+      detectedIssues = remainingIssues;
+      if (!hasBlockingTemplateIssues(detectedIssues)) {
+        break;
+      }
+    }
+
+    await emitGenerationProgress(onProgress, "repair", payload, {
+      detectedIssues,
+      repairAttempts,
+    });
+
+    if (hasBlockingTemplateIssues(detectedIssues)) {
+      throw new Error(
+        `Case generation failed because blocking repair issues remained: ${detectedIssues.join(
+          "; "
+        )}`
+      );
+    }
+  } else {
+    await emitGenerationProgress(onProgress, "repair", payload, {
+      detectedIssues: [],
+      skipped: true,
+    });
+  }
 
   const interviewPlan = await requestStructuredCompletion({
     userId,
@@ -745,7 +1518,7 @@ export const generateCaseTemplatePayload = async ({
     maxTokens: 5000,
     retryAttempts: 2,
     systemPrompt:
-      "You refine legal simulation cases into interview-ready templates. This is phase 2 of 2. Output valid JSON only. Preserve the underlying dispute, but distinguish confirmed proof from leads, missing records, and disputed evidence.",
+      "You refine legal simulation cases into interview-ready templates. This is phase 6 of 6. Output valid JSON only. Preserve the underlying dispute, but distinguish confirmed proof from leads, missing records, and disputed evidence.",
     userPrompt: JSON.stringify(
       buildInterviewPlanningPrompt({
         category,
@@ -757,8 +1530,26 @@ export const generateCaseTemplatePayload = async ({
   });
 
   if (interviewPlan && typeof interviewPlan === "object") {
-    payload = mergeInterviewPlanningPayload(payload, interviewPlan);
+    const plannedPayload = mergeInterviewPlanningPayload(payload, interviewPlan);
+
+    if (hasUsableCanonicalFacts(plannedPayload)) {
+      payload = plannedPayload;
+    }
   }
+
+  payload = finalizeTemplatePresentation(payload, category.slug, finalStoryPacket);
+  const finalIssues = detectTemplateRepairIssues(payload, finalStoryPacket);
+  if (hasBlockingTemplateIssues(finalIssues)) {
+    throw new Error(
+      `Case generation failed final verification because blocking issues remained: ${finalIssues.join(
+        "; "
+      )}`
+    );
+  }
+  await emitGenerationProgress(onProgress, "interview", payload, {
+    interviewPlan,
+    finalIssues,
+  });
 
   payload.slug =
     payload.slug?.trim() ||
@@ -768,6 +1559,8 @@ export const generateCaseTemplatePayload = async ({
   if (errors.length > 0) {
     throw new Error(`Generated case template was invalid: ${errors.join(", ")}`);
   }
+
+  await emitGenerationProgress(onProgress, "complete", payload);
 
   return payload;
 };

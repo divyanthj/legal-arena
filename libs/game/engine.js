@@ -6,6 +6,7 @@ import {
   buildMissingEvidenceNotesForSide,
   buildSuggestedQuestionsForSide,
   cleanPartyClaimText,
+  dedupeSuggestedQuestions,
   enrichTemplateForGameplay,
   getEvidenceItemsForFact,
   getInterviewBlueprintForSide,
@@ -390,20 +391,88 @@ const buildOpenQuestions = (
   template,
   side,
   excludedFactIds = [],
-  excludedEvidenceIds = []
+  excludedEvidenceIds = [],
+  limit = 3
 ) =>
   buildSuggestedQuestionsForSide(ensureTemplate(template), side, {
     excludedFactIds,
     excludedEvidenceIds,
+    limit,
   });
 
-const mergeFactSheet = (current, patch, template) => {
+const getInterviewQuestionHistory = (caseSession, currentQuestion = "") =>
+  uniqueList([
+    ...((caseSession?.interviewTranscript || [])
+      .filter((entry) => entry.role === "player")
+      .map((entry) => entry.text)),
+    currentQuestion,
+  ]);
+
+const resolveFactSheetOpenQuestions = ({
+  template,
+  playerSide = DEFAULT_PLAYER_SIDE,
+  currentOpenQuestions = [],
+  patchOpenQuestions = [],
+  discoveredFactIds = [],
+  discoveredEvidenceIds = [],
+  blockedQuestions = [],
+  limit = 3,
+}) =>
+  dedupeSuggestedQuestions(
+    [
+      ...(patchOpenQuestions || []),
+      ...(currentOpenQuestions || []),
+      ...buildOpenQuestions(
+        template,
+        playerSide,
+        discoveredFactIds,
+        discoveredEvidenceIds,
+        Math.max(limit * 4, 8)
+      ),
+    ],
+    {
+      excludedQuestions: blockedQuestions,
+      limit,
+    }
+  );
+
+const mergeFactSheet = (current, patch, template, options = {}) => {
+  const {
+    playerSide = DEFAULT_PLAYER_SIDE,
+    questionHistory = [],
+    openQuestionLimit = 3,
+  } = options;
   const safeTemplate = ensureTemplate(template);
   const normalizedCurrent = normalizeFactSheetPatch(current);
   const normalizedPatch = normalizeFactSheetPatch(patch);
+  const discoveredFactIds = uniqueList([
+    ...(normalizedCurrent.discoveredFactIds || []),
+    ...(normalizedPatch.discoveredFactIds || []),
+  ]);
+  const discoveredClaimIds = uniqueList([
+    ...(normalizedCurrent.discoveredClaimIds || []),
+    ...(normalizedPatch.discoveredClaimIds || []),
+  ]);
+  const discoveredEvidenceIds = uniqueList([
+    ...(normalizedCurrent.discoveredEvidenceIds || []),
+    ...(normalizedPatch.discoveredEvidenceIds || []),
+  ]);
+  const openQuestions = resolveFactSheetOpenQuestions({
+    template: safeTemplate,
+    playerSide,
+    currentOpenQuestions: normalizedCurrent.openQuestions || [],
+    patchOpenQuestions: normalizedPatch.openQuestions || [],
+    discoveredFactIds,
+    discoveredEvidenceIds,
+    blockedQuestions: questionHistory,
+    limit: openQuestionLimit,
+  });
   const next = {
     ...current,
-    summary: normalizedPatch.summary?.trim() || normalizedCurrent.summary || "",
+    summary:
+      normalizedPatch.summary?.trim() ||
+      normalizedCurrent.summary ||
+      buildSummaryForSide(safeTemplate, playerSide),
     timeline: uniqueList([
       ...(normalizedCurrent.timeline || []),
       ...(normalizedPatch.timeline || []),
@@ -416,18 +485,15 @@ const mergeFactSheet = (current, patch, template) => {
       ...(normalizedCurrent.risks || []),
       ...(normalizedPatch.risks || []),
     ]),
-    theory: normalizedPatch.theory?.trim() || normalizedCurrent.theory || "",
+    theory:
+      normalizedPatch.theory?.trim() ||
+      normalizedCurrent.theory ||
+      buildTheoryForSide(safeTemplate, playerSide),
     desiredRelief:
-      normalizedPatch.desiredRelief?.trim() || normalizedCurrent.desiredRelief || "",
-    openQuestions: uniqueList([
-      ...(normalizedPatch.openQuestions || []),
-      ...(normalizedCurrent.openQuestions || []),
-    ]).length
-      ? uniqueList([
-          ...(normalizedPatch.openQuestions || []),
-          ...(normalizedCurrent.openQuestions || []),
-        ])
-      : buildOpenQuestions(safeTemplate, DEFAULT_PLAYER_SIDE),
+      normalizedPatch.desiredRelief?.trim() ||
+      normalizedCurrent.desiredRelief ||
+      buildDesiredReliefForSide(safeTemplate, playerSide),
+    openQuestions,
     knownFacts: uniqueList([
       ...(normalizedCurrent.knownFacts || []),
       ...(normalizedPatch.knownFacts || []),
@@ -452,18 +518,9 @@ const mergeFactSheet = (current, patch, template) => {
       ...(normalizedCurrent.missingEvidence || []),
       ...(normalizedPatch.missingEvidence || []),
     ]),
-    discoveredFactIds: uniqueList([
-      ...(normalizedCurrent.discoveredFactIds || []),
-      ...(normalizedPatch.discoveredFactIds || []),
-    ]),
-    discoveredClaimIds: uniqueList([
-      ...(normalizedCurrent.discoveredClaimIds || []),
-      ...(normalizedPatch.discoveredClaimIds || []),
-    ]),
-    discoveredEvidenceIds: uniqueList([
-      ...(normalizedCurrent.discoveredEvidenceIds || []),
-      ...(normalizedPatch.discoveredEvidenceIds || []),
-    ]),
+    discoveredFactIds,
+    discoveredClaimIds,
+    discoveredEvidenceIds,
   };
 
   next.ready =
@@ -921,7 +978,7 @@ const buildEvidenceProductionResponse = (item, side) => {
     case "mentioned":
     case "unknown":
       return holderIsSelf
-        ? `I may still have ${lowerLabel} in my records, but I need to look for it before I can send it over.`
+        ? `I do not have ${lowerLabel} in front of me right now. I would need to check my records before I can send it.`
         : `I cannot send you ${lowerLabel} right now. I would need to confirm where it is first.`;
     case "missing":
       return `No, I cannot send you ${lowerLabel} because I do not have it.`;
@@ -930,7 +987,7 @@ const buildEvidenceProductionResponse = (item, side) => {
         ? `I can send you ${lowerLabel}, but there may be a fight about what it really shows.`
         : `There is ${lowerLabel}, but I cannot promise I am the one who can produce it directly.`;
     default:
-      return `I cannot tell you yet whether I can send you ${lowerLabel}. I need to confirm whether I still have it.`;
+      return `I cannot tell you yet whether I can send you ${lowerLabel}. I need to check whether I still have it.`;
   }
 };
 
@@ -1046,6 +1103,61 @@ const questionAsksForAmount = (lowerQuestion = "") =>
   lowerQuestion.includes("what was the amount") ||
   lowerQuestion.includes("exact amount") ||
   lowerQuestion.includes("how many dollars");
+
+const questionAsksForNamesOrList = (lowerQuestion = "") =>
+  lowerQuestion.includes("specific names") ||
+  lowerQuestion.includes("the names") ||
+  lowerQuestion.includes("those names") ||
+  lowerQuestion.includes("their names") ||
+  lowerQuestion.includes("provide the names") ||
+  lowerQuestion.includes("tell me the names") ||
+  lowerQuestion.includes("make that proper list") ||
+  ((lowerQuestion.includes("name") || lowerQuestion.includes("names")) &&
+    (lowerQuestion.includes("what") ||
+      lowerQuestion.includes("which") ||
+      lowerQuestion.includes("who") ||
+      lowerQuestion.includes("provide") ||
+      lowerQuestion.includes("tell"))) ||
+  (lowerQuestion.includes("list") &&
+    (lowerQuestion.includes("provide") ||
+      lowerQuestion.includes("send") ||
+      lowerQuestion.includes("share") ||
+      lowerQuestion.includes("show") ||
+      lowerQuestion.includes("find") ||
+      lowerQuestion.includes("make")));
+
+const questionRequestsProductionOrLookup = (lowerQuestion = "") =>
+  lowerQuestion.includes("provide") ||
+  lowerQuestion.includes("send") ||
+  lowerQuestion.includes("share") ||
+  lowerQuestion.includes("show") ||
+  lowerQuestion.includes("look for") ||
+  lowerQuestion.includes("find") ||
+  lowerQuestion.includes("check your") ||
+  lowerQuestion.includes("pull") ||
+  lowerQuestion.includes("make that") ||
+  lowerQuestion.includes("give me");
+
+const hasRecordSearchPromise = (value = "") =>
+  /\b(need to look|need to check|i'?ll look|i will look|i'?ll check|i will check|before i can send|before sending|once i'?ve pulled|once i have pulled|pull(?:ed)? my|check my messages|check my notes|look for it)\b/i.test(
+    value
+  );
+
+const buildStalledProductionReply = (lowerQuestion = "") => {
+  if (questionAsksForNamesOrList(lowerQuestion)) {
+    return "I still do not have the specific names in front of me right now.";
+  }
+
+  if (questionAsksForExactDate(lowerQuestion)) {
+    return "I still do not have the exact date in front of me right now.";
+  }
+
+  if (questionAsksForAmount(lowerQuestion)) {
+    return "I still do not have the exact amount in front of me right now.";
+  }
+
+  return "I still do not have that detail in front of me right now.";
+};
 
 const hasExactDateDetail = (value = "") =>
   MONTH_NAME_PATTERN.test(value) || EXACT_DATE_PATTERN.test(value);
@@ -1206,6 +1318,7 @@ const buildInterviewFallback = ({ caseSession, template, question, factSheet }) 
   const opponentSide = getOpposingSide(playerSide);
   const partyProfile = getPartyProfileForSide(safeTemplate, playerSide);
   const lowerQuestion = String(question || "").trim().toLowerCase();
+  const questionHistory = getInterviewQuestionHistory(caseSession, question);
   const recentPartyResponses = caseSession.interviewTranscript
     .filter((entry) => entry.role === "party")
     .slice(-3)
@@ -1256,12 +1369,24 @@ const buildInterviewFallback = ({ caseSession, template, question, factSheet }) 
   const remainingFacts = (safeTemplate.canonicalFacts || []).filter(
     (fact) => !factSheet.discoveredFactIds.includes(fact.factId)
   );
-  const leadQuestion = buildOpenQuestions(
-    safeTemplate,
+  const nextDiscoveredFactIds = uniqueList([
+    ...factSheet.discoveredFactIds,
+    ...partyClaims.map((item) => item.fact.factId),
+  ]);
+  const nextDiscoveredEvidenceIds = uniqueList([
+    ...factSheet.discoveredEvidenceIds,
+    ...matchedEvidence.map((item) => item.id),
+  ]);
+  const suggestedOpenQuestions = resolveFactSheetOpenQuestions({
+    template: safeTemplate,
     playerSide,
-    factSheet.discoveredFactIds,
-    factSheet.discoveredEvidenceIds
-  )[0];
+    currentOpenQuestions: factSheet.openQuestions || [],
+    discoveredFactIds: nextDiscoveredFactIds,
+    discoveredEvidenceIds: nextDiscoveredEvidenceIds,
+    blockedQuestions: questionHistory,
+    limit: 3,
+  });
+  const leadQuestion = suggestedOpenQuestions[0];
   const evidenceResponse = supportingEvidence
     .slice(0, 1)
     .map((item) => buildEvidenceResponseSegment(item, playerSide))
@@ -1381,18 +1506,7 @@ const buildInterviewFallback = ({ caseSession, template, question, factSheet }) 
       partyClaims,
       matchedEvidence,
     }),
-    openQuestions: buildOpenQuestions(
-      safeTemplate,
-      playerSide,
-      uniqueList([
-        ...factSheet.discoveredFactIds,
-        ...partyClaims.map((item) => item.fact.factId),
-      ]),
-      uniqueList([
-        ...factSheet.discoveredEvidenceIds,
-        ...matchedEvidence.map((item) => item.id),
-      ])
-    ).slice(0, 2),
+    openQuestions: suggestedOpenQuestions.slice(0, 2),
     discoveredFactIds: partyClaims.map((item) => item.fact.factId),
     discoveredClaimIds: partyClaims.map((item) =>
       getClaimId(item.fact.factId, playerSide)
@@ -1401,7 +1515,10 @@ const buildInterviewFallback = ({ caseSession, template, question, factSheet }) 
   };
 
   const normalizedPatch = normalizeFactSheetPatch(patch);
-  const nextFactSheet = mergeFactSheet(factSheet, normalizedPatch, safeTemplate);
+  const nextFactSheet = mergeFactSheet(factSheet, normalizedPatch, safeTemplate, {
+    playerSide,
+    questionHistory,
+  });
 
   return {
     partyResponse,
@@ -1419,6 +1536,7 @@ const normalizeInterviewResult = ({
   aiResult,
   fallback,
   template,
+  caseSession,
   question,
   factSheet,
   playerSide,
@@ -1427,6 +1545,12 @@ const normalizeInterviewResult = ({
   if (!aiResult || typeof aiResult !== "object") {
     return fallback;
   }
+  const lowerQuestion = String(question || "").trim().toLowerCase();
+  const recentPartyResponses = (caseSession?.interviewTranscript || [])
+    .filter((entry) => entry.role === "party")
+    .slice(-3)
+    .map((entry) => entry.text?.trim())
+    .filter(Boolean);
 
   const validFactIds = (safeTemplate.canonicalFacts || []).map((fact) => fact.factId);
   const validEvidenceIds = (safeTemplate.evidenceItems || []).map((item) => item.id);
@@ -1449,12 +1573,12 @@ const normalizeInterviewResult = ({
     }),
   ]);
   const patch = normalizeFactSheetPatch({
-    summary: "",
+    summary: coerceString(aiResult.summary),
     timeline: coerceStringList(aiResult.timeline, 3),
     supportingFacts: coerceStringList(aiResult.supportingFacts, 3),
     risks: coerceStringList(aiResult.risks, 3),
-    theory: "",
-    desiredRelief: "",
+    theory: coerceString(aiResult.theory),
+    desiredRelief: coerceString(aiResult.desiredRelief),
     knownFacts: [],
     knownClaims: coerceStringList(aiResult.knownClaims, 4),
     disputedFacts: coerceStringList(aiResult.disputedFacts, 3),
@@ -1466,20 +1590,91 @@ const normalizeInterviewResult = ({
     discoveredClaimIds: revealedFactIds.map((factId) => getClaimId(factId, playerSide)),
     discoveredEvidenceIds: revealedEvidenceIds,
   });
-
-  return {
-    partyResponse:
-      aiResult.partyResponse &&
-      !isMetaResponse(aiResult.partyResponse) &&
-      isResponsiveInterviewAnswer(question, aiResult.partyResponse)
-        ? humanizeClaimText(aiResult.partyResponse)
-        : fallback.partyResponse,
-    patch,
-    nextFactSheet: mergeFactSheet(factSheet, patch, safeTemplate),
-    relatedFactIds: relatedFactIds.length > 0 ? relatedFactIds : fallback.relatedFactIds,
+  const questionHistory = getInterviewQuestionHistory(caseSession, question);
+  const normalizedAiPartyResponse = humanizeClaimText(aiResult.partyResponse || "");
+  const repeatedProductionLoop =
+    questionRequestsProductionOrLookup(lowerQuestion) &&
+    hasRecordSearchPromise(normalizedAiPartyResponse) &&
+    recentPartyResponses.some((value) => hasRecordSearchPromise(value));
+  const mergedDiscoveredFactIds = uniqueList([
+    ...(fallback.patch?.discoveredFactIds || []),
+    ...patch.discoveredFactIds,
+  ]);
+  const mergedDiscoveredEvidenceIds = uniqueList([
+    ...(fallback.patch?.discoveredEvidenceIds || []),
+    ...patch.discoveredEvidenceIds,
+  ]);
+  const mergedPatch = normalizeFactSheetPatch({
+    ...fallback.patch,
+    ...patch,
+    timeline:
+      patch.timeline.length > 0 ? patch.timeline : fallback.patch?.timeline || [],
+    supportingFacts:
+      patch.supportingFacts.length > 0
+        ? patch.supportingFacts
+        : fallback.patch?.supportingFacts || [],
+    risks: patch.risks.length > 0 ? patch.risks : fallback.patch?.risks || [],
+    knownClaims:
+      patch.knownClaims.length > 0 ? patch.knownClaims : fallback.patch?.knownClaims || [],
+    disputedFacts:
+      patch.disputedFacts.length > 0
+        ? patch.disputedFacts
+        : fallback.patch?.disputedFacts || [],
+    corroboratedFacts:
+      patch.corroboratedFacts.length > 0
+        ? patch.corroboratedFacts
+        : fallback.patch?.corroboratedFacts || [],
+    sourceLinks:
+      patch.sourceLinks.length > 0 ? patch.sourceLinks : fallback.patch?.sourceLinks || [],
+    missingEvidence:
+      patch.missingEvidence.length > 0
+        ? patch.missingEvidence
+        : fallback.patch?.missingEvidence || [],
+    openQuestions: resolveFactSheetOpenQuestions({
+      template: safeTemplate,
+      playerSide,
+      currentOpenQuestions: factSheet.openQuestions || [],
+      patchOpenQuestions:
+        patch.openQuestions.length > 0
+          ? patch.openQuestions
+          : fallback.patch?.openQuestions || [],
+      discoveredFactIds: mergedDiscoveredFactIds,
+      discoveredEvidenceIds: mergedDiscoveredEvidenceIds,
+      blockedQuestions: questionHistory,
+      limit: 3,
+    }),
+    discoveredFactIds:
+      patch.discoveredFactIds.length > 0
+        ? patch.discoveredFactIds
+        : fallback.patch?.discoveredFactIds || [],
     discoveredClaimIds:
       patch.discoveredClaimIds.length > 0
         ? patch.discoveredClaimIds
+        : fallback.patch?.discoveredClaimIds || [],
+    discoveredEvidenceIds:
+      patch.discoveredEvidenceIds.length > 0
+        ? patch.discoveredEvidenceIds
+        : fallback.patch?.discoveredEvidenceIds || [],
+  });
+
+  return {
+    partyResponse:
+      repeatedProductionLoop
+        ? buildStalledProductionReply(lowerQuestion)
+        : aiResult.partyResponse &&
+          !isMetaResponse(aiResult.partyResponse) &&
+          isResponsiveInterviewAnswer(question, aiResult.partyResponse)
+        ? normalizedAiPartyResponse
+        : fallback.partyResponse,
+    patch: mergedPatch,
+    nextFactSheet: mergeFactSheet(factSheet, mergedPatch, safeTemplate, {
+      playerSide,
+      questionHistory,
+    }),
+    relatedFactIds: relatedFactIds.length > 0 ? relatedFactIds : fallback.relatedFactIds,
+    discoveredClaimIds:
+      mergedPatch.discoveredClaimIds.length > 0
+        ? mergedPatch.discoveredClaimIds
         : fallback.discoveredClaimIds,
   };
 };
@@ -1825,7 +2020,7 @@ export const continueInterview = async ({ caseSession, question, userId }) => {
     maxTokens: 1500,
     retryAttempts: 1,
     systemPrompt:
-      "You are simulating a legal-case party speaking to their own lawyer during intake. Treat this as a role actor, not a script expander. You know the full hidden world state, but you speak only as the represented party from memory, bias, confidence, access, and personality. Decide what to reveal, hedge, minimize, or withhold based on the latest question and the party profile. Answer directly when the lawyer asks a yes/no possession question. Also answer directly when the lawyer asks whether you can provide, send, share, or show a record: say yes, no, or that you need to look for it before sending it. Do not hide behind vague uncertainty if the real answer is about possession or ability to produce the record. It is completely acceptable to say you do not know, do not remember, have not seen something yourself, or only heard about it. Speak like a normal person in first person. Never mention internal schemas, canonical truth, or metadata. Only update the fact sheet with information that actually surfaced in this turn, and keep those updates sparse. Do not auto-draft a full case memo. Leave summary, theory, and desiredRelief blank unless the lawyer explicitly asks for them. Output valid JSON only.",
+      "You are simulating a legal-case party speaking to their own lawyer during intake. Treat this as a role actor, not a script expander. You know the full hidden world state, but you speak only as the represented party from memory, bias, confidence, access, and personality. Decide what to reveal, hedge, minimize, or withhold based on the latest question and the party profile. Answer directly when the lawyer asks a yes/no possession question. Also answer directly when the lawyer asks whether you can provide, send, share, or show a record: say yes, no, or that you do not have it in front of you right now and would need to check your records before sending it. If the lawyer asks for names, dates, amounts, or other facts that might appear in messages, notes, or records, give the fact if you actually remember it; otherwise say plainly that you do not have that detail in front of you right now. Do not tell the lawyer how to investigate, what to pin down next, or how to run the case. Do not keep repeating promises to look for or send something on later turns. It is completely acceptable to say you do not know, do not remember, have not seen something yourself, or only heard about it. Speak like a normal person in first person. Never mention internal schemas, canonical truth, or metadata. Keep fact-sheet updates concise, but you may fill summary, theory, and desiredRelief when the case posture is already clear from the intake or the lawyer asks for them. Output valid JSON only.",
     userPrompt: JSON.stringify({
       task: `Answer the lawyer's latest question as ${playerPartyName}. You are the represented ${playerSide} side. Use the hidden canonical world and your side-specific memory to choose what this person would naturally say and what they would keep back for now.`,
       stage: "interview",
@@ -1842,6 +2037,9 @@ export const continueInterview = async ({ caseSession, question, userId }) => {
       latestQuestion: question,
       outputSchema: {
         partyResponse: "string",
+        summary: "string",
+        theory: "string",
+        desiredRelief: "string",
         revealedFactIds: ["string"],
         revealedEvidenceIds: ["string"],
         timeline: ["string"],
@@ -1862,6 +2060,7 @@ export const continueInterview = async ({ caseSession, question, userId }) => {
     aiResult,
     fallback,
     template,
+    caseSession,
     question,
     factSheet: caseSession.factSheet,
     playerSide,

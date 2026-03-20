@@ -30,6 +30,135 @@ const normalizeStringList = (value) =>
     ? value.map((item) => String(item || "").trim()).filter(Boolean)
     : [];
 
+const QUESTION_NOISE_TOKENS = new Set([
+  "about",
+  "after",
+  "any",
+  "before",
+  "can",
+  "could",
+  "detail",
+  "details",
+  "did",
+  "does",
+  "exact",
+  "exactly",
+  "front",
+  "have",
+  "how",
+  "kind",
+  "more",
+  "please",
+  "really",
+  "right",
+  "should",
+  "specific",
+  "tell",
+  "that",
+  "there",
+  "this",
+  "what",
+  "when",
+  "where",
+  "which",
+  "who",
+  "why",
+  "with",
+  "would",
+  "your",
+]);
+
+const normalizeQuestionToken = (token = "") => {
+  if (token.endsWith("ies") && token.length > 4) {
+    return `${token.slice(0, -3)}y`;
+  }
+
+  if (token.endsWith("s") && token.length > 4) {
+    return token.slice(0, -1);
+  }
+
+  return token;
+};
+
+const tokenizeQuestionSuggestion = (value = "") =>
+  String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .map((token) => normalizeQuestionToken(token))
+    .filter((token) => token.length > 2 && !QUESTION_NOISE_TOKENS.has(token));
+
+const normalizeQuestionSuggestion = (value = "") =>
+  String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const areQuestionSuggestionsEquivalent = (left = "", right = "") => {
+  const normalizedLeft = normalizeQuestionSuggestion(left);
+  const normalizedRight = normalizeQuestionSuggestion(right);
+
+  if (!normalizedLeft || !normalizedRight) {
+    return false;
+  }
+
+  if (normalizedLeft === normalizedRight) {
+    return true;
+  }
+
+  const leftTokens = [...new Set(tokenizeQuestionSuggestion(left))];
+  const rightTokens = [...new Set(tokenizeQuestionSuggestion(right))];
+
+  if (!leftTokens.length || !rightTokens.length) {
+    return false;
+  }
+
+  const rightTokenSet = new Set(rightTokens);
+  const sharedCount = leftTokens.filter((token) => rightTokenSet.has(token)).length;
+  const minTokenCount = Math.min(leftTokens.length, rightTokens.length);
+
+  if (sharedCount === minTokenCount && minTokenCount >= 2) {
+    return true;
+  }
+
+  return sharedCount >= 3 && sharedCount / minTokenCount >= 0.75;
+};
+
+export const dedupeSuggestedQuestions = (
+  questions = [],
+  { excludedQuestions = [], limit = Infinity } = {}
+) => {
+  const normalizedLimit =
+    Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : Infinity;
+  const kept = [];
+  const blocked = normalizeStringList(excludedQuestions);
+
+  normalizeStringList(questions).forEach((question) => {
+    if (
+      blocked.some((blockedQuestion) =>
+        areQuestionSuggestionsEquivalent(question, blockedQuestion)
+      )
+    ) {
+      return;
+    }
+
+    if (
+      kept.some((existingQuestion) =>
+        areQuestionSuggestionsEquivalent(question, existingQuestion)
+      )
+    ) {
+      return;
+    }
+
+    if (kept.length < normalizedLimit) {
+      kept.push(question);
+    }
+  });
+
+  return kept;
+};
+
 export const normalizeEvidenceAvailabilityStatus = (value = "") =>
   EVIDENCE_AVAILABILITY_VALUES.includes(String(value || "").trim())
     ? String(value || "").trim()
@@ -322,7 +451,7 @@ export const buildSuggestedQuestionsForSide = (
     blueprint?.suggestedQuestions?.length;
 
   if (useBlueprintDirectly) {
-    return blueprint.suggestedQuestions.slice(0, limit);
+    return dedupeSuggestedQuestions(blueprint.suggestedQuestions, { limit });
   }
 
   const facts = (safeTemplate.canonicalFacts || [])
@@ -344,11 +473,11 @@ export const buildSuggestedQuestionsForSide = (
       return rightWeight - leftWeight;
     });
 
-  return uniqueList([
+  return dedupeSuggestedQuestions([
     ...(blueprint?.suggestedQuestions || []),
     ...facts.flatMap((fact) => fact.followUpQuestions || []),
     ...evidenceItems.flatMap((item) => item.followUpQuestions || []),
-  ]).slice(0, limit);
+  ], { limit });
 };
 
 const describeEvidenceHolder = (holderSide, side) => {
