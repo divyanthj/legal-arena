@@ -35,6 +35,41 @@ const ALLOWED_EVIDENCE_TYPES = new Set([
 
 const uniqueList = (items = []) =>
   [...new Set((items || []).map((item) => String(item || "").trim()).filter(Boolean))];
+const CLAIM_MATCH_STOPWORDS = new Set([
+  "about",
+  "after",
+  "again",
+  "because",
+  "being",
+  "between",
+  "claim",
+  "condition",
+  "could",
+  "detail",
+  "during",
+  "exact",
+  "general",
+  "generally",
+  "issue",
+  "lease",
+  "major",
+  "minor",
+  "other",
+  "over",
+  "side",
+  "story",
+  "tenant",
+  "there",
+  "their",
+  "them",
+  "they",
+  "this",
+  "unit",
+  "when",
+  "what",
+  "which",
+  "with",
+]);
 const normalizeLookupKey = (value = "") =>
   String(value || "")
     .trim()
@@ -146,6 +181,38 @@ const isLowQualityClaimText = (value = "") => {
     "i don't have any modeled claim",
     "i dont have any modeled claim",
   ].some((pattern) => text.includes(pattern));
+};
+
+const CROSS_CASE_CLAIM_GROUPS = [
+  ["landlord", "tenant", "apartment", "deposit", "move-out", "property management"],
+  ["checkout", "cashier", "register", "store", "shoplifting", "receipt", "charger"],
+  ["employer", "termination", "shift", "manager", "payroll", "workplace"],
+];
+
+const isCrossCaseContaminatedClaim = ({ claimText = "", fact = {}, canonicalStory = "" }) => {
+  const claim = String(claimText || "").trim().toLowerCase();
+  if (!claim) {
+    return false;
+  }
+
+  const corpus = [
+    fact.label || "",
+    fact.canonicalDetail || "",
+    ...(fact.discoverability?.keywords || []),
+    canonicalStory || "",
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  return CROSS_CASE_CLAIM_GROUPS.some((terms) => {
+    const claimHits = terms.filter((term) => claim.includes(term));
+    if (claimHits.length === 0) {
+      return false;
+    }
+
+    const corpusHits = terms.filter((term) => corpus.includes(term));
+    return corpusHits.length === 0;
+  });
 };
 
 const DOCUMENTATION_GAP_PATTERN =
@@ -264,31 +331,171 @@ const normalizeClaims = (claims = []) =>
 
 const buildFallbackClaimText = ({ party, canonicalDetail, kind }) => {
   const detail = String(canonicalDetail || "").trim();
+  const loweredDetail = detail.toLowerCase();
 
   if (!detail) {
     return party === "defendant"
-      ? "I do not agree with that version of events."
+      ? "My position is that the situation was more serious than the other side describes."
       : "That is what happened from my side.";
   }
 
   if (party === "plaintiff") {
+    if (kind === "risk") {
+      return `I know one weakness in my case is that ${detail.charAt(0).toLowerCase()}${detail.slice(1)}`;
+    }
+
+    if (/\bmove-in checklist|condition form|baseline condition\b/i.test(detail)) {
+      return "I do not have a signed move-in checklist or baseline condition form showing exactly what the apartment looked like at the start.";
+    }
+
+    if (/\bphotos?\b/i.test(detail) && /\bmove-out|before leaving|phone\b/i.test(detail)) {
+      return "I took photos before I left because I wanted to show the apartment's general condition at move-out.";
+    }
+
+    if (/\bbody camera|report|officer|contemporaneous note|exact words\b/i.test(detail)) {
+      return "I do not know whether any officer report, body-camera footage, or note captured the exact words that were used.";
+    }
+
     return detail;
   }
 
+  if (/\bsecurity deposit\b/i.test(detail) && /\bpaid\b/i.test(detail)) {
+    return "I do not dispute the lease or that Erica paid a $1,200 security deposit at move-in.";
+  }
+
+  if (/\bnotice\b/i.test(detail) && /\bmove out|lease end|vacate\b/i.test(detail)) {
+    return "I do not dispute that Erica gave notice and moved out at the end of the lease term.";
+  }
+
+  if (/\bkeys?\b/i.test(detail) && /\breturned|possession\b/i.test(detail)) {
+    return "I do not dispute that Erica returned the keys and surrendered possession when the tenancy ended.";
+  }
+
+  if (/\bphotos?\b/i.test(detail) && /\bmove-out|before leaving|phone\b/i.test(detail)) {
+    return "I understand Erica took move-out photos, but I do not think they show every issue I later observed.";
+  }
+
+  if (/\bitemized|itemised|accounting|deduction statement|written accounting\b/i.test(detail)) {
+    return "My position is that I explained the deductions, even if Erica says the written accounting was not detailed enough.";
+  }
+
+  if (/\breceipts?|invoices?|work orders?|records?\b/i.test(detail)) {
+    return "I believe the work was real and necessary, even if the paperwork is incomplete or no longer available.";
+  }
+
+  if (/\breceipt|scanned|register|checkout|paid\b/i.test(detail)) {
+    return "My position is that the charger was not included in the completed purchase at the register.";
+  }
+
+  if (/\bpolice|officer|incident report|citation|arrest\b/i.test(detail)) {
+    return "My position is that police responded after the store owner reported the unpaid item and started a low-level theft case.";
+  }
+
+  if (/\bforce|damage|violence|nonviolent\b/i.test(detail)) {
+    return "I am not claiming Marcus used force or caused damage; the issue is whether he intentionally left without paying.";
+  }
+
+  if (/\blow value|less than twenty dollars|small alleged theft\b/i.test(detail)) {
+    return "The item was low in value, but my position is that the small amount does not resolve the intent question.";
+  }
+
   if (kind === "dispute") {
-    return "I do not agree with that version of events.";
+    if (/\bscan|counter|receipt|paid\b/i.test(detail)) {
+      return "My position is that Marcus did not actually present the charger for scanning before he paid and left.";
+    }
+
+    if (/\bdeny|offered to pay|surprised|first words\b/i.test(detail)) {
+      return "My position is that Marcus's first response outside was inconsistent with an innocent mistake.";
+    }
+
+    if (/\bintent|mistake|knowledge|state of mind\b/i.test(detail)) {
+      return "My position is that Marcus knew the charger had not been paid for when he left the store.";
+    }
+
+    if (/\bclean(?:ing)?\b/i.test(detail)) {
+      return "My position is that the apartment needed more than ordinary turnover cleaning after move-out.";
+    }
+
+    if (/\bwall\b/i.test(detail) && /\bhole|paint|patch\b/i.test(detail)) {
+      return "My position is that the wall condition went beyond minor ordinary wear and required patching or paint work.";
+    }
+
+    if (/\brepaint|paint\b/i.test(detail)) {
+      return "My position is that the repainting was tied to the condition of the unit, not just routine turnover.";
+    }
+
+    if (/\bwear and tear|ordinary\b/i.test(detail) || /\bmove-out condition\b/i.test(detail)) {
+      return "My position is that the apartment was not left in ordinary move-out condition.";
+    }
+
+    return "My position is that the apartment needed more work after move-out than the tenant now admits.";
   }
 
   if (kind === "risk") {
-    return "That leaves out my side of what happened.";
+    return "I think that point leaves out context from my side, even if I may not have every record to prove it cleanly.";
   }
 
-  return "That is not the whole story from my side.";
+  if (/\bno unpaid rent|no lease violations|narrow dispute\b/i.test(loweredDetail)) {
+    return "From my side, this dispute is mainly about the unit's condition and the deposit, not unpaid rent or other violations.";
+  }
+
+  return "I agree with the basic sequence, but I do not agree with the other side's interpretation of what it shows.";
 };
 
-const ensurePartyCoverage = (fact) => {
+const tokenizeClaimMatchText = (value = "") =>
+  uniqueList(
+    normalizeLookupKey(value)
+      .split(" ")
+      .filter((token) => token.length > 3 && !CLAIM_MATCH_STOPWORDS.has(token))
+  );
+
+const scoreClaimMatch = (item = {}, fact = {}) => {
+  const label = normalizeLookupKey(item?.label || "");
+  const detail = normalizeLookupKey(item?.detail || "");
+  const targetLabel = normalizeLookupKey(fact.label || "");
+  const targetDetail = normalizeLookupKey(fact.canonicalDetail || "");
+  const keywordText = Array.isArray(fact.discoverability?.keywords)
+    ? fact.discoverability.keywords.join(" ")
+    : "";
+  const targetTokens = new Set(
+    tokenizeClaimMatchText([targetLabel, targetDetail, keywordText].join(" "))
+  );
+  const labelTokens = tokenizeClaimMatchText(label);
+  const detailTokens = tokenizeClaimMatchText(detail);
+  const overlap = [...new Set([...labelTokens, ...detailTokens])].filter((token) =>
+    targetTokens.has(token)
+  ).length;
+
+  let score = overlap;
+
+  if (label && targetLabel && (targetLabel.includes(label) || label.includes(targetLabel))) {
+    score += 6;
+  }
+
+  if (label && targetDetail && (targetDetail.includes(label) || label.includes(targetDetail))) {
+    score += 3;
+  }
+
+  if (
+    detail &&
+    targetDetail &&
+    (targetDetail.includes(detail.slice(0, Math.min(detail.length, 40))) || detail.includes(targetLabel))
+  ) {
+    score += 2;
+  }
+
+  return score;
+};
+
+const ensurePartyCoverage = (fact, canonicalStory = "") => {
   const normalized = normalizeClaims(fact.claims).filter(
-    (claim) => !isLowQualityClaimText(claim.claimedDetail)
+    (claim) =>
+      !isLowQualityClaimText(claim.claimedDetail) &&
+      !isCrossCaseContaminatedClaim({
+        claimText: claim.claimedDetail,
+        fact,
+        canonicalStory,
+      })
   );
   const parties = normalized.map((claim) => claim.party);
 
@@ -433,6 +640,9 @@ const titleLooksGeneric = (title = "") => {
     /^deposit dispute\b/,
     /^deposit kept for\b/,
     /^deposit withheld for\b/,
+    /^security deposit not returned\b/,
+    /^security deposit kept\b/,
+    /^security deposit withheld\b/,
     /\blease agreement\b/,
     /\blease dispute\b/,
     /\bhabitability issues?\b/,
@@ -706,6 +916,18 @@ const detectTemplateRepairIssues = (payload = {}, canonicalStory = "") => {
           `canonicalFacts[${index}] contains meta/scaffolded claim text for ${claim.party}.`
         );
       }
+
+      if (
+        isCrossCaseContaminatedClaim({
+          claimText: claim.claimedDetail,
+          fact,
+          canonicalStory,
+        })
+      ) {
+        issues.push(
+          `canonicalFacts[${index}] contains claim text for ${claim.party} that appears to belong to a different case domain.`
+        );
+      }
     });
 
     if (fact.kind === "risk" && isRepairInactionFact(fact)) {
@@ -889,7 +1111,7 @@ const normalizeGeneratedPayload = (payload, categorySlug, complexity) => {
                     })
                   : claim.claimedDetail,
             })),
-          }),
+          }, payload.authoringNotes || ""),
         }))
       : [],
     evidenceItems: Array.isArray(payload.evidenceItems)
@@ -1227,25 +1449,18 @@ const claimStanceFromBranch = (value = "", factKind = "") => {
 };
 
 const pickMatchingClaimedFact = (claimedFacts = [], fact = {}) => {
-  const target = normalizeLookupKey(fact.label || fact.canonicalDetail || "");
-  const targetTokens = new Set(target.split(" ").filter((token) => token.length > 3));
+  let best = null;
+  let bestScore = 0;
 
-  return (Array.isArray(claimedFacts) ? claimedFacts : []).find((item) => {
-    const label = normalizeLookupKey(item?.label || "");
-    if (!label) {
-      return false;
+  (Array.isArray(claimedFacts) ? claimedFacts : []).forEach((item) => {
+    const score = scoreClaimMatch(item, fact);
+    if (score > bestScore) {
+      best = item;
+      bestScore = score;
     }
-
-    if (target.includes(label) || label.includes(target)) {
-      return true;
-    }
-
-    const overlap = label
-      .split(" ")
-      .filter((token) => token.length > 3 && targetTokens.has(token)).length;
-
-    return overlap >= 2;
   });
+
+  return bestScore >= 4 ? best : null;
 };
 
 const buildClaimFromSideStory = (side, fact, sideStory = {}) => {
@@ -1256,14 +1471,37 @@ const buildClaimFromSideStory = (side, fact, sideStory = {}) => {
     : [];
 
   if (matched?.detail) {
+    const claimText = sanitizeClaimText(matched.detail);
+    const shouldFallback =
+      !claimText ||
+      isLowQualityClaimText(claimText) ||
+      isCrossCaseContaminatedClaim({
+        claimText,
+        fact,
+        canonicalStory: sideStory?.narrative || "",
+      });
+
     return {
       party: side,
-      claimedDetail: sanitizeClaimText(matched.detail),
+      claimedDetail:
+        !shouldFallback
+          ? claimText
+          : sanitizeClaimText(
+              buildFallbackClaimText({
+                party: side,
+                canonicalDetail: fact.canonicalDetail,
+                kind: factKind,
+              })
+            ),
       stance: claimStanceFromBranch(matched.stance, factKind),
       confidence: matched.stance === "uncertain" ? 0.72 : 0.86,
-      accessLevel: "direct",
+      accessLevel: matched.stance === "uncertain" || factKind === "risk" ? "partial" : "direct",
       deceptionProfile:
-        side === "plaintiff" ? "first-person account with advocacy framing" : "defensive framing",
+        side === "plaintiff"
+          ? "first-person account with advocacy framing"
+          : matched.stance === "uncertain"
+            ? "guarded account with selective certainty"
+            : "defensive framing tied to the file",
       keywords: directKeywords,
     };
   }
@@ -1466,37 +1704,106 @@ const buildTemplateAssemblyPrompt = ({
   };
 };
 
-const buildTemplateRepairPrompt = ({
-  canonicalStory,
-  templateDraft,
-  detectedIssues,
-  category,
-  complexity,
-  prompt,
-}) => ({
-  task: "Repair a generated legal case template so it is internally consistent, playable, and faithful to the canonical story.",
-  requirements: {
-    category: category.slug,
-    categoryTitle: category.title,
-    complexity,
-    additionalPrompt: prompt || "",
-    detectedIssues,
-    rules: [
-      "Keep the same core story, parties, and requested relief unless an issue requires a narrow repair.",
-      "Fix meta or schema-like claim text so every claim and opening sounds like something the party would actually say.",
-      "Repair money inconsistencies across desired relief, story, facts, and evidence.",
-      "Link evidenceItems and canonicalFacts consistently using evidenceRefs and linkedFactIds when the relationship is apparent.",
-      "evidenceRefs must use evidence item ids, not evidence labels or paraphrases.",
-      "If a fact is about ignored repair requests, landlord inaction, or unaddressed habitability problems, do not leave it classified as a plaintiff risk.",
-      "Repair title or subtitle wording if it conflicts with the actual story details.",
-      "Preserve useful specific details unless they contradict the canonical story or the rest of the template.",
-      "Output a full corrected template payload, not a patch.",
-    ],
-  },
-  canonicalStory,
-  templateDraft,
-  outputSchema: baseTemplateOutputSchema,
-});
+const repairTemplateDeterministically = (payload = {}, canonicalStory = "", categorySlug = "") => {
+  const normalizedPayload = {
+    ...payload,
+    interviewBlueprint: {
+      plaintiff: normalizeBlueprintSide(payload.interviewBlueprint?.plaintiff || {}),
+      defendant: normalizeBlueprintSide(payload.interviewBlueprint?.defendant || {}),
+    },
+  };
+  const facts = Array.isArray(normalizedPayload.canonicalFacts) ? normalizedPayload.canonicalFacts : [];
+  const evidenceItems = Array.isArray(normalizedPayload.evidenceItems)
+    ? normalizedPayload.evidenceItems
+    : [];
+  const evidenceById = new Map(
+    evidenceItems
+      .filter((item) => String(item?.id || "").trim())
+      .map((item) => [String(item.id).trim(), { ...item, linkedFactIds: uniqueList(item.linkedFactIds || []) }])
+  );
+  const factIds = new Set(
+    facts.map((fact) => String(fact?.factId || "").trim()).filter(Boolean)
+  );
+
+  const repairedFacts = facts.map((fact) => {
+    const factId = String(fact.factId || "").trim();
+    const cleanedEvidenceRefs = uniqueList(
+      (fact.evidenceRefs || []).filter((ref) => {
+        const evidenceItem = evidenceById.get(String(ref || "").trim());
+        if (!evidenceItem) {
+          return false;
+        }
+
+        const factCorpus = [
+          fact.label || "",
+          fact.canonicalDetail || "",
+          ...(fact.discoverability?.keywords || []),
+        ].join(" ");
+        const evidenceCorpus = [evidenceItem.label || "", evidenceItem.detail || ""].join(" ");
+
+        return (
+          shouldSkipSemanticEvidenceMismatch(fact, evidenceItem) ||
+          countSharedEvidenceTokens(factCorpus, evidenceCorpus) > 0
+        );
+      })
+    );
+
+    cleanedEvidenceRefs.forEach((ref) => {
+      const evidenceItem = evidenceById.get(ref);
+      if (evidenceItem) {
+        evidenceItem.linkedFactIds = uniqueList([...(evidenceItem.linkedFactIds || []), factId]);
+      }
+    });
+
+    return {
+      ...fact,
+      kind:
+        String(fact.kind || "").trim().toLowerCase() === "risk" && isRepairInactionFact(fact)
+          ? "supporting"
+          : fact.kind,
+      claims: ensurePartyCoverage({
+        ...fact,
+        claims: normalizeClaims(fact.claims).map((claim) => ({
+          ...claim,
+          claimedDetail: isCrossCaseContaminatedClaim({
+            claimText: claim.claimedDetail,
+            fact,
+            canonicalStory,
+          })
+            ? (isDocumentationGapFact(fact)
+                ? buildDocumentationGapClaim({
+                    party: normalizeTemplateParty(claim.party),
+                    canonicalDetail: fact.canonicalDetail,
+                  })
+                : buildFallbackClaimText({
+                    party: normalizeTemplateParty(claim.party),
+                    canonicalDetail: fact.canonicalDetail,
+                    kind: fact.kind,
+                  }))
+            : sanitizeClaimText(claim.claimedDetail),
+        })),
+      }, canonicalStory),
+      evidenceRefs: cleanedEvidenceRefs,
+    };
+  });
+
+  const repairedEvidenceItems = [...evidenceById.values()]
+    .map((item) => ({
+      ...item,
+      linkedFactIds: uniqueList((item.linkedFactIds || []).filter((factId) => factIds.has(String(factId)))),
+    }))
+    .filter((item) => (item.linkedFactIds || []).length > 0);
+
+  return finalizeTemplatePresentation(
+    {
+      ...normalizedPayload,
+      canonicalFacts: repairedFacts,
+      evidenceItems: repairedEvidenceItems,
+    },
+    categorySlug,
+    canonicalStory
+  );
+};
 
 const buildInterviewPlanningPrompt = ({ basePayload, category, complexity, prompt }) => ({
   task: "Refine the generated case into an interview-ready template with staged proof and side-specific intake guidance.",
@@ -1721,51 +2028,14 @@ export const buildTemplateFromStoryArtifact = async ({
   await artifact.save();
 
   if (detectedIssues.length > 0) {
-    let repairAttempts = 0;
-
-    while (detectedIssues.length > 0 && repairAttempts < 2) {
-      repairAttempts += 1;
-      const repairedTemplate = await requestStructuredCompletion({
-        userId,
-        model,
-        temperature: 0.25,
-        maxTokens: tokenBudget.repair,
-        retryAttempts: 1,
-        usageLabel: "template.repair",
-        onUsage,
-        throwOnError: true,
-        systemPrompt:
-          "You repair generated legal case templates before final interview refinement. Output valid JSON only and fix the detected issues while staying faithful to the canonical story.",
-        userPrompt: JSON.stringify(
-          buildTemplateRepairPrompt({
-            canonicalStory,
-            templateDraft: payload,
-            detectedIssues,
-            category,
-            complexity,
-            prompt,
-          })
-        ),
-      });
-
-      const repairedPayload = withCanonicalStoryNote(
-        normalizeGeneratedPayload(repairedTemplate, category.slug, complexity),
-        canonicalStory
-      );
-
-      if (hasUsableCanonicalFacts(repairedPayload)) {
-        payload = repairedPayload;
-      }
-
-      detectedIssues = detectTemplateRepairIssues(payload, canonicalStory);
-      artifact.templateRepairIssues = detectedIssues;
-      artifact.templateDraft = payload;
-      await artifact.save();
-
-      if (!hasBlockingTemplateIssues(detectedIssues)) {
-        break;
-      }
-    }
+    payload = withCanonicalStoryNote(
+      repairTemplateDeterministically(payload, canonicalStory, category.slug),
+      canonicalStory
+    );
+    detectedIssues = detectTemplateRepairIssues(payload, canonicalStory);
+    artifact.templateRepairIssues = detectedIssues;
+    artifact.templateDraft = payload;
+    await artifact.save();
   }
 
   await emitBuilderProgress(onProgress, payload, {

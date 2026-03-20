@@ -325,7 +325,12 @@ const buildRelevantMissingEvidenceNotes = ({
   playerSide,
   partyClaims = [],
   matchedEvidence = [],
+  lowerQuestion = "",
 }) => {
+  if (!questionAsksForProofLikeEvidence(lowerQuestion)) {
+    return [];
+  }
+
   const linkedEvidence = uniqueList([
     ...matchedEvidence.map((item) => item.id),
     ...partyClaims.flatMap((item) =>
@@ -942,7 +947,7 @@ const buildEvidencePossessionResponse = (item, side) => {
     case "mentioned":
     case "unknown":
       return holderIsSelf
-        ? `No, I cannot say that I have ${lowerLabel} right now.`
+        ? `I may have ${lowerLabel}, but I cannot say for sure without checking my records.`
         : `No, I do not have ${lowerLabel} right now.`;
     case "contested":
       return holderIsSelf
@@ -978,7 +983,7 @@ const buildEvidenceProductionResponse = (item, side) => {
     case "mentioned":
     case "unknown":
       return holderIsSelf
-        ? `I do not have ${lowerLabel} in front of me right now. I would need to check my records before I can send it.`
+        ? `I may be able to produce ${lowerLabel}, but I would need to check my records first.`
         : `I cannot send you ${lowerLabel} right now. I would need to confirm where it is first.`;
     case "missing":
       return `No, I cannot send you ${lowerLabel} because I do not have it.`;
@@ -1138,6 +1143,26 @@ const questionRequestsProductionOrLookup = (lowerQuestion = "") =>
   lowerQuestion.includes("make that") ||
   lowerQuestion.includes("give me");
 
+const questionAsksForProofLikeEvidence = (lowerQuestion = "") =>
+  (lowerQuestion.includes("proof") ||
+    lowerQuestion.includes("evidence") ||
+    lowerQuestion.includes("record") ||
+    lowerQuestion.includes("records") ||
+    lowerQuestion.includes("invoice") ||
+    lowerQuestion.includes("receipt") ||
+    lowerQuestion.includes("statement") ||
+    lowerQuestion.includes("statements") ||
+    lowerQuestion.includes("photo") ||
+    lowerQuestion.includes("photos") ||
+    lowerQuestion.includes("video") ||
+    lowerQuestion.includes("videos") ||
+    lowerQuestion.includes("document") ||
+    lowerQuestion.includes("documents")) &&
+  !lowerQuestion.includes("what happened") &&
+  !lowerQuestion.includes("what did") &&
+  !lowerQuestion.includes("how did") &&
+  !lowerQuestion.includes("where did");
+
 const hasRecordSearchPromise = (value = "") =>
   /\b(need to look|need to check|i'?ll look|i will look|i'?ll check|i will check|before i can send|before sending|once i'?ve pulled|once i have pulled|pull(?:ed)? my|check my messages|check my notes|look for it)\b/i.test(
     value
@@ -1205,12 +1230,7 @@ const buildSpecificDetailFallback = ({
   leadQuestion,
   playerSide,
 }) => {
-  const proofQuestion =
-    lowerQuestion.includes("concrete") ||
-    lowerQuestion.includes("specific") ||
-    lowerQuestion.includes("proof") ||
-    lowerQuestion.includes("evidence") ||
-    lowerQuestion.includes("record");
+  const proofQuestion = questionAsksForProofLikeEvidence(lowerQuestion);
   const possessionQuestion =
     (lowerQuestion.includes("do you have") ||
       lowerQuestion.includes("did you have") ||
@@ -1295,7 +1315,7 @@ const buildSpecificDetailFallback = ({
     }`;
   }
 
-  if (proofQuestion && supportingEvidence.length === 0) {
+  if (proofQuestion && supportingEvidence.length === 0 && matchedEvidence.length === 0) {
     return `I do not have confirmed proof in hand on that point right now.${
       leadQuestion ? ` The next thing we should pin down is: ${leadQuestion}` : ""
     }`;
@@ -1445,12 +1465,7 @@ const buildInterviewFallback = ({ caseSession, template, question, factSheet }) 
       lowerQuestion.includes("has it") ||
       lowerQuestion.includes("holds it") ||
       lowerQuestion.includes("who has"));
-  const proofQuestion =
-    lowerQuestion.includes("concrete") ||
-    lowerQuestion.includes("specific") ||
-    lowerQuestion.includes("proof") ||
-    lowerQuestion.includes("evidence") ||
-    lowerQuestion.includes("record");
+  const proofQuestion = questionAsksForProofLikeEvidence(lowerQuestion);
   const thirdPartyEvidence = matchedEvidence.find(
     (item) => item.holderSide === "third-party"
   );
@@ -1505,6 +1520,7 @@ const buildInterviewFallback = ({ caseSession, template, question, factSheet }) 
       playerSide,
       partyClaims,
       matchedEvidence,
+      lowerQuestion,
     }),
     openQuestions: suggestedOpenQuestions.slice(0, 2),
     discoveredFactIds: partyClaims.map((item) => item.fact.factId),
@@ -2020,7 +2036,7 @@ export const continueInterview = async ({ caseSession, question, userId }) => {
     maxTokens: 1500,
     retryAttempts: 1,
     systemPrompt:
-      "You are simulating a legal-case party speaking to their own lawyer during intake. Treat this as a role actor, not a script expander. You know the full hidden world state, but you speak only as the represented party from memory, bias, confidence, access, and personality. Decide what to reveal, hedge, minimize, or withhold based on the latest question and the party profile. Answer directly when the lawyer asks a yes/no possession question. Also answer directly when the lawyer asks whether you can provide, send, share, or show a record: say yes, no, or that you do not have it in front of you right now and would need to check your records before sending it. If the lawyer asks for names, dates, amounts, or other facts that might appear in messages, notes, or records, give the fact if you actually remember it; otherwise say plainly that you do not have that detail in front of you right now. Do not tell the lawyer how to investigate, what to pin down next, or how to run the case. Do not keep repeating promises to look for or send something on later turns. It is completely acceptable to say you do not know, do not remember, have not seen something yourself, or only heard about it. Speak like a normal person in first person. Never mention internal schemas, canonical truth, or metadata. Keep fact-sheet updates concise, but you may fill summary, theory, and desiredRelief when the case posture is already clear from the intake or the lawyer asks for them. Output valid JSON only.",
+      "You are simulating a legal-case party speaking to their own lawyer during intake. Treat this as a role actor, not a script expander. You know the full hidden world state, but you speak only as the represented party from memory, bias, confidence, access, and personality. Decide what to reveal, hedge, minimize, or withhold based on the latest question and the party profile. Answer directly when the lawyer asks a yes/no possession question. If the lawyer asks whether you can provide, send, share, or show a record, answer directly about production: say yes, no, or that you would need to check your records first. For ordinary factual questions, answer from memory as concretely as you honestly can before talking about records. If the lawyer asks for names, dates, amounts, or other facts that might appear in messages, notes, or records, give the fact if you actually remember it; otherwise say plainly that you do not remember the exact detail. Do not tell the lawyer how to investigate, what to pin down next, or how to run the case. Do not keep repeating promises to look for or send something on later turns. It is completely acceptable to say you do not know, do not remember, have not seen something yourself, or only heard about it. Speak like a normal person in first person. Never mention internal schemas, canonical truth, or metadata. Keep fact-sheet updates concise, but you may fill summary, theory, and desiredRelief when the case posture is already clear from the intake or the lawyer asks for them. Output valid JSON only.",
     userPrompt: JSON.stringify({
       task: `Answer the lawyer's latest question as ${playerPartyName}. You are the represented ${playerSide} side. Use the hidden canonical world and your side-specific memory to choose what this person would naturally say and what they would keep back for now.`,
       stage: "interview",
