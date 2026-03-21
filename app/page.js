@@ -1,15 +1,10 @@
 import Link from "next/link";
+import Image from "next/image";
 import connectMongo from "@/libs/mongoose";
 import CaseTemplate from "@/models/CaseTemplate";
 import { getCategoryTitle } from "@/libs/game/categories";
 
 export const dynamic = "force-dynamic";
-
-const trustSignals = [
-  { value: "1,200+", label: "cases played" },
-  { value: "8 min", label: "average session" },
-  { value: "3-part", label: "practice loop" },
-];
 
 const benefits = [
   "Build airtight fact sheets from messy narratives",
@@ -53,14 +48,21 @@ const loadFeaturedCases = async () => {
   try {
     await connectMongo();
 
-    const templates = await CaseTemplate.find({ status: "active" })
-      .sort({ updatedAt: -1 })
-      .limit(3);
+    const [templates, totalActiveCases] = await Promise.all([
+      CaseTemplate.find({ status: "active" }).sort({ updatedAt: -1 }).limit(3),
+      CaseTemplate.countDocuments({ status: "active" }),
+    ]);
 
-    return templates.map((template) => template.toJSON());
+    return {
+      featuredCases: templates.map((template) => template.toJSON()),
+      totalActiveCases,
+    };
   } catch (error) {
     console.error("Landing page case load failed:", error.message);
-    return [];
+    return {
+      featuredCases: [],
+      totalActiveCases: 0,
+    };
   }
 };
 
@@ -83,8 +85,16 @@ const getFactPrompt = (template) =>
     .join(" and ") || "";
 
 export default async function Page() {
-  const featuredCases = await loadFeaturedCases();
+  const { featuredCases, totalActiveCases } = await loadFeaturedCases();
   const heroCase = featuredCases[0] || null;
+  const trustSignals = [
+    {
+      value: totalActiveCases > 0 ? totalActiveCases.toLocaleString("en-US") : "0",
+      label: "cases and growing every day",
+    },
+    { value: "8 min", label: "average session" },
+    { value: "3-part", label: "practice loop" },
+  ];
 
   return (
     <main className="min-h-screen bg-base-200">
@@ -93,9 +103,17 @@ export default async function Page() {
           <div className="flex-1">
             <Link
               href="/"
-              className="text-sm font-semibold uppercase tracking-[0.35em] text-base-content/65"
+              className="inline-flex items-center"
+              aria-label="Legal Arena home"
             >
-              Legal Arena
+              <Image
+                src="/logoandname.png"
+                alt="Legal Arena"
+                width={180}
+                height={40}
+                className="h-8 w-auto md:h-9"
+                priority
+              />
             </Link>
           </div>
           <div className="flex-none">
@@ -106,14 +124,14 @@ export default async function Page() {
         </div>
       </header>
 
-      <section className="mx-auto max-w-7xl px-6 py-12 md:px-8 md:py-16">
-        <div className="grid items-start gap-8 xl:grid-cols-[minmax(0,1.05fr)_minmax(420px,0.95fr)]">
-          <div className="space-y-8">
+      <section className="mx-auto max-w-7xl px-6 py-12 md:px-8 md:py-16 xl:py-20">
+        <div className="grid items-start gap-8 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)] xl:gap-12">
+          <div className="space-y-8 xl:space-y-10">
             <div className="space-y-5">
               <p className="text-xs uppercase tracking-[0.4em] text-primary/75">
                 AI courtroom simulator
               </p>
-              <h1 className="max-w-3xl font-serif text-5xl leading-[0.95] text-base-content md:text-6xl xl:text-7xl">
+              <h1 className="max-w-4xl font-serif text-5xl leading-[0.95] text-base-content md:text-6xl xl:text-[5.25rem]">
                 Practice real courtroom arguments in an AI-powered simulation game
               </h1>
               <p className="max-w-2xl text-lg leading-8 text-base-content/75">
@@ -123,6 +141,9 @@ export default async function Page() {
               <p className="max-w-2xl text-base leading-7 text-base-content/65">
                 Each case plays like a short, replayable match. Test your reasoning,
                 adapt your strategy, and try again.
+              </p>
+              <p className="max-w-2xl text-sm uppercase tracking-[0.22em] text-primary/80">
+                {totalActiveCases.toLocaleString("en-US")} cases and growing every day
               </p>
             </div>
 
@@ -135,21 +156,21 @@ export default async function Page() {
               </p>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-3 xl:max-w-4xl">
               {trustSignals.map((signal) => (
                 <div
                   key={signal.label}
                   className="rounded-box border border-base-300 bg-base-100 p-4 shadow-sm"
                 >
                   <p className="text-2xl font-bold text-base-content">{signal.value}</p>
-                  <p className="mt-2 text-sm uppercase tracking-[0.2em] text-base-content/55">
+                  <p className="mt-2 max-w-[12ch] text-xs uppercase tracking-[0.16em] text-base-content/55 md:text-sm">
                     {signal.label}
                   </p>
                 </div>
               ))}
             </div>
 
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-3 xl:max-w-5xl">
               {steps.map((step) => (
                 <div
                   key={step.number}
@@ -169,7 +190,7 @@ export default async function Page() {
             </div>
           </div>
 
-          <div className="card border border-base-300 bg-base-100 shadow-2xl">
+          <div className="card border border-base-300 bg-base-100 shadow-2xl xl:sticky xl:top-24">
             <div className="card-body gap-5 p-6 md:p-8">
               <div className="rounded-box bg-neutral p-5 text-neutral-content">
                 <p className="text-sm uppercase tracking-[0.25em] text-primary-content/75">
@@ -236,17 +257,19 @@ export default async function Page() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-6 pb-12 md:px-8">
-        <div className="grid gap-6 xl:grid-cols-[minmax(320px,0.9fr)_minmax(0,1.1fr)]">
-          <div className="card border border-base-300 bg-base-100 shadow-xl">
-            <div className="card-body p-6">
-              <p className="text-sm uppercase tracking-[0.3em] text-base-content/45">
-                What you get
-              </p>
-              <h2 className="mt-3 font-serif text-4xl leading-tight text-base-content">
-                Train like a litigator
-              </h2>
-              <div className="mt-6 space-y-3 text-base leading-7 text-base-content/75">
+      <section className="mx-auto max-w-7xl px-6 pb-12 md:px-8 md:pb-16">
+        <div className="space-y-6">
+          <div className="rounded-[2rem] border border-base-300 bg-base-100 p-6 shadow-xl md:p-8">
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:items-start">
+              <div className="max-w-2xl">
+                <p className="text-sm uppercase tracking-[0.3em] text-base-content/45">
+                  What you get
+                </p>
+                <h2 className="mt-3 font-serif text-4xl leading-tight text-base-content">
+                  Train like a litigator
+                </h2>
+              </div>
+              <div className="grid gap-3 text-base leading-7 text-base-content/75 md:grid-cols-2">
                 {benefits.map((benefit) => (
                   <p key={benefit}>- {benefit}</p>
                 ))}
@@ -254,14 +277,14 @@ export default async function Page() {
             </div>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {(featuredCases.length > 0 ? featuredCases : [null, null, null]).map(
               (template, index) => (
                 <div
                   key={template?.id || `placeholder-${index}`}
                   className="card border border-base-300 bg-base-100 shadow-lg"
                 >
-                  <div className="card-body min-h-72 p-6">
+                  <div className="card-body min-h-80 p-6">
                     <p className="text-sm uppercase tracking-[0.25em] text-base-content/45">
                       {template ? getCategoryTitle(template.primaryCategory) : "Case"}
                     </p>
@@ -288,8 +311,8 @@ export default async function Page() {
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-6 pb-12 md:px-8">
-        <div className="grid gap-6 xl:grid-cols-2">
+      <section className="mx-auto max-w-7xl px-6 pb-12 md:px-8 md:pb-16">
+        <div className="grid gap-6 lg:grid-cols-2">
           <div className="card border border-base-300 bg-base-100 shadow-lg">
             <div className="card-body p-6">
               <p className="text-sm uppercase tracking-[0.3em] text-base-content/45">
