@@ -103,17 +103,20 @@ export default async function Page() {
           <div className="flex-1">
             <Link
               href="/"
-              className="inline-flex items-center"
+              className="inline-flex items-center gap-3"
               aria-label="Legal Arena home"
             >
               <Image
-                src="/logoandname.png"
-                alt="Legal Arena"
-                width={180}
+                src="/logoAndName.png"
+                alt="Legal Arena logo"
+                width={40}
                 height={40}
-                className="h-8 w-auto md:h-9"
+                className="h-8 w-8 object-contain md:h-9 md:w-9"
                 priority
               />
+              <span className="text-sm font-semibold uppercase tracking-[0.35em] text-base-content/70 md:text-base">
+                Legal Arena
+              </span>
             </Link>
           </div>
           <div className="flex-none">
