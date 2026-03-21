@@ -1,4 +1,5 @@
 import { Inter } from "next/font/google";
+import Script from "next/script";
 import PlausibleProvider from "next-plausible";
 import { getSEOTags } from "@/libs/seo";
 import ClientLayout from "@/components/LayoutClient";
@@ -25,6 +26,13 @@ export default function RootLayout({ children }) {
       {config.domainName && (
         <head>
           <PlausibleProvider domain={config.domainName} />
+          <Script
+            defer
+            data-website-id="dfid_jj19izF8dJN5YpCrXoA2G"
+            data-domain="legalarena.app"
+            src="https://datafa.st/js/script.js"
+            strategy="afterInteractive"
+          />
         </head>
       )}
       <body className="min-h-screen">
