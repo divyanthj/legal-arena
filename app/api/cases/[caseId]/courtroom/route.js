@@ -116,6 +116,7 @@ export async function POST(req, { params }) {
 
       await applyVerdictToProgression({
         userId: session.user.id,
+        userProfile: session.user,
         primaryCategory: caseSession.primaryCategory,
         complexity: caseSession.complexity,
         verdictWinner: result.verdict.winner,

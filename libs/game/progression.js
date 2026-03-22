@@ -53,20 +53,66 @@ export const normalizeProgression = (rawProgression) => {
   };
 };
 
-export const ensureUserProfile = async (userId) => {
+export const ensureUserProfile = async (userId, profile = null) => {
   await connectMongo();
 
   let user = await User.findById(userId);
   if (!user) {
+    const email = String(profile?.email || "")
+      .trim()
+      .toLowerCase();
+
+    if (!email) {
+      throw new Error("Cannot create a user profile without an email address.");
+    }
+
     user = await User.create({
       _id: userId,
+      email,
+      name: profile?.name?.trim?.() || undefined,
+      image: profile?.image?.trim?.() || undefined,
+      emailVerified:
+        profile?.emailVerified === undefined ? null : profile.emailVerified,
       progression: getDefaultProgression(),
     });
   }
 
+  let shouldSave = false;
+
+  if (profile?.email) {
+    const normalizedEmail = String(profile.email).trim().toLowerCase();
+
+    if (normalizedEmail && user.email !== normalizedEmail) {
+      user.email = normalizedEmail;
+      shouldSave = true;
+    }
+  }
+
+  if (profile?.name?.trim?.() && user.name !== profile.name.trim()) {
+    user.name = profile.name.trim();
+    shouldSave = true;
+  }
+
+  if (profile?.image?.trim?.() && user.image !== profile.image.trim()) {
+    user.image = profile.image.trim();
+    shouldSave = true;
+  }
+
+  if (profile?.emailVerified !== undefined && user.emailVerified !== profile.emailVerified) {
+    user.emailVerified = profile.emailVerified;
+    shouldSave = true;
+  }
+
   const nextProgression = normalizeProgression(user.progression);
-  user.progression = nextProgression;
-  await user.save();
+  if (JSON.stringify(nextProgression) !== JSON.stringify(user.progression)) {
+    user.progression = nextProgression;
+    shouldSave = true;
+  }
+
+  if (shouldSave) {
+    user.progression = nextProgression;
+    await user.save();
+  }
 
   return user;
 };
@@ -81,12 +127,13 @@ export const getEligibleComplexityForCategory = (progression, categorySlug) => {
 
 export const applyVerdictToProgression = async ({
   userId,
+  userProfile = null,
   primaryCategory,
   complexity,
   verdictWinner,
   highlights = [],
 }) => {
-  const user = await ensureUserProfile(userId);
+  const user = await ensureUserProfile(userId, userProfile);
   if (!user) {
     return null;
   }

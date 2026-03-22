@@ -354,10 +354,10 @@ export const buildCasePayload = (caseSession, templateOverride = null) => {
   };
 };
 
-export const listScenarioOptions = async (userId) => {
+export const listScenarioOptions = async (userId, userProfile = null) => {
   await connectMongo();
 
-  const user = await ensureUserProfile(userId);
+  const user = await ensureUserProfile(userId, userProfile);
   const progression = normalizeProgression(user?.progression);
   const [templates, cooldowns] = await Promise.all([
     CaseTemplate.find({ status: "active" }).sort({
@@ -377,7 +377,7 @@ export const listScenarioOptions = async (userId) => {
   );
 };
 
-export const createCaseSession = async ({ userId, caseTemplateId }) => {
+export const createCaseSession = async ({ userId, userProfile = null, caseTemplateId }) => {
   await connectMongo();
 
   const templateDocument = await CaseTemplate.findOne({
@@ -391,7 +391,7 @@ export const createCaseSession = async ({ userId, caseTemplateId }) => {
 
   const template = enrichTemplateForGameplay(toPlain(templateDocument));
 
-  const user = await ensureUserProfile(userId);
+  const user = await ensureUserProfile(userId, userProfile);
   const progression = normalizeProgression(user?.progression);
   const allowedComplexity = getEligibleComplexityForCategory(
     progression,
@@ -626,11 +626,11 @@ export const exitCaseSessionForUser = async ({ userId, caseId }) => {
   return caseSession;
 };
 
-export const listDashboardDataForUser = async (userId) => {
+export const listDashboardDataForUser = async (userId, userProfile = null) => {
   const [cases, templates, user] = await Promise.all([
     listCaseSessionsForUser(userId),
-    listScenarioOptions(userId),
-    ensureUserProfile(userId),
+    listScenarioOptions(userId, userProfile),
+    ensureUserProfile(userId, userProfile),
   ]);
 
   return {

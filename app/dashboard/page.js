@@ -20,7 +20,7 @@ export default async function Dashboard() {
   }
 
   const [dashboardData, overallLeaderboard, categoryLeaderboards] = await Promise.all([
-    listDashboardDataForUser(session.user.id),
+    listDashboardDataForUser(session.user.id, session.user),
     listOverallLeaderboard(),
     Promise.all(
       LEGAL_CASE_CATEGORIES.map(async (category) => [

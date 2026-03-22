@@ -21,7 +21,10 @@ export async function GET() {
   }
 
   try {
-    const dashboardData = await listDashboardDataForUser(session.user.id);
+    const dashboardData = await listDashboardDataForUser(
+      session.user.id,
+      session.user
+    );
 
     return NextResponse.json({
       cases: dashboardData.cases,
@@ -52,6 +55,7 @@ export async function POST(req) {
     const body = await req.json();
     const caseSession = await createCaseSession({
       userId: session.user.id,
+      userProfile: session.user,
       caseTemplateId: body?.caseTemplateId,
     });
 

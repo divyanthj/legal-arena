@@ -57,6 +57,10 @@ const userSchema = mongoose.Schema(
       lowercase: true,
       private: true,
     },
+    emailVerified: {
+      type: Date,
+      default: null,
+    },
     image: {
       type: String,
     },
@@ -115,6 +119,8 @@ const userSchema = mongoose.Schema(
     toJSON: { virtuals: true },
   }
 );
+
+userSchema.index({ email: 1 }, { unique: true, sparse: true });
 
 // add plugin that converts mongoose to json
 userSchema.plugin(toJSON);
