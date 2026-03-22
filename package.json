@@ -8,7 +8,8 @@
     "postbuild": "next-sitemap",
     "start": "next start",
     "lint": "next lint",
-    "test": "node tests/run-email-nudges-tests.mjs"
+    "test": "node tests/run-email-nudges-tests.mjs",
+    "reset:user-data": "node scripts/reset-user-data.mjs"
   },
   "dependencies": {
     "@auth/mongodb-adapter": "^1.0.0",

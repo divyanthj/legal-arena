@@ -15,3 +15,9 @@ A legal training app where users interview clients, build case files, argue simu
 - `/dashboard/admin` is the admin lab for creating and generating case templates.
 - Generated and manually authored case templates are stored in MongoDB.
 - `POST /api/internal/email-nudges/run` runs retention nudges. Pass `dryRun=true` and `limit=<n>` in the query string or JSON body when validating a run.
+
+## Reset User Data
+
+- Dry run auth data reset: `npm run reset:user-data`
+- Apply auth data reset: `npm run reset:user-data -- --apply`
+- Apply auth + gameplay data reset: `npm run reset:user-data -- --apply --include-gameplay`

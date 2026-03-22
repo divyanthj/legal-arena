@@ -4,7 +4,6 @@ import { MongoDBAdapter } from "@auth/mongodb-adapter";
 import config from "@/config";
 import connectMongo from "./mongo";
 import { sendMagicLinkEmail } from "@/libs/emailSender";
-import { syncUserProfileFromAuth } from "@/libs/user-profile";
 
 export const authOptions = {
   // Set any random key in .env.local
@@ -42,26 +41,11 @@ export const authOptions = {
   ...(connectMongo && { adapter: MongoDBAdapter(connectMongo) }),
 
   callbacks: {
-    signIn: async ({ user }) => {
-      await syncUserProfileFromAuth(user);
-      return true;
-    },
     session: async ({ session, token }) => {
       if (session?.user) {
         session.user.id = token.sub;
       }
       return session;
-    },
-  },
-  events: {
-    createUser: async ({ user }) => {
-      await syncUserProfileFromAuth(user);
-    },
-    updateUser: async ({ user }) => {
-      await syncUserProfileFromAuth(user);
-    },
-    signIn: async ({ user }) => {
-      await syncUserProfileFromAuth(user);
     },
   },
   session: {
