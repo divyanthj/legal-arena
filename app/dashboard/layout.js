@@ -12,7 +12,11 @@ export default async function LayoutPrivate({ children }) {
   const session = await getServerSession(authOptions);
 
   if (!session) {
-    redirect(config.auth.loginUrl);
+    redirect(
+      `${config.auth.loginUrl}?callbackUrl=${encodeURIComponent(
+        config.auth.callbackUrl
+      )}`
+    );
   }
 
   return <>{children}</>;

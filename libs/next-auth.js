@@ -76,6 +76,9 @@ export const authOptions = {
       }
       return session;
     },
+    redirect: async ({ baseUrl }) => {
+      return `${baseUrl}${config.auth.callbackUrl}`;
+    },
   },
   session: {
     strategy: "jwt",
