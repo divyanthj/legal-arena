@@ -7,6 +7,7 @@ import CaseTemplate from "@/models/CaseTemplate";
 import CaseSession from "@/models/CaseSession";
 import { getAdminEmails, isAdminEmail } from "@/libs/admin";
 import { listCategoryOptions } from "@/libs/game/templates";
+import { toClientJSON } from "@/libs/serialize";
 
 export const dynamic = "force-dynamic";
 
@@ -68,9 +69,9 @@ export default async function AdminPage() {
 
   return (
     <AdminCaseLab
-      categories={listCategoryOptions()}
-      initialTemplates={templatesWithStats}
-      adminEmails={getAdminEmails()}
+      categories={toClientJSON(listCategoryOptions())}
+      initialTemplates={toClientJSON(templatesWithStats)}
+      adminEmails={toClientJSON(getAdminEmails())}
     />
   );
 }

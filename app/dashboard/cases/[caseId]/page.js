@@ -5,6 +5,7 @@ import CaseWorkspace from "@/components/legal-arena/CaseWorkspace";
 import DevelopmentAccessGate from "@/components/legal-arena/DevelopmentAccessGate";
 import { getCaseSessionForUser } from "@/libs/game/store";
 import { hasGameAccess } from "@/libs/admin";
+import { toClientJSON } from "@/libs/serialize";
 
 export const dynamic = "force-dynamic";
 
@@ -24,5 +25,5 @@ export default async function CasePage({ params }) {
     notFound();
   }
 
-  return <CaseWorkspace initialCase={caseSession} />;
+  return <CaseWorkspace initialCase={toClientJSON(caseSession)} />;
 }

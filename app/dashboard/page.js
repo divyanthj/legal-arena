@@ -9,6 +9,7 @@ import {
 } from "@/libs/game/progression";
 import { LEGAL_CASE_CATEGORIES } from "@/libs/game/categories";
 import { hasGameAccess, isAdminEmail } from "@/libs/admin";
+import { toClientJSON } from "@/libs/serialize";
 
 export const dynamic = "force-dynamic";
 
@@ -32,12 +33,12 @@ export default async function Dashboard() {
 
   return (
     <DashboardHub
-      initialCases={dashboardData.cases}
-      templates={dashboardData.templates}
-      categories={dashboardData.categories}
-      progression={dashboardData.progression}
-      overallLeaderboard={overallLeaderboard}
-      categoryLeaderboards={Object.fromEntries(categoryLeaderboards)}
+      initialCases={toClientJSON(dashboardData.cases)}
+      templates={toClientJSON(dashboardData.templates)}
+      categories={toClientJSON(dashboardData.categories)}
+      progression={toClientJSON(dashboardData.progression)}
+      overallLeaderboard={toClientJSON(overallLeaderboard)}
+      categoryLeaderboards={toClientJSON(Object.fromEntries(categoryLeaderboards))}
       isAdmin={isAdminEmail(session.user?.email)}
       userName={session.user?.name || session.user?.email}
     />
