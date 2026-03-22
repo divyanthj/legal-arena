@@ -10,13 +10,22 @@ import {
 import { LEGAL_CASE_CATEGORIES } from "@/libs/game/categories";
 import { hasGameAccess, isAdminEmail } from "@/libs/admin";
 import { toClientJSON } from "@/libs/serialize";
+import connectMongo from "@/libs/mongoose";
+import User from "@/models/User";
 
 export const dynamic = "force-dynamic";
 
 export default async function Dashboard() {
   const session = await getServerSession(authOptions);
+  let hasPurchasedAccess = false;
 
-  if (!hasGameAccess(session.user?.email)) {
+  if (session?.user?.id) {
+    await connectMongo();
+    const user = await User.findById(session.user.id).select("hasAccess");
+    hasPurchasedAccess = Boolean(user?.hasAccess);
+  }
+
+  if (!hasGameAccess(session.user?.email) && !hasPurchasedAccess) {
     return <DevelopmentAccessGate email={session.user?.email || ""} />;
   }
 

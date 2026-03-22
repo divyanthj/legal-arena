@@ -53,6 +53,30 @@ const config = {
       },
     ],
   },
+  lemonsqueezy: {
+    earlyAccessVariantId:
+      process.env.NODE_ENV === "development"
+        ? process.env.LEMONSQUEEZY_VARIANT_ID_DEV || ""
+        : process.env.LEMONSQUEEZY_VARIANT_ID || "",
+    plans: [
+      {
+        variantId:
+          process.env.NODE_ENV === "development"
+            ? process.env.LEMONSQUEEZY_VARIANT_ID_DEV || ""
+            : process.env.LEMONSQUEEZY_VARIANT_ID || "",
+        name: "Early Access",
+        description:
+          "One-time purchase for immediate access while Legal Arena is still in early access.",
+        price: 9.99,
+        priceAnchor: 29.99,
+        features: [
+          { name: "Immediate access to the full Legal Arena build" },
+          { name: "All future early-access updates included" },
+          { name: "One-time payment, no subscription" },
+        ],
+      },
+    ],
+  },
   aws: {
     bucket: "bucket-name",
     bucketUrl: `https://bucket-name.s3.amazonaws.com/`,

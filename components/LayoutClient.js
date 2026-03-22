@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
-import { useSession } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
 import { Crisp } from "crisp-sdk-web";
 import { SessionProvider } from "next-auth/react";
 import NextTopLoader from "nextjs-toploader";
@@ -45,6 +45,46 @@ const CrispChat = () => {
   return null;
 };
 
+const SessionGuard = () => {
+  const pathname = usePathname();
+  const { data, status } = useSession();
+
+  useEffect(() => {
+    if (status !== "authenticated" || !data?.user?.id) {
+      return;
+    }
+
+    let isCancelled = false;
+
+    const verifySession = async () => {
+      try {
+        const response = await fetch("/api/auth/session-status", {
+          cache: "no-store",
+        });
+        const payload = await response.json();
+
+        if (!isCancelled && payload?.authenticated && !payload?.active) {
+          await signOut({
+            callbackUrl: `${config.auth.loginUrl}?callbackUrl=${encodeURIComponent(
+              config.auth.callbackUrl
+            )}`,
+          });
+        }
+      } catch (error) {
+        console.error("session verification failed", error);
+      }
+    };
+
+    verifySession();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [data?.user?.id, pathname, status]);
+
+  return null;
+};
+
 // All the client wrappers are here (they can't be in server components)
 // 1. SessionProvider: Allow the useSession from next-auth (find out if user is auth or not)
 // 2. NextTopLoader: Show a progress bar at the top when navigating between pages
@@ -73,6 +113,8 @@ const ClientLayout = ({ children }) => {
           id="tooltip"
           className="z-[60] !opacity-100 max-w-sm shadow-lg"
         />
+
+        <SessionGuard />
 
         {/* Set Crisp customer chat support */}
         <CrispChat />

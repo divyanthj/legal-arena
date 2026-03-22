@@ -3,7 +3,9 @@ import EmailProvider from "next-auth/providers/email";
 import { MongoDBAdapter } from "@auth/mongodb-adapter";
 import config from "@/config";
 import connectMongo from "./mongo";
+import connectMongoose from "@/libs/mongoose";
 import { sendMagicLinkEmail } from "@/libs/emailSender";
+import User from "@/models/User";
 
 export const authOptions = {
   // Set any random key in .env.local
@@ -13,6 +15,11 @@ export const authOptions = {
       // Follow the "Login with Google" tutorial to get your credentials
       clientId: process.env.GOOGLE_ID,
       clientSecret: process.env.GOOGLE_SECRET,
+      authorization: {
+        params: {
+          prompt: "select_account",
+        },
+      },
       async profile(profile) {
         return {
           id: profile.sub,
@@ -41,7 +48,29 @@ export const authOptions = {
   ...(connectMongo && { adapter: MongoDBAdapter(connectMongo) }),
 
   callbacks: {
+    jwt: async ({ token }) => {
+      if (!token?.sub) {
+        return token;
+      }
+
+      try {
+        await connectMongoose();
+        const user = await User.findById(token.sub).select("_id");
+
+        if (!user) {
+          return {};
+        }
+      } catch (error) {
+        console.error("next-auth jwt lookup failed", error);
+      }
+
+      return token;
+    },
     session: async ({ session, token }) => {
+      if (!token?.sub) {
+        return null;
+      }
+
       if (session?.user) {
         session.user.id = token.sub;
       }

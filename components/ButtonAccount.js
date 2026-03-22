@@ -4,6 +4,7 @@
 import { useState } from "react";
 import { Popover, Transition } from "@headlessui/react";
 import { useSession, signOut } from "next-auth/react";
+import config from "@/config";
 import apiClient from "@/libs/api";
 
 // A button to show user some account actions
@@ -18,6 +19,13 @@ const ButtonAccount = () => {
 
   const handleSignOut = () => {
     signOut({ callbackUrl: "/" });
+  };
+  const handleSwitchAccount = () => {
+    signOut({
+      callbackUrl: `${config.auth.loginUrl}?callbackUrl=${encodeURIComponent(
+        config.auth.callbackUrl
+      )}`,
+    });
   };
   const handleBilling = async () => {
     setIsLoading(true);
@@ -108,6 +116,20 @@ const ButtonAccount = () => {
                       />
                     </svg>
                     Billing
+                  </button>
+                  <button
+                    className="flex w-full items-center gap-2 rounded-lg px-4 py-1.5 font-medium text-base-content duration-200 hover:bg-base-300"
+                    onClick={handleSwitchAccount}
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                      className="w-5 h-5"
+                    >
+                      <path d="M3 10a.75.75 0 01.75-.75h7.69L9.22 7.03a.75.75 0 111.06-1.06l3.5 3.5a.75.75 0 010 1.06l-3.5 3.5a.75.75 0 11-1.06-1.06l2.22-2.22H3.75A.75.75 0 013 10zm8 5.25a.75.75 0 01.75-.75h3.5a.75.75 0 00.75-.75v-7.5a.75.75 0 00-.75-.75h-3.5a.75.75 0 010-1.5h3.5A2.25 2.25 0 0117.5 6v7.5a2.25 2.25 0 01-2.25 2.25h-3.5a.75.75 0 01-.75-.75z" />
+                    </svg>
+                    Switch account
                   </button>
                   <button
                     className="flex w-full items-center gap-2 rounded-lg px-4 py-1.5 font-medium text-base-content duration-200 hover:bg-error/20 hover:text-error"
