@@ -3,6 +3,10 @@
     {
       "path": "/api/internal/email-nudges/run",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/internal/case-templates/rebalance",
+      "schedule": "10 * * * *"
     }
   ]
 }
