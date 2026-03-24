@@ -15,7 +15,7 @@ import {
 } from "@/libs/caseTemplateRebalancer";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 300;
+export const maxDuration = 480;
 
 const safeJson = async (req) => {
   try {
@@ -127,7 +127,7 @@ const handleRequest = async (req, body = {}) => {
       userId: "cron-rebalancer",
       model: process.env.OPENAI_REBALANCE_MODEL?.trim() || "gpt-5.4-mini",
       generationProfile: "rebalance",
-      timeBudgetMs: 4 * 60 * 1000,
+      timeBudgetMs: 7 * 60 * 1000,
     });
 
     return NextResponse.json(

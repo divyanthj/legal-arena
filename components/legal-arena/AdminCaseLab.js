@@ -178,6 +178,17 @@ const SORTABLE_COLUMNS = {
   },
 };
 
+const formatCompletionTimeIst = (value = new Date()) =>
+  new Intl.DateTimeFormat("en-IN", {
+    timeZone: "Asia/Kolkata",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+  }).format(value);
+
 export default function AdminCaseLab({
   categories,
   initialTemplates,
@@ -513,6 +524,7 @@ export default function AdminCaseLab({
           successCount += 1;
           setTemplates((current) => [template, ...current]);
           setSelectedTemplateId(template.id);
+          const completedAtIst = formatCompletionTimeIst(new Date());
 
           setGenerationProgress((current) => ({
             ...current,
@@ -531,8 +543,8 @@ export default function AdminCaseLab({
                     title: template.title,
                     status: "completed",
                     message: artifactId
-                      ? `Saved to the library and linked to artifact ${artifactId}.`
-                      : "Saved to the library and available immediately.",
+                      ? `Saved to the library and linked to artifact ${artifactId}. Completed at ${completedAtIst} IST.`
+                      : `Saved to the library and available immediately. Completed at ${completedAtIst} IST.`,
                   }
                 : item
             ),
