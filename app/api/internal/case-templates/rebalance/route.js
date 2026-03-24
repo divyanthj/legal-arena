@@ -1,6 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
-import { createGeneratedCaseTemplate } from "@/libs/game/generation";
+import {
+  createGeneratedCaseTemplate,
+  GenerationDeferredError,
+} from "@/libs/game/generation";
 import {
   CASE_TEMPLATE_REBALANCER_LOCK_KEY,
   acquireInternalJobLock,
@@ -12,6 +15,7 @@ import {
 } from "@/libs/caseTemplateRebalancer";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 const safeJson = async (req) => {
   try {
@@ -28,10 +32,12 @@ const buildResponsePayload = ({
   template = null,
   artifactId = null,
   reason = "",
+  stage = "",
 } = {}) => ({
   action,
   dryRun,
   reason,
+  stage,
   targetPerCategory: snapshot?.targetPerCategory ?? null,
   derivedComplexityTargets: snapshot?.derivedTargets || [],
   selectedTarget: snapshot?.selectedTarget || null,
@@ -74,8 +80,10 @@ const handleRequest = async (req, body = {}) => {
     );
   }
 
+  let snapshot = null;
+
   try {
-    const snapshot = await getCaseTemplateRebalanceSnapshot({
+    snapshot = await getCaseTemplateRebalanceSnapshot({
       targetPerCategory,
     });
 
@@ -117,6 +125,9 @@ const handleRequest = async (req, body = {}) => {
       complexity: snapshot.selectedTarget.complexity,
       prompt: "",
       userId: "cron-rebalancer",
+      model: process.env.OPENAI_REBALANCE_MODEL?.trim() || "gpt-5.4-mini",
+      generationProfile: "rebalance",
+      timeBudgetMs: 4 * 60 * 1000,
     });
 
     return NextResponse.json(
@@ -130,6 +141,24 @@ const handleRequest = async (req, body = {}) => {
       { status: 201 }
     );
   } catch (error) {
+    if (error instanceof GenerationDeferredError) {
+      snapshot = await getCaseTemplateRebalanceSnapshot({
+        targetPerCategory,
+      });
+
+      return NextResponse.json(
+        buildResponsePayload({
+          action: "running",
+          dryRun: options.dryRun,
+          snapshot,
+          artifactId: error.artifactId || null,
+          stage: error.stage || "",
+          reason: "Generation checkpoint saved. The next rebalance invocation will resume from the artifact.",
+        }),
+        { status: 202 }
+      );
+    }
+
     console.error("Case template rebalance run failed:", error);
 
     return NextResponse.json(

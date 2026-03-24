@@ -10,6 +10,9 @@ import {
 import { validateCaseTemplatePayload } from "./templates";
 import { LEGAL_CASE_CATEGORIES, getCategoryBySlug } from "./categories";
 
+const isFastGenerationProfile = (value = "") =>
+  ["fast", "rebalance"].includes(String(value || "").trim().toLowerCase());
+
 const categoryLegalTagDefaults = {
   "rental-dispute": ["housing", "notice", "records", "damage", "remedy"],
   "marital-dispute": ["fairness", "records", "credibility", "remedy"],
@@ -1866,7 +1869,7 @@ const emitBuilderProgress = async (onProgress, result, extra = {}) => {
   });
 };
 
-const getTemplateTokenBudget = (complexity = 1) => {
+const getTemplateTokenBudget = (complexity = 1, generationProfile = "default") => {
   const normalized = Math.max(1, Math.min(5, Number(complexity) || 1));
   const budgets = {
     1: {
@@ -1911,7 +1914,17 @@ const getTemplateTokenBudget = (complexity = 1) => {
     },
   };
 
-  return budgets[normalized];
+  const baseBudget = budgets[normalized];
+
+  if (!isFastGenerationProfile(generationProfile)) {
+    return baseBudget;
+  }
+
+  return {
+    ...baseBudget,
+    factInventory: baseBudget.factInventory + 1200,
+    interview: 0,
+  };
 };
 
 export const buildTemplateFromStoryArtifact = async ({
@@ -1921,13 +1934,16 @@ export const buildTemplateFromStoryArtifact = async ({
   prompt = "",
   userId = "system",
   model,
+  generationProfile = "default",
+  yieldController,
   onUsage,
   onProgress,
 }) => {
   const canonicalStory = String(artifact?.canonicalStoryPacket?.canonicalStory || "").trim();
-  const tokenBudget = getTemplateTokenBudget(complexity);
+  const tokenBudget = getTemplateTokenBudget(complexity, generationProfile);
   const storyContext = buildCompactStoryContext(artifact);
 
+  await yieldController?.checkpoint("template");
   const factInventory = await requestStructuredCompletion({
     userId,
     model,
@@ -1954,6 +1970,7 @@ export const buildTemplateFromStoryArtifact = async ({
     artifactId: artifact?.id,
   });
 
+  await yieldController?.checkpoint("template");
   const evidenceInventory = await requestStructuredCompletion({
     userId,
     model,
@@ -2055,34 +2072,37 @@ export const buildTemplateFromStoryArtifact = async ({
 
   let interviewPlan = null;
 
-  try {
-    interviewPlan = await requestStructuredCompletion({
-      userId,
-      model,
-      temperature: 0.35,
-      maxTokens: tokenBudget.interview,
-      retryAttempts: 2,
-      usageLabel: "template.interview",
-      onUsage,
-      throwOnError: true,
-      systemPrompt:
-        "You refine legal simulation cases into interview-ready templates. Output valid JSON only. Preserve the dispute but distinguish confirmed proof from leads, missing records, and disputed evidence.",
-      userPrompt: JSON.stringify(
-        buildInterviewPlanningPrompt({
-          basePayload: payload,
-          category,
-          complexity,
-          prompt,
-        })
-      ),
-    });
-  } catch (error) {
-    console.warn("Interview planning refinement failed; using deterministic template fallback.", {
-      artifactId: artifact?.id || null,
-      category: category.slug,
-      complexity,
-      error: error?.message || String(error),
-    });
+  if (!isFastGenerationProfile(generationProfile) && tokenBudget.interview > 0) {
+    try {
+      await yieldController?.checkpoint("interview");
+      interviewPlan = await requestStructuredCompletion({
+        userId,
+        model,
+        temperature: 0.35,
+        maxTokens: tokenBudget.interview,
+        retryAttempts: 2,
+        usageLabel: "template.interview",
+        onUsage,
+        throwOnError: true,
+        systemPrompt:
+          "You refine legal simulation cases into interview-ready templates. Output valid JSON only. Preserve the dispute but distinguish confirmed proof from leads, missing records, and disputed evidence.",
+        userPrompt: JSON.stringify(
+          buildInterviewPlanningPrompt({
+            basePayload: payload,
+            category,
+            complexity,
+            prompt,
+          })
+        ),
+      });
+    } catch (error) {
+      console.warn("Interview planning refinement failed; using deterministic template fallback.", {
+        artifactId: artifact?.id || null,
+        category: category.slug,
+        complexity,
+        error: error?.message || String(error),
+      });
+    }
   }
 
   if (interviewPlan && typeof interviewPlan === "object") {

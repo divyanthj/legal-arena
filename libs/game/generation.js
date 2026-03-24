@@ -11,6 +11,9 @@ const DEFAULT_GENERATION_MODEL =
   process.env.OPENAI_MODEL?.trim() ||
   "gpt-5.4";
 
+const isFastGenerationProfile = (value = "") =>
+  ["fast", "rebalance"].includes(String(value || "").trim().toLowerCase());
+
 const GENERATION_STAGE_LABELS = {
   canonical: "Writing canon",
   plaintiffDraft: "Writing plaintiff draft",
@@ -24,6 +27,8 @@ const GENERATION_STAGE_LABELS = {
   interview: "Planning interview",
   complete: "Complete",
 };
+
+const DEFAULT_STAGE_YIELD_BUFFER_MS = 60 * 1000;
 
 const slugify = (value = "") =>
   value
@@ -51,6 +56,51 @@ const attachArtifactIdToError = (error, artifact) => {
   }
 
   return error;
+};
+
+export class GenerationDeferredError extends Error {
+  constructor({ artifactId = null, stage = "", message = "" } = {}) {
+    super(message || "Generation checkpoint saved for a later invocation.");
+    this.name = "GenerationDeferredError";
+    this.artifactId = artifactId || null;
+    this.stage = stage || "";
+  }
+}
+
+const buildYieldController = ({
+  artifact = null,
+  startedAt = Date.now(),
+  timeBudgetMs = 0,
+  yieldBufferMs = DEFAULT_STAGE_YIELD_BUFFER_MS,
+} = {}) => {
+  const hasBudget = Number(timeBudgetMs) > 0;
+
+  return {
+    async checkpoint(stage = "") {
+      if (!hasBudget) {
+        return;
+      }
+
+      const elapsedMs = Date.now() - startedAt;
+      const remainingMs = timeBudgetMs - elapsedMs;
+
+      if (remainingMs > yieldBufferMs) {
+        return;
+      }
+
+      if (artifact) {
+        artifact.status = "running";
+        artifact.failureStage = stage;
+        artifact.failureReason = "";
+        await artifact.save();
+      }
+
+      throw new GenerationDeferredError({
+        artifactId: artifact?.id || null,
+        stage,
+      });
+    },
+  };
 };
 
 const findResumableArtifact = async ({
@@ -161,7 +211,7 @@ export const getStoryComplexityProfile = (complexity = 1) => {
   };
 };
 
-const getStoryTokenBudget = (complexity = 1) => {
+const getStoryTokenBudget = (complexity = 1, generationProfile = "default") => {
   const normalized = Math.max(1, Math.min(5, Number(complexity) || 1));
   const budgets = {
     1: {
@@ -196,7 +246,16 @@ const getStoryTokenBudget = (complexity = 1) => {
     },
   };
 
-  return budgets[normalized];
+  const baseBudget = budgets[normalized];
+
+  if (!isFastGenerationProfile(generationProfile)) {
+    return baseBudget;
+  }
+
+  return {
+    ...baseBudget,
+    plausibility: baseBudget.plausibility + 700,
+  };
 };
 
 const storyPacketOutputSchema = {
@@ -500,10 +559,14 @@ const runDetailedBranchWithPlausibility = async ({
   plausibilityStage,
   onUsage,
   onProgress,
+  generationProfile = "default",
+  yieldController,
 }) => {
   let priorIssues = [];
+  const maxPlausibilityPasses = isFastGenerationProfile(generationProfile) ? 2 : 3;
 
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  for (let attempt = 0; attempt < maxPlausibilityPasses; attempt += 1) {
+    await yieldController?.checkpoint(detailStage);
     artifact.failureStage = detailStage;
     await artifact.save();
     const detailedStory = await requestStructuredCompletion({
@@ -538,6 +601,7 @@ const runDetailedBranchWithPlausibility = async ({
       attempt: attempt + 1,
     });
 
+    await yieldController?.checkpoint(plausibilityStage);
     artifact.failureStage = plausibilityStage;
     await artifact.save();
     const plausibilityReview = await requestStructuredCompletion({
@@ -594,6 +658,8 @@ export const generateCaseTemplatePayload = async ({
   prompt = "",
   userId = "system",
   model = DEFAULT_GENERATION_MODEL,
+  generationProfile = "default",
+  timeBudgetMs = 0,
   resumeArtifactId = "",
   purgePreviousWork = false,
   onProgress,
@@ -601,8 +667,9 @@ export const generateCaseTemplatePayload = async ({
   const category = getCategoryBySlug(categorySlug) || getCategoryBySlug(DEFAULT_CATEGORY_SLUG);
   const normalizedComplexity = Math.max(1, Math.min(5, Number(complexity) || 1));
   const complexityProfile = getStoryComplexityProfile(normalizedComplexity);
-  const tokenBudget = getStoryTokenBudget(normalizedComplexity);
+  const tokenBudget = getStoryTokenBudget(normalizedComplexity, generationProfile);
   const usageTracker = createUsageTracker();
+  const startedAt = Date.now();
   if (purgePreviousWork) {
     await purgeResumableArtifacts({
       resumeArtifactId,
@@ -627,6 +694,7 @@ export const generateCaseTemplatePayload = async ({
       usageTracker.setArtifact(artifact);
       artifact.status = "running";
       artifact.failureReason = "";
+      artifact.model = model;
       await artifact.save();
       await emitGenerationProgress(
         onProgress,
@@ -648,8 +716,27 @@ export const generateCaseTemplatePayload = async ({
       );
     }
 
+    if (!artifact) {
+      artifact = await GenerationArtifact.create({
+        status: "running",
+        categorySlug: category.slug,
+        complexity: normalizedComplexity,
+        prompt,
+        model,
+        failureStage: "canonical",
+      });
+      usageTracker.setArtifact(artifact);
+    }
+
+    const yieldController = buildYieldController({
+      artifact,
+      startedAt,
+      timeBudgetMs,
+    });
+
     let canonicalStoryPacket = artifact?.canonicalStoryPacket || null;
     if (!canonicalStoryPacket) {
+      await yieldController.checkpoint("canonical");
       canonicalStoryPacket = await requestStructuredCompletion({
         userId,
         model,
@@ -677,6 +764,7 @@ export const generateCaseTemplatePayload = async ({
 
     let plaintiffStoryDraft = artifact?.plaintiffStoryDraft || null;
     if (!plaintiffStoryDraft) {
+      await yieldController.checkpoint("plaintiffDraft");
       plaintiffStoryDraft = await requestStructuredCompletion({
         userId,
         model,
@@ -706,6 +794,7 @@ export const generateCaseTemplatePayload = async ({
 
     let defendantStoryDraft = artifact?.defendantStoryDraft || null;
     if (!defendantStoryDraft) {
+      await yieldController.checkpoint("defendantDraft");
       defendantStoryDraft = await requestStructuredCompletion({
         userId,
         model,
@@ -730,28 +819,14 @@ export const generateCaseTemplatePayload = async ({
       });
     }
 
-    if (!artifact) {
-      artifact = await GenerationArtifact.create({
-        status: "running",
-        categorySlug: category.slug,
-        complexity: normalizedComplexity,
-        prompt,
-        model,
-        canonicalStoryPacket,
-        plaintiffStoryDraft,
-        defendantStoryDraft,
-      });
-      usageTracker.setArtifact(artifact);
-    } else {
-      artifact.categorySlug = category.slug;
-      artifact.complexity = normalizedComplexity;
-      artifact.prompt = prompt;
-      artifact.model = model;
-      artifact.canonicalStoryPacket = canonicalStoryPacket;
-      artifact.plaintiffStoryDraft = plaintiffStoryDraft;
-      artifact.defendantStoryDraft = defendantStoryDraft;
-      await artifact.save();
-    }
+    artifact.categorySlug = category.slug;
+    artifact.complexity = normalizedComplexity;
+    artifact.prompt = prompt;
+    artifact.model = model;
+    artifact.canonicalStoryPacket = canonicalStoryPacket;
+    artifact.plaintiffStoryDraft = plaintiffStoryDraft;
+    artifact.defendantStoryDraft = defendantStoryDraft;
+    await artifact.save();
     await emitGenerationProgress(onProgress, "defendantDraft", defendantStoryDraft, {
       artifactId: artifact.id,
     });
@@ -778,6 +853,8 @@ export const generateCaseTemplatePayload = async ({
             plausibilityStage: "plaintiffPlausibility",
             onUsage: usageTracker.record,
             onProgress,
+            generationProfile,
+            yieldController,
           });
 
     const defendantDetailedStory =
@@ -802,6 +879,8 @@ export const generateCaseTemplatePayload = async ({
             plausibilityStage: "defendantPlausibility",
             onUsage: usageTracker.record,
             onProgress,
+            generationProfile,
+            yieldController,
           });
 
     artifact.plaintiffDetailedStory = plaintiffDetailedStory;
@@ -816,6 +895,8 @@ export const generateCaseTemplatePayload = async ({
       prompt,
       userId,
       model,
+      generationProfile,
+      yieldController,
       onUsage: usageTracker.record,
       onProgress,
     });

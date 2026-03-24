@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/internal/case-templates/rebalance",
-      "schedule": "10 * * * *"
+      "schedule": "*/10 * * * *"
     }
   ]
 }
