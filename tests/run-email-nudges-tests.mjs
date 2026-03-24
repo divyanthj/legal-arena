@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   NUDGE_TYPES,
+  buildCandidate,
   determineRetentionNudge,
   hasValidNudgeSecret,
   parseNudgeRunOptions,
@@ -195,6 +196,101 @@ const tests = [
       });
 
       assert.equal(result.candidate.type, NUDGE_TYPES.RESUME_INTERVIEW);
+    },
+  },
+  {
+    name: "lifecycle candidates are considered when no gameplay-state nudge is eligible",
+    run() {
+      const result = determineRetentionNudge({
+        now,
+        caseSessions: [],
+        logs: [],
+        lifecycleCandidates: [
+          buildCandidate({
+            type: NUDGE_TYPES.DORMANT_WINBACK,
+            dedupeKey: "dormant_winback:general:0",
+            reason: "player has been inactive without an active matter",
+          }),
+        ],
+      });
+
+      assert.equal(result.candidate.type, NUDGE_TYPES.DORMANT_WINBACK);
+    },
+  },
+  {
+    name: "gameplay-state nudges outrank broader lifecycle nudges",
+    run() {
+      const result = determineRetentionNudge({
+        now,
+        caseSessions: [
+          buildCase({
+            id: "case-10",
+            status: "courtroom",
+            updatedAt: "2026-03-16T07:00:00.000Z",
+          }),
+        ],
+        logs: [],
+        lifecycleCandidates: [
+          buildCandidate({
+            type: NUDGE_TYPES.DORMANT_WINBACK,
+            dedupeKey: "dormant_winback:general:0",
+            reason: "player has been inactive without an active matter",
+          }),
+        ],
+      });
+
+      assert.equal(result.candidate.type, NUDGE_TYPES.RESUME_COURTROOM);
+    },
+  },
+  {
+    name: "higher-priority lifecycle nudges outrank lower-priority lifecycle nudges",
+    run() {
+      const result = determineRetentionNudge({
+        now,
+        caseSessions: [],
+        logs: [],
+        lifecycleCandidates: [
+          buildCandidate({
+            type: NUDGE_TYPES.DORMANT_WINBACK,
+            dedupeKey: "dormant_winback:general:0",
+            reason: "player has been inactive without an active matter",
+          }),
+          buildCandidate({
+            type: NUDGE_TYPES.NEW_UNLOCK,
+            dedupeKey: "new_unlock:employment:2",
+            reason: "unlocked Employment complexity 2",
+          }),
+        ],
+      });
+
+      assert.equal(result.candidate.type, NUDGE_TYPES.NEW_UNLOCK);
+    },
+  },
+  {
+    name: "lifecycle dedupe prevents resending the same broader nudge",
+    run() {
+      const result = determineRetentionNudge({
+        now,
+        caseSessions: [],
+        logs: [
+          {
+            nudgeType: NUDGE_TYPES.DORMANT_WINBACK,
+            caseSessionId: null,
+            dedupeKey: "dormant_winback:general:0",
+            sentAt: new Date("2026-03-10T02:00:00.000Z"),
+          },
+        ],
+        lifecycleCandidates: [
+          buildCandidate({
+            type: NUDGE_TYPES.DORMANT_WINBACK,
+            dedupeKey: "dormant_winback:general:0",
+            reason: "player has been inactive without an active matter",
+          }),
+        ],
+      });
+
+      assert.equal(result.candidate, null);
+      assert.equal(result.skipReason, "no_eligible_nudge");
     },
   },
   {

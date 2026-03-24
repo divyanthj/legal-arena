@@ -260,6 +260,8 @@ const buildTemplateCard = ({ template, progression, cooldownEndsAt = null }) => 
   return {
     id: template.id,
     slug: template.slug,
+    createdAt: template.createdAt,
+    updatedAt: template.updatedAt,
     title: template.title,
     subtitle: template.subtitle,
     overview: template.overview,

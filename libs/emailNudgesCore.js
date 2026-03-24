@@ -3,13 +3,21 @@ export const NUDGE_TYPES = {
   RESUME_COURTROOM: "resume_courtroom",
   POST_VERDICT_NEXT_CASE: "post_verdict_next_case",
   COOLDOWN_RETURN: "cooldown_return",
+  NEW_UNLOCK: "new_unlock",
+  LEADERBOARD_MILESTONE: "leaderboard_milestone",
+  NEW_CONTENT_RELEVANT: "new_content_relevant",
+  DORMANT_WINBACK: "dormant_winback",
 };
 
 export const NUDGE_PRIORITY = [
+  NUDGE_TYPES.NEW_UNLOCK,
   NUDGE_TYPES.POST_VERDICT_NEXT_CASE,
-  NUDGE_TYPES.COOLDOWN_RETURN,
   NUDGE_TYPES.RESUME_COURTROOM,
   NUDGE_TYPES.RESUME_INTERVIEW,
+  NUDGE_TYPES.COOLDOWN_RETURN,
+  NUDGE_TYPES.LEADERBOARD_MILESTONE,
+  NUDGE_TYPES.NEW_CONTENT_RELEVANT,
+  NUDGE_TYPES.DORMANT_WINBACK,
 ];
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -87,12 +95,14 @@ export const hasSentNudge = ({
   logs = [],
   nudgeType,
   caseSessionId = null,
+  dedupeKey = null,
 } = {}) => {
-  const dedupeKey = makeNudgeDedupeKey({ nudgeType, caseSessionId });
+  const resolvedDedupeKey =
+    dedupeKey || makeNudgeDedupeKey({ nudgeType, caseSessionId });
 
   return logs.some(
     (log) =>
-      log.dedupeKey === dedupeKey ||
+      log.dedupeKey === resolvedDedupeKey ||
       (log.nudgeType === nudgeType &&
         String(log.caseSessionId || "") === String(caseSessionId || ""))
   );
@@ -106,20 +116,60 @@ const sortByUpdatedAtDesc = (caseSessions = []) =>
 const findLatestCase = (caseSessions = [], predicate = () => true) =>
   sortByUpdatedAtDesc(caseSessions).find(predicate) || null;
 
-const buildCandidate = (type, caseSession, reason) => ({
+export const buildCandidate = ({
   type,
-  caseSessionId: String(caseSession.id || caseSession._id),
-  dedupeKey: makeNudgeDedupeKey({
-    nudgeType: type,
-    caseSessionId: String(caseSession.id || caseSession._id),
-  }),
+  reason,
+  caseSession = null,
+  caseSessionId = null,
+  dedupeKey = null,
+  meta = {},
+}) => ({
+  type,
+  caseSessionId:
+    caseSessionId ||
+    (caseSession ? String(caseSession.id || caseSession._id) : null),
+  dedupeKey:
+    dedupeKey ||
+    makeNudgeDedupeKey({
+      nudgeType: type,
+      caseSessionId:
+        caseSessionId ||
+        (caseSession ? String(caseSession.id || caseSession._id) : null),
+    }),
   caseSession,
   reason,
+  meta,
 });
+
+const pickLifecycleCandidate = ({ lifecycleCandidates = [], logs = [] } = {}) => {
+  for (const type of NUDGE_PRIORITY) {
+    const candidate = lifecycleCandidates.find((item) => item.type === type);
+
+    if (!candidate) {
+      continue;
+    }
+
+    if (
+      hasSentNudge({
+        logs,
+        nudgeType: candidate.type,
+        caseSessionId: candidate.caseSessionId,
+        dedupeKey: candidate.dedupeKey,
+      })
+    ) {
+      continue;
+    }
+
+    return candidate;
+  }
+
+  return null;
+};
 
 export const determineRetentionNudge = ({
   caseSessions = [],
   logs = [],
+  lifecycleCandidates = [],
   now = new Date(),
 } = {}) => {
   if (hasRecentRetentionEmail({ logs, now })) {
@@ -154,11 +204,11 @@ export const determineRetentionNudge = ({
       })
     ) {
       return {
-        candidate: buildCandidate(
-          NUDGE_TYPES.POST_VERDICT_NEXT_CASE,
-          latestCase,
-          "completed case without a newer active matter"
-        ),
+        candidate: buildCandidate({
+          type: NUDGE_TYPES.POST_VERDICT_NEXT_CASE,
+          caseSession: latestCase,
+          reason: "completed case without a newer active matter",
+        }),
         skipReason: null,
       };
     }
@@ -185,11 +235,11 @@ export const determineRetentionNudge = ({
       })
     ) {
       return {
-        candidate: buildCandidate(
-          NUDGE_TYPES.COOLDOWN_RETURN,
-          eligibleExitedCase,
-          "exited case cooldown finished"
-        ),
+        candidate: buildCandidate({
+          type: NUDGE_TYPES.COOLDOWN_RETURN,
+          caseSession: eligibleExitedCase,
+          reason: "exited case cooldown finished",
+        }),
         skipReason: null,
       };
     }
@@ -209,11 +259,11 @@ export const determineRetentionNudge = ({
       })
     ) {
       return {
-        candidate: buildCandidate(
-          NUDGE_TYPES.RESUME_COURTROOM,
-          latestCase,
-          "courtroom matter has gone idle"
-        ),
+        candidate: buildCandidate({
+          type: NUDGE_TYPES.RESUME_COURTROOM,
+          caseSession: latestCase,
+          reason: "courtroom matter has gone idle",
+        }),
         skipReason: null,
       };
     }
@@ -233,14 +283,23 @@ export const determineRetentionNudge = ({
       })
     ) {
       return {
-        candidate: buildCandidate(
-          NUDGE_TYPES.RESUME_INTERVIEW,
-          latestNonExitedCase,
-          "intake has gone idle"
-        ),
+        candidate: buildCandidate({
+          type: NUDGE_TYPES.RESUME_INTERVIEW,
+          caseSession: latestNonExitedCase,
+          reason: "intake has gone idle",
+        }),
         skipReason: null,
       };
     }
+  }
+
+  const lifecycleCandidate = pickLifecycleCandidate({ lifecycleCandidates, logs });
+
+  if (lifecycleCandidate) {
+    return {
+      candidate: lifecycleCandidate,
+      skipReason: null,
+    };
   }
 
   return {
