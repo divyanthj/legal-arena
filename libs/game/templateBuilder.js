@@ -2053,26 +2053,37 @@ export const buildTemplateFromStoryArtifact = async ({
     );
   }
 
-  const interviewPlan = await requestStructuredCompletion({
-    userId,
-    model,
-    temperature: 0.35,
-    maxTokens: tokenBudget.interview,
-    retryAttempts: 1,
-    usageLabel: "template.interview",
-    onUsage,
-    throwOnError: true,
-    systemPrompt:
-      "You refine legal simulation cases into interview-ready templates. Output valid JSON only. Preserve the dispute but distinguish confirmed proof from leads, missing records, and disputed evidence.",
-    userPrompt: JSON.stringify(
-      buildInterviewPlanningPrompt({
-        basePayload: payload,
-        category,
-        complexity,
-        prompt,
-      })
-    ),
-  });
+  let interviewPlan = null;
+
+  try {
+    interviewPlan = await requestStructuredCompletion({
+      userId,
+      model,
+      temperature: 0.35,
+      maxTokens: tokenBudget.interview,
+      retryAttempts: 2,
+      usageLabel: "template.interview",
+      onUsage,
+      throwOnError: true,
+      systemPrompt:
+        "You refine legal simulation cases into interview-ready templates. Output valid JSON only. Preserve the dispute but distinguish confirmed proof from leads, missing records, and disputed evidence.",
+      userPrompt: JSON.stringify(
+        buildInterviewPlanningPrompt({
+          basePayload: payload,
+          category,
+          complexity,
+          prompt,
+        })
+      ),
+    });
+  } catch (error) {
+    console.warn("Interview planning refinement failed; using deterministic template fallback.", {
+      artifactId: artifact?.id || null,
+      category: category.slug,
+      complexity,
+      error: error?.message || String(error),
+    });
+  }
 
   if (interviewPlan && typeof interviewPlan === "object") {
     const plannedPayload = mergeInterviewPlanningPayload(payload, interviewPlan);

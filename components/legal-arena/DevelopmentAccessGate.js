@@ -1,8 +1,25 @@
+"use client";
+
+import { signOut } from "next-auth/react";
 import config from "@/config";
 import EarlyAccessCheckoutButton from "./EarlyAccessCheckoutButton";
 
+const loginHref = `${config.auth.loginUrl}?callbackUrl=${encodeURIComponent(
+  config.auth.callbackUrl
+)}`;
+
 export default function DevelopmentAccessGate({ email = "" }) {
   const plan = config.lemonsqueezy.plans[0];
+
+  const handleLogout = () => {
+    signOut({ callbackUrl: "/" });
+  };
+
+  const handleSwitchAccount = () => {
+    signOut({
+      callbackUrl: loginHref,
+    });
+  };
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(37,99,235,0.14),_transparent_35%),linear-gradient(180deg,#f8fafc_0%,#e2e8f0_100%)] px-4 py-10 md:px-8">
@@ -65,6 +82,22 @@ export default function DevelopmentAccessGate({ email = "" }) {
               <div className="mt-4 rounded-2xl border border-sky-100 bg-sky-50 p-4">
                 <p className="text-sm font-semibold text-sky-900">Signed in as</p>
                 <p className="mt-1 text-sm text-sky-800">{email}</p>
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    className="inline-flex items-center justify-center rounded-full border border-sky-200 bg-white px-4 py-2 text-sm font-semibold text-sky-900 transition hover:border-sky-300 hover:bg-sky-100"
+                    onClick={handleSwitchAccount}
+                  >
+                    Switch account
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-100"
+                    onClick={handleLogout}
+                  >
+                    Log out
+                  </button>
+                </div>
               </div>
             ) : null}
 
