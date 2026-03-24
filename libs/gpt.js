@@ -285,6 +285,24 @@ const shouldRetryStructuredParse = ({ content, finishReason = "", parsed }) => {
 const isRetryableApiErrorStatus = (status) =>
   [408, 409, 429, 500, 502, 503, 504].includes(Number(status));
 
+const isRetryableTransportError = (error) => {
+  const message = String(error?.message || "").toLowerCase();
+  const causeCode = String(error?.cause?.code || "").toUpperCase();
+
+  return (
+    message.includes("fetch failed") ||
+    [
+      "ECONNRESET",
+      "ETIMEDOUT",
+      "ECONNREFUSED",
+      "EPIPE",
+      "UND_ERR_CONNECT_TIMEOUT",
+      "UND_ERR_HEADERS_TIMEOUT",
+      "UND_ERR_SOCKET",
+    ].includes(causeCode)
+  );
+};
+
 const getRetryTokenGrowthStep = (maxTokens = 0) =>
   Math.max(500, Math.min(2000, Math.ceil((Number(maxTokens) || 0) * 0.25)));
 
@@ -467,6 +485,18 @@ export const requestStructuredCompletion = async ({
     } catch (error) {
       lastError = error;
       console.error("OpenAI request failed:", error);
+
+      if (attempt < retryAttempts && isRetryableTransportError(error)) {
+        console.warn("Retrying structured completion after transport failure.", {
+          nextAttempt: attempt + 2,
+          maxTokens: attemptMaxTokens,
+          model,
+          api: useResponsesApi ? "responses" : "chat_completions",
+          causeCode: error?.cause?.code || "",
+          message: error?.message || String(error),
+        });
+        continue;
+      }
 
       if (throwOnError) {
         throw error;
