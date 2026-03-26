@@ -59,7 +59,7 @@ export async function POST(req) {
         const email = attributes?.user_email?.trim().toLowerCase() || "";
         const name = attributes?.user_name?.trim() || "";
         const userId =
-          customData?.userId || customData?.user_id || customData?.userID || "";
+          customData?.user_id || customData?.userId || customData?.userID || "";
 
         let user = null;
 
@@ -90,6 +90,9 @@ export async function POST(req) {
         user.variantId = variantId;
         user.billingProvider = "lemonsqueezy";
         user.hasAccess = true;
+        if (!user.email && email) {
+          user.email = email;
+        }
         if (!user.name && name) {
           user.name = name;
         }

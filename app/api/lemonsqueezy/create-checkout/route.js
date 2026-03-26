@@ -1,71 +1,46 @@
-import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/libs/next-auth";
-import connectMongo from "@/libs/mongoose";
-import User from "@/models/User";
-import config from "@/config";
 import { createLemonSqueezyCheckout } from "@/libs/lemonsqueezy";
+import config from "@/config";
+import connectMongo from "@/libs/mongoose";
+import { authOptions } from "@/libs/next-auth";
+import User from "@/models/User";
+import { getServerSession } from "next-auth/next";
+import { NextResponse } from "next/server";
 
 export async function POST(req) {
+  const body = await req.json();
+
+  const variantId = body.variantId || config.lemonsqueezy.earlyAccessVariantId;
+
+  if (!variantId) {
+    return NextResponse.json(
+      { error: "Variant ID is required" },
+      { status: 400 }
+    );
+  } else if (!body.redirectUrl) {
+    return NextResponse.json(
+      { error: "Redirect URL is required" },
+      { status: 400 }
+    );
+  }
+
   try {
     const session = await getServerSession(authOptions);
 
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Not signed in" }, { status: 401 });
-    }
-
-    const body = await req.json();
-    const redirectUrl = body.redirectUrl;
-    const variantId = body.variantId || config.lemonsqueezy.earlyAccessVariantId;
-
-    if (!redirectUrl) {
-      return NextResponse.json(
-        { error: "Redirect URL is required" },
-        { status: 400 }
-      );
-    }
-
-    if (!variantId) {
-      return NextResponse.json(
-        { error: "Lemon Squeezy variant ID is required" },
-        { status: 400 }
-      );
-    }
-
     await connectMongo();
 
-    const user = await User.findById(session.user.id).select("email name");
-    const sessionEmail = String(session.user.email || "").trim().toLowerCase();
-    const persistedEmail = String(user?.email || "").trim().toLowerCase();
-    const checkoutEmail = persistedEmail || sessionEmail;
+    const user = await User.findById(session?.user?.id);
+    const { redirectUrl } = body;
 
-    if (!checkoutEmail) {
-      return NextResponse.json(
-        { error: "No email address found for the signed-in account" },
-        { status: 400 }
-      );
-    }
-
-    // Keep the user record in sync so checkout and webhook matching stay reliable.
-    if (user && !persistedEmail && sessionEmail) {
-      user.email = sessionEmail;
-      await user.save();
-    }
-
-    const url = await createLemonSqueezyCheckout({
+    const checkoutURL = await createLemonSqueezyCheckout({
       variantId,
       redirectUrl,
-      email: checkoutEmail,
-      name: user?.name || session.user.name || "",
-      userId: session.user.id,
+      userId: session?.user?.id,
+      email: user?.email,
     });
 
-    return NextResponse.json({ url });
-  } catch (error) {
-    console.error(error);
-    return NextResponse.json(
-      { error: error?.message || "Failed to create checkout" },
-      { status: 500 }
-    );
+    return NextResponse.json({ url: checkoutURL });
+  } catch (e) {
+    console.error(e);
+    return NextResponse.json({ error: e?.message }, { status: 500 });
   }
 }

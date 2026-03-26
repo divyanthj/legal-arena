@@ -54,6 +54,7 @@ const config = {
     ],
   },
   lemonsqueezy: {
+    storeId: process.env.LEMONSQUEEZY_STORE_ID || "",
     earlyAccessVariantId:
       process.env.NODE_ENV === "development"
         ? process.env.LEMONSQUEEZY_VARIANT_ID_DEV || ""

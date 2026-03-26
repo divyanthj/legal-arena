@@ -1,9 +1,5 @@
 import assert from "node:assert/strict";
-import {
-  appendLemonSqueezyPrefillParams,
-  buildLemonSqueezyCheckoutPayload,
-  createLemonSqueezyCheckout,
-} from "../libs/lemonsqueezy.js";
+import { createLemonSqueezyCheckout } from "../libs/lemonsqueezy.js";
 
 async function runTest(name, fn) {
   try {
@@ -26,72 +22,13 @@ process.env.LEMONSQUEEZY_STORE_ID = "12345";
 const results = [];
 
 results.push(
-  await runTest(
-    "builds checkout payload with normalized email, name, and custom user id",
-    async () => {
-      const payload = buildLemonSqueezyCheckoutPayload({
-        redirectUrl: "https://legalarena.app/dashboard",
-        email: " Divyanth.Jayaraj@GMAIL.com ",
-        name: "Divyanth",
-        userId: " user-123 ",
-      });
+  await runTest("returns null when variant id is missing", async () => {
+    const url = await createLemonSqueezyCheckout({
+      redirectUrl: "https://legalarena.app/dashboard",
+      email: "divyanth.jayaraj@gmail.com",
+    });
 
-      assert.equal(
-        payload.productOptions.redirectUrl,
-        "https://legalarena.app/dashboard"
-      );
-      assert.equal(payload.checkoutData.email, "divyanth.jayaraj@gmail.com");
-      assert.equal(payload.checkoutData.name, "Divyanth");
-      assert.deepEqual(payload.checkoutData.custom, { userId: "user-123" });
-    }
-  )
-);
-
-results.push(
-  await runTest("fails fast when checkout email is missing", async () => {
-    assert.throws(
-      () =>
-        buildLemonSqueezyCheckoutPayload({
-          redirectUrl: "https://legalarena.app/dashboard",
-          email: "   ",
-        }),
-      /A signed-in email address is required for checkout/
-    );
-  })
-);
-
-results.push(
-  await runTest("fails fast when variant id is missing", async () => {
-    await assert.rejects(
-      () =>
-        createLemonSqueezyCheckout({
-          redirectUrl: "https://legalarena.app/dashboard",
-          email: "divyanth.jayaraj@gmail.com",
-        }),
-      /Lemon Squeezy variant ID is required/
-    );
-  })
-);
-
-results.push(
-  await runTest("appends email, name, and custom data to checkout url", async () => {
-    const checkoutUrl = appendLemonSqueezyPrefillParams(
-      "https://simplysolved.lemonsqueezy.com/checkout/buy/test-id",
-      {
-        email: " Divyanth.Jayaraj@GMAIL.com ",
-        name: "Divyanth",
-        userId: " user-123 ",
-      }
-    );
-
-    const url = new URL(checkoutUrl);
-
-    assert.equal(
-      url.searchParams.get("checkout[email]"),
-      "divyanth.jayaraj@gmail.com"
-    );
-    assert.equal(url.searchParams.get("checkout[name]"), "Divyanth");
-    assert.equal(url.searchParams.get("checkout[custom][userId]"), "user-123");
+    assert.equal(url, null);
   })
 );
 

@@ -4,8 +4,8 @@
 import { useState } from "react";
 import { Popover, Transition } from "@headlessui/react";
 import { useSession, signOut } from "next-auth/react";
-import config from "@/config";
 import apiClient from "@/libs/api";
+import config from "@/config";
 
 // A button to show user some account actions
 //  1. Billing: open a Stripe Customer Portal to manage their billing (cancel subscription, update payment method, etc.).
@@ -31,9 +31,7 @@ const ButtonAccount = () => {
     setIsLoading(true);
 
     try {
-      const { url } = await apiClient.post("/stripe/create-portal", {
-        returnUrl: window.location.href,
-      });
+      const { url } = await apiClient.post("/lemonsqueezy/create-portal");
 
       window.location.href = url;
     } catch (e) {
