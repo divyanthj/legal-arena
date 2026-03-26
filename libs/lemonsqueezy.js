@@ -1,39 +1,27 @@
-const LEMON_SQUEEZY_API_URL = "https://api.lemonsqueezy.com/v1";
+import {
+  createCheckout,
+  lemonSqueezySetup,
+} from "@lemonsqueezy/lemonsqueezy.js";
 
 const normalizeEmail = (value = "") => String(value || "").trim().toLowerCase();
 const normalizeString = (value = "") => String(value || "").trim();
 
-const getHeaders = () => {
+const getApiKey = () => {
   const apiKey = process.env.LEMONSQUEEZY_API_KEY?.trim();
 
   if (!apiKey) {
     throw new Error("LEMONSQUEEZY_API_KEY is required");
   }
 
-  return {
-    Accept: "application/vnd.api+json",
-    "Content-Type": "application/vnd.api+json",
-    Authorization: `Bearer ${apiKey}`,
-  };
+  return apiKey;
 };
 
-export const createLemonSqueezyCheckout = async ({
-  variantId,
+export const buildLemonSqueezyCheckoutPayload = ({
   redirectUrl,
   email,
   name,
   userId,
 }) => {
-  if (!variantId) {
-    throw new Error("Lemon Squeezy variant ID is required");
-  }
-
-  const storeId = process.env.LEMONSQUEEZY_STORE_ID?.trim();
-
-  if (!storeId) {
-    throw new Error("LEMONSQUEEZY_STORE_ID is required");
-  }
-
   const normalizedEmail = normalizeEmail(email);
   const normalizedName = normalizeString(name);
   const normalizedUserId = normalizeString(userId);
@@ -56,44 +44,53 @@ export const createLemonSqueezyCheckout = async ({
     };
   }
 
-  const response = await fetch(`${LEMON_SQUEEZY_API_URL}/checkouts`, {
-    method: "POST",
-    headers: getHeaders(),
-    body: JSON.stringify({
-      data: {
-        type: "checkouts",
-        attributes: {
-          product_options: {
-            redirect_url: redirectUrl,
-          },
-          checkout_data: checkoutData,
-        },
-        relationships: {
-          store: {
-            data: {
-              type: "stores",
-              id: String(storeId),
-            },
-          },
-          variant: {
-            data: {
-              type: "variants",
-              id: String(variantId),
-            },
-          },
-        },
-      },
-    }),
+  return {
+    productOptions: {
+      redirectUrl,
+    },
+    checkoutData,
+  };
+};
+
+export const createLemonSqueezyCheckout = async ({
+  variantId,
+  redirectUrl,
+  email,
+  name,
+  userId,
+}) => {
+  if (!variantId) {
+    throw new Error("Lemon Squeezy variant ID is required");
+  }
+
+  const storeId = process.env.LEMONSQUEEZY_STORE_ID?.trim();
+
+  if (!storeId) {
+    throw new Error("LEMONSQUEEZY_STORE_ID is required");
+  }
+
+  lemonSqueezySetup({ apiKey: getApiKey() });
+
+  const checkoutPayload = buildLemonSqueezyCheckoutPayload({
+    redirectUrl,
+    email,
+    name,
+    userId,
   });
 
-  const payload = await response.json();
+  const { data, error } = await createCheckout(
+    String(storeId),
+    String(variantId),
+    checkoutPayload
+  );
 
-  if (!response.ok) {
+  if (error) {
     const detail =
-      payload?.errors?.map((error) => error.detail).filter(Boolean).join(", ") ||
+      error?.error?.message ||
+      error?.message ||
       "Failed to create Lemon Squeezy checkout";
     throw new Error(detail);
   }
 
-  return payload?.data?.attributes?.url || null;
+  return data?.data?.attributes?.url || null;
 };

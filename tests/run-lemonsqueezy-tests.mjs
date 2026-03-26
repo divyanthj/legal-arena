@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
-import { createLemonSqueezyCheckout } from "../libs/lemonsqueezy.js";
+import {
+  buildLemonSqueezyCheckoutPayload,
+  createLemonSqueezyCheckout,
+} from "../libs/lemonsqueezy.js";
 
 async function runTest(name, fn) {
   try {
@@ -13,68 +16,41 @@ async function runTest(name, fn) {
   }
 }
 
-const originalFetch = global.fetch;
 const originalApiKey = process.env.LEMONSQUEEZY_API_KEY;
 const originalStoreId = process.env.LEMONSQUEEZY_STORE_ID;
 
 process.env.LEMONSQUEEZY_API_KEY = "test-key";
 process.env.LEMONSQUEEZY_STORE_ID = "12345";
 
-let capturedRequest = null;
-
-global.fetch = async (url, options) => {
-  capturedRequest = {
-    url,
-    options,
-  };
-
-  return {
-    ok: true,
-    async json() {
-      return {
-        data: {
-          attributes: {
-            url: "https://checkout.test/abc",
-          },
-        },
-      };
-    },
-  };
-};
-
 const results = [];
 
 results.push(
-  await runTest("creates checkout with normalized email, name, and custom user id", async () => {
-    capturedRequest = null;
+  await runTest(
+    "builds checkout payload with normalized email, name, and custom user id",
+    async () => {
+      const payload = buildLemonSqueezyCheckoutPayload({
+        redirectUrl: "https://legalarena.app/dashboard",
+        email: " Divyanth.Jayaraj@GMAIL.com ",
+        name: "Divyanth",
+        userId: " user-123 ",
+      });
 
-    const url = await createLemonSqueezyCheckout({
-      variantId: "987",
-      redirectUrl: "https://legalarena.app/dashboard",
-      email: " Divyanth.Jayaraj@GMAIL.com ",
-      name: "Divyanth",
-      userId: " user-123 ",
-    });
-
-    assert.equal(url, "https://checkout.test/abc");
-    assert.ok(capturedRequest);
-    assert.equal(capturedRequest.url, "https://api.lemonsqueezy.com/v1/checkouts");
-
-    const payload = JSON.parse(capturedRequest.options.body);
-    const checkoutData = payload.data.attributes.checkout_data;
-
-    assert.equal(checkoutData.email, "divyanth.jayaraj@gmail.com");
-    assert.equal(checkoutData.name, "Divyanth");
-    assert.deepEqual(checkoutData.custom, { userId: "user-123" });
-  })
+      assert.equal(
+        payload.productOptions.redirectUrl,
+        "https://legalarena.app/dashboard"
+      );
+      assert.equal(payload.checkoutData.email, "divyanth.jayaraj@gmail.com");
+      assert.equal(payload.checkoutData.name, "Divyanth");
+      assert.deepEqual(payload.checkoutData.custom, { userId: "user-123" });
+    }
+  )
 );
 
 results.push(
   await runTest("fails fast when checkout email is missing", async () => {
-    await assert.rejects(
+    assert.throws(
       () =>
-        createLemonSqueezyCheckout({
-          variantId: "987",
+        buildLemonSqueezyCheckoutPayload({
           redirectUrl: "https://legalarena.app/dashboard",
           email: "   ",
         }),
@@ -83,7 +59,18 @@ results.push(
   })
 );
 
-global.fetch = originalFetch;
+results.push(
+  await runTest("fails fast when variant id is missing", async () => {
+    await assert.rejects(
+      () =>
+        createLemonSqueezyCheckout({
+          redirectUrl: "https://legalarena.app/dashboard",
+          email: "divyanth.jayaraj@gmail.com",
+        }),
+      /Lemon Squeezy variant ID is required/
+    );
+  })
+);
 
 if (originalApiKey === undefined) {
   delete process.env.LEMONSQUEEZY_API_KEY;
