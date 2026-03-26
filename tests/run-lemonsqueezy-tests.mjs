@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  appendLemonSqueezyPrefillParams,
   buildLemonSqueezyCheckoutPayload,
   createLemonSqueezyCheckout,
 } from "../libs/lemonsqueezy.js";
@@ -69,6 +70,28 @@ results.push(
         }),
       /Lemon Squeezy variant ID is required/
     );
+  })
+);
+
+results.push(
+  await runTest("appends email, name, and custom data to checkout url", async () => {
+    const checkoutUrl = appendLemonSqueezyPrefillParams(
+      "https://simplysolved.lemonsqueezy.com/checkout/buy/test-id",
+      {
+        email: " Divyanth.Jayaraj@GMAIL.com ",
+        name: "Divyanth",
+        userId: " user-123 ",
+      }
+    );
+
+    const url = new URL(checkoutUrl);
+
+    assert.equal(
+      url.searchParams.get("checkout[email]"),
+      "divyanth.jayaraj@gmail.com"
+    );
+    assert.equal(url.searchParams.get("checkout[name]"), "Divyanth");
+    assert.equal(url.searchParams.get("checkout[custom][userId]"), "user-123");
   })
 );
 

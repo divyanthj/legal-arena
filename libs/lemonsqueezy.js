@@ -16,6 +16,27 @@ const getApiKey = () => {
   return apiKey;
 };
 
+export const appendLemonSqueezyPrefillParams = (checkoutUrl, data = {}) => {
+  const url = new URL(checkoutUrl);
+  const normalizedEmail = normalizeEmail(data.email);
+  const normalizedName = normalizeString(data.name);
+  const normalizedUserId = normalizeString(data.userId);
+
+  if (normalizedEmail) {
+    url.searchParams.set("checkout[email]", normalizedEmail);
+  }
+
+  if (normalizedName) {
+    url.searchParams.set("checkout[name]", normalizedName);
+  }
+
+  if (normalizedUserId) {
+    url.searchParams.set("checkout[custom][userId]", normalizedUserId);
+  }
+
+  return url.toString();
+};
+
 export const buildLemonSqueezyCheckoutPayload = ({
   redirectUrl,
   email,
@@ -92,5 +113,15 @@ export const createLemonSqueezyCheckout = async ({
     throw new Error(detail);
   }
 
-  return data?.data?.attributes?.url || null;
+  const checkoutUrl = data?.data?.attributes?.url || null;
+
+  if (!checkoutUrl) {
+    return null;
+  }
+
+  return appendLemonSqueezyPrefillParams(checkoutUrl, {
+    email,
+    name,
+    userId,
+  });
 };
