@@ -34,12 +34,29 @@ export async function POST(req) {
 
     await connectMongo();
 
-    const user = await User.findById(session.user.id).select("email");
+    const user = await User.findById(session.user.id).select("email name");
+    const sessionEmail = String(session.user.email || "").trim().toLowerCase();
+    const persistedEmail = String(user?.email || "").trim().toLowerCase();
+    const checkoutEmail = persistedEmail || sessionEmail;
+
+    if (!checkoutEmail) {
+      return NextResponse.json(
+        { error: "No email address found for the signed-in account" },
+        { status: 400 }
+      );
+    }
+
+    // Keep the user record in sync so checkout and webhook matching stay reliable.
+    if (user && !persistedEmail && sessionEmail) {
+      user.email = sessionEmail;
+      await user.save();
+    }
 
     const url = await createLemonSqueezyCheckout({
       variantId,
       redirectUrl,
-      email: user?.email || session.user.email || "",
+      email: checkoutEmail,
+      name: user?.name || session.user.name || "",
       userId: session.user.id,
     });
 

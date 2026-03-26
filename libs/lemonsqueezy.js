@@ -1,5 +1,8 @@
 const LEMON_SQUEEZY_API_URL = "https://api.lemonsqueezy.com/v1";
 
+const normalizeEmail = (value = "") => String(value || "").trim().toLowerCase();
+const normalizeString = (value = "") => String(value || "").trim();
+
 const getHeaders = () => {
   const apiKey = process.env.LEMONSQUEEZY_API_KEY?.trim();
 
@@ -18,6 +21,7 @@ export const createLemonSqueezyCheckout = async ({
   variantId,
   redirectUrl,
   email,
+  name,
   userId,
 }) => {
   if (!variantId) {
@@ -30,6 +34,28 @@ export const createLemonSqueezyCheckout = async ({
     throw new Error("LEMONSQUEEZY_STORE_ID is required");
   }
 
+  const normalizedEmail = normalizeEmail(email);
+  const normalizedName = normalizeString(name);
+  const normalizedUserId = normalizeString(userId);
+
+  if (!normalizedEmail) {
+    throw new Error("A signed-in email address is required for checkout");
+  }
+
+  const checkoutData = {
+    email: normalizedEmail,
+  };
+
+  if (normalizedName) {
+    checkoutData.name = normalizedName;
+  }
+
+  if (normalizedUserId) {
+    checkoutData.custom = {
+      userId: normalizedUserId,
+    };
+  }
+
   const response = await fetch(`${LEMON_SQUEEZY_API_URL}/checkouts`, {
     method: "POST",
     headers: getHeaders(),
@@ -40,14 +66,7 @@ export const createLemonSqueezyCheckout = async ({
           product_options: {
             redirect_url: redirectUrl,
           },
-          checkout_data: {
-            email,
-            custom: userId
-              ? {
-                  userId,
-                }
-              : undefined,
-          },
+          checkout_data: checkoutData,
         },
         relationships: {
           store: {
