@@ -70,15 +70,15 @@ const Footer = () => {
               </div>
 
               <div className="mb-10 flex flex-col items-center justify-center gap-2 text-sm md:items-start">
-                <a href="https://instagram.com" target="_blank" rel="noreferrer" className="link link-hover">
+                <a href="https://instagram.com/legalarena.app" target="_blank" rel="noreferrer" className="link link-hover">
                   Instagram
                 </a>
-                <a href="https://x.com" target="_blank" rel="noreferrer" className="link link-hover">
+                {/* <a href="https://x.com" target="_blank" rel="noreferrer" className="link link-hover">
                   X
                 </a>
                 <a href="https://linkedin.com" target="_blank" rel="noreferrer" className="link link-hover">
                   LinkedIn
-                </a>
+                </a> */}
               </div>
             </div>
           </div>
