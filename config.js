@@ -55,16 +55,10 @@ const config = {
   },
   lemonsqueezy: {
     storeId: process.env.LEMONSQUEEZY_STORE_ID || "",
-    earlyAccessVariantId:
-      process.env.NODE_ENV === "development"
-        ? process.env.LEMONSQUEEZY_VARIANT_ID_DEV || ""
-        : process.env.LEMONSQUEEZY_VARIANT_ID || "",
+    earlyAccessVariantId: process.env.LEMONSQUEEZY_VARIANT_ID || "",
     plans: [
       {
-        variantId:
-          process.env.NODE_ENV === "development"
-            ? process.env.LEMONSQUEEZY_VARIANT_ID_DEV || ""
-            : process.env.LEMONSQUEEZY_VARIANT_ID || "",
+        variantId: process.env.LEMONSQUEEZY_VARIANT_ID || "",
         name: "Early Access",
         description:
           "One-time purchase for immediate access while Legal Arena is still in early access.",
