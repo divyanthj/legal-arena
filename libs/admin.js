@@ -1,4 +1,6 @@
 import "server-only";
+import connectMongo from "@/libs/mongoose";
+import User from "@/models/User";
 
 const normalizeEmail = (value = "") => value.trim().toLowerCase();
 
@@ -33,6 +35,20 @@ export const isAdminEmail = (email) =>
 export const hasGameAccess = (email) =>
   Boolean(email) &&
   (isAdminEmail(email) || parseGrantedAccess().includes(normalizeEmail(email)));
+
+export const userCanAccessArena = async (session) => {
+  if (!session?.user?.id) {
+    return false;
+  }
+
+  if (hasGameAccess(session.user?.email)) {
+    return true;
+  }
+
+  await connectMongo();
+  const user = await User.findById(session.user.id).select("hasAccess");
+  return Boolean(user?.hasAccess);
+};
 
 export const getCaseGeneratorApiKey = () =>
   process.env.CASE_GENERATOR_API_KEY?.trim() || "";

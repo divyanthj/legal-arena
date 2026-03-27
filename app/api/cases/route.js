@@ -5,23 +5,7 @@ import {
   createCaseSession,
   listDashboardDataForUser,
 } from "@/libs/game/store";
-import { hasGameAccess } from "@/libs/admin";
-import connectMongo from "@/libs/mongoose";
-import User from "@/models/User";
-
-const userCanAccessArena = async (session) => {
-  if (!session?.user?.id) {
-    return false;
-  }
-
-  if (hasGameAccess(session.user?.email)) {
-    return true;
-  }
-
-  await connectMongo();
-  const user = await User.findById(session.user.id).select("hasAccess");
-  return Boolean(user?.hasAccess);
-};
+import { userCanAccessArena } from "@/libs/admin";
 
 export async function GET() {
   const session = await getServerSession(authOptions);

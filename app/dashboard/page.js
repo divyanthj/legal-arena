@@ -7,22 +7,14 @@ import {
   listOverallLeaderboard,
 } from "@/libs/game/progression";
 import { LEGAL_CASE_CATEGORIES } from "@/libs/game/categories";
-import { hasGameAccess, isAdminEmail } from "@/libs/admin";
+import { isAdminEmail, userCanAccessArena } from "@/libs/admin";
 import { toClientJSON } from "@/libs/serialize";
-import connectMongo from "@/libs/mongoose";
-import User from "@/models/User";
 
 export const dynamic = "force-dynamic";
 
 export default async function Dashboard() {
   const session = await getServerSession(authOptions);
-  let hasPurchasedAccess = false;
-
-  if (session?.user?.id) {
-    await connectMongo();
-    const user = await User.findById(session.user.id).select("hasAccess");
-    hasPurchasedAccess = Boolean(user?.hasAccess);
-  }
+  const hasArenaAccess = await userCanAccessArena(session);
 
   const [dashboardData, overallLeaderboard, categoryLeaderboards] = await Promise.all([
     listDashboardDataForUser(session.user.id, session.user),
@@ -46,7 +38,7 @@ export default async function Dashboard() {
       isAdmin={isAdminEmail(session.user?.email)}
       userName={session.user?.name || session.user?.email}
       userEmail={session.user?.email || ""}
-      hasArenaAccess={hasGameAccess(session.user?.email) || hasPurchasedAccess}
+      hasArenaAccess={hasArenaAccess}
     />
   );
 }
