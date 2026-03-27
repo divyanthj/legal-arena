@@ -353,12 +353,13 @@ export default function DashboardHub({
                 <p className="text-sm uppercase tracking-[0.25em] text-base-content/50">
                   Leaderboard
                 </p>
-                <h2 className="mt-2 text-2xl font-bold">Top lawyers overall</h2>
+                <h2 className="mt-2 text-2xl font-bold">Top 10 lawyers overall</h2>
                 <div className="mt-5 space-y-3">
-                  {overallLeaderboard.slice(0, 5).map((entry) => (
-                    <div
+                  {overallLeaderboard.slice(0, 10).map((entry) => (
+                    <Link
                       key={entry.id}
-                      className="rounded-box bg-base-200 p-4"
+                      href={`/dashboard/players/${entry.id}`}
+                      className="block rounded-box bg-base-200 p-4 transition hover:-translate-y-0.5 hover:bg-base-300/80"
                     >
                       <div className="flex items-center justify-between gap-3">
                         <p className="font-semibold">
@@ -371,7 +372,7 @@ export default function DashboardHub({
                       <p className="mt-2 text-sm text-base-content/70">
                         {entry.completedCases} completed matters · {entry.wins} wins
                       </p>
-                    </div>
+                    </Link>
                   ))}
                 </div>
               </div>
@@ -382,12 +383,13 @@ export default function DashboardHub({
                 <p className="text-sm uppercase tracking-[0.25em] text-base-content/50">
                   Specialty Board
                 </p>
-                <h2 className="mt-2 text-2xl font-bold">Top lawyers by category</h2>
+                <h2 className="mt-2 text-2xl font-bold">Top 10 lawyers by category</h2>
                 <div className="mt-5 space-y-3">
-                  {selectedLeaderboard.slice(0, 5).map((entry) => (
-                    <div
+                  {selectedLeaderboard.slice(0, 10).map((entry) => (
+                    <Link
                       key={`${selectedCategory}-${entry.id}`}
-                      className="rounded-box bg-base-200 p-4"
+                      href={`/dashboard/players/${entry.id}`}
+                      className="block rounded-box bg-base-200 p-4 transition hover:-translate-y-0.5 hover:bg-base-300/80"
                     >
                       <div className="flex items-center justify-between gap-3">
                         <p className="font-semibold">
@@ -401,7 +403,7 @@ export default function DashboardHub({
                         {entry.category?.completedCases || 0} completed in {selectedCategory} ·
                         unlock {entry.category?.unlockedComplexity || 1}
                       </p>
-                    </div>
+                    </Link>
                   ))}
                 </div>
               </div>

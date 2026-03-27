@@ -3,6 +3,7 @@ import "server-only";
 import connectMongo from "@/libs/mongoose";
 import CaseSession from "@/models/CaseSession";
 import CaseTemplate from "@/models/CaseTemplate";
+import User from "@/models/User";
 import { LAWBOOK_VERSION, getLawbookRules } from "@/data/legalArenaLawbook";
 import { listCategoryOptions } from "./templates";
 import {
@@ -14,6 +15,7 @@ import {
   normalizeTemplateParty,
 } from "./templateInterview";
 import {
+  buildPublicLeaderboardEntry,
   ensureUserProfile,
   getEligibleComplexityForCategory,
   normalizeProgression,
@@ -640,5 +642,63 @@ export const listDashboardDataForUser = async (userId, userProfile = null) => {
     templates,
     categories: listCategoryOptions(),
     progression: normalizeProgression(user?.progression),
+  };
+};
+
+export const getPublicPlayerProfile = async (playerId) => {
+  await connectMongo();
+
+  const user = await User.findById(playerId);
+
+  if (!user) {
+    return null;
+  }
+
+  const hydratedUser = await ensureUserProfile(playerId);
+  const cases = await CaseSession.find({
+    userId: playerId,
+    status: { $ne: "exited" },
+  })
+    .populate("caseTemplateId")
+    .sort({ updatedAt: -1 });
+
+  const missingTemplateSlugs = [
+    ...new Set(
+      cases
+        .filter((caseSession) => !caseSession.caseTemplateId)
+        .map((caseSession) => getTemplateSlugFromSession(caseSession))
+        .filter(Boolean)
+    ),
+  ];
+  const fallbackTemplates = missingTemplateSlugs.length
+    ? await CaseTemplate.find({ slug: { $in: missingTemplateSlugs } })
+    : [];
+  const fallbackMap = new Map(
+    fallbackTemplates.map((template) => [template.slug, toPlain(template)])
+  );
+
+  const sessionsNeedingSlug = cases.filter((caseSession) => ensureCaseSessionSlug(caseSession));
+
+  if (sessionsNeedingSlug.length > 0) {
+    await Promise.all(
+      sessionsNeedingSlug.map((caseSession) => persistCaseSessionSlug(caseSession))
+    );
+  }
+
+  return {
+    player: {
+      ...buildPublicLeaderboardEntry(hydratedUser),
+      joinedAt: hydratedUser.createdAt,
+      updatedAt: hydratedUser.updatedAt,
+      categoryStats: normalizeProgression(hydratedUser.progression).categoryStats,
+    },
+    cases: cases.map((caseSession) => {
+      const template =
+        toPlain(caseSession.caseTemplateId) ||
+        fallbackMap.get(getTemplateSlugFromSession(caseSession)) ||
+        null;
+
+      return buildCasePayload(caseSession, template);
+    }),
   };
 };
