@@ -1,7 +1,6 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/libs/next-auth";
 import DashboardHub from "@/components/legal-arena/DashboardHub";
-import DevelopmentAccessGate from "@/components/legal-arena/DevelopmentAccessGate";
 import { listDashboardDataForUser } from "@/libs/game/store";
 import {
   listCategoryLeaderboard,
@@ -25,10 +24,6 @@ export default async function Dashboard() {
     hasPurchasedAccess = Boolean(user?.hasAccess);
   }
 
-  if (!hasGameAccess(session.user?.email) && !hasPurchasedAccess) {
-    return <DevelopmentAccessGate email={session.user?.email || ""} />;
-  }
-
   const [dashboardData, overallLeaderboard, categoryLeaderboards] = await Promise.all([
     listDashboardDataForUser(session.user.id, session.user),
     listOverallLeaderboard(),
@@ -50,6 +45,8 @@ export default async function Dashboard() {
       categoryLeaderboards={toClientJSON(Object.fromEntries(categoryLeaderboards))}
       isAdmin={isAdminEmail(session.user?.email)}
       userName={session.user?.name || session.user?.email}
+      userEmail={session.user?.email || ""}
+      hasArenaAccess={hasGameAccess(session.user?.email) || hasPurchasedAccess}
     />
   );
 }

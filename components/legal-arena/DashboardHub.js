@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import ButtonAccount from "@/components/ButtonAccount";
 import apiClient from "@/libs/api";
+import { DevelopmentAccessPanel } from "@/components/legal-arena/DevelopmentAccessGate";
 
 const statusLabel = {
   interview: "Interview",
@@ -73,12 +74,15 @@ export default function DashboardHub({
   categoryLeaderboards,
   isAdmin = false,
   userName = "Counsel",
+  userEmail = "",
+  hasArenaAccess = false,
 }) {
   const router = useRouter();
   const [browserTimeZone, setBrowserTimeZone] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState(
     categories[0]?.slug || ""
   );
+  const [showPaywallModal, setShowPaywallModal] = useState(false);
   const filteredTemplates = useMemo(
     () =>
       templates.filter(
@@ -101,6 +105,10 @@ export default function DashboardHub({
 
   const handleCreateCase = async (caseTemplateId) => {
     if (!caseTemplateId) return;
+    if (!hasArenaAccess) {
+      setShowPaywallModal(true);
+      return;
+    }
 
     setCreating(true);
 
@@ -401,6 +409,21 @@ export default function DashboardHub({
           </div>
         </section>
       </section>
+      {showPaywallModal ? (
+        <dialog className="modal modal-open">
+          <div className="modal-box max-h-none overflow-visible max-w-3xl bg-transparent p-0 shadow-none">
+            <DevelopmentAccessPanel
+              email={userEmail}
+              onClose={() => setShowPaywallModal(false)}
+            />
+          </div>
+          <form method="dialog" className="modal-backdrop">
+            <button type="button" onClick={() => setShowPaywallModal(false)}>
+              close
+            </button>
+          </form>
+        </dialog>
+      ) : null}
     </main>
   );
 }

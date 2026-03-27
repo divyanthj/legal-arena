@@ -6,6 +6,22 @@ import {
   listDashboardDataForUser,
 } from "@/libs/game/store";
 import { hasGameAccess } from "@/libs/admin";
+import connectMongo from "@/libs/mongoose";
+import User from "@/models/User";
+
+const userCanAccessArena = async (session) => {
+  if (!session?.user?.id) {
+    return false;
+  }
+
+  if (hasGameAccess(session.user?.email)) {
+    return true;
+  }
+
+  await connectMongo();
+  const user = await User.findById(session.user.id).select("hasAccess");
+  return Boolean(user?.hasAccess);
+};
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -13,7 +29,7 @@ export async function GET() {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   }
-  if (!hasGameAccess(session.user?.email)) {
+  if (!(await userCanAccessArena(session))) {
     return NextResponse.json(
       { error: "Legal Arena is still in development. Access is currently limited." },
       { status: 403 }
@@ -44,7 +60,7 @@ export async function POST(req) {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   }
-  if (!hasGameAccess(session.user?.email)) {
+  if (!(await userCanAccessArena(session))) {
     return NextResponse.json(
       { error: "Legal Arena is still in development. Access is currently limited." },
       { status: 403 }
