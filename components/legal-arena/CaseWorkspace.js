@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import ButtonAccount from "@/components/ButtonAccount";
 import apiClient from "@/libs/api";
@@ -31,59 +31,72 @@ const normalizeCourtroomEntry = (entry = {}) => ({
 const winnerLabel = {
   player: "You prevailed",
   opponent: "Opposing counsel prevailed",
-  draw: "The court called it too close",
+  draw: "The court found it too close",
+};
+
+const winnerSignal = {
+  player: "Favorable Ruling",
+  opponent: "Adverse Ruling",
+  draw: "Split Outcome",
 };
 
 const verdictTone = {
   player: {
-    card: "border-success/30 bg-success/10",
-    eyebrow: "text-success",
+    card: "arena-status-favorable",
+    eyebrow: "text-emerald-300",
   },
   opponent: {
-    card: "border-error/30 bg-error/10",
-    eyebrow: "text-error",
+    card: "arena-status-critical",
+    eyebrow: "text-rose-300",
   },
   draw: {
-    card: "border-warning/30 bg-warning/10",
-    eyebrow: "text-warning",
+    card: "arena-status-caution",
+    eyebrow: "text-amber-300",
   },
+};
+
+const statusTone = {
+  interview: "arena-status-caution",
+  courtroom: "arena-status-neutral",
+  verdict: "arena-status-favorable",
+  exited: "arena-status-critical",
 };
 
 const ruleExplainers = {
   "burden-of-proof":
-    "This rule tracks who had to prove the point at issue and whether the record actually met that burden.",
+    "Tracks who had to prove the disputed point and whether that burden was actually met.",
   "reliable-records":
-    "This rule rewards records and concrete documentation over speculation, rough memory, or unsupported estimates.",
+    "Rewards records and concrete documentation over assumptions or unsupported memory.",
   "presumption-and-proof":
-    "This rule measures whether the argument overcame the starting presumption with actual proof rather than inference alone.",
+    "Measures whether the argument overcame the starting presumption with actual proof.",
   "ordinary-wear-vs-damage":
-    "This rule focuses on whether the condition described sounds like routine use or chargeable damage.",
+    "Separates routine usage outcomes from chargeable damage based on the record.",
   "notice-and-fair-warning":
-    "This rule looks at whether the other side received clear notice of the claimed basis, charges, or theory.",
+    "Looks at whether the opposing side had clear notice of the claimed basis or charge.",
   "proportional-remedy":
-    "This rule asks whether the requested outcome matches what the record actually supports.",
+    "Checks whether requested relief is proportionate to what the record supports.",
   "credibility-under-pressure":
-    "This rule weighs whether the witness's story stayed believable once pressed on specifics and weak spots.",
+    "Weighs whether testimony remains credible once pressed on specifics and weak points.",
 };
 
 const helpText = {
   playerPressure:
-    "Your pressure is the strength your side has built with the court so far. Higher usually means your arguments are landing more effectively.",
+    "Pressure reflects how strongly your side has persuaded the court so far in this matter.",
   opponentPressure:
-    "Opponent pressure is the force the other side is building against you. Higher means the court is currently finding their position more persuasive.",
+    "Opponent pressure reflects how strongly the other side is currently persuading the bench.",
   helpedYourSide:
-    "These are the points the court thought genuinely helped your side's argument or credibility.",
+    "These points helped your side establish stronger credibility or legal footing.",
   weakenedYourSide:
-    "These are the gaps, mistakes, or unresolved issues the court thought weakened your side.",
+    "These points weakened your side through gaps, concessions, or unresolved issues.",
   factsUsed:
-    "These badges mark facts your argument relied on. Hover to see the specific fact that was picked up from the record.",
+    "Badges indicate facts your argument relied on. Hover to inspect the underlying record detail.",
   rulesUsed:
-    "These badges mark lawbook concepts the round appears to have engaged. Hover to see what each one means.",
+    "Badges indicate lawbook rules engaged in the round. Hover to inspect each rule lens.",
 };
 
 const InfoDot = ({ content, label }) => (
   <span
-    className="inline-flex cursor-pointer items-center justify-center text-base-content/55 transition hover:text-base-content"
+    className="inline-flex cursor-pointer items-center justify-center text-slate-400 transition hover:text-slate-200"
     data-tooltip-id="tooltip"
     data-tooltip-content={content}
     aria-label={label || "More information"}
@@ -112,7 +125,7 @@ const getRuleTooltip = (rule) =>
   `${rule
     .split("-")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ")} is one of the lawbook lenses the court used to evaluate this round.`;
+    .join(" ")} is one of the lawbook lenses the court used in this round.`;
 
 const normalizeFactKey = (value = "") => String(value || "").trim().toLowerCase();
 
@@ -139,10 +152,7 @@ const resolveFactReference = (factReference, canonicalFactLookup) => {
   if (canonicalFact) {
     return {
       badge: "Fact",
-      tooltip:
-        canonicalFact.canonicalDetail ||
-        canonicalFact.label ||
-        trimmed,
+      tooltip: canonicalFact.canonicalDetail || canonicalFact.label || trimmed,
     };
   }
 
@@ -171,6 +181,11 @@ const getDefendantName = (caseSession) =>
   caseSession.defendantName || caseSession.premise.opponentName;
 
 const getCaseRouteRef = (caseSession) => caseSession.slug || caseSession.id;
+
+const clampPercent = (value) => {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(100, value));
+};
 
 export default function CaseWorkspace({ initialCase }) {
   const router = useRouter();
@@ -352,126 +367,137 @@ export default function CaseWorkspace({ initialCase }) {
     verdictTone[caseSession.verdict?.winner] || verdictTone.draw;
   const canonicalFactLookup = buildCanonicalFactLookup(caseSession);
 
+  const pressureTotal = Math.max(caseSession.score.player + caseSession.score.opponent, 1);
+  const playerPressurePct = clampPercent((caseSession.score.player / pressureTotal) * 100);
+  const opponentPressurePct = clampPercent(
+    (caseSession.score.opponent / pressureTotal) * 100
+  );
+
+  const courtroomStageLabel = useMemo(() => {
+    if (isExited) return "Exited";
+    if (isInterview) return "Party Intake";
+    if (isVerdict) return "Verdict";
+    return `Courtroom Round ${caseSession.score.roundsCompleted + 1}`;
+  }, [caseSession.score.roundsCompleted, isExited, isInterview, isVerdict]);
+
   return (
-    <main className="min-h-screen bg-base-200 px-4 py-6 md:px-8 md:py-10">
-      <section className="mx-auto max-w-7xl space-y-6">
-        <div className="card border border-base-300 bg-neutral text-neutral-content shadow-2xl">
-          <div className="card-body p-6 md:p-8">
+    <main className="arena-shell min-h-screen px-4 py-6 md:px-8 md:py-10">
+      <section className="mx-auto max-w-7xl space-y-6 arena-reveal">
+        <div className="arena-console arena-scanline">
+          <div className="p-6 md:p-8">
             <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
               <div className="max-w-3xl">
                 <div className="flex flex-wrap items-center gap-2">
                   <Link
                     href="/dashboard"
-                    className="btn btn-ghost btn-sm text-neutral-content"
+                    className="btn btn-ghost btn-sm border border-slate-500/25 bg-slate-900/30 text-slate-100"
                   >
                     Back to Cases
                   </Link>
-                  <span className="badge badge-outline border-primary/40 text-neutral-content">
+                  <span className="badge badge-outline border-slate-400/35 text-slate-100">
                     {caseSession.practiceArea}
                   </span>
-                  <span className="badge badge-outline border-primary/40 text-neutral-content">
+                  <span className="badge badge-outline border-slate-400/35 text-slate-100">
                     {caseSession.primaryCategory}
                   </span>
-                  <span className="badge badge-outline border-primary/40 text-neutral-content">
+                  <span className="badge badge-outline border-slate-400/35 text-slate-100">
                     Complexity {caseSession.complexity}
                   </span>
-                  <span className="badge badge-outline border-primary/40 text-neutral-content">
+                  <span className="badge badge-outline border-slate-400/35 text-slate-100">
                     {sideBadgeLabel}
                   </span>
                 </div>
-                <h1 className="mt-4 font-serif text-4xl leading-tight md:text-5xl">
+                <h1 className="arena-case-title mt-4 text-4xl leading-tight md:text-5xl">
                   {caseSession.title}
                 </h1>
-                <p className="mt-3 max-w-2xl text-neutral-content/75">
+                <p className="mt-3 max-w-2xl text-slate-300">
                   {caseSession.premise.overview}
                 </p>
-                <div className="mt-4 flex flex-wrap gap-4 text-sm text-neutral-content/70">
+                <div className="mt-4 flex flex-wrap gap-4 text-sm text-slate-300">
                   <span>Plaintiff: {plaintiffName}</span>
                   <span>vs.</span>
                   <span>Defendant: {defendantName}</span>
                   <span>{caseSession.premise.courtName}</span>
                 </div>
-                <p className="mt-3 text-sm text-neutral-content/75">
+                <p className="mt-3 text-sm text-slate-300">
                   You represent {playerPartyName} against {opponentPartyName}.
                 </p>
               </div>
 
               <div className="flex flex-col items-start gap-3 md:items-end">
-                <div className="badge badge-lg badge-outline border-white/25 text-neutral-content">
-                  {isExited
-                    ? "Exited"
-                    : isInterview
-                    ? "Party Intake"
-                    : isVerdict
-                      ? "Verdict"
-                      : `Courtroom Round ${caseSession.score.roundsCompleted + 1}`}
-                </div>
+                <span
+                  className={`badge border px-3 py-3 arena-status ${
+                    statusTone[caseSession.status] || "arena-status-neutral"
+                  }`}
+                >
+                  {courtroomStageLabel}
+                </span>
                 <ButtonAccount />
               </div>
             </div>
           </div>
         </div>
 
-        <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+        <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
           <section className="space-y-6">
             {isInterview ? (
-              <div className="card border border-base-300 bg-base-100 shadow-xl">
-                <div className="card-body p-6">
+              <div className="arena-console">
+                <div className="p-6">
                   <div className="flex items-end justify-between gap-3">
                     <div>
-                      <p className="text-sm uppercase tracking-[0.25em] text-base-content/50">
-                        Step 1
-                      </p>
-                      <h2 className="mt-2 text-2xl font-bold">
+                      <p className="arena-kicker">Step 1</p>
+                      <h2 className="arena-headline mt-2 text-2xl">
                         Collect your side&apos;s facts
                       </h2>
                     </div>
-                    <span className="text-sm text-base-content/55">
-                      Interview {playerPartyName} and refine the case file.
+                    <span className="text-xs uppercase tracking-[0.14em] text-slate-400">
+                      Interview {playerPartyName} and tighten the record.
                     </span>
                   </div>
 
-                  <div className="mt-5 space-y-4">
+                  <div className="arena-scroll mt-5 max-h-[30rem] space-y-4 overflow-y-auto pr-2">
                     {visibleInterviewTranscript.map((entry, index) => (
                       <article
                         key={`${entry.createdAt}-${index}`}
-                        className={`rounded-box p-4 ${
+                        className={`rounded-xl p-4 ${
                           entry.role !== "player"
-                            ? "bg-base-200"
-                            : "ml-auto max-w-[90%] bg-primary/10"
+                            ? "arena-transcript-opponent"
+                            : "arena-transcript-player ml-auto max-w-[90%]"
                         }`}
                       >
                         <div className="flex items-center justify-between gap-3">
-                          <p className="font-semibold">{entry.speaker}</p>
-                          <p className="text-xs text-base-content/45">
+                          <p className="font-semibold text-slate-100">{entry.speaker}</p>
+                          <p className="text-xs text-slate-400">
                             {formatDateTime(entry.createdAt)}
                           </p>
                         </div>
-                        <p className="mt-2 whitespace-pre-wrap leading-7">
+                        <p className="mt-2 whitespace-pre-wrap leading-7 text-slate-100">
                           {entry.text}
                         </p>
                       </article>
                     ))}
                     {working && pendingSpeaker && (
-                      <article className="rounded-box bg-base-200 p-4">
+                      <article className="arena-transcript-opponent rounded-xl p-4">
                         <div className="flex items-center justify-between gap-3">
-                          <p className="font-semibold">{pendingSpeaker}</p>
+                          <p className="font-semibold text-slate-100">{pendingSpeaker}</p>
                           <span className="loading loading-dots loading-sm" />
                         </div>
-                        <p className="mt-2 leading-7">{pendingSpeaker} is typing...</p>
+                        <p className="mt-2 leading-7 text-slate-100">
+                          {pendingSpeaker} is typing...
+                        </p>
                       </article>
                     )}
                   </div>
 
                   <form className="mt-6 space-y-3" onSubmit={handleInterviewSubmit}>
                     <textarea
-                      className="textarea textarea-bordered h-32 w-full"
+                      className="textarea textarea-bordered h-32 w-full bg-slate-950/35 text-slate-100"
                       placeholder={`Ask ${playerPartyName} about dates, records, witnesses, notice, or any proof gaps you need to pin down.`}
                       value={question}
                       onChange={(event) => setQuestion(event.target.value)}
                     />
                     <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div className="space-y-1 text-sm text-base-content/60">
+                      <div className="space-y-1 text-sm text-slate-300">
                         <div>
                           Suggested open questions:{" "}
                           {(caseSession.factSheet.openQuestions || [])
@@ -481,16 +507,14 @@ export default function CaseWorkspace({ initialCase }) {
                         {caseSession.factSheet.missingEvidence?.length > 0 && (
                           <div>
                             Proof gaps:{" "}
-                            {caseSession.factSheet.missingEvidence
-                              .slice(0, 2)
-                              .join(" | ")}
+                            {caseSession.factSheet.missingEvidence.slice(0, 2).join(" | ")}
                           </div>
                         )}
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
                         <button
                           type="button"
-                          className="btn btn-ghost text-error"
+                          className="btn btn-ghost border border-rose-400/40 text-rose-200"
                           disabled={working}
                           onClick={handleExitCase}
                         >
@@ -508,15 +532,13 @@ export default function CaseWorkspace({ initialCase }) {
                 </div>
               </div>
             ) : isExited ? (
-              <div className="card border border-warning/30 bg-warning/10 shadow-xl">
-                <div className="card-body p-6">
-                  <p className="text-sm uppercase tracking-[0.25em] text-warning">
-                    Case Exited
-                  </p>
-                  <h2 className="mt-2 text-2xl font-bold">This intake was closed</h2>
-                  <p className="mt-3 max-w-2xl text-base-content/80">
-                    You exited this matter during the interview stage. The same case
-                    stays unavailable for 24 hours before it can be started again.
+              <div className="arena-console">
+                <div className="p-6">
+                  <p className="arena-kicker text-rose-300">Case Exited</p>
+                  <h2 className="arena-headline mt-2 text-2xl">This intake was closed</h2>
+                  <p className="mt-3 max-w-2xl text-slate-300">
+                    You exited this matter during intake. The same case stays unavailable for
+                    24 hours before it can be started again.
                   </p>
                   <div className="mt-5">
                     <Link href="/dashboard" className="btn btn-primary">
@@ -526,93 +548,92 @@ export default function CaseWorkspace({ initialCase }) {
                 </div>
               </div>
             ) : (
-              <div className="card border border-base-300 bg-base-100 shadow-xl">
-                <div className="card-body p-6">
+              <div className="arena-console arena-round-transition">
+                <div className="p-6">
                   <div className="flex items-end justify-between gap-3">
                     <div>
-                      <p className="text-sm uppercase tracking-[0.25em] text-base-content/50">
-                        Step 2
-                      </p>
-                      <h2 className="mt-2 text-2xl font-bold">
+                      <p className="arena-kicker">Step 2</p>
+                      <h2 className="arena-headline mt-2 text-2xl">
                         Freeform courtroom duel
                       </h2>
                     </div>
-                    <span className="text-sm text-base-content/55">
-                      Round {caseSession.score.roundsCompleted} of{" "}
-                      {caseSession.maxCourtRounds}
+                    <span className="text-xs uppercase tracking-[0.14em] text-slate-400">
+                      Round {caseSession.score.roundsCompleted} of {caseSession.maxCourtRounds}
                     </span>
                   </div>
 
                   <div className="mt-5 grid gap-4 md:grid-cols-3">
-                    <div className="stat rounded-box bg-base-200">
+                    <div className="arena-metric">
                       <div className="flex items-center gap-2">
-                        <p className="text-sm uppercase tracking-[0.2em] text-base-content/45">
-                          Your Pressure
-                        </p>
+                        <p className="arena-kicker">Your Pressure</p>
                         <InfoDot
                           content={helpText.playerPressure}
                           label="Explain your pressure"
                         />
                       </div>
-                      <p className="mt-2 text-3xl font-bold">
+                      <p className="mt-2 text-3xl font-bold text-slate-100">
                         {caseSession.score.player}
                       </p>
+                      <div className="mt-3 arena-progress-track" aria-hidden="true">
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-sky-500 to-sky-300"
+                          style={{ width: `${playerPressurePct}%` }}
+                        />
+                      </div>
                     </div>
-                    <div className="stat rounded-box bg-base-200">
+                    <div className="arena-metric">
                       <div className="flex items-center gap-2">
-                        <p className="text-sm uppercase tracking-[0.2em] text-base-content/45">
-                          Opponent Pressure
-                        </p>
+                        <p className="arena-kicker">Opponent Pressure</p>
                         <InfoDot
                           content={helpText.opponentPressure}
                           label="Explain opponent pressure"
                         />
                       </div>
-                      <p className="mt-2 text-3xl font-bold">
+                      <p className="mt-2 text-3xl font-bold text-slate-100">
                         {caseSession.score.opponent}
                       </p>
+                      <div className="mt-3 arena-progress-track" aria-hidden="true">
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-amber-500 to-amber-300"
+                          style={{ width: `${opponentPressurePct}%` }}
+                        />
+                      </div>
                     </div>
-                    <div className="rounded-box bg-primary/10 p-4">
-                      <p className="text-sm uppercase tracking-[0.2em] text-base-content/45">
-                        Bench Signal
-                      </p>
-                      <p className="mt-2 text-sm leading-6">
+                    <div className="arena-metric">
+                      <p className="arena-kicker">Bench Signal</p>
+                      <p className="mt-2 text-sm leading-6 text-slate-100">
                         {caseSession.score.lastBenchSignal ||
                           "The bench is listening. Build the record carefully."}
                       </p>
                     </div>
                   </div>
 
-                  <div className="mt-5 space-y-4">
+                  <div className="arena-scroll mt-5 max-h-[30rem] space-y-4 overflow-y-auto pr-2">
                     {normalizedCourtroomTranscript.length === 0 ? (
-                      <div className="rounded-box bg-base-200 p-5">
-                        <p className="font-semibold">Court is now in session.</p>
-                        <p className="mt-2 text-sm text-base-content/70">
-                          Open with the strongest version of your theory and anchor
-                          it to the lawbook and fact sheet.
+                      <div className="arena-console-soft p-5">
+                        <p className="font-semibold text-slate-100">Court is now in session.</p>
+                        <p className="mt-2 text-sm text-slate-300">
+                          Open with your strongest theory and anchor it to lawbook and fact
+                          sheet.
                         </p>
                       </div>
                     ) : (
                       normalizedCourtroomTranscript.map((entry, index) => (
                         <article
                           key={`${entry.round}-${entry.speaker}-${index}`}
-                          className={`rounded-box p-4 ${
+                          className={`rounded-xl p-4 ${
                             entry.speaker === "player"
-                              ? "ml-auto max-w-[95%] bg-primary/10"
-                              : "bg-base-200"
+                              ? "arena-transcript-player ml-auto max-w-[95%]"
+                              : "arena-transcript-opponent"
                           }`}
                         >
                           <div className="flex items-center justify-between gap-3">
-                            <p className="font-semibold">
-                              {entry.speaker === "player"
-                                ? "You"
-                                : opponentPartyName}
+                            <p className="font-semibold text-slate-100">
+                              {entry.speaker === "player" ? "You" : opponentPartyName}
                             </p>
-                            <p className="text-xs text-base-content/45">
-                              Round {entry.round}
-                            </p>
+                            <p className="text-xs text-slate-400">Round {entry.round}</p>
                           </div>
-                          <p className="mt-2 whitespace-pre-wrap leading-7">
+                          <p className="mt-2 whitespace-pre-wrap leading-7 text-slate-100">
                             {entry.text}
                           </p>
                           {entry.speaker === "player" &&
@@ -628,7 +649,7 @@ export default function CaseWorkspace({ initialCase }) {
                                   return (
                                     <span
                                       key={`${fact}-${factIndex}`}
-                                      className="badge badge-outline badge-sm max-w-[18rem] truncate"
+                                      className="badge badge-outline badge-sm max-w-[18rem] truncate border-slate-400/45 text-slate-100"
                                       data-tooltip-id="tooltip"
                                       data-tooltip-content={resolvedFact.tooltip}
                                     >
@@ -639,7 +660,7 @@ export default function CaseWorkspace({ initialCase }) {
                                 {entry.citedRules.map((rule) => (
                                   <span
                                     key={rule}
-                                    className="badge badge-warning badge-sm"
+                                    className="badge badge-sm arena-status arena-status-caution border"
                                     data-tooltip-id="tooltip"
                                     data-tooltip-content={getRuleTooltip(rule)}
                                   >
@@ -652,24 +673,26 @@ export default function CaseWorkspace({ initialCase }) {
                       ))
                     )}
                     {working && pendingSpeaker === opponentPartyName && (
-                      <article className="rounded-box bg-base-200 p-4">
+                      <article className="arena-transcript-opponent rounded-xl p-4">
                         <div className="flex items-center justify-between gap-3">
-                          <p className="font-semibold">{opponentPartyName}</p>
+                          <p className="font-semibold text-slate-100">{opponentPartyName}</p>
                           <span className="loading loading-dots loading-sm" />
                         </div>
-                        <p className="mt-2 leading-7">{opponentPartyName} is typing...</p>
+                        <p className="mt-2 leading-7 text-slate-100">
+                          {opponentPartyName} is typing...
+                        </p>
                       </article>
                     )}
                   </div>
 
                   {!isVerdict && (
                     <form className="mt-6 space-y-3" onSubmit={handleCourtroomSubmit}>
-                    <textarea
-                      className="textarea textarea-bordered h-40 w-full"
-                      placeholder={`Deliver your argument for ${playerPartyName}. Cite the fact sheet, confront the weakest point on ${opponentPartyName}'s side, and tie your position to the lawbook.`}
-                      value={argument}
-                      onChange={(event) => setArgument(event.target.value)}
-                    />
+                      <textarea
+                        className="textarea textarea-bordered h-40 w-full bg-slate-950/35 text-slate-100"
+                        placeholder={`Deliver your argument for ${playerPartyName}. Cite the fact sheet, confront the weakest point on ${opponentPartyName}'s side, and tie your position to the lawbook.`}
+                        value={argument}
+                        onChange={(event) => setArgument(event.target.value)}
+                      />
                       <div className="flex items-center justify-end">
                         <button className="btn btn-primary" disabled={working}>
                           {working && (
@@ -685,47 +708,44 @@ export default function CaseWorkspace({ initialCase }) {
             )}
 
             {isVerdict && (
-              <div className={`card border shadow-xl ${verdictStyle.card}`}>
-                <div className="card-body p-6">
-                  <p
-                    className={`text-sm uppercase tracking-[0.25em] ${verdictStyle.eyebrow}`}
-                  >
-                    Final Ruling
-                  </p>
-                  <h2 className="mt-2 text-3xl font-bold text-base-content">
+              <div className={`arena-console border ${verdictStyle.card}`}>
+                <div className="p-6">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <p className={`arena-kicker ${verdictStyle.eyebrow}`}>Final Ruling</p>
+                    <span className={`badge border arena-status ${verdictStyle.card}`}>
+                      {winnerSignal[caseSession.verdict.winner] || winnerSignal.draw}
+                    </span>
+                  </div>
+                  <h2 className="arena-case-title mt-2 text-3xl">
                     {winnerLabel[caseSession.verdict.winner]}
                   </h2>
-                  <p className="mt-3 max-w-3xl leading-7 text-base-content/80">
+                  <p className="mt-3 max-w-3xl leading-7 text-slate-300">
                     {caseSession.verdict.summary}
                   </p>
                   <div className="mt-5 grid gap-4 md:grid-cols-2">
-                    <div className="rounded-box bg-base-100/90 p-4">
+                    <div className="arena-console-soft p-4">
                       <div className="flex items-center gap-2">
-                        <p className="font-semibold text-base-content">
-                          What Helped Your Side
-                        </p>
+                        <p className="font-semibold text-slate-100">What helped your side</p>
                         <InfoDot
                           content={helpText.helpedYourSide}
                           label="Explain what helped your side"
                         />
                       </div>
-                      <ul className="mt-3 space-y-2 text-sm text-base-content/80">
+                      <ul className="mt-3 space-y-2 text-sm text-slate-300">
                         {caseSession.verdict.highlights.map((item) => (
                           <li key={item}>- {item}</li>
                         ))}
                       </ul>
                     </div>
-                    <div className="rounded-box bg-base-100/90 p-4">
+                    <div className="arena-console-soft p-4">
                       <div className="flex items-center gap-2">
-                        <p className="font-semibold text-base-content">
-                          What Weakened Your Side
-                        </p>
+                        <p className="font-semibold text-slate-100">What weakened your side</p>
                         <InfoDot
                           content={helpText.weakenedYourSide}
                           label="Explain what weakened your side"
                         />
                       </div>
-                      <ul className="mt-3 space-y-2 text-sm text-base-content/80">
+                      <ul className="mt-3 space-y-2 text-sm text-slate-300">
                         {caseSession.verdict.concerns.map((item) => (
                           <li key={item}>- {item}</li>
                         ))}
@@ -738,25 +758,29 @@ export default function CaseWorkspace({ initialCase }) {
           </section>
 
           <aside className="space-y-6">
-            <div className="card border border-base-300 bg-base-100 shadow-xl">
-              <div className="card-body p-6">
+            <div className="arena-console">
+              <div className="p-6">
                 <div className="flex items-end justify-between gap-3">
                   <div>
-                    <p className="text-sm uppercase tracking-[0.25em] text-base-content/50">
-                      Fact Sheet
-                    </p>
-                    <h2 className="mt-2 text-2xl font-bold">Case file</h2>
+                    <p className="arena-kicker">Fact Sheet</p>
+                    <h2 className="arena-headline mt-2 text-2xl">Case file</h2>
                   </div>
-                  <span className="badge badge-outline">
+                  <span
+                    className={`badge border arena-status ${
+                      caseSession.factSheet.ready
+                        ? "arena-status-favorable"
+                        : "arena-status-caution"
+                    }`}
+                  >
                     {caseSession.factSheet.ready ? "Court-ready" : "Draft"}
                   </span>
                 </div>
 
                 <div className="mt-5 space-y-4">
                   <label className="form-control">
-                    <span className="label-text font-semibold">Case summary</span>
+                    <span className="label-text font-semibold text-slate-100">Case summary</span>
                     <textarea
-                      className="textarea textarea-bordered h-24"
+                      className="textarea textarea-bordered h-24 bg-slate-950/35 text-slate-100"
                       value={factSheetDraft.summary}
                       onChange={(event) =>
                         setFactSheetDraft((current) => ({
@@ -769,9 +793,9 @@ export default function CaseWorkspace({ initialCase }) {
                   </label>
 
                   <label className="form-control">
-                    <span className="label-text font-semibold">Theory</span>
+                    <span className="label-text font-semibold text-slate-100">Theory</span>
                     <textarea
-                      className="textarea textarea-bordered h-24"
+                      className="textarea textarea-bordered h-24 bg-slate-950/35 text-slate-100"
                       value={factSheetDraft.theory}
                       onChange={(event) =>
                         setFactSheetDraft((current) => ({
@@ -784,9 +808,9 @@ export default function CaseWorkspace({ initialCase }) {
                   </label>
 
                   <label className="form-control">
-                    <span className="label-text font-semibold">Timeline</span>
+                    <span className="label-text font-semibold text-slate-100">Timeline</span>
                     <textarea
-                      className="textarea textarea-bordered h-28"
+                      className="textarea textarea-bordered h-28 bg-slate-950/35 text-slate-100"
                       value={factSheetDraft.timeline}
                       onChange={(event) =>
                         setFactSheetDraft((current) => ({
@@ -799,9 +823,11 @@ export default function CaseWorkspace({ initialCase }) {
                   </label>
 
                   <label className="form-control">
-                    <span className="label-text font-semibold">Supporting facts</span>
+                    <span className="label-text font-semibold text-slate-100">
+                      Supporting facts
+                    </span>
                     <textarea
-                      className="textarea textarea-bordered h-32"
+                      className="textarea textarea-bordered h-32 bg-slate-950/35 text-slate-100"
                       value={factSheetDraft.supportingFacts}
                       onChange={(event) =>
                         setFactSheetDraft((current) => ({
@@ -814,9 +840,9 @@ export default function CaseWorkspace({ initialCase }) {
                   </label>
 
                   <label className="form-control">
-                    <span className="label-text font-semibold">Risks</span>
+                    <span className="label-text font-semibold text-slate-100">Risks</span>
                     <textarea
-                      className="textarea textarea-bordered h-24"
+                      className="textarea textarea-bordered h-24 bg-slate-950/35 text-slate-100"
                       value={factSheetDraft.risks}
                       onChange={(event) =>
                         setFactSheetDraft((current) => ({
@@ -829,9 +855,11 @@ export default function CaseWorkspace({ initialCase }) {
                   </label>
 
                   <label className="form-control">
-                    <span className="label-text font-semibold">Disputed facts</span>
+                    <span className="label-text font-semibold text-slate-100">
+                      Disputed facts
+                    </span>
                     <textarea
-                      className="textarea textarea-bordered h-24"
+                      className="textarea textarea-bordered h-24 bg-slate-950/35 text-slate-100"
                       value={factSheetDraft.disputedFacts}
                       onChange={(event) =>
                         setFactSheetDraft((current) => ({
@@ -844,9 +872,11 @@ export default function CaseWorkspace({ initialCase }) {
                   </label>
 
                   <label className="form-control">
-                    <span className="label-text font-semibold">Corroborated facts</span>
+                    <span className="label-text font-semibold text-slate-100">
+                      Corroborated facts
+                    </span>
                     <textarea
-                      className="textarea textarea-bordered h-24"
+                      className="textarea textarea-bordered h-24 bg-slate-950/35 text-slate-100"
                       value={factSheetDraft.corroboratedFacts}
                       onChange={(event) =>
                         setFactSheetDraft((current) => ({
@@ -859,11 +889,11 @@ export default function CaseWorkspace({ initialCase }) {
                   </label>
 
                   <label className="form-control">
-                    <span className="label-text font-semibold">
+                    <span className="label-text font-semibold text-slate-100">
                       Missing evidence / proof gaps
                     </span>
                     <textarea
-                      className="textarea textarea-bordered h-24"
+                      className="textarea textarea-bordered h-24 bg-slate-950/35 text-slate-100"
                       value={factSheetDraft.missingEvidence}
                       onChange={(event) =>
                         setFactSheetDraft((current) => ({
@@ -876,9 +906,11 @@ export default function CaseWorkspace({ initialCase }) {
                   </label>
 
                   <label className="form-control">
-                    <span className="label-text font-semibold">Requested relief</span>
+                    <span className="label-text font-semibold text-slate-100">
+                      Requested relief
+                    </span>
                     <textarea
-                      className="textarea textarea-bordered h-20"
+                      className="textarea textarea-bordered h-20 bg-slate-950/35 text-slate-100"
                       value={factSheetDraft.desiredRelief}
                       onChange={(event) =>
                         setFactSheetDraft((current) => ({
@@ -906,20 +938,18 @@ export default function CaseWorkspace({ initialCase }) {
               </div>
             </div>
 
-            <div className="card border border-base-300 bg-base-100 shadow-xl">
-              <div className="card-body p-6">
-                <p className="text-sm uppercase tracking-[0.25em] text-base-content/50">
-                  Lawbook
-                </p>
-                <h2 className="mt-2 text-2xl font-bold">Rules in play</h2>
+            <div className="arena-console">
+              <div className="p-6">
+                <p className="arena-kicker">Lawbook</p>
+                <h2 className="arena-headline mt-2 text-2xl">Rules in play</h2>
                 <div className="mt-5 space-y-3">
                   {caseSession.lawbook.map((rule) => (
-                    <article key={rule.id} className="rounded-box bg-base-200 p-4">
-                      <p className="font-semibold">{rule.title}</p>
-                      <p className="mt-2 text-sm leading-6 text-base-content/75">
+                    <article key={rule.id} className="arena-console-soft p-4">
+                      <p className="font-semibold text-slate-100">{rule.title}</p>
+                      <p className="mt-2 text-sm leading-6 text-slate-300">
                         {rule.principle}
                       </p>
-                      <p className="mt-2 text-xs uppercase tracking-[0.15em] text-base-content/45">
+                      <p className="mt-2 text-xs uppercase tracking-[0.15em] text-slate-400">
                         {rule.tags.join(" | ")}
                       </p>
                     </article>

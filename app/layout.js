@@ -1,4 +1,4 @@
-import { Inter } from "next/font/google";
+import { IBM_Plex_Serif, Inter, Inter_Tight } from "next/font/google";
 import Script from "next/script";
 import PlausibleProvider from "next-plausible";
 import { getSEOTags } from "@/libs/seo";
@@ -8,6 +8,16 @@ import config from "@/config";
 import "./globals.css";
 
 const font = Inter({ subsets: ["latin"] });
+const arenaHeadlineFont = Inter_Tight({
+  subsets: ["latin"],
+  weight: ["600", "700", "800"],
+  variable: "--font-arena-headline",
+});
+const arenaCaseFont = IBM_Plex_Serif({
+  subsets: ["latin"],
+  weight: ["500", "600"],
+  variable: "--font-arena-case",
+});
 
 export const viewport = {
   // Will use the primary color of your theme to show a nice theme color in the URL bar of supported browsers
@@ -22,7 +32,11 @@ export const metadata = getSEOTags();
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" data-theme={config.colors.theme} className={font.className}>
+    <html
+      lang="en"
+      data-theme={config.colors.theme}
+      className={`${font.className} ${arenaHeadlineFont.variable} ${arenaCaseFont.variable}`}
+    >
       {config.domainName && (
         <head>
           <PlausibleProvider domain={config.domainName} />

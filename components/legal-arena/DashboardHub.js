@@ -8,15 +8,22 @@ import apiClient from "@/libs/api";
 import { DevelopmentAccessPanel } from "@/components/legal-arena/DevelopmentAccessGate";
 
 const statusLabel = {
-  interview: "Interview",
-  courtroom: "In Court",
+  interview: "Intake",
+  courtroom: "Courtroom",
   verdict: "Verdict Ready",
 };
 
-const statusClass = {
-  interview: "badge badge-warning badge-outline",
-  courtroom: "badge badge-info badge-outline",
-  verdict: "badge badge-success badge-outline",
+const statusSeverity = {
+  interview: "caution",
+  courtroom: "neutral",
+  verdict: "favorable",
+};
+
+const severityClass = {
+  neutral: "arena-status-neutral",
+  caution: "arena-status-caution",
+  critical: "arena-status-critical",
+  favorable: "arena-status-favorable",
 };
 
 const formatDate = (value) =>
@@ -65,6 +72,16 @@ const getTemplateUnlockMessage = (template, timeZone) => {
   return template.unlockReason;
 };
 
+const getRecordRatio = (wins, losses, draws) => {
+  const total = wins + losses + draws;
+
+  if (total <= 0) {
+    return 0;
+  }
+
+  return Math.round((wins / total) * 100);
+};
+
 export default function DashboardHub({
   initialCases,
   templates,
@@ -79,15 +96,12 @@ export default function DashboardHub({
 }) {
   const router = useRouter();
   const [browserTimeZone, setBrowserTimeZone] = useState(null);
-  const [selectedCategory, setSelectedCategory] = useState(
-    categories[0]?.slug || ""
-  );
+  const [selectedCategory, setSelectedCategory] = useState(categories[0]?.slug || "");
   const [showPaywallModal, setShowPaywallModal] = useState(false);
   const filteredTemplates = useMemo(
     () =>
       templates.filter(
-        (template) =>
-          !selectedCategory || template.primaryCategory === selectedCategory
+        (template) => !selectedCategory || template.primaryCategory === selectedCategory
       ),
     [selectedCategory, templates]
   );
@@ -95,8 +109,12 @@ export default function DashboardHub({
 
   const selectedLeaderboard = categoryLeaderboards[selectedCategory] || [];
   const categoryProgress =
-    progression.categoryStats.find((item) => item.categorySlug === selectedCategory) ||
-    null;
+    progression.categoryStats.find((item) => item.categorySlug === selectedCategory) || null;
+  const recordRatio = getRecordRatio(
+    progression.wins,
+    progression.losses,
+    progression.draws
+  );
 
   useEffect(() => {
     const detectedTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -125,36 +143,35 @@ export default function DashboardHub({
     }
   };
 
-  const visibleTemplates =
-    filteredTemplates.length > 0 ? filteredTemplates : templates;
+  const visibleTemplates = filteredTemplates.length > 0 ? filteredTemplates : templates;
 
   return (
-    <main className="min-h-screen bg-base-200 px-4 py-6 md:px-8 md:py-10">
-      <section className="mx-auto max-w-7xl space-y-8">
-        <div className="card border border-base-300 bg-neutral text-neutral-content shadow-2xl">
-          <div className="card-body gap-4 p-0">
-            <div className="flex flex-col gap-6 p-6 md:flex-row md:items-start md:justify-between md:p-8">
+    <main className="arena-shell min-h-screen px-4 py-6 md:px-8 md:py-10">
+      <section className="mx-auto max-w-7xl space-y-8 arena-reveal">
+        <div className="arena-console arena-scanline overflow-hidden">
+          <div className="p-6 md:p-8">
+            <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
               <div className="max-w-3xl space-y-4">
-                <p className="text-xs uppercase tracking-[0.35em] text-primary-content/75">
-                  Legal Arena
-                </p>
-                <h1 className="font-serif text-4xl leading-tight md:text-6xl">
-                  Build a specialty, unlock tougher matters, and climb the board.
+                <p className="arena-kicker">Legal Arena Command</p>
+                <h1 className="arena-headline text-4xl leading-tight md:text-6xl">
+                  Operationally sharp advocacy. No room for soft arguments.
                 </h1>
-                <p className="max-w-2xl text-base text-neutral-content/75 md:text-lg">
-                  Welcome back, {userName}. Your matters now come from a live case
-                  library with category-based progression, complexity gates, and
-                  public rankings.
+                <p className="max-w-2xl text-sm text-slate-300 md:text-base">
+                  Welcome back, {userName}. Intake, strategy, and courtroom execution are
+                  live below. Choose the matter, build your record, and climb category boards.
                 </p>
               </div>
               <div className="flex items-start justify-between gap-3 md:flex-col md:items-end">
-                <Link href="/" className="btn btn-ghost btn-sm text-neutral-content">
+                <Link
+                  href="/"
+                  className="btn btn-ghost btn-sm border border-slate-500/25 bg-slate-900/30 text-slate-100"
+                >
                   Public Home
                 </Link>
                 {isAdmin && (
                   <Link
                     href="/dashboard/admin"
-                    className="btn btn-ghost btn-sm text-neutral-content"
+                    className="btn btn-ghost btn-sm border border-slate-500/25 bg-slate-900/30 text-slate-100"
                   >
                     Admin Lab
                   </Link>
@@ -163,61 +180,60 @@ export default function DashboardHub({
               </div>
             </div>
 
-            <div className="stats stats-vertical rounded-none border-t border-white/10 bg-black/20 text-neutral-content lg:stats-horizontal">
-              <div className="stat">
-                <p className="stat-title uppercase tracking-[0.2em] text-neutral-content/55">
-                  Overall Rating
+            <div className="mt-8 grid gap-3 lg:grid-cols-3">
+              <div className="arena-metric">
+                <p className="arena-kicker">Overall Rating</p>
+                <p className="mt-2 text-3xl font-semibold text-slate-100">
+                  {progression.overallRating}
                 </p>
-                <p className="stat-value text-3xl">{progression.overallRating}</p>
-                <p className="stat-desc text-neutral-content/60">
+                <p className="mt-1 text-xs text-slate-400">
                   {progression.overallXp} XP across {progression.completedCases} completed matters
                 </p>
               </div>
-              <div className="stat">
-                <p className="stat-title uppercase tracking-[0.2em] text-neutral-content/55">
-                  Specialty Unlock
+              <div className="arena-metric">
+                <p className="arena-kicker">Specialty Unlock</p>
+                <p className="mt-2 text-3xl font-semibold text-slate-100">
+                  Tier {categoryProgress?.unlockedComplexity || 1}
                 </p>
-                <p className="stat-value text-3xl">
-                  {categoryProgress?.unlockedComplexity || 1}
-                </p>
-                <p className="stat-desc text-neutral-content/60">
-                  {categoryProgress?.categorySlug || categories[0]?.slug || "general"} complexity tier
+                <p className="mt-1 text-xs text-slate-400">
+                  {categoryProgress?.categorySlug || categories[0]?.slug || "general"} track
                 </p>
               </div>
-              <div className="stat">
-                <p className="stat-title uppercase tracking-[0.2em] text-neutral-content/55">
-                  Record
-                </p>
-                <p className="stat-value text-3xl">
+              <div className="arena-metric">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="arena-kicker">Record Integrity</p>
+                  <span className="badge arena-status arena-status-favorable badge-sm border">
+                    {recordRatio}% wins
+                  </span>
+                </div>
+                <p className="mt-2 text-3xl font-semibold text-slate-100">
                   {progression.wins}-{progression.losses}-{progression.draws}
                 </p>
-                <p className="stat-desc text-neutral-content/60">
-                  Wins, losses, draws
-                </p>
+                <div className="mt-3 arena-progress-track" aria-hidden="true">
+                  <div className="arena-progress-fill" style={{ width: `${recordRatio}%` }} />
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        <section className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+        <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
           <div className="space-y-6">
-            <div className="card border border-base-300 bg-base-100 shadow-xl">
-              <div className="card-body p-6">
+            <div className="arena-console">
+              <div className="p-6">
                 <div>
-                  <p className="text-sm uppercase tracking-[0.25em] text-base-content/50">
-                    New Case
-                  </p>
-                  <h2 className="mt-2 text-2xl font-bold">Choose a dispute</h2>
+                  <p className="arena-kicker">Case Intake Console</p>
+                  <h2 className="arena-headline mt-2 text-2xl">Select a live dispute</h2>
                 </div>
 
                 <div className="mt-5 flex flex-wrap gap-2">
                   {categories.map((category) => (
                     <button
                       key={category.slug}
-                      className={`badge badge-lg cursor-pointer border px-4 py-4 ${
+                      className={`badge badge-lg cursor-pointer border px-4 py-4 transition ${
                         selectedCategory === category.slug
-                          ? "border-primary bg-primary/10"
-                          : "border-base-300 bg-base-100"
+                          ? "arena-status arena-status-favorable"
+                          : "arena-status arena-status-neutral"
                       }`}
                       onClick={() => setSelectedCategory(category.slug)}
                     >
@@ -230,51 +246,47 @@ export default function DashboardHub({
                   {visibleTemplates.map((template) => (
                     <div
                       key={template.id}
-                      className="rounded-box border border-base-300 bg-base-100 p-5 transition hover:border-primary/40 hover:bg-base-200"
+                      className="arena-console-soft arena-reveal p-5 transition hover:border-slate-300/40"
                     >
                       <div className="flex flex-wrap items-start justify-between gap-4">
-                        <div className="flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="badge badge-outline">
-                            {template.practiceArea}
-                          </span>
-                          <span className="badge badge-outline">
-                            {template.primaryCategory}
-                          </span>
-                          <span className="badge badge-outline">
-                            Complexity {template.complexity}
-                          </span>
-                          <span className="text-xs uppercase tracking-[0.2em] text-base-content/45">
-                            {template.courtName}
-                          </span>
-                        </div>
-                        <h3 className="mt-3 text-xl font-bold">{template.title}</h3>
-                        <p className="mt-1 text-sm text-base-content/65">
-                          {template.subtitle}
-                        </p>
-                        <p className="mt-3 text-sm leading-6 text-base-content/75">
-                          {template.overview}
-                        </p>
-                        <div className="mt-4 flex flex-wrap gap-4 text-sm">
-                          <span>
-                            <span className="font-semibold">Plaintiff:</span>{" "}
-                            {template.plaintiffName || template.clientName}
-                          </span>
-                          <span>
-                            <span className="font-semibold">Defendant:</span>{" "}
-                            {template.defendantName || template.opponentName}
-                          </span>
-                        </div>
-                        <p
-                          className={`mt-4 text-sm ${
-                            template.unlocked ? "text-success" : "text-warning"
-                          }`}
-                        >
-                          {getTemplateUnlockMessage(template, browserTimeZone)}
-                        </p>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="badge badge-outline border-slate-400/35 text-slate-200">
+                              {template.practiceArea}
+                            </span>
+                            <span className="badge badge-outline border-slate-400/35 text-slate-200">
+                              {template.primaryCategory}
+                            </span>
+                            <span className="badge badge-outline border-slate-400/35 text-slate-200">
+                              Complexity {template.complexity}
+                            </span>
+                            <span className="arena-kicker !text-[0.62rem] !tracking-[0.18em] text-slate-400">
+                              {template.courtName}
+                            </span>
+                          </div>
+                          <h3 className="mt-3 text-xl font-semibold text-slate-100">{template.title}</h3>
+                          <p className="mt-1 text-sm text-slate-300">{template.subtitle}</p>
+                          <p className="mt-3 text-sm leading-6 text-slate-300/95">{template.overview}</p>
+                          <div className="mt-4 flex flex-wrap gap-4 text-sm text-slate-200">
+                            <span>
+                              <span className="font-semibold text-slate-100">Plaintiff:</span>{" "}
+                              {template.plaintiffName || template.clientName}
+                            </span>
+                            <span>
+                              <span className="font-semibold text-slate-100">Defendant:</span>{" "}
+                              {template.defendantName || template.opponentName}
+                            </span>
+                          </div>
+                          <p
+                            className={`mt-4 text-sm ${
+                              template.unlocked ? "text-emerald-300" : "text-amber-300"
+                            }`}
+                          >
+                            {getTemplateUnlockMessage(template, browserTimeZone)}
+                          </p>
                         </div>
                         <button
-                          className="btn btn-primary"
+                          className="btn btn-primary arena-pulse"
                           onClick={() => handleCreateCase(template.id)}
                           disabled={creating || !template.unlocked}
                         >
@@ -288,59 +300,60 @@ export default function DashboardHub({
               </div>
             </div>
 
-            <div className="card border border-base-300 bg-base-100 shadow-xl">
-              <div className="card-body p-6">
+            <div className="arena-console">
+              <div className="p-6">
                 <div className="flex items-end justify-between gap-3">
                   <div>
-                    <p className="text-sm uppercase tracking-[0.25em] text-base-content/50">
-                      My Cases
-                    </p>
-                    <h2 className="mt-2 text-2xl font-bold">Recent matters</h2>
+                    <p className="arena-kicker">Active Dockets</p>
+                    <h2 className="arena-headline mt-2 text-2xl">Recent matters</h2>
                   </div>
-                  <span className="text-sm text-base-content/55">
-                    Saved transcripts and verdicts
+                  <span className="text-xs uppercase tracking-[0.16em] text-slate-400">
+                    Saved transcripts and rulings
                   </span>
                 </div>
 
                 <div className="mt-5 space-y-4">
                   {initialCases.length === 0 ? (
-                    <div className="rounded-box border border-dashed border-base-300 bg-base-200/70 p-8 text-center">
-                      <p className="text-lg font-semibold">No matters opened yet</p>
-                      <p className="mt-2 text-sm text-base-content/65">
-                        Start with an unlocked category matter and your client intake
-                        file will be prepared for you.
+                    <div className="arena-console-soft border-dashed p-8 text-center">
+                      <p className="text-lg font-semibold text-slate-100">No matters opened yet</p>
+                      <p className="mt-2 text-sm text-slate-300">
+                        Start with an unlocked category matter and the intake file will be staged.
                       </p>
                     </div>
                   ) : (
-                    initialCases.map((item) => (
-                      <Link
-                        key={item.id}
-                        href={`/dashboard/cases/${item.slug || item.id}`}
-                        className="block rounded-box border border-base-300 bg-base-100 p-5 transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-lg"
-                      >
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <div>
-                            <h3 className="text-lg font-bold">{item.title}</h3>
-                            <p className="text-sm text-base-content/60">
-                              Updated {formatDate(item.updatedAt)}
-                            </p>
+                    initialCases.map((item) => {
+                      const caseSeverity = statusSeverity[item.status] || "neutral";
+
+                      return (
+                        <Link
+                          key={item.id}
+                          href={`/dashboard/cases/${item.slug || item.id}`}
+                          className="arena-console-soft block p-5 transition hover:-translate-y-0.5 hover:border-slate-300/45"
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                              <h3 className="text-lg font-semibold text-slate-100">{item.title}</h3>
+                              <p className="text-sm text-slate-400">Updated {formatDate(item.updatedAt)}</p>
+                            </div>
+                            <span
+                              className={`badge border arena-status ${
+                                severityClass[caseSeverity]
+                              }`}
+                            >
+                              {statusLabel[item.status] || "In Progress"}
+                            </span>
                           </div>
-                          <span className={statusClass[item.status]}>
-                            {statusLabel[item.status]}
-                          </span>
-                        </div>
-                        <p className="mt-3 text-sm leading-6 text-base-content/75">
-                          {item.premise?.overview}
-                        </p>
-                        <div className="mt-4 flex flex-wrap gap-4 text-sm text-base-content/70">
-                          <span>{item.primaryCategory}</span>
-                          <span>Complexity {item.complexity}</span>
-                          <span>{item.plaintiffName || item.premise?.clientName}</span>
-                          <span>vs.</span>
-                          <span>{item.defendantName || item.premise?.opponentName}</span>
-                        </div>
-                      </Link>
-                    ))
+                          <p className="mt-3 text-sm leading-6 text-slate-300">{item.premise?.overview}</p>
+                          <div className="mt-4 flex flex-wrap gap-4 text-sm text-slate-300">
+                            <span>{item.primaryCategory}</span>
+                            <span>Complexity {item.complexity}</span>
+                            <span>{item.plaintiffName || item.premise?.clientName}</span>
+                            <span>vs.</span>
+                            <span>{item.defendantName || item.premise?.opponentName}</span>
+                          </div>
+                        </Link>
+                      );
+                    })
                   )}
                 </div>
               </div>
@@ -348,29 +361,28 @@ export default function DashboardHub({
           </div>
 
           <div className="space-y-6">
-            <div className="card border border-base-300 bg-base-100 shadow-xl">
-              <div className="card-body p-6">
-                <p className="text-sm uppercase tracking-[0.25em] text-base-content/50">
-                  Leaderboard
-                </p>
-                <h2 className="mt-2 text-2xl font-bold">Top 10 lawyers overall</h2>
+            <div className="arena-console">
+              <div className="p-6">
+                <p className="arena-kicker">Network Telemetry</p>
+                <h2 className="arena-headline mt-2 text-2xl">Top 10 overall counsel</h2>
                 <div className="mt-5 space-y-3">
                   {overallLeaderboard.slice(0, 10).map((entry) => (
                     <Link
                       key={entry.id}
                       href={`/dashboard/players/${entry.id}`}
-                      className="block rounded-box bg-base-200 p-4 transition hover:-translate-y-0.5 hover:bg-base-300/80"
+                      className="arena-console-soft block p-4 transition hover:-translate-y-0.5 hover:border-slate-300/45"
                     >
                       <div className="flex items-center justify-between gap-3">
-                        <p className="font-semibold">
-                          #{entry.rank} {entry.name}
+                        <p className="font-semibold text-slate-100">
+                          <span className="mr-1 text-slate-300">#{entry.rank}</span>
+                          {entry.name}
                         </p>
-                        <span className="badge badge-outline">
+                        <span className="badge arena-status arena-status-neutral border">
                           {entry.overallRating}
                         </span>
                       </div>
-                      <p className="mt-2 text-sm text-base-content/70">
-                        {entry.completedCases} completed matters · {entry.wins} wins
+                      <p className="mt-2 text-sm text-slate-300">
+                        {entry.completedCases} completed matters | {entry.wins} wins
                       </p>
                     </Link>
                   ))}
@@ -378,29 +390,28 @@ export default function DashboardHub({
               </div>
             </div>
 
-            <div className="card border border-base-300 bg-base-100 shadow-xl">
-              <div className="card-body p-6">
-                <p className="text-sm uppercase tracking-[0.25em] text-base-content/50">
-                  Specialty Board
-                </p>
-                <h2 className="mt-2 text-2xl font-bold">Top 10 lawyers by category</h2>
+            <div className="arena-console">
+              <div className="p-6">
+                <p className="arena-kicker">Specialty Board</p>
+                <h2 className="arena-headline mt-2 text-2xl">Top 10 by category</h2>
                 <div className="mt-5 space-y-3">
                   {selectedLeaderboard.slice(0, 10).map((entry) => (
                     <Link
                       key={`${selectedCategory}-${entry.id}`}
                       href={`/dashboard/players/${entry.id}`}
-                      className="block rounded-box bg-base-200 p-4 transition hover:-translate-y-0.5 hover:bg-base-300/80"
+                      className="arena-console-soft block p-4 transition hover:-translate-y-0.5 hover:border-slate-300/45"
                     >
                       <div className="flex items-center justify-between gap-3">
-                        <p className="font-semibold">
-                          #{entry.rank} {entry.name}
+                        <p className="font-semibold text-slate-100">
+                          <span className="mr-1 text-slate-300">#{entry.rank}</span>
+                          {entry.name}
                         </p>
-                        <span className="badge badge-outline">
+                        <span className="badge arena-status arena-status-favorable border">
                           {entry.category?.rating || 1000}
                         </span>
                       </div>
-                      <p className="mt-2 text-sm text-base-content/70">
-                        {entry.category?.completedCases || 0} completed in {selectedCategory} ·
+                      <p className="mt-2 text-sm text-slate-300">
+                        {entry.category?.completedCases || 0} completed in {selectedCategory} |
                         unlock {entry.category?.unlockedComplexity || 1}
                       </p>
                     </Link>
@@ -413,7 +424,7 @@ export default function DashboardHub({
       </section>
       {showPaywallModal ? (
         <dialog className="modal modal-open">
-          <div className="modal-box max-h-none overflow-visible max-w-3xl bg-transparent p-0 shadow-none">
+          <div className="modal-box max-h-none max-w-3xl overflow-visible bg-transparent p-0 shadow-none">
             <DevelopmentAccessPanel
               email={userEmail}
               onClose={() => setShowPaywallModal(false)}
