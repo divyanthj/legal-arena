@@ -162,6 +162,30 @@ progress::-webkit-progress-value {
     background: rgba(23, 85, 60, 0.34);
   }
 
+  .arena-shell .arena-textarea,
+  .arena-shell .arena-textarea:disabled,
+  .arena-shell .arena-textarea[readonly] {
+    color: #edf5ff;
+    -webkit-text-fill-color: #edf5ff;
+    background-color: rgba(2, 6, 12, 0.48);
+    border-color: rgba(122, 160, 201, 0.38);
+    opacity: 1;
+  }
+
+  .arena-shell .arena-textarea::placeholder {
+    color: rgba(203, 213, 225, 0.72);
+  }
+
+  .arena-shell .arena-textarea[readonly] {
+    cursor: text;
+  }
+
+  .arena-shell .btn:disabled,
+  .arena-shell .btn.btn-disabled {
+    color: rgba(241, 245, 249, 0.86);
+    opacity: 0.72;
+  }
+
   .arena-transcript-player {
     border: 1px solid rgba(111, 183, 255, 0.4);
     background: linear-gradient(180deg, rgba(23, 50, 77, 0.75), rgba(14, 33, 53, 0.87));

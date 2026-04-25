@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import ButtonAccount from "@/components/ButtonAccount";
 import apiClient from "@/libs/api";
@@ -27,6 +27,9 @@ const normalizeCourtroomEntry = (entry = {}) => ({
   citedRules: Array.isArray(entry.citedRules) ? entry.citedRules : [],
   citedClaimIds: Array.isArray(entry.citedClaimIds) ? entry.citedClaimIds : [],
 });
+
+const caseFileFieldClass =
+  "textarea textarea-bordered arena-textarea h-24 bg-slate-950/35 text-slate-100";
 
 const winnerLabel = {
   player: "You prevailed",
@@ -193,8 +196,17 @@ export default function CaseWorkspace({ initialCase }) {
   const [question, setQuestion] = useState("");
   const [argument, setArgument] = useState("");
   const [working, setWorking] = useState(false);
+  const [recordingQuestion, setRecordingQuestion] = useState(false);
+  const [transcribingQuestion, setTranscribingQuestion] = useState(false);
+  const [recordingArgument, setRecordingArgument] = useState(false);
+  const [transcribingArgument, setTranscribingArgument] = useState(false);
   const [pendingSpeaker, setPendingSpeaker] = useState("");
   const [optimisticTranscriptEntry, setOptimisticTranscriptEntry] = useState(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const streamRef = useRef(null);
+  const interviewTranscriptRef = useRef(null);
+  const courtroomTranscriptRef = useRef(null);
   const [factSheetDraft, setFactSheetDraft] = useState({
     summary: initialCase.factSheet.summary || "",
     theory: initialCase.factSheet.theory || "",
@@ -221,6 +233,13 @@ export default function CaseWorkspace({ initialCase }) {
     });
   }, [caseSession]);
 
+  useEffect(
+    () => () => {
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+    },
+    []
+  );
+
   const buildFactSheetPayload = () => ({
     ...caseSession.factSheet,
     summary: factSheetDraft.summary.trim(),
@@ -243,6 +262,28 @@ export default function CaseWorkspace({ initialCase }) {
     : caseSession.courtroomTranscript;
   const normalizedCourtroomTranscript =
     visibleCourtroomTranscript.map(normalizeCourtroomEntry);
+
+  useEffect(() => {
+    if (!isInterview || !interviewTranscriptRef.current) {
+      return;
+    }
+
+    interviewTranscriptRef.current.scrollTo({
+      top: interviewTranscriptRef.current.scrollHeight,
+      behavior: "smooth",
+    });
+  }, [isInterview, visibleInterviewTranscript.length, working, pendingSpeaker]);
+
+  useEffect(() => {
+    if (isInterview || !courtroomTranscriptRef.current) {
+      return;
+    }
+
+    courtroomTranscriptRef.current.scrollTo({
+      top: courtroomTranscriptRef.current.scrollHeight,
+      behavior: "smooth",
+    });
+  }, [isInterview, normalizedCourtroomTranscript.length, working, pendingSpeaker]);
 
   const handleInterviewSubmit = async (event) => {
     event.preventDefault();
@@ -276,6 +317,100 @@ export default function CaseWorkspace({ initialCase }) {
       setWorking(false);
     }
   };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current?.state === "recording") {
+      mediaRecorderRef.current.stop();
+    }
+  };
+
+  const handleVoiceInput = async ({
+    recording,
+    setRecording,
+    setTranscribing,
+    setText,
+  }) => {
+    if (recording) {
+      stopRecording();
+      return;
+    }
+
+    if (!navigator?.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      console.error("Voice input is not supported in this browser.");
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+
+      streamRef.current = stream;
+      audioChunksRef.current = [];
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (event) => {
+        if (event.data?.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.onstop = async () => {
+        const mimeType = recorder.mimeType || "audio/webm";
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+        const formData = new FormData();
+
+        streamRef.current?.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+        mediaRecorderRef.current = null;
+        setRecording(false);
+
+        if (!audioBlob.size) {
+          return;
+        }
+
+        formData.append("audio", audioBlob, "question.webm");
+        setTranscribing(true);
+
+        try {
+          const { text } = await apiClient.post("/transcribe", formData);
+
+          if (text) {
+            setText((current) =>
+              [current.trim(), text.trim()].filter(Boolean).join(" ")
+            );
+          }
+        } catch (error) {
+          console.error(error);
+        } finally {
+          setTranscribing(false);
+        }
+      };
+
+      recorder.start();
+      setRecording(true);
+    } catch (error) {
+      setRecording(false);
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+      console.error(error);
+    }
+  };
+
+  const handleQuestionVoiceInput = () =>
+    handleVoiceInput({
+      recording: recordingQuestion,
+      setRecording: setRecordingQuestion,
+      setTranscribing: setTranscribingQuestion,
+      setText: setQuestion,
+    });
+
+  const handleArgumentVoiceInput = () =>
+    handleVoiceInput({
+      recording: recordingArgument,
+      setRecording: setRecordingArgument,
+      setTranscribing: setTranscribingArgument,
+      setText: setArgument,
+    });
 
   const handleFinalize = async () => {
     setWorking(true);
@@ -455,7 +590,10 @@ export default function CaseWorkspace({ initialCase }) {
                     </span>
                   </div>
 
-                  <div className="arena-scroll mt-5 max-h-[30rem] space-y-4 overflow-y-auto pr-2">
+                  <div
+                    ref={interviewTranscriptRef}
+                    className="arena-scroll mt-5 max-h-[30rem] space-y-4 overflow-y-auto pr-2"
+                  >
                     {visibleInterviewTranscript.map((entry, index) => (
                       <article
                         key={`${entry.createdAt}-${index}`}
@@ -491,10 +629,11 @@ export default function CaseWorkspace({ initialCase }) {
 
                   <form className="mt-6 space-y-3" onSubmit={handleInterviewSubmit}>
                     <textarea
-                      className="textarea textarea-bordered h-32 w-full bg-slate-950/35 text-slate-100"
+                      className="textarea textarea-bordered arena-textarea h-32 w-full bg-slate-950/35 text-slate-100"
                       placeholder={`Ask ${playerPartyName} about dates, records, witnesses, notice, or any proof gaps you need to pin down.`}
                       value={question}
                       onChange={(event) => setQuestion(event.target.value)}
+                      disabled={transcribingQuestion}
                     />
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div className="space-y-1 text-sm text-slate-300">
@@ -514,13 +653,58 @@ export default function CaseWorkspace({ initialCase }) {
                       <div className="flex flex-wrap items-center gap-2">
                         <button
                           type="button"
+                          className={`btn border ${
+                            recordingQuestion
+                              ? "border-rose-400/60 bg-rose-950/40 text-rose-100"
+                              : "btn-ghost border-slate-500/35 text-slate-100"
+                          }`}
+                          disabled={working || transcribingQuestion}
+                          onClick={handleQuestionVoiceInput}
+                          data-tooltip-id="tooltip"
+                          data-tooltip-content={
+                            recordingQuestion
+                              ? "Stop recording and transcribe"
+                              : "Record a question with your microphone"
+                          }
+                          aria-label={
+                            recordingQuestion
+                              ? "Stop recording and transcribe"
+                              : "Record a question with your microphone"
+                          }
+                        >
+                          {transcribingQuestion ? (
+                            <span className="loading loading-spinner loading-xs" />
+                          ) : (
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              strokeWidth={1.5}
+                              stroke="currentColor"
+                              className="h-5 w-5"
+                              aria-hidden="true"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M12 18.75a6 6 0 0 0 6-6v-1.5m-12 0v1.5a6 6 0 0 0 6 6Zm0 0v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V6a3 3 0 1 1 6 0v6.75a3 3 0 0 1-3 3Z"
+                              />
+                            </svg>
+                          )}
+                          {recordingQuestion ? "Stop" : transcribingQuestion ? "Transcribing" : "Voice"}
+                        </button>
+                        <button
+                          type="button"
                           className="btn btn-ghost border border-rose-400/40 text-rose-200"
-                          disabled={working}
+                          disabled={working || recordingQuestion || transcribingQuestion}
                           onClick={handleExitCase}
                         >
                           Exit Case
                         </button>
-                        <button className="btn btn-primary" disabled={working}>
+                        <button
+                          className="btn btn-primary"
+                          disabled={working || recordingQuestion || transcribingQuestion}
+                        >
                           {working && (
                             <span className="loading loading-spinner loading-xs" />
                           )}
@@ -608,7 +792,10 @@ export default function CaseWorkspace({ initialCase }) {
                     </div>
                   </div>
 
-                  <div className="arena-scroll mt-5 max-h-[30rem] space-y-4 overflow-y-auto pr-2">
+                  <div
+                    ref={courtroomTranscriptRef}
+                    className="arena-scroll mt-5 max-h-[30rem] space-y-4 overflow-y-auto pr-2"
+                  >
                     {normalizedCourtroomTranscript.length === 0 ? (
                       <div className="arena-console-soft p-5">
                         <p className="font-semibold text-slate-100">Court is now in session.</p>
@@ -688,13 +875,63 @@ export default function CaseWorkspace({ initialCase }) {
                   {!isVerdict && (
                     <form className="mt-6 space-y-3" onSubmit={handleCourtroomSubmit}>
                       <textarea
-                        className="textarea textarea-bordered h-40 w-full bg-slate-950/35 text-slate-100"
+                        className="textarea textarea-bordered arena-textarea h-40 w-full bg-slate-950/35 text-slate-100"
                         placeholder={`Deliver your argument for ${playerPartyName}. Cite the fact sheet, confront the weakest point on ${opponentPartyName}'s side, and tie your position to the lawbook.`}
                         value={argument}
                         onChange={(event) => setArgument(event.target.value)}
+                        disabled={transcribingArgument}
                       />
-                      <div className="flex items-center justify-end">
-                        <button className="btn btn-primary" disabled={working}>
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          className={`btn border ${
+                            recordingArgument
+                              ? "border-rose-400/60 bg-rose-950/40 text-rose-100"
+                              : "btn-ghost border-slate-500/35 text-slate-100"
+                          }`}
+                          disabled={working || transcribingArgument}
+                          onClick={handleArgumentVoiceInput}
+                          data-tooltip-id="tooltip"
+                          data-tooltip-content={
+                            recordingArgument
+                              ? "Stop recording and transcribe"
+                              : "Record an argument with your microphone"
+                          }
+                          aria-label={
+                            recordingArgument
+                              ? "Stop recording and transcribe"
+                              : "Record an argument with your microphone"
+                          }
+                        >
+                          {transcribingArgument ? (
+                            <span className="loading loading-spinner loading-xs" />
+                          ) : (
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              strokeWidth={1.5}
+                              stroke="currentColor"
+                              className="h-5 w-5"
+                              aria-hidden="true"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M12 18.75a6 6 0 0 0 6-6v-1.5m-12 0v1.5a6 6 0 0 0 6 6Zm0 0v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V6a3 3 0 1 1 6 0v6.75a3 3 0 0 1-3 3Z"
+                              />
+                            </svg>
+                          )}
+                          {recordingArgument
+                            ? "Stop"
+                            : transcribingArgument
+                            ? "Transcribing"
+                            : "Voice"}
+                        </button>
+                        <button
+                          className="btn btn-primary"
+                          disabled={working || recordingArgument || transcribingArgument}
+                        >
                           {working && (
                             <span className="loading loading-spinner loading-xs" />
                           )}
@@ -780,7 +1017,7 @@ export default function CaseWorkspace({ initialCase }) {
                   <label className="form-control">
                     <span className="label-text font-semibold text-slate-100">Case summary</span>
                     <textarea
-                      className="textarea textarea-bordered h-24 bg-slate-950/35 text-slate-100"
+                      className={caseFileFieldClass}
                       value={factSheetDraft.summary}
                       onChange={(event) =>
                         setFactSheetDraft((current) => ({
@@ -788,14 +1025,14 @@ export default function CaseWorkspace({ initialCase }) {
                           summary: event.target.value,
                         }))
                       }
-                      disabled={!isInterview}
+                      readOnly={!isInterview}
                     />
                   </label>
 
                   <label className="form-control">
                     <span className="label-text font-semibold text-slate-100">Theory</span>
                     <textarea
-                      className="textarea textarea-bordered h-24 bg-slate-950/35 text-slate-100"
+                      className={caseFileFieldClass}
                       value={factSheetDraft.theory}
                       onChange={(event) =>
                         setFactSheetDraft((current) => ({
@@ -803,14 +1040,14 @@ export default function CaseWorkspace({ initialCase }) {
                           theory: event.target.value,
                         }))
                       }
-                      disabled={!isInterview}
+                      readOnly={!isInterview}
                     />
                   </label>
 
                   <label className="form-control">
                     <span className="label-text font-semibold text-slate-100">Timeline</span>
                     <textarea
-                      className="textarea textarea-bordered h-28 bg-slate-950/35 text-slate-100"
+                      className="textarea textarea-bordered arena-textarea h-28 bg-slate-950/35 text-slate-100"
                       value={factSheetDraft.timeline}
                       onChange={(event) =>
                         setFactSheetDraft((current) => ({
@@ -818,7 +1055,7 @@ export default function CaseWorkspace({ initialCase }) {
                           timeline: event.target.value,
                         }))
                       }
-                      disabled={!isInterview}
+                      readOnly={!isInterview}
                     />
                   </label>
 
@@ -827,7 +1064,7 @@ export default function CaseWorkspace({ initialCase }) {
                       Supporting facts
                     </span>
                     <textarea
-                      className="textarea textarea-bordered h-32 bg-slate-950/35 text-slate-100"
+                      className="textarea textarea-bordered arena-textarea h-32 bg-slate-950/35 text-slate-100"
                       value={factSheetDraft.supportingFacts}
                       onChange={(event) =>
                         setFactSheetDraft((current) => ({
@@ -835,14 +1072,14 @@ export default function CaseWorkspace({ initialCase }) {
                           supportingFacts: event.target.value,
                         }))
                       }
-                      disabled={!isInterview}
+                      readOnly={!isInterview}
                     />
                   </label>
 
                   <label className="form-control">
                     <span className="label-text font-semibold text-slate-100">Risks</span>
                     <textarea
-                      className="textarea textarea-bordered h-24 bg-slate-950/35 text-slate-100"
+                      className={caseFileFieldClass}
                       value={factSheetDraft.risks}
                       onChange={(event) =>
                         setFactSheetDraft((current) => ({
@@ -850,7 +1087,7 @@ export default function CaseWorkspace({ initialCase }) {
                           risks: event.target.value,
                         }))
                       }
-                      disabled={!isInterview}
+                      readOnly={!isInterview}
                     />
                   </label>
 
@@ -859,7 +1096,7 @@ export default function CaseWorkspace({ initialCase }) {
                       Disputed facts
                     </span>
                     <textarea
-                      className="textarea textarea-bordered h-24 bg-slate-950/35 text-slate-100"
+                      className={caseFileFieldClass}
                       value={factSheetDraft.disputedFacts}
                       onChange={(event) =>
                         setFactSheetDraft((current) => ({
@@ -867,7 +1104,7 @@ export default function CaseWorkspace({ initialCase }) {
                           disputedFacts: event.target.value,
                         }))
                       }
-                      disabled={!isInterview}
+                      readOnly={!isInterview}
                     />
                   </label>
 
@@ -876,7 +1113,7 @@ export default function CaseWorkspace({ initialCase }) {
                       Corroborated facts
                     </span>
                     <textarea
-                      className="textarea textarea-bordered h-24 bg-slate-950/35 text-slate-100"
+                      className={caseFileFieldClass}
                       value={factSheetDraft.corroboratedFacts}
                       onChange={(event) =>
                         setFactSheetDraft((current) => ({
@@ -884,7 +1121,7 @@ export default function CaseWorkspace({ initialCase }) {
                           corroboratedFacts: event.target.value,
                         }))
                       }
-                      disabled={!isInterview}
+                      readOnly={!isInterview}
                     />
                   </label>
 
@@ -893,7 +1130,7 @@ export default function CaseWorkspace({ initialCase }) {
                       Missing evidence / proof gaps
                     </span>
                     <textarea
-                      className="textarea textarea-bordered h-24 bg-slate-950/35 text-slate-100"
+                      className={caseFileFieldClass}
                       value={factSheetDraft.missingEvidence}
                       onChange={(event) =>
                         setFactSheetDraft((current) => ({
@@ -901,7 +1138,7 @@ export default function CaseWorkspace({ initialCase }) {
                           missingEvidence: event.target.value,
                         }))
                       }
-                      disabled={!isInterview}
+                      readOnly={!isInterview}
                     />
                   </label>
 
@@ -910,7 +1147,7 @@ export default function CaseWorkspace({ initialCase }) {
                       Requested relief
                     </span>
                     <textarea
-                      className="textarea textarea-bordered h-20 bg-slate-950/35 text-slate-100"
+                      className="textarea textarea-bordered arena-textarea h-20 bg-slate-950/35 text-slate-100"
                       value={factSheetDraft.desiredRelief}
                       onChange={(event) =>
                         setFactSheetDraft((current) => ({
@@ -918,7 +1155,7 @@ export default function CaseWorkspace({ initialCase }) {
                           desiredRelief: event.target.value,
                         }))
                       }
-                      disabled={!isInterview}
+                      readOnly={!isInterview}
                     />
                   </label>
 

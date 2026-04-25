@@ -1196,6 +1196,42 @@ const hasUncertaintyLanguage = (value = "") =>
     value
   );
 
+const shouldUseKnownSpecificFallback = (question = "", answer = "", fallbackAnswer = "") => {
+  const lowerQuestion = String(question || "").trim().toLowerCase();
+  const normalizedAnswer = String(answer || "").trim();
+  const normalizedFallback = String(fallbackAnswer || "").trim();
+
+  if (!normalizedAnswer || !normalizedFallback) {
+    return false;
+  }
+
+  if (
+    questionAsksForAmount(lowerQuestion) &&
+    hasAmountDetail(normalizedFallback) &&
+    !hasAmountDetail(normalizedAnswer)
+  ) {
+    return true;
+  }
+
+  if (
+    questionAsksForExactDate(lowerQuestion) &&
+    hasExactDateDetail(normalizedFallback) &&
+    !hasExactDateDetail(normalizedAnswer)
+  ) {
+    return true;
+  }
+
+  if (
+    questionAsksForContactMethod(lowerQuestion) &&
+    hasContactMethodDetail(normalizedFallback) &&
+    !hasContactMethodDetail(normalizedAnswer)
+  ) {
+    return true;
+  }
+
+  return false;
+};
+
 const isResponsiveInterviewAnswer = (question = "", answer = "") => {
   const lowerQuestion = String(question || "").trim().toLowerCase();
   const normalizedAnswer = String(answer || "").trim();
@@ -1294,31 +1330,23 @@ const buildSpecificDetailFallback = ({
   if (asksForExactDate && !hasExactDateDetail(corpus)) {
     return `I do not have the exact date${lowerQuestion.includes("dates") ? "s" : ""} in front of me right now. The best I can say from what I have is that ${toSpokenSentence(
       bestKnownDetail
-    ) || "I only remember the general sequence, not the exact day"}.${
-      leadQuestion ? ` The next thing we should pin down is: ${leadQuestion}` : ""
-    }`;
+    ) || "I only remember the general sequence, not the exact day"}.`;
   }
 
   if (asksForContactMethod && !hasContactMethodDetail(corpus)) {
     return `I cannot confirm whether that was by phone, email, text, or something else from what I have right now.${
       supportingEvidence[0]
         ? ` ${buildEvidenceResponseSegment(supportingEvidence[0], playerSide)}`
-        : leadQuestion
-        ? ` The next thing we should pin down is: ${leadQuestion}`
         : ""
     }`;
   }
 
   if (asksForAmount && !hasAmountDetail(corpus)) {
-    return `I do not have the exact amount in front of me right now.${
-      leadQuestion ? ` The next thing we should pin down is: ${leadQuestion}` : ""
-    }`;
+    return "I do not have the exact amount in front of me right now.";
   }
 
   if (proofQuestion && supportingEvidence.length === 0 && matchedEvidence.length === 0) {
-    return `I do not have confirmed proof in hand on that point right now.${
-      leadQuestion ? ` The next thing we should pin down is: ${leadQuestion}` : ""
-    }`;
+    return "I do not have confirmed proof in hand on that point right now.";
   }
 
   if (possessionQuestion && bestEvidence) {
@@ -1445,8 +1473,6 @@ const buildInterviewFallback = ({ caseSession, template, question, factSheet }) 
       ? evidenceResponse
       : remainingFacts.length === 0
       ? "I do not know anything more specific about that right now."
-      : leadQuestion
-      ? `I do not know that detail right now. The next thing we should pin down is: ${leadQuestion}`
       : "I do not know that detail right now.";
   const specificDetailFallback = buildSpecificDetailFallback({
     lowerQuestion,
@@ -1479,8 +1505,6 @@ const buildInterviewFallback = ({ caseSession, template, question, factSheet }) 
       supportingEvidence[0],
       playerSide
     )}`;
-  } else if (repeatedFallbackReply && leadQuestion) {
-    partyResponse = `I do not know anything more specific about that right now. The next thing we should pin down is: ${leadQuestion}`;
   } else if (repeatedFallbackReply) {
     partyResponse = "I do not know anything more specific about that right now.";
   }
@@ -1608,6 +1632,11 @@ const normalizeInterviewResult = ({
   });
   const questionHistory = getInterviewQuestionHistory(caseSession, question);
   const normalizedAiPartyResponse = humanizeClaimText(aiResult.partyResponse || "");
+  const useKnownSpecificFallback = shouldUseKnownSpecificFallback(
+    question,
+    normalizedAiPartyResponse,
+    fallback.partyResponse
+  );
   const repeatedProductionLoop =
     questionRequestsProductionOrLookup(lowerQuestion) &&
     hasRecordSearchPromise(normalizedAiPartyResponse) &&
@@ -1677,6 +1706,8 @@ const normalizeInterviewResult = ({
     partyResponse:
       repeatedProductionLoop
         ? buildStalledProductionReply(lowerQuestion)
+        : useKnownSpecificFallback
+        ? fallback.partyResponse
         : aiResult.partyResponse &&
           !isMetaResponse(aiResult.partyResponse) &&
           isResponsiveInterviewAnswer(question, aiResult.partyResponse)
@@ -2036,7 +2067,7 @@ export const continueInterview = async ({ caseSession, question, userId }) => {
     maxTokens: 1500,
     retryAttempts: 1,
     systemPrompt:
-      "You are simulating a legal-case party speaking to their own lawyer during intake. Treat this as a role actor, not a script expander. You know the full hidden world state, but you speak only as the represented party from memory, bias, confidence, access, and personality. Decide what to reveal, hedge, minimize, or withhold based on the latest question and the party profile. Answer directly when the lawyer asks a yes/no possession question. If the lawyer asks whether you can provide, send, share, or show a record, answer directly about production: say yes, no, or that you would need to check your records first. For ordinary factual questions, answer from memory as concretely as you honestly can before talking about records. If the lawyer asks for names, dates, amounts, or other facts that might appear in messages, notes, or records, give the fact if you actually remember it; otherwise say plainly that you do not remember the exact detail. Do not tell the lawyer how to investigate, what to pin down next, or how to run the case. Do not keep repeating promises to look for or send something on later turns. It is completely acceptable to say you do not know, do not remember, have not seen something yourself, or only heard about it. Speak like a normal person in first person. Never mention internal schemas, canonical truth, or metadata. Keep fact-sheet updates concise, but you may fill summary, theory, and desiredRelief when the case posture is already clear from the intake or the lawyer asks for them. Output valid JSON only.",
+      "You are simulating a legal-case party speaking to their own lawyer during intake. Treat this as a role actor, not a script expander. You know the full hidden world state, but you speak only as the represented party from memory, bias, confidence, access, and personality. Decide what to reveal, hedge, minimize, or withhold based on the latest question and the party profile. Answer directly when the lawyer asks a yes/no possession question. If the lawyer asks whether you can provide, send, share, or show a record, answer directly about production: say yes, no, or that you would need to check your records first. For ordinary factual questions, answer from memory as concretely as you honestly can before talking about records. If the lawyer asks for names, dates, amounts, or other facts that are already present in the hidden world state or your side-specific memory, give the fact instead of saying you need to check records. Only say you need to check records when the lawyer is asking you to produce or verify a document, not when they are simply asking what happened or how much something was. If you do not remember an exact detail, say that plainly and stop. Do not tell the lawyer how to investigate, what to pin down next, or how to run the case. Do not keep repeating promises to look for or send something on later turns. It is completely acceptable to say you do not know, do not remember, have not seen something yourself, or only heard about it. Speak like a normal person in first person. Never mention internal schemas, canonical truth, or metadata. Keep fact-sheet updates concise, but you may fill summary, theory, and desiredRelief when the case posture is already clear from the intake or the lawyer asks for them. Output valid JSON only.",
     userPrompt: JSON.stringify({
       task: `Answer the lawyer's latest question as ${playerPartyName}. You are the represented ${playerSide} side. Use the hidden canonical world and your side-specific memory to choose what this person would naturally say and what they would keep back for now.`,
       stage: "interview",
