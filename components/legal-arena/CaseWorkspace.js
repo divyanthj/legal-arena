@@ -262,6 +262,9 @@ export default function CaseWorkspace({ initialCase }) {
     : caseSession.courtroomTranscript;
   const normalizedCourtroomTranscript =
     visibleCourtroomTranscript.map(normalizeCourtroomEntry);
+  const isInterview = caseSession.status === "interview";
+  const isVerdict = caseSession.status === "verdict";
+  const isExited = caseSession.status === "exited";
 
   useEffect(() => {
     if (!isInterview || !interviewTranscriptRef.current) {
@@ -489,9 +492,6 @@ export default function CaseWorkspace({ initialCase }) {
     }
   };
 
-  const isInterview = caseSession.status === "interview";
-  const isVerdict = caseSession.status === "verdict";
-  const isExited = caseSession.status === "exited";
   const playerPartyName = getPlayerPartyName(caseSession);
   const opponentPartyName = getOpponentPartyName(caseSession);
   const plaintiffName = getPlaintiffName(caseSession);
