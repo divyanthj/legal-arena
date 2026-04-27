@@ -152,6 +152,10 @@ const caseSessionSchema = mongoose.Schema(
       type: Date,
       default: null,
     },
+    completedAt: {
+      type: Date,
+      default: null,
+    },
     lawbookVersion: {
       type: String,
       required: true,

@@ -24,6 +24,7 @@ import { DEFAULT_CATEGORY_SLUG } from "./categories";
 
 const toPlain = (doc) => (doc?.toJSON ? doc.toJSON() : doc);
 const CASE_EXIT_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+const CASE_COMPLETION_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
 const DEFAULT_PLAYER_SIDE = "client";
 const OPPOSING_SIDE = {
   client: "opponent",
@@ -186,6 +187,14 @@ const buildOpeningStatementForSide = (template, side) => {
 const getTemplateSlugFromSession = (caseSession) =>
   caseSession.templateSlug || caseSession.scenarioId || "";
 
+const formatCooldownEndsAt = (value) =>
+  value.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
 const applyTemplateMetadataToSession = (caseSession, template) => {
   if (!caseSession || !template) {
     return false;
@@ -251,13 +260,116 @@ const getActiveExitCooldowns = async (userId) => {
   return cooldowns;
 };
 
-const buildTemplateCard = ({ template, progression, cooldownEndsAt = null }) => {
+const getActiveCompletedCooldowns = async (userId) => {
+  const threshold = new Date(Date.now() - CASE_COMPLETION_COOLDOWN_MS);
+  const completedSessions = await CaseSession.find({
+    userId,
+    status: "verdict",
+    $or: [
+      { completedAt: { $gte: threshold } },
+      {
+        completedAt: null,
+        updatedAt: { $gte: threshold },
+      },
+    ],
+  })
+    .select("caseTemplateId completedAt updatedAt")
+    .sort({ updatedAt: -1 });
+
+  const cooldowns = new Map();
+
+  completedSessions.forEach((session) => {
+    const templateId = String(session.caseTemplateId);
+    const completedAt = session.completedAt || session.updatedAt;
+
+    if (!completedAt) {
+      return;
+    }
+
+    const cooldownEndsAt = new Date(
+      new Date(completedAt).getTime() + CASE_COMPLETION_COOLDOWN_MS
+    );
+    const current = cooldowns.get(templateId);
+
+    if (!current || cooldownEndsAt > current) {
+      cooldowns.set(templateId, cooldownEndsAt);
+    }
+  });
+
+  return cooldowns;
+};
+
+const getTemplateAvailability = ({
+  template,
+  progression,
+  exitCooldownEndsAt = null,
+  completionCooldownEndsAt = null,
+}) => {
   const eligibleComplexity = getEligibleComplexityForCategory(
     progression,
     template.primaryCategory
   );
-  const cooldownActive = cooldownEndsAt && cooldownEndsAt > new Date();
+  const now = new Date();
+  const exitCooldownActive = exitCooldownEndsAt && exitCooldownEndsAt > now;
+  const completionCooldownActive =
+    completionCooldownEndsAt && completionCooldownEndsAt > now;
   const unlockedByProgression = template.complexity <= eligibleComplexity;
+
+  if (completionCooldownActive) {
+    return {
+      visible: false,
+      unlocked: false,
+      cooldownEndsAt: completionCooldownEndsAt,
+      unlockReason: "Available again soon.",
+      blockReason: `This case is locked until ${formatCooldownEndsAt(
+        completionCooldownEndsAt
+      )}.`,
+    };
+  }
+
+  if (exitCooldownActive) {
+    return {
+      visible: true,
+      unlocked: unlockedByProgression && !exitCooldownActive,
+      cooldownEndsAt: exitCooldownEndsAt,
+      unlockReason: "Available again soon.",
+      blockReason: `This case is on cooldown until ${formatCooldownEndsAt(
+        exitCooldownEndsAt
+      )}.`,
+    };
+  }
+
+  if (!unlockedByProgression) {
+    return {
+      visible: true,
+      unlocked: false,
+      cooldownEndsAt: null,
+      unlockReason: `Unlock ${template.primaryCategory} complexity ${template.complexity} by completing more cases in that category.`,
+      blockReason: "This case is locked until you gain more experience in that category.",
+    };
+  }
+
+  return {
+    visible: true,
+    unlocked: true,
+    cooldownEndsAt: null,
+    unlockReason: "Available for your current specialization level.",
+    blockReason: "",
+  };
+};
+
+const buildTemplateCard = ({
+  template,
+  progression,
+  exitCooldownEndsAt = null,
+  completionCooldownEndsAt = null,
+}) => {
+  const availability = getTemplateAvailability({
+    template,
+    progression,
+    exitCooldownEndsAt,
+    completionCooldownEndsAt,
+  });
 
   return {
     id: template.id,
@@ -278,14 +390,11 @@ const buildTemplateCard = ({ template, progression, cooldownEndsAt = null }) => 
     complexity: template.complexity,
     sourceType: template.sourceType,
     legalTags: template.legalTags || [],
-    unlocked: unlockedByProgression && !cooldownActive,
-    cooldownEndsAt: cooldownActive ? cooldownEndsAt.toISOString() : null,
-    unlockReason:
-      cooldownActive
-        ? "Available again soon."
-        : unlockedByProgression
-        ? "Available for your current specialization level."
-        : `Unlock ${template.primaryCategory} complexity ${template.complexity} by completing more cases in that category.`,
+    unlocked: availability.unlocked,
+    cooldownEndsAt: availability.cooldownEndsAt
+      ? availability.cooldownEndsAt.toISOString()
+      : null,
+    unlockReason: availability.unlockReason,
   };
 };
 
@@ -363,22 +472,40 @@ export const listScenarioOptions = async (userId, userProfile = null) => {
 
   const user = await ensureUserProfile(userId, userProfile);
   const progression = normalizeProgression(user?.progression);
-  const [templates, cooldowns] = await Promise.all([
+  const [templates, exitCooldowns, completedCooldowns] = await Promise.all([
     CaseTemplate.find({ status: "active" }).sort({
       primaryCategory: 1,
       complexity: 1,
       createdAt: -1,
     }),
     getActiveExitCooldowns(userId),
+    getActiveCompletedCooldowns(userId),
   ]);
 
-  return templates.map((template) =>
-    buildTemplateCard({
-      template: toPlain(template),
+  return templates.flatMap((templateDocument) => {
+    const template = toPlain(templateDocument);
+    const availability = getTemplateAvailability({
+      template,
       progression,
-      cooldownEndsAt: cooldowns.get(String(template._id)) || null,
-    })
-  );
+      exitCooldownEndsAt: exitCooldowns.get(String(templateDocument._id)) || null,
+      completionCooldownEndsAt:
+        completedCooldowns.get(String(templateDocument._id)) || null,
+    });
+
+    if (!availability.visible) {
+      return [];
+    }
+
+    return [
+      buildTemplateCard({
+        template,
+        progression,
+        exitCooldownEndsAt: exitCooldowns.get(String(templateDocument._id)) || null,
+        completionCooldownEndsAt:
+          completedCooldowns.get(String(templateDocument._id)) || null,
+      }),
+    ];
+  });
 };
 
 export const createCaseSession = async ({ userId, userProfile = null, caseTemplateId }) => {
@@ -397,27 +524,22 @@ export const createCaseSession = async ({ userId, userProfile = null, caseTempla
 
   const user = await ensureUserProfile(userId, userProfile);
   const progression = normalizeProgression(user?.progression);
-  const allowedComplexity = getEligibleComplexityForCategory(
+  const [exitCooldowns, completedCooldowns] = await Promise.all([
+    getActiveExitCooldowns(userId),
+    getActiveCompletedCooldowns(userId),
+  ]);
+  const availability = getTemplateAvailability({
+    template,
     progression,
-    template.primaryCategory
-  );
-  const cooldowns = await getActiveExitCooldowns(userId);
-  const cooldownEndsAt = cooldowns.get(String(templateDocument._id));
+    exitCooldownEndsAt: exitCooldowns.get(String(templateDocument._id)) || null,
+    completionCooldownEndsAt:
+      completedCooldowns.get(String(templateDocument._id)) || null,
+  });
   const playerSide = Math.random() < 0.5 ? "client" : "opponent";
   const openingStatement = buildOpeningStatementForSide(template, playerSide);
 
-  if (template.complexity > allowedComplexity) {
-    throw new Error("This case is locked until you gain more experience in that category.");
-  }
-  if (cooldownEndsAt && cooldownEndsAt > new Date()) {
-    throw new Error(
-      `This case is on cooldown until ${cooldownEndsAt.toLocaleString("en-US", {
-        month: "short",
-        day: "numeric",
-        hour: "numeric",
-        minute: "2-digit",
-      })}.`
-    );
+  if (!availability.unlocked) {
+    throw new Error(availability.blockReason);
   }
 
   const caseSession = new CaseSession({

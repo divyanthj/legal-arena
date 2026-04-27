@@ -103,6 +103,7 @@ export async function POST(req, { params }) {
 
     if (result.verdict) {
       caseSession.status = "verdict";
+      caseSession.completedAt = caseSession.completedAt || new Date();
       caseSession.verdict = {
         winner: result.verdict.winner,
         summary: result.verdict.summary,
