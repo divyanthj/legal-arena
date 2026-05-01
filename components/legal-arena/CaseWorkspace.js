@@ -5,190 +5,30 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import ButtonAccount from "@/components/ButtonAccount";
 import apiClient from "@/libs/api";
+import { useCaseVoiceRecorder } from "./useCaseVoiceRecorder";
 
-const formatDateTime = (value) =>
-  new Intl.DateTimeFormat("en", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(new Date(value));
-
-const joinLines = (items = []) => items.join("\n");
-const splitLines = (value) =>
-  value
-    .split("\n")
-    .map((item) => item.trim())
-    .filter(Boolean);
-
-const normalizeCourtroomEntry = (entry = {}) => ({
-  ...entry,
-  citedFacts: Array.isArray(entry.citedFacts) ? entry.citedFacts : [],
-  citedRules: Array.isArray(entry.citedRules) ? entry.citedRules : [],
-  citedClaimIds: Array.isArray(entry.citedClaimIds) ? entry.citedClaimIds : [],
-});
-
-const caseFileFieldClass =
-  "textarea textarea-bordered arena-textarea h-24 bg-slate-950/35 text-slate-100";
-
-const winnerLabel = {
-  player: "You prevailed",
-  opponent: "Opposing counsel prevailed",
-  draw: "The court found it too close",
-};
-
-const winnerSignal = {
-  player: "Favorable Ruling",
-  opponent: "Adverse Ruling",
-  draw: "Split Outcome",
-};
-
-const verdictTone = {
-  player: {
-    card: "arena-status-favorable",
-    eyebrow: "text-emerald-300",
-  },
-  opponent: {
-    card: "arena-status-critical",
-    eyebrow: "text-rose-300",
-  },
-  draw: {
-    card: "arena-status-caution",
-    eyebrow: "text-amber-300",
-  },
-};
-
-const statusTone = {
-  interview: "arena-status-caution",
-  courtroom: "arena-status-neutral",
-  verdict: "arena-status-favorable",
-  exited: "arena-status-critical",
-};
-
-const ruleExplainers = {
-  "burden-of-proof":
-    "Tracks who had to prove the disputed point and whether that burden was actually met.",
-  "reliable-records":
-    "Rewards records and concrete documentation over assumptions or unsupported memory.",
-  "presumption-and-proof":
-    "Measures whether the argument overcame the starting presumption with actual proof.",
-  "ordinary-wear-vs-damage":
-    "Separates routine usage outcomes from chargeable damage based on the record.",
-  "notice-and-fair-warning":
-    "Looks at whether the opposing side had clear notice of the claimed basis or charge.",
-  "proportional-remedy":
-    "Checks whether requested relief is proportionate to what the record supports.",
-  "credibility-under-pressure":
-    "Weighs whether testimony remains credible once pressed on specifics and weak points.",
-};
-
-const helpText = {
-  playerPressure:
-    "Pressure reflects how strongly your side has persuaded the court so far in this matter.",
-  opponentPressure:
-    "Opponent pressure reflects how strongly the other side is currently persuading the bench.",
-  helpedYourSide:
-    "These points helped your side establish stronger credibility or legal footing.",
-  weakenedYourSide:
-    "These points weakened your side through gaps, concessions, or unresolved issues.",
-  factsUsed:
-    "Badges indicate facts your argument relied on. Hover to inspect the underlying record detail.",
-  rulesUsed:
-    "Badges indicate lawbook rules engaged in the round. Hover to inspect each rule lens.",
-};
-
-const InfoDot = ({ content, label }) => (
-  <span
-    className="inline-flex cursor-pointer items-center justify-center text-slate-400 transition hover:text-slate-200"
-    data-tooltip-id="tooltip"
-    data-tooltip-content={content}
-    aria-label={label || "More information"}
-    tabIndex={0}
-  >
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      fill="none"
-      viewBox="0 0 24 24"
-      strokeWidth={1.5}
-      stroke="currentColor"
-      className="h-4 w-4"
-      aria-hidden="true"
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z"
-      />
-    </svg>
-  </span>
-);
-
-const getRuleTooltip = (rule) =>
-  ruleExplainers[rule] ||
-  `${rule
-    .split("-")
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ")} is one of the lawbook lenses the court used in this round.`;
-
-const normalizeFactKey = (value = "") => String(value || "").trim().toLowerCase();
-
-const buildCanonicalFactLookup = (caseSession) =>
-  new Map(
-    ((caseSession.template && caseSession.template.canonicalFacts) || []).flatMap((fact) => {
-      const key = normalizeFactKey(fact.factId);
-      if (!key) return [];
-      return [[key, fact]];
-    })
-  );
-
-const resolveFactReference = (factReference, canonicalFactLookup) => {
-  const trimmed = String(factReference || "").trim();
-  if (!trimmed) {
-    return {
-      badge: "Fact",
-      tooltip: helpText.factsUsed,
-    };
-  }
-
-  const canonicalFact = canonicalFactLookup.get(normalizeFactKey(trimmed));
-
-  if (canonicalFact) {
-    return {
-      badge: "Fact",
-      tooltip: canonicalFact.canonicalDetail || canonicalFact.label || trimmed,
-    };
-  }
-
-  return {
-    badge: "Fact",
-    tooltip: trimmed,
-  };
-};
-
-const getPlayerPartyName = (caseSession) =>
-  caseSession.playerPartyName ||
-  (caseSession.playerSide === "opponent"
-    ? caseSession.premise.opponentName
-    : caseSession.premise.clientName);
-
-const getOpponentPartyName = (caseSession) =>
-  caseSession.opponentPartyName ||
-  (caseSession.playerSide === "opponent"
-    ? caseSession.premise.clientName
-    : caseSession.premise.opponentName);
-
-const getPlaintiffName = (caseSession) =>
-  caseSession.plaintiffName || caseSession.premise.clientName;
-
-const getDefendantName = (caseSession) =>
-  caseSession.defendantName || caseSession.premise.opponentName;
-
-const getCaseRouteRef = (caseSession) => caseSession.slug || caseSession.id;
-
-const clampPercent = (value) => {
-  if (!Number.isFinite(value)) return 0;
-  return Math.max(0, Math.min(100, value));
-};
+import {
+  formatDateTime,
+  joinLines,
+  splitLines,
+  normalizeCourtroomEntry,
+  caseFileFieldClass,
+  winnerLabel,
+  winnerSignal,
+  verdictTone,
+  statusTone,
+  helpText,
+  InfoDot,
+  getRuleTooltip,
+  buildCanonicalFactLookup,
+  resolveFactReference,
+  getPlayerPartyName,
+  getOpponentPartyName,
+  getPlaintiffName,
+  getDefendantName,
+  getCaseRouteRef,
+  clampPercent,
+} from "./caseWorkspaceUtils";
 
 export default function CaseWorkspace({ initialCase }) {
   const router = useRouter();
@@ -196,17 +36,18 @@ export default function CaseWorkspace({ initialCase }) {
   const [question, setQuestion] = useState("");
   const [argument, setArgument] = useState("");
   const [working, setWorking] = useState(false);
-  const [recordingQuestion, setRecordingQuestion] = useState(false);
-  const [transcribingQuestion, setTranscribingQuestion] = useState(false);
-  const [recordingArgument, setRecordingArgument] = useState(false);
-  const [transcribingArgument, setTranscribingArgument] = useState(false);
   const [pendingSpeaker, setPendingSpeaker] = useState("");
   const [optimisticTranscriptEntry, setOptimisticTranscriptEntry] = useState(null);
-  const mediaRecorderRef = useRef(null);
-  const audioChunksRef = useRef([]);
-  const streamRef = useRef(null);
   const interviewTranscriptRef = useRef(null);
   const courtroomTranscriptRef = useRef(null);
+  const {
+    recordingQuestion,
+    transcribingQuestion,
+    recordingArgument,
+    transcribingArgument,
+    handleQuestionVoiceInput,
+    handleArgumentVoiceInput,
+  } = useCaseVoiceRecorder({ setQuestion, setArgument });
   const [factSheetDraft, setFactSheetDraft] = useState({
     summary: initialCase.factSheet.summary || "",
     theory: initialCase.factSheet.theory || "",
@@ -233,12 +74,6 @@ export default function CaseWorkspace({ initialCase }) {
     });
   }, [caseSession]);
 
-  useEffect(
-    () => () => {
-      streamRef.current?.getTracks().forEach((track) => track.stop());
-    },
-    []
-  );
 
   const buildFactSheetPayload = () => ({
     ...caseSession.factSheet,
@@ -320,100 +155,6 @@ export default function CaseWorkspace({ initialCase }) {
       setWorking(false);
     }
   };
-
-  const stopRecording = () => {
-    if (mediaRecorderRef.current?.state === "recording") {
-      mediaRecorderRef.current.stop();
-    }
-  };
-
-  const handleVoiceInput = async ({
-    recording,
-    setRecording,
-    setTranscribing,
-    setText,
-  }) => {
-    if (recording) {
-      stopRecording();
-      return;
-    }
-
-    if (!navigator?.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
-      console.error("Voice input is not supported in this browser.");
-      return;
-    }
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
-
-      streamRef.current = stream;
-      audioChunksRef.current = [];
-      mediaRecorderRef.current = recorder;
-
-      recorder.ondataavailable = (event) => {
-        if (event.data?.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
-      };
-
-      recorder.onstop = async () => {
-        const mimeType = recorder.mimeType || "audio/webm";
-        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
-        const formData = new FormData();
-
-        streamRef.current?.getTracks().forEach((track) => track.stop());
-        streamRef.current = null;
-        mediaRecorderRef.current = null;
-        setRecording(false);
-
-        if (!audioBlob.size) {
-          return;
-        }
-
-        formData.append("audio", audioBlob, "question.webm");
-        setTranscribing(true);
-
-        try {
-          const { text } = await apiClient.post("/transcribe", formData);
-
-          if (text) {
-            setText((current) =>
-              [current.trim(), text.trim()].filter(Boolean).join(" ")
-            );
-          }
-        } catch (error) {
-          console.error(error);
-        } finally {
-          setTranscribing(false);
-        }
-      };
-
-      recorder.start();
-      setRecording(true);
-    } catch (error) {
-      setRecording(false);
-      streamRef.current?.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-      console.error(error);
-    }
-  };
-
-  const handleQuestionVoiceInput = () =>
-    handleVoiceInput({
-      recording: recordingQuestion,
-      setRecording: setRecordingQuestion,
-      setTranscribing: setTranscribingQuestion,
-      setText: setQuestion,
-    });
-
-  const handleArgumentVoiceInput = () =>
-    handleVoiceInput({
-      recording: recordingArgument,
-      setRecording: setRecordingArgument,
-      setTranscribing: setTranscribingArgument,
-      setText: setArgument,
-    });
 
   const handleFinalize = async () => {
     setWorking(true);
