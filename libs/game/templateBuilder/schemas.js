@@ -16,6 +16,17 @@ export const baseTemplateOutputSchema = {
   defendantName: "string",
   legalTags: ["string"],
   authoringNotes: "string",
+  canonicalStory: {
+    story: "string",
+    events: ["string"],
+    partyMentalStates: {
+      plaintiff: ["string"],
+      defendant: ["string"],
+    },
+    evidenceNarrative: ["string"],
+    ambiguities: ["string"],
+    authoringBoundaries: ["string"],
+  },
   partyProfiles: {
     plaintiff: {
       role: "plaintiff",

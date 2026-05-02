@@ -9,6 +9,7 @@ import {
   getInterviewBlueprintForSide,
   normalizeTemplateParty,
 } from "../templateInterview";
+import { buildStoryContextForSide, getCanonicalStoryWorld } from "../storyWorld";
 
 export const uniqueList = (items = []) =>
   [...new Set(items.filter(Boolean).map((item) => String(item).trim()).filter(Boolean))];
@@ -146,10 +147,35 @@ export const toSpokenSentence = (value = "") => {
   return text.charAt(0).toLowerCase() + text.slice(1);
 };
 
-export const getTemplate = (caseSession) =>
-  caseSession.caseTemplateId?.toJSON
+export const getTemplate = (caseSession) => {
+  const populatedTemplate = caseSession.caseTemplateId?.toJSON
     ? caseSession.caseTemplateId.toJSON()
     : caseSession.caseTemplateId;
+  const usableTemplate =
+    populatedTemplate && (populatedTemplate.title || populatedTemplate.overview)
+      ? populatedTemplate
+      : null;
+
+  return (
+    usableTemplate ||
+    caseSession.templateSnapshot || {
+        title: caseSession.title,
+        slug: caseSession.templateSlug || caseSession.scenarioId,
+        overview: caseSession.premise?.overview || "",
+        desiredRelief: caseSession.premise?.desiredRelief || "",
+        openingStatement: caseSession.premise?.openingStatement || "",
+        starterTheory: caseSession.factSheet?.theory || "",
+        practiceArea: caseSession.practiceArea,
+        primaryCategory: caseSession.primaryCategory,
+        complexity: caseSession.complexity,
+        courtName: caseSession.premise?.courtName || "",
+        plaintiffName: caseSession.premise?.clientName || "",
+        defendantName: caseSession.premise?.opponentName || "",
+        legalTags: [],
+        canonicalStory: caseSession.canonicalStory || null,
+      }
+  );
+};
 
 export const ensureTemplate = (template) => ({
   canonicalFacts: [],
@@ -163,6 +189,7 @@ export const ensureTemplate = (template) => ({
   opponentName: "Opponent",
   title: "Case",
   ...enrichTemplateForGameplay(template || {}),
+  canonicalStory: getCanonicalStoryWorld(template || {}),
 });
 
 export const getClaimId = (factId, party) => `${party}:${factId}`;
@@ -621,6 +648,7 @@ export const buildInterviewAgentContext = ({ template, playerSide, factSheet }) 
       posture: blueprint?.posture || "",
       suggestedQuestions: blueprint?.suggestedQuestions || [],
       priorityFactIds: blueprint?.priorityFactIds || [],
+      storyMemory: buildStoryContextForSide(safeTemplate, templateSide),
     },
     otherParty: {
       side: getTemplatePartyForSessionSide(getOpposingSide(playerSide)),
@@ -640,5 +668,6 @@ export const buildInterviewAgentContext = ({ template, playerSide, factSheet }) 
         discoveredEvidenceIds: factSheet.discoveredEvidenceIds || [],
       })
     ),
+    canonicalStoryWorld: getCanonicalStoryWorld(safeTemplate),
   };
 };

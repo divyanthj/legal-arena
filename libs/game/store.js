@@ -15,6 +15,11 @@ import {
   normalizeTemplateParty,
 } from "./templateInterview";
 import {
+  buildJudgeProfile,
+  buildSessionTemplateSnapshot,
+  getCanonicalStoryWorld,
+} from "./storyWorld";
+import {
   buildPublicLeaderboardEntry,
   ensureUserProfile,
   getEligibleComplexityForCategory,
@@ -400,7 +405,16 @@ const buildTemplateCard = ({
 
 export const buildCasePayload = (caseSession, templateOverride = null) => {
   const plainCase = toPlain(caseSession);
-  const templateSource = templateOverride || plainCase.caseTemplateId || plainCase.template || null;
+  const rawTemplateSource =
+    templateOverride ||
+    plainCase.caseTemplateId ||
+    plainCase.template ||
+    plainCase.templateSnapshot ||
+    null;
+  const templateSource =
+    rawTemplateSource && (rawTemplateSource.title || rawTemplateSource.overview)
+      ? rawTemplateSource
+      : plainCase.templateSnapshot || null;
   const template = templateSource ? enrichTemplateForGameplay(toPlain(templateSource)) : null;
   const templateSlug = getTemplateSlugFromSession(plainCase);
   const playerSide = getPlayerSide(plainCase);
@@ -521,6 +535,8 @@ export const createCaseSession = async ({ userId, userProfile = null, caseTempla
   }
 
   const template = enrichTemplateForGameplay(toPlain(templateDocument));
+  const templateSnapshot = buildSessionTemplateSnapshot(template);
+  const canonicalStory = getCanonicalStoryWorld(template);
 
   const user = await ensureUserProfile(userId, userProfile);
   const progression = normalizeProgression(user?.progression);
@@ -555,6 +571,8 @@ export const createCaseSession = async ({ userId, userProfile = null, caseTempla
     status: "interview",
     lawbookVersion: LAWBOOK_VERSION,
     maxCourtRounds: Math.max(3, template.complexity + 1),
+    templateSnapshot,
+    canonicalStory,
     premise: {
       clientName: template.clientName,
       opponentName: template.opponentName,
@@ -612,6 +630,10 @@ export const createCaseSession = async ({ userId, userProfile = null, caseTempla
   });
 
   ensureCaseSessionSlug(caseSession);
+  caseSession.judgeProfile = buildJudgeProfile({
+    caseSessionId: caseSession._id || caseSession.id || caseSession.slug,
+    complexity: template.complexity,
+  });
   await caseSession.save();
 
   return buildCasePayload(caseSession, template);

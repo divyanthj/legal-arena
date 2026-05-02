@@ -4,6 +4,7 @@ import {
   buildMissingEvidenceNotesForSide,
   getEvidenceItemsForFact,
 } from "../templateInterview";
+import { buildStoryContextForSide } from "../storyWorld";
 import {
   uniqueList,
   clamp,
@@ -69,6 +70,42 @@ import {
   questionRequestsProductionOrLookup,
   shouldUseKnownSpecificFallback,
 } from "./interview/questions";
+
+const buildStoryGroundedFallback = ({ template, playerSide, question }) => {
+  const storyContext = buildStoryContextForSide(
+    template,
+    playerSide === "opponent" ? "defendant" : "plaintiff"
+  );
+  const questionTokens = tokenize(question);
+  const storySections = [
+    ...storyContext.chronologicalEvents.map((text) => ({ type: "event", text })),
+    ...storyContext.myMentalState.map((text) => ({ type: "memory", text })),
+    ...storyContext.evidenceInWorld.map((text) => ({ type: "evidence", text })),
+    ...storyContext.ambiguities.map((text) => ({ type: "ambiguity", text })),
+  ].filter((item) => item.text);
+
+  const ranked = storySections
+    .map((item) => ({
+      ...item,
+      score: countSharedTokens(question, item.text),
+    }))
+    .sort((left, right) => right.score - left.score);
+  const best = ranked[0];
+
+  if (!best || best.score <= 0) {
+    return "";
+  }
+
+  if (best.type === "evidence") {
+    return `The record point I know about is this: ${toSpokenSentence(best.text)}.`;
+  }
+
+  if (best.type === "ambiguity") {
+    return `That is one of the weak spots: ${toSpokenSentence(best.text)}.`;
+  }
+
+  return `What I can tell you is that ${toSpokenSentence(best.text)}.`;
+};
 export const buildRelevantMissingEvidenceNotes = ({
   safeTemplate,
   playerSide,
@@ -212,6 +249,17 @@ export const buildInterviewFallback = ({ caseSession, template, question, factSh
       : remainingFacts.length === 0
       ? "I do not know anything more specific about that right now."
       : "I do not know that detail right now.";
+  const storyGroundedFallback = !primaryClaim && !evidenceResponse
+    ? buildStoryGroundedFallback({
+        template: safeTemplate,
+        playerSide,
+        question,
+      })
+    : "";
+
+  if (storyGroundedFallback) {
+    partyResponse = storyGroundedFallback;
+  }
   const specificDetailFallback = buildSpecificDetailFallback({
     lowerQuestion,
     corpus: responseCorpus,

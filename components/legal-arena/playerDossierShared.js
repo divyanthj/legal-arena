@@ -1,0 +1,146 @@
+import { LEGAL_CASE_CATEGORIES } from "@/libs/game/categories";
+
+export const statusLabel = {
+  interview: "Intake",
+  courtroom: "In Court",
+  verdict: "Verdict Ready",
+  exited: "Exited",
+};
+
+export const statusTone = {
+  interview: "arena-status-caution",
+  courtroom: "arena-status-neutral",
+  verdict: "arena-status-favorable",
+  exited: "arena-status-critical",
+};
+
+export const outcomeLabel = {
+  player: "Won",
+  opponent: "Lost",
+  draw: "Drew",
+  "": "In Progress",
+};
+
+export const matterTabs = ["Case File", "Interview", "Courtroom", "Verdict"];
+
+export const isValidDate = (value) => {
+  if (!value) return false;
+  return !Number.isNaN(new Date(value).getTime());
+};
+
+export const formatDate = (value, fallback = "Unknown date") => {
+  if (!isValidDate(value)) return fallback;
+
+  return new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date(value));
+};
+
+export const formatDateTime = (value, fallback = "Time unavailable") => {
+  if (!isValidDate(value)) return fallback;
+
+  return new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(value));
+};
+
+export const getCategoryTitle = (slug) =>
+  LEGAL_CASE_CATEGORIES.find((category) => category.slug === slug)?.title || slug;
+
+export const getMatterId = (caseSession) =>
+  caseSession?.slug || caseSession?.id || caseSession?._id || "";
+
+export const getMatterIdentifiers = (caseSession) =>
+  [caseSession?.slug, caseSession?.id, caseSession?._id].filter(Boolean).map(String);
+
+export const findMatterById = (cases = [], matterId = "") => {
+  const normalizedMatterId = String(matterId || "");
+
+  return (
+    cases.find((caseSession) =>
+      getMatterIdentifiers(caseSession).includes(normalizedMatterId)
+    ) || null
+  );
+};
+
+export const getOutcome = (caseSession) => caseSession?.verdict?.winner || "";
+
+export const getSidePlayed = (caseSession) =>
+  caseSession?.playerSide === "opponent" ? "Defendant" : "Plaintiff";
+
+export const getInterviewSpeaker = (entry, playerName) =>
+  entry.role === "player" ? playerName : entry.speaker;
+
+export const getCourtSpeaker = (entry, playerName, caseSession) =>
+  entry.speaker === "player"
+    ? playerName
+    : caseSession.opponentPartyName || caseSession.premise?.opponentName || "Opponent";
+
+export const getUniqueOptions = (items) => [...new Set(items.filter(Boolean))].sort();
+
+export const getStatusFilterLabel = (status) => statusLabel[status] || status;
+
+export const summarizeCount = (count, singular, plural = `${singular}s`) =>
+  `${count} ${count === 1 ? singular : plural}`;
+
+export const normalizeMatter = (caseSession) => ({
+  ...caseSession,
+  interviewCount: (caseSession.interviewTranscript || []).length,
+  courtroomCount: (caseSession.courtroomTranscript || []).length,
+  outcome: getOutcome(caseSession),
+  updatedDateLabel: formatDate(caseSession.updatedAt),
+});
+
+export function EmptyPanel({ title, detail }) {
+  return (
+    <div className="arena-console-soft border-dashed p-6 text-center">
+      <p className="font-semibold text-slate-100">{title}</p>
+      <p className="mt-2 text-sm leading-6 text-slate-300">{detail}</p>
+    </div>
+  );
+}
+
+export function FactList({ title, items }) {
+  const visibleItems = (items || []).filter(Boolean);
+
+  return (
+    <div className="arena-console-soft p-4">
+      <p className="font-semibold text-slate-100">{title}</p>
+      {visibleItems.length > 0 ? (
+        <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-300">
+          {visibleItems.map((item, index) => (
+            <li key={`${title}-${index}`}>- {item}</li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-3 text-sm text-slate-400">No entries recorded.</p>
+      )}
+    </div>
+  );
+}
+
+export function TranscriptEntry({ children, isPlayer, meta, speaker }) {
+  return (
+    <article
+      className={`rounded-xl p-4 ${
+        isPlayer
+          ? "arena-transcript-player ml-auto max-w-[95%]"
+          : "arena-transcript-opponent"
+      }`}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="font-semibold text-slate-100">{speaker}</p>
+        <p className="text-xs text-slate-400">{meta}</p>
+      </div>
+      <p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-slate-100">
+        {children}
+      </p>
+    </article>
+  );
+}

@@ -3,7 +3,7 @@ import {
   getCustomer,
   lemonSqueezySetup,
 } from "@lemonsqueezy/lemonsqueezy.js";
-import config from "@/config";
+import config from "../config.js";
 
 // This is used to create a Lemon Squeezy Checkout for one-time payments.
 export const createLemonSqueezyCheckout = async ({

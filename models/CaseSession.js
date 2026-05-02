@@ -165,6 +165,18 @@ const caseSessionSchema = mongoose.Schema(
       type: Number,
       default: 3,
     },
+    templateSnapshot: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
+    canonicalStory: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
+    judgeProfile: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
     premise: {
       clientName: String,
       opponentName: String,

@@ -2,14 +2,15 @@ import { notFound } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/libs/next-auth";
 import DevelopmentAccessGate from "@/components/legal-arena/DevelopmentAccessGate";
-import PlayerProfileDossier from "@/components/legal-arena/PlayerProfileDossier";
+import PlayerMatterDossier from "@/components/legal-arena/PlayerMatterDossier";
+import { findMatterById } from "@/components/legal-arena/playerDossierShared";
 import { userCanAccessArena } from "@/libs/admin";
 import { getPublicPlayerProfile } from "@/libs/game/store";
 import { toClientJSON } from "@/libs/serialize";
 
 export const dynamic = "force-dynamic";
 
-export default async function PlayerProfilePage({ params }) {
+export default async function PlayerMatterPage({ params }) {
   const session = await getServerSession(authOptions);
 
   if (!(await userCanAccessArena(session))) {
@@ -22,5 +23,16 @@ export default async function PlayerProfilePage({ params }) {
     notFound();
   }
 
-  return <PlayerProfileDossier profile={toClientJSON(profile)} />;
+  const matter = findMatterById(profile.cases, params.matterId);
+
+  if (!matter) {
+    notFound();
+  }
+
+  return (
+    <PlayerMatterDossier
+      player={toClientJSON(profile.player)}
+      caseSession={toClientJSON(matter)}
+    />
+  );
 }

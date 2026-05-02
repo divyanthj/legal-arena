@@ -35,6 +35,7 @@ import {
   factPriorityScore,
   pickMatchingClaimedFact,
 } from "./deterministic";
+import { normalizeCanonicalStory } from "../storyWorld";
 
 export const buildCompactStoryContext = (artifact = {}) => ({
   categorySlug: String(artifact?.categorySlug || "").trim(),
@@ -169,6 +170,32 @@ export const buildClaimsAndMetaPrompt = ({
       ? canonical.legalTags.map((item) => String(item).trim()).filter(Boolean)
       : [],
     authoringNotes: String(canonical.authoringNotes || "").trim(),
+    canonicalStory: normalizeCanonicalStory({
+      canonicalStory: canonical.canonicalStory || "",
+      events: canonical.storyBeats || [],
+      partyMentalStates: {
+        plaintiff: [
+          ...(Array.isArray(canonical.plaintiffPressurePoints)
+            ? canonical.plaintiffPressurePoints
+            : []),
+          plaintiffStory.narrative || "",
+        ],
+        defendant: [
+          ...(Array.isArray(canonical.defendantPressurePoints)
+            ? canonical.defendantPressurePoints
+            : []),
+          defendantStory.narrative || "",
+        ],
+      },
+      evidenceNarrative: canonical.likelyEvidence || [],
+      ambiguities: [
+        ...(Array.isArray(canonical.disputedIssues) ? canonical.disputedIssues : []),
+        ...(Array.isArray(canonical.missingOrUncertainRecords)
+          ? canonical.missingOrUncertainRecords
+          : []),
+      ],
+      authoringBoundaries: canonical.authoringNotes ? [canonical.authoringNotes] : [],
+    }),
     partyProfiles: buildDeterministicPartyProfiles(storyContext),
     interviewBlueprint: buildDeterministicInterviewBlueprint(facts, storyContext),
     claimsByFact: facts.map((fact) => ({

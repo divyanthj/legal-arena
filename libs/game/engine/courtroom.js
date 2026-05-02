@@ -125,9 +125,11 @@ export const buildCourtroomAgentContext = ({
       caseSession.factSheet.discoveredFactIds || [],
       caseSession.factSheet.discoveredEvidenceIds || []
     ),
+    canonicalStoryWorld: safeTemplate.canonicalStory,
     bench: {
       lawbookRules: rules,
       score: caseSession.score,
+      judgeProfile: caseSession.judgeProfile || null,
       recentCourtroomTranscript: caseSession.courtroomTranscript.slice(-6),
     },
   };
@@ -197,6 +199,13 @@ export const buildCourtroomFallback = ({ caseSession, argument, rules, template 
   const citedRules = pickRuleMentions(argument, rules);
   const citedClaims = pickClaimMentions(argument, caseSession.factSheet);
   const lowerArgument = argument.toLowerCase();
+  const judgeProfile = caseSession.judgeProfile || {};
+  const judgeVariance =
+    typeof judgeProfile.varianceSeed === "number"
+      ? ((judgeProfile.varianceSeed + caseSession.score.roundsCompleted) % 5) - 2
+      : 0;
+  const proofStrictness =
+    typeof judgeProfile.proofStrictness === "number" ? judgeProfile.proofStrictness : 0.6;
 
   const addressesRisk = (caseSession.factSheet.risks || []).some((risk) =>
     risk
@@ -226,7 +235,9 @@ export const buildCourtroomFallback = ({ caseSession, argument, rules, template 
       citedClaims.length * 1 +
       (addressesRisk ? 2 : 0) +
       (addressesDispute ? 3 : 0) +
-      (argument.length > 240 ? 2 : 0),
+      (argument.length > 240 ? 2 : 0) +
+      (corroboratedHits > 0 ? Math.round(proofStrictness * 2) : 0) +
+      judgeVariance,
     4,
     20
   );
@@ -245,7 +256,9 @@ export const buildCourtroomFallback = ({ caseSession, argument, rules, template 
     5 +
       unresolvedDisputes * 3 +
       unresolvedRisks * 2 +
-      (citedRules.length === 0 ? 2 : 0),
+      (citedRules.length === 0 ? 2 : 0) +
+      (corroboratedHits === 0 ? Math.round(proofStrictness * 2) : 0) -
+      judgeVariance,
     4,
     18
   );
@@ -284,8 +297,8 @@ export const buildCourtroomFallback = ({ caseSession, argument, rules, template 
 
   const benchSignal =
     playerDelta >= opponentDelta
-      ? "The judge seems to trust arguments more when they rest on corroborated facts rather than raw party statements."
-      : "The judge appears concerned that the opposing side still has room to reframe the disputed record.";
+      ? `The ${judgeProfile.label || "judge"} judge seems to trust arguments more when they rest on facts that were actually gathered and presented.`
+      : `The ${judgeProfile.label || "judge"} judge appears concerned that the opposing side still has room to reframe the disputed record.`;
 
   return {
     opponentResponse,
@@ -452,4 +465,3 @@ export const normalizeCourtResult = ({
         : fallbackVerdict,
   };
 };
-

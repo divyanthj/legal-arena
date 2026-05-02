@@ -214,6 +214,43 @@ const partyProfileSchema = mongoose.Schema(
   { _id: false }
 );
 
+const canonicalStorySchema = mongoose.Schema(
+  {
+    story: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    events: {
+      type: [String],
+      default: [],
+    },
+    partyMentalStates: {
+      plaintiff: {
+        type: [String],
+        default: [],
+      },
+      defendant: {
+        type: [String],
+        default: [],
+      },
+    },
+    evidenceNarrative: {
+      type: [String],
+      default: [],
+    },
+    ambiguities: {
+      type: [String],
+      default: [],
+    },
+    authoringBoundaries: {
+      type: [String],
+      default: [],
+    },
+  },
+  { _id: false }
+);
+
 const caseTemplateSchema = mongoose.Schema(
   {
     slug: {
@@ -306,6 +343,10 @@ const caseTemplateSchema = mongoose.Schema(
       default: "",
       trim: true,
     },
+    canonicalStory: {
+      type: canonicalStorySchema,
+      default: () => ({}),
+    },
     partyProfiles: {
       plaintiff: {
         type: partyProfileSchema,
@@ -389,6 +430,7 @@ if (
   existingCaseTemplateModel &&
   (!existingCaseTemplateModel.schema?.obj?.plaintiffName ||
     !existingCaseTemplateModel.schema?.obj?.partyProfiles ||
+    !existingCaseTemplateModel.schema?.obj?.canonicalStory ||
     !existingCaseTemplateModel.schema?.obj?.generationArtifactId)
 ) {
   mongoose.deleteModel("CaseTemplate");
