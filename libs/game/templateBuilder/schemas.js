@@ -18,14 +18,30 @@ export const baseTemplateOutputSchema = {
   authoringNotes: "string",
   canonicalStory: {
     story: "string",
-    events: ["string"],
+    events: [
+      {
+        beatId: "string",
+        order: "number",
+        label: "string",
+        detail: "string",
+        status: "settled|disputed|unknown",
+      },
+    ],
     partyMentalStates: {
-      plaintiff: ["string"],
-      defendant: ["string"],
+      plaintiff: ["string|object"],
+      defendant: ["string|object"],
     },
-    evidenceNarrative: ["string"],
-    ambiguities: ["string"],
-    authoringBoundaries: ["string"],
+    evidenceNarrative: [
+      {
+        label: "string",
+        detail: "string",
+        type: "document|photo|message|invoice|witness|record|other",
+        holderSide: "plaintiff|defendant|shared|third-party|unknown",
+        availabilityStatus: "confirmed|mentioned|unknown|missing|contested",
+      },
+    ],
+    ambiguities: ["string|object"],
+    authoringBoundaries: ["string|object"],
   },
   partyProfiles: {
     plaintiff: {

@@ -1,25 +1,119 @@
-const cleanText = (value = "") => String(value || "").trim();
-const cleanList = (items = []) =>
-  (Array.isArray(items) ? items : [])
-    .map((item) => cleanText(item))
-    .filter(Boolean);
+const OBJECT_PLACEHOLDER_PATTERN = /^\[object\s+Object\]$/i;
 
-const stringifyStoryItem = (item = {}) => {
-  if (typeof item === "string") {
-    return cleanText(item);
+const cleanText = (value = "") => {
+  if (value === null || value === undefined) {
+    return "";
   }
 
-  return cleanText(
-    [
-      item.label,
-      item.date || item.timing,
-      item.event || item.detail || item.description || item.text,
-      item.plaintiffState || item.defendantState || item.thoughtProcess,
-    ]
-      .filter(Boolean)
-      .join(": ")
-  );
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return String(value).trim();
+  }
+
+  return "";
 };
+
+const isMeaningfulText = (value = "") => {
+  const text = cleanText(value);
+  return Boolean(text) && !OBJECT_PLACEHOLDER_PATTERN.test(text);
+};
+
+const isPlainObject = (value) =>
+  value &&
+  typeof value === "object" &&
+  !Array.isArray(value) &&
+  !(value instanceof Date);
+
+const normalizeStoryObject = (item = {}) => {
+  const normalized = {};
+
+  Object.entries(item).forEach(([key, value]) => {
+    if (value === null || value === undefined) {
+      return;
+    }
+
+    if (Array.isArray(value)) {
+      const list = normalizeStoryList(value);
+      if (list.length) {
+        normalized[key] = list;
+      }
+      return;
+    }
+
+    if (isPlainObject(value)) {
+      const nested = normalizeStoryObject(value);
+      if (Object.keys(nested).length) {
+        normalized[key] = nested;
+      }
+      return;
+    }
+
+    if (typeof value === "number" || typeof value === "boolean") {
+      normalized[key] = value;
+      return;
+    }
+
+    const text = cleanText(value);
+    if (isMeaningfulText(text)) {
+      normalized[key] = text;
+    }
+  });
+
+  return normalized;
+};
+
+export const storyItemToText = (item = {}) => {
+  if (typeof item === "string" || typeof item === "number" || typeof item === "boolean") {
+    return isMeaningfulText(item) ? cleanText(item) : "";
+  }
+
+  if (!isPlainObject(item)) {
+    return "";
+  }
+
+  const primaryParts = [
+    item.label,
+    item.date || item.timing,
+    item.event || item.detail || item.description || item.text || item.canonicalDetail,
+    item.plaintiffState || item.defendantState || item.thoughtProcess || item.reaction,
+  ]
+    .map((value) => cleanText(value))
+    .filter(isMeaningfulText);
+
+  if (primaryParts.length) {
+    return primaryParts.join(": ");
+  }
+
+  return Object.values(item)
+    .flatMap((value) => {
+      if (Array.isArray(value)) {
+        return value.map(storyItemToText);
+      }
+      if (isPlainObject(value)) {
+        return storyItemToText(value);
+      }
+      return cleanText(value);
+    })
+    .filter(isMeaningfulText)
+    .join(": ");
+};
+
+const normalizeStoryItem = (item = {}) => {
+  if (isPlainObject(item)) {
+    const normalized = normalizeStoryObject(item);
+    return storyItemToText(normalized) ? normalized : "";
+  }
+
+  const text = cleanText(item);
+  return isMeaningfulText(text) ? text : "";
+};
+
+const normalizeStoryList = (items = []) =>
+  (Array.isArray(items) ? items : [])
+    .map((item) => normalizeStoryItem(item))
+    .filter(Boolean);
+
+const storyItemsToTextList = (items = []) =>
+  normalizeStoryList(items).map(storyItemToText).filter(isMeaningfulText);
 
 export const normalizeCanonicalStory = (source = {}) => {
   const packet =
@@ -29,28 +123,28 @@ export const normalizeCanonicalStory = (source = {}) => {
       : source) ||
     {};
   const storyText = cleanText(packet.canonicalStory || packet.story || packet.narrative);
-  const events = cleanList(packet.events || packet.storyBeats).map(stringifyStoryItem);
+  const events = normalizeStoryList(packet.events || packet.storyBeats);
   const partyMentalStates = {
-    plaintiff: cleanList(
+    plaintiff: normalizeStoryList(
       packet.partyMentalStates?.plaintiff ||
         packet.plaintiffMentalStates ||
         packet.plaintiffPressurePoints
-    ).map(stringifyStoryItem),
-    defendant: cleanList(
+    ),
+    defendant: normalizeStoryList(
       packet.partyMentalStates?.defendant ||
         packet.defendantMentalStates ||
         packet.defendantPressurePoints
-    ).map(stringifyStoryItem),
+    ),
   };
-  const evidenceNarrative = cleanList(
+  const evidenceNarrative = normalizeStoryList(
     packet.evidenceNarrative || packet.likelyEvidence
-  ).map(stringifyStoryItem);
-  const ambiguities = cleanList(
+  );
+  const ambiguities = normalizeStoryList(
     packet.ambiguities || packet.missingOrUncertainRecords || packet.disputedIssues
-  ).map(stringifyStoryItem);
-  const authoringBoundaries = cleanList(
+  );
+  const authoringBoundaries = normalizeStoryList(
     packet.authoringBoundaries || packet.boundaries
-  ).map(stringifyStoryItem);
+  );
 
   return {
     story: storyText,
@@ -111,6 +205,7 @@ export const buildCanonicalStoryFromLegacyTemplate = (template = {}) => {
 
 export const getCanonicalStoryWorld = (template = {}) => {
   const normalized = normalizeCanonicalStory(template.canonicalStory);
+  const legacyFallback = buildCanonicalStoryFromLegacyTemplate(template);
 
   if (
     normalized.story ||
@@ -118,10 +213,30 @@ export const getCanonicalStoryWorld = (template = {}) => {
     normalized.evidenceNarrative.length ||
     normalized.ambiguities.length
   ) {
-    return normalized;
+    return {
+      ...normalized,
+      events: normalized.events.length ? normalized.events : legacyFallback.events,
+      partyMentalStates: {
+        plaintiff: normalized.partyMentalStates.plaintiff.length
+          ? normalized.partyMentalStates.plaintiff
+          : legacyFallback.partyMentalStates.plaintiff,
+        defendant: normalized.partyMentalStates.defendant.length
+          ? normalized.partyMentalStates.defendant
+          : legacyFallback.partyMentalStates.defendant,
+      },
+      evidenceNarrative: normalized.evidenceNarrative.length
+        ? normalized.evidenceNarrative
+        : legacyFallback.evidenceNarrative,
+      ambiguities: normalized.ambiguities.length
+        ? normalized.ambiguities
+        : legacyFallback.ambiguities,
+      authoringBoundaries: normalized.authoringBoundaries.length
+        ? normalized.authoringBoundaries
+        : legacyFallback.authoringBoundaries,
+    };
   }
 
-  return buildCanonicalStoryFromLegacyTemplate(template);
+  return legacyFallback;
 };
 
 export const buildSessionTemplateSnapshot = (template = {}) => ({
@@ -157,15 +272,17 @@ export const buildStoryContextForSide = (template = {}, side = "plaintiff") => {
 
   return {
     canonicalStory: storyWorld.story,
-    chronologicalEvents: storyWorld.events,
-    myMentalState: storyWorld.partyMentalStates?.[normalizedSide] || [],
+    chronologicalEvents: storyItemsToTextList(storyWorld.events),
+    myMentalState: storyItemsToTextList(storyWorld.partyMentalStates?.[normalizedSide] || []),
     otherSideMentalState:
-      storyWorld.partyMentalStates?.[
-        normalizedSide === "plaintiff" ? "defendant" : "plaintiff"
-      ] || [],
-    evidenceInWorld: storyWorld.evidenceNarrative,
-    ambiguities: storyWorld.ambiguities,
-    authoringBoundaries: storyWorld.authoringBoundaries,
+      storyItemsToTextList(
+        storyWorld.partyMentalStates?.[
+          normalizedSide === "plaintiff" ? "defendant" : "plaintiff"
+        ] || []
+      ),
+    evidenceInWorld: storyItemsToTextList(storyWorld.evidenceNarrative),
+    ambiguities: storyItemsToTextList(storyWorld.ambiguities),
+    authoringBoundaries: storyItemsToTextList(storyWorld.authoringBoundaries),
   };
 };
 

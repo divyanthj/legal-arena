@@ -222,29 +222,29 @@ const canonicalStorySchema = mongoose.Schema(
       trim: true,
     },
     events: {
-      type: [String],
+      type: [mongoose.Schema.Types.Mixed],
       default: [],
     },
     partyMentalStates: {
       plaintiff: {
-        type: [String],
+        type: [mongoose.Schema.Types.Mixed],
         default: [],
       },
       defendant: {
-        type: [String],
+        type: [mongoose.Schema.Types.Mixed],
         default: [],
       },
     },
     evidenceNarrative: {
-      type: [String],
+      type: [mongoose.Schema.Types.Mixed],
       default: [],
     },
     ambiguities: {
-      type: [String],
+      type: [mongoose.Schema.Types.Mixed],
       default: [],
     },
     authoringBoundaries: {
-      type: [String],
+      type: [mongoose.Schema.Types.Mixed],
       default: [],
     },
   },
