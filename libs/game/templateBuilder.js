@@ -23,6 +23,10 @@ import {
   emitBuilderProgress,
   getTemplateTokenBudget,
 } from "./templateBuilder/progress";
+import {
+  finalizeTemplatePresentation,
+  isFastGenerationProfile,
+} from "./templateBuilder/shared";
 
 export const buildTemplateFromStoryArtifact = async ({
   artifact,
