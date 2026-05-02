@@ -2,6 +2,11 @@ import "server-only";
 
 import { normalizeTemplateParty } from "../templateInterview";
 import { LEGAL_CASE_CATEGORIES, getCategoryBySlug } from "../categories";
+import {
+  MONEY_PATTERN,
+  buildDepositCaseTitle,
+  extractMoneyValues,
+} from "./titleUtils";
 
 export const isFastGenerationProfile = (value = "") =>
   ["fast", "rebalance"].includes(String(value || "").trim().toLowerCase());
@@ -659,18 +664,6 @@ export const categoryTitleFallbacks = {
   administrative: "Red Tape Reckoning",
 };
 
-export const buildDepositCaseTitle = (corpus = "") => {
-  const moneyValues = extractMoneyValues(corpus);
-  const likelyWithheldAmount =
-    moneyValues.find((value) => value && value !== "1200") || moneyValues[0] || "";
-
-  if (likelyWithheldAmount) {
-    return `The $${likelyWithheldAmount} Deposit Fight`;
-  }
-
-  return "The Deposit Fight";
-};
-
 export const buildInterestingTitle = ({ title, subtitle, categorySlug, story = "", overview = "" }) => {
   if (!titleLooksGeneric(title)) {
     return String(title || "").trim();
@@ -711,3 +704,5 @@ export const finalizeTemplatePresentation = (payload = {}, categorySlug, canonic
 
 export const META_SCAFFOLDING_PATTERN =
   /\b(they are going to dispute this and say it does not prove my side|modeled claim|modelled claim|pending refinement|schema|i know they may use this against me|i know this point could be used against me|from my side, that point is being framed against me|my side is that)\b/i;
+
+export { MONEY_PATTERN, buildDepositCaseTitle, extractMoneyValues };

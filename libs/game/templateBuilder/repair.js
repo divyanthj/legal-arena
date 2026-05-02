@@ -40,18 +40,13 @@ import {
   normalizePartyProfile,
   titleLooksGeneric,
   categoryTitleFallbacks,
+  MONEY_PATTERN,
+  extractMoneyValues,
   buildDepositCaseTitle,
   buildInterestingTitle,
   finalizeTemplatePresentation,
   META_SCAFFOLDING_PATTERN,
 } from "./shared";
-
-export const MONEY_PATTERN = /\$\s?\d[\d,]*(?:\.\d{2})?|\b\d[\d,]*(?:\.\d{2})?\s?dollars?\b/gi;
-
-export const extractMoneyValues = (value = "") =>
-  [...String(value || "").matchAll(MONEY_PATTERN)].map((match) =>
-    String(match[0]).replace(/[^0-9.]/g, "")
-  );
 
 export const tokenizeEvidenceText = (value = "") =>
   uniqueList(
