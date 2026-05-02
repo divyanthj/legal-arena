@@ -4,6 +4,7 @@ import { requestStructuredCompletion } from "@/libs/gpt";
 import { validateCaseTemplatePayload } from "./templates";
 import {
   detectTemplateRepairIssues,
+  hasBlockingTemplateIssues,
   hasUsableCanonicalFacts,
   withCanonicalStoryNote,
   normalizeGeneratedPayload,
