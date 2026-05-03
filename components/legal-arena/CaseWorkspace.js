@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import ButtonAccount from "@/components/ButtonAccount";
 import apiClient from "@/libs/api";
+import { sanitizeFactSheet } from "@/libs/game/factSheetSanitizer";
 import { useCaseVoiceRecorder } from "./useCaseVoiceRecorder";
 
 import {
@@ -32,7 +33,11 @@ import {
 
 export default function CaseWorkspace({ initialCase }) {
   const router = useRouter();
-  const [caseSession, setCaseSession] = useState(initialCase);
+  const initialFactSheet = sanitizeFactSheet(initialCase.factSheet || {});
+  const [caseSession, setCaseSession] = useState(() => ({
+    ...initialCase,
+    factSheet: initialFactSheet,
+  }));
   const [question, setQuestion] = useState("");
   const [argument, setArgument] = useState("");
   const [working, setWorking] = useState(false);
@@ -49,28 +54,29 @@ export default function CaseWorkspace({ initialCase }) {
     handleArgumentVoiceInput,
   } = useCaseVoiceRecorder({ setQuestion, setArgument });
   const [factSheetDraft, setFactSheetDraft] = useState({
-    summary: initialCase.factSheet.summary || "",
-    theory: initialCase.factSheet.theory || "",
-    desiredRelief: initialCase.factSheet.desiredRelief || "",
-    timeline: joinLines(initialCase.factSheet.timeline),
-    supportingFacts: joinLines(initialCase.factSheet.supportingFacts),
-    risks: joinLines(initialCase.factSheet.risks),
-    disputedFacts: joinLines(initialCase.factSheet.disputedFacts),
-    corroboratedFacts: joinLines(initialCase.factSheet.corroboratedFacts),
-    missingEvidence: joinLines(initialCase.factSheet.missingEvidence || []),
+    summary: initialFactSheet.summary || "",
+    theory: initialFactSheet.theory || "",
+    desiredRelief: initialFactSheet.desiredRelief || "",
+    timeline: joinLines(initialFactSheet.timeline),
+    supportingFacts: joinLines(initialFactSheet.supportingFacts),
+    risks: joinLines(initialFactSheet.risks),
+    disputedFacts: joinLines(initialFactSheet.disputedFacts),
+    corroboratedFacts: joinLines(initialFactSheet.corroboratedFacts),
+    missingEvidence: joinLines(initialFactSheet.missingEvidence || []),
   });
 
   useEffect(() => {
+    const sanitizedFactSheet = sanitizeFactSheet(caseSession.factSheet || {});
     setFactSheetDraft({
-      summary: caseSession.factSheet.summary || "",
-      theory: caseSession.factSheet.theory || "",
-      desiredRelief: caseSession.factSheet.desiredRelief || "",
-      timeline: joinLines(caseSession.factSheet.timeline),
-      supportingFacts: joinLines(caseSession.factSheet.supportingFacts),
-      risks: joinLines(caseSession.factSheet.risks),
-      disputedFacts: joinLines(caseSession.factSheet.disputedFacts),
-      corroboratedFacts: joinLines(caseSession.factSheet.corroboratedFacts),
-      missingEvidence: joinLines(caseSession.factSheet.missingEvidence || []),
+      summary: sanitizedFactSheet.summary || "",
+      theory: sanitizedFactSheet.theory || "",
+      desiredRelief: sanitizedFactSheet.desiredRelief || "",
+      timeline: joinLines(sanitizedFactSheet.timeline),
+      supportingFacts: joinLines(sanitizedFactSheet.supportingFacts),
+      risks: joinLines(sanitizedFactSheet.risks),
+      disputedFacts: joinLines(sanitizedFactSheet.disputedFacts),
+      corroboratedFacts: joinLines(sanitizedFactSheet.corroboratedFacts),
+      missingEvidence: joinLines(sanitizedFactSheet.missingEvidence || []),
     });
   }, [caseSession]);
 
@@ -145,7 +151,10 @@ export default function CaseWorkspace({ initialCase }) {
         { question: submittedQuestion }
       );
 
-      setCaseSession(nextCase);
+      setCaseSession({
+        ...nextCase,
+        factSheet: sanitizeFactSheet(nextCase.factSheet || {}),
+      });
     } catch (error) {
       setQuestion(submittedQuestion);
       console.error(error);
@@ -167,7 +176,10 @@ export default function CaseWorkspace({ initialCase }) {
         }
       );
 
-      setCaseSession(nextCase);
+      setCaseSession({
+        ...nextCase,
+        factSheet: sanitizeFactSheet(nextCase.factSheet || {}),
+      });
     } catch (error) {
       console.error(error);
     } finally {
@@ -200,7 +212,10 @@ export default function CaseWorkspace({ initialCase }) {
         { argument: submittedArgument }
       );
 
-      setCaseSession(nextCase);
+      setCaseSession({
+        ...nextCase,
+        factSheet: sanitizeFactSheet(nextCase.factSheet || {}),
+      });
     } catch (error) {
       setArgument(submittedArgument);
       console.error(error);

@@ -49,6 +49,96 @@ import {
   buildInterviewAgentContext,
 } from "./shared";
 
+const PROOF_GAP_PATTERN =
+  /\b(photo|photos|receipt|receipts|invoice|invoices|inspection|dated|document|documentation|record|records|log|logs|itemized|itemised|support|supported|proof)\b/i;
+const WEAK_PROOF_PATTERN =
+  /\b(incomplete|missing|thin|uncertain|not fully|not clearly|vague|generic|unsupported|proof gap|documentation gap|not adequately|not enough reliable support|not reliably)\b/i;
+const VERIFICATION_FEEDBACK_PATTERN =
+  /\b(thin|documentation|documented|verify|verification|item-by-item|item by item|ordinary wear|chargeable damage|routine turnover|unsupported|substantiated|proof|receipts?|invoices?|photos?|inspection notes?)\b/i;
+const DISCRETE_DAMAGE_PATTERN =
+  /\b(broken|replacement|replace|fixture|blind|window latch|lock|door|cracked|hole|missing|damaged)\b/i;
+const SUBJECTIVE_CHARGE_PATTERN =
+  /\b(cleaning|carpet|stain|wall marks?|paint|scuff|turnover|ordinary wear|routine)\b/i;
+
+const proofTextCorpus = (factSheet = {}) =>
+  [
+    ...(factSheet.risks || []),
+    ...(factSheet.missingEvidence || []),
+    ...(factSheet.disputedFacts || []),
+    ...(factSheet.supportingFacts || []),
+  ].join(" ");
+
+const recentBenchCorpus = (caseSession = {}) =>
+  [
+    caseSession.score?.lastBenchSignal || "",
+    ...(caseSession.courtroomTranscript || [])
+      .slice(-4)
+      .flatMap((entry) => [entry.benchSignal, entry.text]),
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+const extractProofGaps = (factSheet = {}) =>
+  uniqueList([...(factSheet.missingEvidence || []), ...(factSheet.risks || [])].filter(
+    (item) => PROOF_GAP_PATTERN.test(item) || WEAK_PROOF_PATTERN.test(item)
+  )).slice(0, 5);
+
+const extractSalvageableItems = (factSheet = {}) =>
+  uniqueList(
+    [
+      ...(factSheet.supportingFacts || []),
+      ...(factSheet.corroboratedFacts || []),
+      ...(factSheet.disputedFacts || []),
+      ...(factSheet.knownClaims || []),
+    ].filter((item) => DISCRETE_DAMAGE_PATTERN.test(item))
+  ).slice(0, 3);
+
+const extractWeakCategories = (factSheet = {}) =>
+  uniqueList(
+    [
+      ...(factSheet.supportingFacts || []),
+      ...(factSheet.disputedFacts || []),
+      ...(factSheet.risks || []),
+    ].filter((item) => SUBJECTIVE_CHARGE_PATTERN.test(item) || WEAK_PROOF_PATTERN.test(item))
+  ).slice(0, 4);
+
+export const buildProofStrategyContext = ({ caseSession }) => {
+  const factSheet = caseSession.factSheet || {};
+  const fileCorpus = proofTextCorpus(factSheet);
+  const benchCorpus = recentBenchCorpus(caseSession);
+  const proofGaps = extractProofGaps(factSheet);
+  const salvageableItems = extractSalvageableItems(factSheet);
+  const weakCategories = extractWeakCategories(factSheet);
+  const weakFile = proofGaps.length > 0 || WEAK_PROOF_PATTERN.test(fileCorpus);
+  const benchFlaggedVerification =
+    VERIFICATION_FEEDBACK_PATTERN.test(benchCorpus) &&
+    caseSession.score?.roundsCompleted > 0;
+  const mode = weakFile || benchFlaggedVerification ? "salvage" : "standard";
+
+  return {
+    mode,
+    weakFile,
+    benchFlaggedVerification,
+    proofGaps,
+    salvageableItems,
+    weakCategories,
+    lateRound: (caseSession.score?.roundsCompleted || 0) + 1 >= 3,
+    instructions:
+      mode === "salvage"
+        ? [
+            "Do not keep defending broad categories as if they are fully proven.",
+            "Concede or narrow weakly documented categories instead of overclaiming them.",
+            "Identify the strongest one or two verifiable items and explain why they can support a limited allowance.",
+            "Tie each requested allowance to a documented condition and a bounded amount or proportional reduction when the record permits.",
+            "Ask for a partial ruling or reduced award, not an all-or-nothing win.",
+          ]
+        : [
+            "Anchor the argument to specific facts, corroborated points, and lawbook rules.",
+            "Address visible disputes directly before asking for the full requested relief.",
+          ],
+  };
+};
+
 export const buildCounselContext = ({ caseSession, template, rules }) => {
   const safeTemplate = ensureTemplate(template);
   const playerSide = getPlayerSide(caseSession);
@@ -64,6 +154,7 @@ export const buildCounselContext = ({ caseSession, template, rules }) => {
       name: getPartyName(safeTemplate, getOpposingSide(playerSide)),
     },
     publicCaseFile: caseSession.factSheet,
+    proofStrategy: buildProofStrategyContext({ caseSession }),
     lawbookRules: rules,
     recentCourtroomTranscript: caseSession.courtroomTranscript.slice(-6),
   };
@@ -95,6 +186,7 @@ export const buildCourtroomAgentContext = ({
   const safeTemplate = ensureTemplate(template);
   const playerSide = getPlayerSide(caseSession);
   const opponentSide = getOpposingSide(playerSide);
+  const proofStrategy = buildProofStrategyContext({ caseSession });
 
   return {
     shouldReturnVerdict,
@@ -104,6 +196,7 @@ export const buildCourtroomAgentContext = ({
       objective: buildDesiredReliefForSide(safeTemplate, playerSide),
       publicCaseFile: caseSession.factSheet,
       analysis: counselAnalysis,
+      proofStrategy,
     },
     opposingCounsel: {
       side: getTemplatePartyForSessionSide(opponentSide),
@@ -131,6 +224,7 @@ export const buildCourtroomAgentContext = ({
       score: caseSession.score,
       judgeProfile: caseSession.judgeProfile || null,
       recentCourtroomTranscript: caseSession.courtroomTranscript.slice(-6),
+      proofStrategy,
     },
   };
 };
@@ -206,6 +300,7 @@ export const buildCourtroomFallback = ({ caseSession, argument, rules, template 
       : 0;
   const proofStrictness =
     typeof judgeProfile.proofStrictness === "number" ? judgeProfile.proofStrictness : 0.6;
+  const proofStrategy = buildProofStrategyContext({ caseSession });
 
   const addressesRisk = (caseSession.factSheet.risks || []).some((risk) =>
     risk
@@ -285,6 +380,21 @@ export const buildCourtroomFallback = ({ caseSession, argument, rules, template 
   ]).slice(0, 3);
 
   const weaknesses = uniqueList([
+    proofStrategy.mode === "salvage" &&
+    proofStrategy.salvageableItems.length === 0
+      ? "The record has documentation gaps and the argument did not isolate a provable minimum item."
+      : "",
+    proofStrategy.mode === "salvage" &&
+    proofStrategy.salvageableItems.length > 0 &&
+    !proofStrategy.salvageableItems.some((item) =>
+      item
+        .toLowerCase()
+        .split(/\s+/)
+        .filter((token) => token.length > 4)
+        .some((token) => lowerArgument.includes(token))
+    )
+      ? `The argument should narrow to a verifiable item such as: ${proofStrategy.salvageableItems[0]}`
+      : "",
     citedRules.length === 0 ? "The argument did not clearly anchor itself to a lawbook rule." : "",
     !addressesRisk && caseSession.factSheet.risks[0]
       ? `A visible weakness remains unaddressed: ${caseSession.factSheet.risks[0]}`
@@ -296,6 +406,9 @@ export const buildCourtroomFallback = ({ caseSession, argument, rules, template 
   ]).slice(0, 3);
 
   const benchSignal =
+    proofStrategy.mode === "salvage"
+      ? `The ${judgeProfile.label || "judge"} judge needs a decision-ready partial remedy tied to the strongest documented item, not repeated broad damage categories.`
+      : 
     playerDelta >= opponentDelta
       ? `The ${judgeProfile.label || "judge"} judge seems to trust arguments more when they rest on facts that were actually gathered and presented.`
       : `The ${judgeProfile.label || "judge"} judge appears concerned that the opposing side still has room to reframe the disputed record.`;

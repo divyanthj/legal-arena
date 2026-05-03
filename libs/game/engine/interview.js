@@ -57,6 +57,8 @@ import {
 import {
   buildEvidenceResponseSegment,
   buildEvidenceHolderResponseSegment,
+  buildEvidenceProductionSummary,
+  evidenceCanBeProducedBySide,
   findSupportingEvidenceForClaims,
   pickRelevantEvidence,
   pickRelevantFacts,
@@ -125,7 +127,7 @@ export const buildRelevantMissingEvidenceNotes = ({
   ])
     .map((id) => (safeTemplate.evidenceItems || []).find((item) => item.id === id))
     .filter(Boolean)
-    .filter((item) => item.availabilityStatus !== "confirmed");
+    .filter((item) => !evidenceCanBeProducedBySide(item, playerSide));
 
   return uniqueList(
     linkedEvidence.map((item) => buildMissingEvidenceNotesForSide({
@@ -189,6 +191,12 @@ export const buildInterviewFallback = ({ caseSession, template, question, factSh
     partyClaims,
     playerSide,
   });
+  const productionRequest =
+    questionRequestsProductionOrLookup(lowerQuestion) &&
+    questionAsksForProofLikeEvidence(lowerQuestion);
+  const producibleEvidence = matchedEvidence.filter((item) =>
+    evidenceCanBeProducedBySide(item, playerSide)
+  );
   const remainingFacts = (safeTemplate.canonicalFacts || []).filter(
     (fact) => !factSheet.discoveredFactIds.includes(fact.factId)
   );
@@ -282,7 +290,9 @@ export const buildInterviewFallback = ({ caseSession, template, question, factSh
     (item) => item.holderSide === "third-party"
   );
 
-  if (specificDetailFallback) {
+  if (productionRequest && matchedEvidence.length > 0) {
+    partyResponse = buildEvidenceProductionSummary(matchedEvidence, playerSide);
+  } else if (specificDetailFallback) {
     partyResponse = specificDetailFallback;
   } else if (repeatedFallbackReply && holderQuestion && thirdPartyEvidence) {
     partyResponse = buildEvidenceHolderResponseSegment(thirdPartyEvidence);
@@ -323,8 +333,16 @@ export const buildInterviewFallback = ({ caseSession, template, question, factSh
       )
       .slice(0, 1)
       .map((item) => buildInterviewDisputeNote(item)),
-    corroboratedFacts: [],
-    sourceLinks: [],
+    corroboratedFacts: productionRequest
+      ? producibleEvidence
+          .slice(0, 3)
+          .map((item) => item.detail || item.label)
+      : [],
+    sourceLinks: productionRequest
+      ? producibleEvidence
+          .slice(0, 3)
+          .map((item) => item.label || item.id)
+      : [],
     missingEvidence: buildRelevantMissingEvidenceNotes({
       safeTemplate,
       playerSide,
@@ -427,6 +445,15 @@ export const normalizeInterviewResult = ({
     questionRequestsProductionOrLookup(lowerQuestion) &&
     hasRecordSearchPromise(normalizedAiPartyResponse) &&
     recentPartyResponses.some((value) => hasRecordSearchPromise(value));
+  const productionAnswerShouldUseFallback =
+    questionRequestsProductionOrLookup(lowerQuestion) &&
+    questionAsksForProofLikeEvidence(lowerQuestion) &&
+    fallback.partyResponse &&
+    !hasRecordSearchPromise(fallback.partyResponse) &&
+    (hasRecordSearchPromise(normalizedAiPartyResponse) ||
+      /without checking|need to check|would need to confirm|cannot say for sure/i.test(
+        normalizedAiPartyResponse
+      ));
   const mergedDiscoveredFactIds = uniqueList([
     ...(fallback.patch?.discoveredFactIds || []),
     ...patch.discoveredFactIds,
@@ -492,6 +519,8 @@ export const normalizeInterviewResult = ({
     partyResponse:
       repeatedProductionLoop
         ? buildStalledProductionReply(lowerQuestion)
+        : productionAnswerShouldUseFallback
+        ? fallback.partyResponse
         : useKnownSpecificFallback
         ? fallback.partyResponse
         : aiResult.partyResponse &&

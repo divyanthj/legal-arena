@@ -289,6 +289,71 @@ export const buildEvidenceProductionResponse = (item, side) => {
   }
 };
 
+export const evidenceCanBeProducedBySide = (item, side) => {
+  const templateSide = getTemplatePartyForSessionSide(side);
+  const holderIsSelf = item.holderSide === templateSide || item.holderSide === "shared";
+
+  return holderIsSelf && ["confirmed", "contested"].includes(item.availabilityStatus);
+};
+
+export const buildEvidenceProductionSummary = (items = [], side) => {
+  const seenIds = new Set();
+  const relevantItems = items
+    .filter((item) => {
+      const key = item.id || item.label || item.detail;
+      if (!key || seenIds.has(key)) {
+        return false;
+      }
+      seenIds.add(key);
+      return true;
+    })
+    .slice(0, 5);
+  const producible = relevantItems.filter((item) => evidenceCanBeProducedBySide(item, side));
+  const unavailable = relevantItems.filter((item) => !evidenceCanBeProducedBySide(item, side));
+
+  if (producible.length === 0 && unavailable.length === 0) {
+    return "";
+  }
+
+  const producedText = producible
+    .map((item) => {
+      const label = lowerFirst(String(item.label || item.detail || "that record").trim());
+      const detail = String(item.detail || "").trim();
+
+      return detail ? `${label} (${detail})` : label;
+    })
+    .join("; ");
+  const unavailableText = unavailable
+    .map((item) => {
+      const label = lowerFirst(String(item.label || item.detail || "that record").trim());
+
+      if (evidenceIsHeldByOtherParty(item, side)) {
+        return `${label} appears to be held by the other side`;
+      }
+
+      if (item.holderSide === "third-party") {
+        return `${label} appears to be held by a third party`;
+      }
+
+      if (item.availabilityStatus === "missing") {
+        return `${label} is not in hand`;
+      }
+
+      return `${label} has not been confirmed in the file`;
+    })
+    .join("; ");
+
+  if (producedText && unavailableText) {
+    return `Yes. I can provide ${producedText}. I cannot provide ${unavailableText} right now.`;
+  }
+
+  if (producedText) {
+    return `Yes. I can provide ${producedText}.`;
+  }
+
+  return `No. I cannot provide ${unavailableText} right now.`;
+};
+
 export const evidenceIsHeldByOtherParty = (item, side) =>
   (side === "client" && item.holderSide === "defendant") ||
   (side === "opponent" && item.holderSide === "plaintiff");

@@ -10,6 +10,7 @@ import {
   normalizeTemplateParty,
 } from "../templateInterview";
 import { buildStoryContextForSide, getCanonicalStoryWorld } from "../storyWorld";
+import { sanitizeFactSheet, sanitizeFactSheetList } from "../factSheetSanitizer";
 
 export const uniqueList = (items = []) =>
   [...new Set(items.filter(Boolean).map((item) => String(item).trim()).filter(Boolean))];
@@ -365,21 +366,39 @@ export const formatOpponentPosition = (value = "") => {
 
 export const normalizeFactSheetPatch = (patch = {}) => ({
   ...patch,
-  timeline: (patch.timeline || []).map((item) => humanizeClaimText(item)),
-  supportingFacts: (patch.supportingFacts || []).map((item) =>
-    humanizeClaimText(item)
+  timeline: sanitizeFactSheetList(
+    "timeline",
+    (patch.timeline || []).map((item) => humanizeClaimText(item))
   ),
-  risks: (patch.risks || []).map((item) => humanizeClaimText(item)),
-  knownFacts: (patch.knownFacts || []).map((item) => humanizeClaimText(item)),
-  knownClaims: (patch.knownClaims || []).map((item) => humanizeClaimText(item)),
-  disputedFacts: (patch.disputedFacts || []).map((item) =>
-    formatOpponentPosition(item)
+  supportingFacts: sanitizeFactSheetList(
+    "supportingFacts",
+    (patch.supportingFacts || []).map((item) => humanizeClaimText(item))
   ),
-  corroboratedFacts: (patch.corroboratedFacts || []).map((item) =>
-    humanizeClaimText(item)
+  risks: sanitizeFactSheetList(
+    "risks",
+    (patch.risks || []).map((item) => humanizeClaimText(item))
+  ),
+  knownFacts: sanitizeFactSheetList(
+    "knownFacts",
+    (patch.knownFacts || []).map((item) => humanizeClaimText(item))
+  ),
+  knownClaims: sanitizeFactSheetList(
+    "knownClaims",
+    (patch.knownClaims || []).map((item) => humanizeClaimText(item))
+  ),
+  disputedFacts: sanitizeFactSheetList(
+    "disputedFacts",
+    (patch.disputedFacts || []).map((item) => formatOpponentPosition(item))
+  ),
+  corroboratedFacts: sanitizeFactSheetList(
+    "corroboratedFacts",
+    (patch.corroboratedFacts || []).map((item) => humanizeClaimText(item))
   ),
   sourceLinks: patch.sourceLinks || [],
-  missingEvidence: (patch.missingEvidence || []).map((item) => humanizeClaimText(item)),
+  missingEvidence: sanitizeFactSheetList(
+    "missingEvidence",
+    (patch.missingEvidence || []).map((item) => humanizeClaimText(item))
+  ),
   openQuestions: patch.openQuestions || [],
   discoveredFactIds: patch.discoveredFactIds || [],
   discoveredClaimIds: patch.discoveredClaimIds || [],
@@ -527,7 +546,7 @@ export const mergeFactSheet = (current, patch, template, options = {}) => {
     next.timeline.length >= 1 &&
     (next.supportingFacts.length >= 2 || next.corroboratedFacts.length >= 1);
 
-  return next;
+  return sanitizeFactSheet(next);
 };
 
 export const coerceString = (value = "") =>

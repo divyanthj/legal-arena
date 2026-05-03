@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { sanitizeFactSheet } from "@/libs/game/factSheetSanitizer";
 import {
   EmptyPanel,
   FactList,
@@ -25,7 +26,7 @@ import {
 export default function PlayerMatterDossier({ player, caseSession }) {
   const matter = normalizeMatter(caseSession);
   const [activeTab, setActiveTab] = useState("Case File");
-  const factSheet = matter.factSheet || {};
+  const factSheet = sanitizeFactSheet(matter.factSheet || {});
   const verdict = matter.verdict || {};
   const hasVerdict = matter.status === "verdict" && Boolean(verdict.summary);
   const playerScore = verdict.finalScore?.player || matter.score?.player || 0;
