@@ -48,7 +48,7 @@ const ButtonAccount = () => {
     <Popover className="relative z-10">
       {({ open }) => (
         <>
-          <Popover.Button className="btn">
+          <Popover.Button className="arena-btn-dark inline-flex min-h-0 items-center gap-3 px-4 py-3 text-sm">
             {session?.user?.image ? (
               <img
                 src={session?.user?.image}
@@ -59,7 +59,7 @@ const ButtonAccount = () => {
                 height={24}
               />
             ) : (
-              <span className="w-6 h-6 bg-base-300 flex justify-center items-center rounded-full shrink-0">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/10 text-xs font-semibold">
                 {session?.user?.name?.charAt(0) ||
                   session?.user?.email?.charAt(0)}
               </span>
@@ -95,10 +95,10 @@ const ButtonAccount = () => {
             leaveTo="transform scale-95 opacity-0"
           >
             <Popover.Panel className="absolute left-0 z-10 mt-3 w-screen max-w-[16rem] transform">
-              <div className="overflow-hidden rounded-xl bg-base-100 p-1 text-base-content shadow-xl ring-1 ring-base-content ring-opacity-5">
-                <div className="space-y-0.5 text-sm text-base-content">
+              <div className="arena-surface overflow-hidden rounded-2xl p-1.5 text-white shadow-xl">
+                <div className="space-y-1 text-sm text-white/85">
                   <button
-                    className="flex w-full items-center gap-2 rounded-lg px-4 py-1.5 font-medium text-base-content duration-200 hover:bg-base-300"
+                    className="flex w-full items-center gap-2 rounded-xl px-4 py-2.5 font-medium duration-200 hover:bg-white/8"
                     onClick={handleBilling}
                   >
                     <svg
@@ -116,7 +116,7 @@ const ButtonAccount = () => {
                     Billing
                   </button>
                   <button
-                    className="flex w-full items-center gap-2 rounded-lg px-4 py-1.5 font-medium text-base-content duration-200 hover:bg-base-300"
+                    className="flex w-full items-center gap-2 rounded-xl px-4 py-2.5 font-medium duration-200 hover:bg-white/8"
                     onClick={handleSwitchAccount}
                   >
                     <svg
@@ -130,7 +130,7 @@ const ButtonAccount = () => {
                     Switch account
                   </button>
                   <button
-                    className="flex w-full items-center gap-2 rounded-lg px-4 py-1.5 font-medium text-base-content duration-200 hover:bg-error/20 hover:text-error"
+                    className="flex w-full items-center gap-2 rounded-xl px-4 py-2.5 font-medium text-rose-200 duration-200 hover:bg-rose-500/10 hover:text-rose-100"
                     onClick={handleSignOut}
                   >
                     <svg

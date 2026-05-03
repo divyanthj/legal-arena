@@ -23,7 +23,7 @@ export const normalizeCourtroomEntry = (entry = {}) => ({
 });
 
 export const caseFileFieldClass =
-  "textarea textarea-bordered arena-textarea h-24 bg-slate-950/35 text-slate-100";
+  "textarea textarea-bordered arena-textarea arena-field h-24 text-slate-100";
 
 export const winnerLabel = {
   player: "You prevailed",

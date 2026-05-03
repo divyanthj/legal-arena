@@ -75,31 +75,31 @@ export default function PlayerProfileDossier({ profile }) {
     : "Join date unavailable";
 
   return (
-    <main className="arena-shell min-h-screen overflow-x-hidden px-4 py-6 md:px-8 md:py-10">
+    <main className="arena-app-shell min-h-screen overflow-x-hidden px-4 py-6 md:px-8 md:py-10">
       <section className="mx-auto max-w-7xl space-y-6 arena-reveal">
-        <div className="arena-console arena-scanline">
+        <div className="arena-surface arena-scanline arena-column-bg">
           <div className="p-6 md:p-8">
             <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
               <div className="max-w-4xl">
                 <div className="flex flex-wrap items-center gap-2">
                   <Link
                     href="/dashboard"
-                    className="btn btn-ghost btn-sm border border-slate-500/25 bg-slate-900/30 text-slate-100"
+                    className="arena-btn-dark inline-flex px-4 py-2 text-sm"
                   >
                     Back to Dashboard
                   </Link>
-                  <span className="badge badge-outline border-slate-400/35 text-slate-100">
+                  <span className="badge badge-outline border-white/15 text-white/80">
                     Player Dossier
                   </span>
                 </div>
-                <h1 className="arena-case-title mt-4 text-4xl leading-tight md:text-5xl">
+                <h1 className="arena-headline mt-5 text-4xl uppercase leading-[0.92] md:text-6xl">
                   {player.name}
                 </h1>
-                <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300 md:text-base">
+                <p className="mt-3 max-w-2xl text-sm leading-7 text-white/66 md:text-base">
                   A focused archive of this lawyer&apos;s matter record and category
                   strength.
                 </p>
-                <div className="mt-4 flex flex-wrap gap-4 text-sm text-slate-300">
+                <div className="mt-4 flex flex-wrap gap-4 text-sm text-white/58">
                   <span>{joinedLabel}</span>
                   <span>{player.completedCases} completed matters</span>
                   <span>
@@ -108,21 +108,21 @@ export default function PlayerProfileDossier({ profile }) {
                 </div>
               </div>
               <div className="grid w-full gap-3 sm:grid-cols-3 md:w-auto md:min-w-[25rem]">
-                <div className="arena-metric">
+                <div className="arena-stat-card">
                   <p className="arena-kicker">Rating</p>
-                  <p className="mt-2 text-3xl font-semibold text-slate-100">
+                  <p className="mt-2 text-3xl font-semibold text-white">
                     {player.overallRating}
                   </p>
                 </div>
-                <div className="arena-metric">
+                <div className="arena-stat-card">
                   <p className="arena-kicker">XP</p>
-                  <p className="mt-2 text-3xl font-semibold text-slate-100">
+                  <p className="mt-2 text-3xl font-semibold text-white">
                     {player.overallXp}
                   </p>
                 </div>
-                <div className="arena-metric">
+                <div className="arena-stat-card">
                   <p className="arena-kicker">Matters</p>
-                  <p className="mt-2 text-3xl font-semibold text-slate-100">
+                  <p className="mt-2 text-3xl font-semibold text-white">
                     {cases.length}
                   </p>
                 </div>
@@ -133,23 +133,23 @@ export default function PlayerProfileDossier({ profile }) {
 
         <div className="grid gap-6 xl:grid-cols-[0.78fr_1.22fr]">
           <aside className="space-y-6">
-            <div className="arena-console">
+            <div className="arena-surface">
               <div className="p-5 md:p-6">
                 <p className="arena-kicker">Specialty Record</p>
                 <h2 className="arena-headline mt-2 text-2xl">Category progression</h2>
                 <div className="mt-5 space-y-3">
                   {sortedCategories.map((category) => (
-                    <article key={category.categorySlug} className="arena-console-soft p-4">
+                    <article key={category.categorySlug} className="arena-surface-soft p-4">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="font-semibold text-slate-100">
+                          <p className="font-semibold text-white">
                             {getCategoryTitle(category.categorySlug)}
                           </p>
-                          <p className="mt-2 text-sm text-slate-300">
+                          <p className="mt-2 text-sm text-white/64">
                             {category.completedCases} completed | unlock{" "}
                             {category.unlockedComplexity}
                           </p>
-                          <p className="mt-1 text-sm text-slate-400">
+                          <p className="mt-1 text-sm text-white/42">
                             Record {category.wins}-{category.losses}-{category.draws}
                           </p>
                         </div>
@@ -158,7 +158,7 @@ export default function PlayerProfileDossier({ profile }) {
                         </span>
                       </div>
                       {(category.recentPerformance || []).length > 0 && (
-                        <p className="mt-3 line-clamp-2 text-xs leading-5 text-slate-400">
+                        <p className="mt-3 line-clamp-2 text-xs leading-5 text-white/42">
                           {category.recentPerformance.slice(0, 2).join(" | ")}
                         </p>
                       )}
@@ -170,25 +170,25 @@ export default function PlayerProfileDossier({ profile }) {
           </aside>
 
           <section className="space-y-6">
-            <div className="arena-console">
+            <div className="arena-surface">
               <div className="p-5 md:p-6">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                   <div>
                     <p className="arena-kicker">Matter Archive</p>
                     <h2 className="arena-headline mt-2 text-2xl">Cases</h2>
                   </div>
-                  <p className="text-sm text-slate-400">
+                  <p className="text-sm text-white/42">
                     {filteredCases.length} of {cases.length} visible matters
                   </p>
                 </div>
 
                 <div className="mt-5 grid gap-3 md:grid-cols-3">
                   <label className="form-control">
-                    <span className="label-text text-xs uppercase tracking-[0.14em] text-slate-400">
+                    <span className="label-text text-xs uppercase tracking-[0.14em] text-white/42">
                       Category
                     </span>
                     <select
-                      className="select select-bordered min-h-0 bg-slate-950/40 text-sm text-slate-100"
+                      className="arena-select select select-bordered min-h-0 text-sm text-slate-100"
                       value={categoryFilter}
                       onChange={(event) => setCategoryFilter(event.target.value)}
                     >
@@ -201,11 +201,11 @@ export default function PlayerProfileDossier({ profile }) {
                     </select>
                   </label>
                   <label className="form-control">
-                    <span className="label-text text-xs uppercase tracking-[0.14em] text-slate-400">
+                    <span className="label-text text-xs uppercase tracking-[0.14em] text-white/42">
                       Status
                     </span>
                     <select
-                      className="select select-bordered min-h-0 bg-slate-950/40 text-sm text-slate-100"
+                      className="arena-select select select-bordered min-h-0 text-sm text-slate-100"
                       value={statusFilter}
                       onChange={(event) => setStatusFilter(event.target.value)}
                     >
@@ -218,11 +218,11 @@ export default function PlayerProfileDossier({ profile }) {
                     </select>
                   </label>
                   <label className="form-control">
-                    <span className="label-text text-xs uppercase tracking-[0.14em] text-slate-400">
+                    <span className="label-text text-xs uppercase tracking-[0.14em] text-white/42">
                       Outcome
                     </span>
                     <select
-                      className="select select-bordered min-h-0 bg-slate-950/40 text-sm text-slate-100"
+                      className="arena-select select select-bordered min-h-0 text-sm text-slate-100"
                       value={outcomeFilter}
                       onChange={(event) => setOutcomeFilter(event.target.value)}
                     >
@@ -257,7 +257,7 @@ export default function PlayerProfileDossier({ profile }) {
                         <Link
                           key={matterId}
                           href={`/dashboard/players/${player.id}/matters/${matterId}`}
-                          className="arena-console-soft block p-4 transition hover:-translate-y-0.5 hover:border-slate-300/45"
+                          className="arena-surface-soft block p-4 transition hover:-translate-y-0.5 hover:border-white/20"
                         >
                           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                             <div className="min-w-0">
@@ -272,30 +272,30 @@ export default function PlayerProfileDossier({ profile }) {
                                 <span className="badge border arena-status arena-status-neutral">
                                   {outcomeLabel[caseSession.outcome] || "In Progress"}
                                 </span>
-                                <span className="text-xs uppercase tracking-[0.14em] text-slate-400">
+                                <span className="text-xs uppercase tracking-[0.14em] text-white/42">
                                   Updated {caseSession.updatedDateLabel}
                                 </span>
                               </div>
-                              <h3 className="mt-3 text-lg font-semibold leading-tight text-slate-100">
+                              <h3 className="mt-3 text-lg font-semibold leading-tight text-white">
                                 {caseSession.title}
                               </h3>
-                              <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-300">
+                              <p className="mt-2 line-clamp-2 text-sm leading-7 text-white/66">
                                 {caseSession.premise?.overview ||
                                   "No case overview available."}
                               </p>
-                              <div className="mt-3 flex flex-wrap gap-4 text-xs text-slate-400">
+                              <div className="mt-3 flex flex-wrap gap-4 text-xs text-white/42">
                                 <span>
                                   {caseSession.premise?.courtName || "Unknown court"}
                                 </span>
                                 <span>Side played: {getSidePlayed(caseSession)}</span>
                               </div>
                             </div>
-                            <div className="flex shrink-0 flex-wrap gap-2 text-xs text-slate-300 lg:max-w-[16rem] lg:justify-end">
+                            <div className="flex shrink-0 flex-wrap gap-2 text-xs text-white/56 lg:max-w-[16rem] lg:justify-end">
                               <span>{getCategoryTitle(caseSession.primaryCategory)}</span>
                               <span>Complexity {caseSession.complexity}</span>
                               <span>{summarizeCount(caseSession.interviewCount, "intake")}</span>
                               <span>{summarizeCount(caseSession.courtroomCount, "round")}</span>
-                              <span className="font-semibold text-slate-100">View matter</span>
+                              <span className="font-semibold text-white">View matter</span>
                             </div>
                           </div>
                         </Link>

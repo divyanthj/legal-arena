@@ -272,45 +272,45 @@ export default function CaseWorkspace({ initialCase }) {
   }, [caseSession.score.roundsCompleted, isExited, isInterview, isVerdict]);
 
   return (
-    <main className="arena-shell min-h-screen px-4 py-6 md:px-8 md:py-10">
+    <main className="arena-app-shell min-h-screen px-4 py-6 md:px-8 md:py-10">
       <section className="mx-auto max-w-7xl space-y-6 arena-reveal">
-        <div className="arena-console arena-scanline">
+        <div className="arena-surface arena-scanline arena-column-bg">
           <div className="p-6 md:p-8">
             <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
               <div className="max-w-3xl">
                 <div className="flex flex-wrap items-center gap-2">
                   <Link
                     href="/dashboard"
-                    className="btn btn-ghost btn-sm border border-slate-500/25 bg-slate-900/30 text-slate-100"
+                    className="arena-btn-dark inline-flex px-4 py-2 text-sm"
                   >
                     Back to Cases
                   </Link>
-                  <span className="badge badge-outline border-slate-400/35 text-slate-100">
+                  <span className="badge badge-outline border-white/15 text-white/80">
                     {caseSession.practiceArea}
                   </span>
-                  <span className="badge badge-outline border-slate-400/35 text-slate-100">
+                  <span className="badge badge-outline border-white/15 text-white/80">
                     {caseSession.primaryCategory}
                   </span>
-                  <span className="badge badge-outline border-slate-400/35 text-slate-100">
+                  <span className="badge badge-outline border-white/15 text-white/80">
                     Complexity {caseSession.complexity}
                   </span>
-                  <span className="badge badge-outline border-slate-400/35 text-slate-100">
+                  <span className="badge badge-outline border-white/15 text-white/80">
                     {sideBadgeLabel}
                   </span>
                 </div>
-                <h1 className="arena-case-title mt-4 text-4xl leading-tight md:text-5xl">
+                <h1 className="arena-headline mt-5 text-4xl uppercase leading-[0.92] md:text-6xl">
                   {caseSession.title}
                 </h1>
-                <p className="mt-3 max-w-2xl text-slate-300">
+                <p className="mt-4 max-w-2xl text-white/66">
                   {caseSession.premise.overview}
                 </p>
-                <div className="mt-4 flex flex-wrap gap-4 text-sm text-slate-300">
+                <div className="mt-4 flex flex-wrap gap-4 text-sm text-white/58">
                   <span>Plaintiff: {plaintiffName}</span>
                   <span>vs.</span>
                   <span>Defendant: {defendantName}</span>
                   <span>{caseSession.premise.courtName}</span>
                 </div>
-                <p className="mt-3 text-sm text-slate-300">
+                <p className="mt-3 text-sm text-white/66">
                   You represent {playerPartyName} against {opponentPartyName}.
                 </p>
               </div>
@@ -332,7 +332,7 @@ export default function CaseWorkspace({ initialCase }) {
         <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
           <section className="space-y-6">
             {isInterview ? (
-              <div className="arena-console">
+              <div className="arena-surface">
                 <div className="p-6">
                   <div className="flex items-end justify-between gap-3">
                     <div>
@@ -341,7 +341,7 @@ export default function CaseWorkspace({ initialCase }) {
                         Collect your side&apos;s facts
                       </h2>
                     </div>
-                    <span className="text-xs uppercase tracking-[0.14em] text-slate-400">
+                    <span className="text-xs uppercase tracking-[0.14em] text-white/42">
                       Interview {playerPartyName} and tighten the record.
                     </span>
                   </div>
@@ -360,12 +360,12 @@ export default function CaseWorkspace({ initialCase }) {
                         }`}
                       >
                         <div className="flex items-center justify-between gap-3">
-                          <p className="font-semibold text-slate-100">{entry.speaker}</p>
-                          <p className="text-xs text-slate-400">
+                          <p className="font-semibold text-white">{entry.speaker}</p>
+                          <p className="text-xs text-white/40">
                             {formatDateTime(entry.createdAt)}
                           </p>
                         </div>
-                        <p className="mt-2 whitespace-pre-wrap leading-7 text-slate-100">
+                        <p className="mt-2 whitespace-pre-wrap leading-7 text-white">
                           {entry.text}
                         </p>
                       </article>
@@ -373,10 +373,10 @@ export default function CaseWorkspace({ initialCase }) {
                     {working && pendingSpeaker && (
                       <article className="arena-transcript-opponent rounded-xl p-4">
                         <div className="flex items-center justify-between gap-3">
-                          <p className="font-semibold text-slate-100">{pendingSpeaker}</p>
+                          <p className="font-semibold text-white">{pendingSpeaker}</p>
                           <span className="loading loading-dots loading-sm" />
                         </div>
-                        <p className="mt-2 leading-7 text-slate-100">
+                        <p className="mt-2 leading-7 text-white">
                           {pendingSpeaker} is typing...
                         </p>
                       </article>
@@ -385,14 +385,14 @@ export default function CaseWorkspace({ initialCase }) {
 
                   <form className="mt-6 space-y-3" onSubmit={handleInterviewSubmit}>
                     <textarea
-                      className="textarea textarea-bordered arena-textarea h-32 w-full bg-slate-950/35 text-slate-100"
+                      className="textarea textarea-bordered arena-textarea arena-field h-32 w-full text-slate-100"
                       placeholder={`Ask ${playerPartyName} about dates, records, witnesses, notice, or any proof gaps you need to pin down.`}
                       value={question}
                       onChange={(event) => setQuestion(event.target.value)}
                       disabled={transcribingQuestion}
                     />
                     <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div className="space-y-1 text-sm text-slate-300">
+                      <div className="space-y-1 text-sm text-white/62">
                         <div>
                           Suggested open questions:{" "}
                           {(caseSession.factSheet.openQuestions || [])
@@ -409,11 +409,11 @@ export default function CaseWorkspace({ initialCase }) {
                       <div className="flex flex-wrap items-center gap-2">
                         <button
                           type="button"
-                          className={`btn border ${
+                          className={`border ${
                             recordingQuestion
-                              ? "border-rose-400/60 bg-rose-950/40 text-rose-100"
-                              : "btn-ghost border-slate-500/35 text-slate-100"
-                          }`}
+                              ? "arena-btn-danger"
+                              : "arena-btn-dark"
+                          } inline-flex items-center gap-2 px-4 py-3`}
                           disabled={working || transcribingQuestion}
                           onClick={handleQuestionVoiceInput}
                           data-tooltip-id="tooltip"
@@ -451,14 +451,14 @@ export default function CaseWorkspace({ initialCase }) {
                         </button>
                         <button
                           type="button"
-                          className="btn btn-ghost border border-rose-400/40 text-rose-200"
+                          className="arena-btn-danger px-4 py-3"
                           disabled={working || recordingQuestion || transcribingQuestion}
                           onClick={handleExitCase}
                         >
                           Exit Case
                         </button>
                         <button
-                          className="btn btn-primary"
+                          className="arena-btn-light px-5 py-3"
                           disabled={working || recordingQuestion || transcribingQuestion}
                         >
                           {working && (
@@ -472,23 +472,23 @@ export default function CaseWorkspace({ initialCase }) {
                 </div>
               </div>
             ) : isExited ? (
-              <div className="arena-console">
+              <div className="arena-surface">
                 <div className="p-6">
                   <p className="arena-kicker text-rose-300">Case Exited</p>
                   <h2 className="arena-headline mt-2 text-2xl">This intake was closed</h2>
-                  <p className="mt-3 max-w-2xl text-slate-300">
+                  <p className="mt-3 max-w-2xl text-white/66">
                     You exited this matter during intake. The same case stays unavailable for
                     24 hours before it can be started again.
                   </p>
                   <div className="mt-5">
-                    <Link href="/dashboard" className="btn btn-primary">
+                    <Link href="/dashboard" className="arena-btn-light inline-flex px-5 py-3">
                       Back to Cases
                     </Link>
                   </div>
                 </div>
               </div>
             ) : (
-              <div className="arena-console arena-round-transition">
+              <div className="arena-surface arena-round-transition">
                 <div className="p-6">
                   <div className="flex items-end justify-between gap-3">
                     <div>
@@ -497,13 +497,13 @@ export default function CaseWorkspace({ initialCase }) {
                         Freeform courtroom duel
                       </h2>
                     </div>
-                    <span className="text-xs uppercase tracking-[0.14em] text-slate-400">
+                    <span className="text-xs uppercase tracking-[0.14em] text-white/42">
                       Round {caseSession.score.roundsCompleted} of {caseSession.maxCourtRounds}
                     </span>
                   </div>
 
                   <div className="mt-5 grid gap-4 md:grid-cols-3">
-                    <div className="arena-metric">
+                    <div className="arena-stat-card">
                       <div className="flex items-center gap-2">
                         <p className="arena-kicker">Your Pressure</p>
                         <InfoDot
@@ -511,7 +511,7 @@ export default function CaseWorkspace({ initialCase }) {
                           label="Explain your pressure"
                         />
                       </div>
-                      <p className="mt-2 text-3xl font-bold text-slate-100">
+                      <p className="mt-2 text-3xl font-bold text-white">
                         {caseSession.score.player}
                       </p>
                       <div className="mt-3 arena-progress-track" aria-hidden="true">
@@ -521,7 +521,7 @@ export default function CaseWorkspace({ initialCase }) {
                         />
                       </div>
                     </div>
-                    <div className="arena-metric">
+                    <div className="arena-stat-card">
                       <div className="flex items-center gap-2">
                         <p className="arena-kicker">Opponent Pressure</p>
                         <InfoDot
@@ -529,7 +529,7 @@ export default function CaseWorkspace({ initialCase }) {
                           label="Explain opponent pressure"
                         />
                       </div>
-                      <p className="mt-2 text-3xl font-bold text-slate-100">
+                      <p className="mt-2 text-3xl font-bold text-white">
                         {caseSession.score.opponent}
                       </p>
                       <div className="mt-3 arena-progress-track" aria-hidden="true">
@@ -539,9 +539,9 @@ export default function CaseWorkspace({ initialCase }) {
                         />
                       </div>
                     </div>
-                    <div className="arena-metric">
+                    <div className="arena-stat-card">
                       <p className="arena-kicker">Bench Signal</p>
-                      <p className="mt-2 text-sm leading-6 text-slate-100">
+                      <p className="mt-2 text-sm leading-7 text-white/76">
                         {caseSession.score.lastBenchSignal ||
                           "The bench is listening. Build the record carefully."}
                       </p>
@@ -553,9 +553,9 @@ export default function CaseWorkspace({ initialCase }) {
                     className="arena-scroll mt-5 max-h-[30rem] space-y-4 overflow-y-auto pr-2"
                   >
                     {normalizedCourtroomTranscript.length === 0 ? (
-                      <div className="arena-console-soft p-5">
-                        <p className="font-semibold text-slate-100">Court is now in session.</p>
-                        <p className="mt-2 text-sm text-slate-300">
+                      <div className="arena-surface-soft p-5">
+                        <p className="font-semibold text-white">Court is now in session.</p>
+                        <p className="mt-2 text-sm text-white/62">
                           Open with your strongest theory and anchor it to lawbook and fact
                           sheet.
                         </p>
@@ -571,12 +571,12 @@ export default function CaseWorkspace({ initialCase }) {
                           }`}
                         >
                           <div className="flex items-center justify-between gap-3">
-                            <p className="font-semibold text-slate-100">
+                            <p className="font-semibold text-white">
                               {entry.speaker === "player" ? "You" : opponentPartyName}
                             </p>
-                            <p className="text-xs text-slate-400">Round {entry.round}</p>
+                            <p className="text-xs text-white/40">Round {entry.round}</p>
                           </div>
-                          <p className="mt-2 whitespace-pre-wrap leading-7 text-slate-100">
+                          <p className="mt-2 whitespace-pre-wrap leading-7 text-white">
                             {entry.text}
                           </p>
                           {entry.speaker === "player" &&
@@ -592,7 +592,7 @@ export default function CaseWorkspace({ initialCase }) {
                                   return (
                                     <span
                                       key={`${fact}-${factIndex}`}
-                                      className="badge badge-outline badge-sm max-w-[18rem] truncate border-slate-400/45 text-slate-100"
+                                      className="badge badge-outline badge-sm max-w-[18rem] truncate border-white/15 text-white/82"
                                       data-tooltip-id="tooltip"
                                       data-tooltip-content={resolvedFact.tooltip}
                                     >
@@ -618,10 +618,10 @@ export default function CaseWorkspace({ initialCase }) {
                     {working && pendingSpeaker === opponentPartyName && (
                       <article className="arena-transcript-opponent rounded-xl p-4">
                         <div className="flex items-center justify-between gap-3">
-                          <p className="font-semibold text-slate-100">{opponentPartyName}</p>
+                          <p className="font-semibold text-white">{opponentPartyName}</p>
                           <span className="loading loading-dots loading-sm" />
                         </div>
-                        <p className="mt-2 leading-7 text-slate-100">
+                        <p className="mt-2 leading-7 text-white">
                           {opponentPartyName} is typing...
                         </p>
                       </article>
@@ -631,7 +631,7 @@ export default function CaseWorkspace({ initialCase }) {
                   {!isVerdict && (
                     <form className="mt-6 space-y-3" onSubmit={handleCourtroomSubmit}>
                       <textarea
-                        className="textarea textarea-bordered arena-textarea h-40 w-full bg-slate-950/35 text-slate-100"
+                        className="textarea textarea-bordered arena-textarea arena-field h-40 w-full text-slate-100"
                         placeholder={`Deliver your argument for ${playerPartyName}. Cite the fact sheet, confront the weakest point on ${opponentPartyName}'s side, and tie your position to the lawbook.`}
                         value={argument}
                         onChange={(event) => setArgument(event.target.value)}
@@ -640,11 +640,11 @@ export default function CaseWorkspace({ initialCase }) {
                       <div className="flex flex-wrap items-center justify-end gap-2">
                         <button
                           type="button"
-                          className={`btn border ${
+                          className={`border ${
                             recordingArgument
-                              ? "border-rose-400/60 bg-rose-950/40 text-rose-100"
-                              : "btn-ghost border-slate-500/35 text-slate-100"
-                          }`}
+                              ? "arena-btn-danger"
+                              : "arena-btn-dark"
+                          } inline-flex items-center gap-2 px-4 py-3`}
                           disabled={working || transcribingArgument}
                           onClick={handleArgumentVoiceInput}
                           data-tooltip-id="tooltip"
@@ -685,7 +685,7 @@ export default function CaseWorkspace({ initialCase }) {
                             : "Voice"}
                         </button>
                         <button
-                          className="btn btn-primary"
+                          className="arena-btn-light px-5 py-3"
                           disabled={working || recordingArgument || transcribingArgument}
                         >
                           {working && (
@@ -701,7 +701,7 @@ export default function CaseWorkspace({ initialCase }) {
             )}
 
             {isVerdict && (
-              <div className={`arena-console border ${verdictStyle.card}`}>
+              <div className={`arena-surface border ${verdictStyle.card}`}>
                 <div className="p-6">
                   <div className="flex flex-wrap items-center gap-3">
                     <p className={`arena-kicker ${verdictStyle.eyebrow}`}>Final Ruling</p>
@@ -709,36 +709,36 @@ export default function CaseWorkspace({ initialCase }) {
                       {winnerSignal[caseSession.verdict.winner] || winnerSignal.draw}
                     </span>
                   </div>
-                  <h2 className="arena-case-title mt-2 text-3xl">
+                  <h2 className="arena-headline mt-2 text-3xl uppercase">
                     {winnerLabel[caseSession.verdict.winner]}
                   </h2>
-                  <p className="mt-3 max-w-3xl leading-7 text-slate-300">
+                  <p className="mt-3 max-w-3xl leading-7 text-white/66">
                     {caseSession.verdict.summary}
                   </p>
                   <div className="mt-5 grid gap-4 md:grid-cols-2">
-                    <div className="arena-console-soft p-4">
+                    <div className="arena-surface-soft p-4">
                       <div className="flex items-center gap-2">
-                        <p className="font-semibold text-slate-100">What helped your side</p>
+                        <p className="font-semibold text-white">What helped your side</p>
                         <InfoDot
                           content={helpText.helpedYourSide}
                           label="Explain what helped your side"
                         />
                       </div>
-                      <ul className="mt-3 space-y-2 text-sm text-slate-300">
+                      <ul className="mt-3 space-y-2 text-sm text-white/66">
                         {caseSession.verdict.highlights.map((item) => (
                           <li key={item}>- {item}</li>
                         ))}
                       </ul>
                     </div>
-                    <div className="arena-console-soft p-4">
+                    <div className="arena-surface-soft p-4">
                       <div className="flex items-center gap-2">
-                        <p className="font-semibold text-slate-100">What weakened your side</p>
+                        <p className="font-semibold text-white">What weakened your side</p>
                         <InfoDot
                           content={helpText.weakenedYourSide}
                           label="Explain what weakened your side"
                         />
                       </div>
-                      <ul className="mt-3 space-y-2 text-sm text-slate-300">
+                      <ul className="mt-3 space-y-2 text-sm text-white/66">
                         {caseSession.verdict.concerns.map((item) => (
                           <li key={item}>- {item}</li>
                         ))}
@@ -751,7 +751,7 @@ export default function CaseWorkspace({ initialCase }) {
           </section>
 
           <aside className="space-y-6">
-            <div className="arena-console">
+            <div className="arena-surface">
               <div className="p-6">
                 <div className="flex items-end justify-between gap-3">
                   <div>
@@ -771,7 +771,7 @@ export default function CaseWorkspace({ initialCase }) {
 
                 <div className="mt-5 space-y-4">
                   <label className="form-control">
-                    <span className="label-text font-semibold text-slate-100">Case summary</span>
+                    <span className="label-text font-semibold text-white">Case summary</span>
                     <textarea
                       className={caseFileFieldClass}
                       value={factSheetDraft.summary}
@@ -786,7 +786,7 @@ export default function CaseWorkspace({ initialCase }) {
                   </label>
 
                   <label className="form-control">
-                    <span className="label-text font-semibold text-slate-100">Theory</span>
+                    <span className="label-text font-semibold text-white">Theory</span>
                     <textarea
                       className={caseFileFieldClass}
                       value={factSheetDraft.theory}
@@ -801,9 +801,9 @@ export default function CaseWorkspace({ initialCase }) {
                   </label>
 
                   <label className="form-control">
-                    <span className="label-text font-semibold text-slate-100">Timeline</span>
+                    <span className="label-text font-semibold text-white">Timeline</span>
                     <textarea
-                      className="textarea textarea-bordered arena-textarea h-28 bg-slate-950/35 text-slate-100"
+                      className="textarea textarea-bordered arena-textarea arena-field h-28 text-slate-100"
                       value={factSheetDraft.timeline}
                       onChange={(event) =>
                         setFactSheetDraft((current) => ({
@@ -816,11 +816,11 @@ export default function CaseWorkspace({ initialCase }) {
                   </label>
 
                   <label className="form-control">
-                    <span className="label-text font-semibold text-slate-100">
+                    <span className="label-text font-semibold text-white">
                       Supporting facts
                     </span>
                     <textarea
-                      className="textarea textarea-bordered arena-textarea h-32 bg-slate-950/35 text-slate-100"
+                      className="textarea textarea-bordered arena-textarea arena-field h-32 text-slate-100"
                       value={factSheetDraft.supportingFacts}
                       onChange={(event) =>
                         setFactSheetDraft((current) => ({
@@ -833,7 +833,7 @@ export default function CaseWorkspace({ initialCase }) {
                   </label>
 
                   <label className="form-control">
-                    <span className="label-text font-semibold text-slate-100">Risks</span>
+                    <span className="label-text font-semibold text-white">Risks</span>
                     <textarea
                       className={caseFileFieldClass}
                       value={factSheetDraft.risks}
@@ -848,7 +848,7 @@ export default function CaseWorkspace({ initialCase }) {
                   </label>
 
                   <label className="form-control">
-                    <span className="label-text font-semibold text-slate-100">
+                    <span className="label-text font-semibold text-white">
                       Disputed facts
                     </span>
                     <textarea
@@ -865,7 +865,7 @@ export default function CaseWorkspace({ initialCase }) {
                   </label>
 
                   <label className="form-control">
-                    <span className="label-text font-semibold text-slate-100">
+                    <span className="label-text font-semibold text-white">
                       Corroborated facts
                     </span>
                     <textarea
@@ -882,7 +882,7 @@ export default function CaseWorkspace({ initialCase }) {
                   </label>
 
                   <label className="form-control">
-                    <span className="label-text font-semibold text-slate-100">
+                    <span className="label-text font-semibold text-white">
                       Missing evidence / proof gaps
                     </span>
                     <textarea
@@ -899,11 +899,11 @@ export default function CaseWorkspace({ initialCase }) {
                   </label>
 
                   <label className="form-control">
-                    <span className="label-text font-semibold text-slate-100">
+                    <span className="label-text font-semibold text-white">
                       Requested relief
                     </span>
                     <textarea
-                      className="textarea textarea-bordered arena-textarea h-20 bg-slate-950/35 text-slate-100"
+                      className="textarea textarea-bordered arena-textarea arena-field h-20 text-slate-100"
                       value={factSheetDraft.desiredRelief}
                       onChange={(event) =>
                         setFactSheetDraft((current) => ({
@@ -917,7 +917,7 @@ export default function CaseWorkspace({ initialCase }) {
 
                   {isInterview && (
                     <button
-                      className="btn btn-secondary w-full"
+                      className="arena-btn-light w-full px-5 py-3"
                       onClick={handleFinalize}
                       disabled={working}
                     >
@@ -931,18 +931,18 @@ export default function CaseWorkspace({ initialCase }) {
               </div>
             </div>
 
-            <div className="arena-console">
+            <div className="arena-surface">
               <div className="p-6">
                 <p className="arena-kicker">Lawbook</p>
                 <h2 className="arena-headline mt-2 text-2xl">Rules in play</h2>
                 <div className="mt-5 space-y-3">
                   {caseSession.lawbook.map((rule) => (
-                    <article key={rule.id} className="arena-console-soft p-4">
-                      <p className="font-semibold text-slate-100">{rule.title}</p>
-                      <p className="mt-2 text-sm leading-6 text-slate-300">
+                    <article key={rule.id} className="arena-surface-soft p-4">
+                      <p className="font-semibold text-white">{rule.title}</p>
+                      <p className="mt-2 text-sm leading-6 text-white/66">
                         {rule.principle}
                       </p>
-                      <p className="mt-2 text-xs uppercase tracking-[0.15em] text-slate-400">
+                      <p className="mt-2 text-xs uppercase tracking-[0.15em] text-white/40">
                         {rule.tags.join(" | ")}
                       </p>
                     </article>

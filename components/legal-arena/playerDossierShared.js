@@ -99,9 +99,9 @@ export const normalizeMatter = (caseSession) => ({
 
 export function EmptyPanel({ title, detail }) {
   return (
-    <div className="arena-console-soft border-dashed p-6 text-center">
-      <p className="font-semibold text-slate-100">{title}</p>
-      <p className="mt-2 text-sm leading-6 text-slate-300">{detail}</p>
+    <div className="arena-surface-soft border-dashed p-6 text-center">
+      <p className="font-semibold text-white">{title}</p>
+      <p className="mt-2 text-sm leading-7 text-white/62">{detail}</p>
     </div>
   );
 }
@@ -110,16 +110,16 @@ export function FactList({ title, items }) {
   const visibleItems = (items || []).filter(Boolean);
 
   return (
-    <div className="arena-console-soft p-4">
-      <p className="font-semibold text-slate-100">{title}</p>
+    <div className="arena-surface-soft p-4">
+      <p className="font-semibold text-white">{title}</p>
       {visibleItems.length > 0 ? (
-        <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-300">
+        <ul className="mt-3 space-y-2 text-sm leading-7 text-white/66">
           {visibleItems.map((item, index) => (
             <li key={`${title}-${index}`}>- {item}</li>
           ))}
         </ul>
       ) : (
-        <p className="mt-3 text-sm text-slate-400">No entries recorded.</p>
+        <p className="mt-3 text-sm text-white/42">No entries recorded.</p>
       )}
     </div>
   );
@@ -135,10 +135,10 @@ export function TranscriptEntry({ children, isPlayer, meta, speaker }) {
       }`}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="font-semibold text-slate-100">{speaker}</p>
-        <p className="text-xs text-slate-400">{meta}</p>
+        <p className="font-semibold text-white">{speaker}</p>
+        <p className="text-xs text-white/40">{meta}</p>
       </div>
-      <p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-slate-100">
+      <p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-white">
         {children}
       </p>
     </article>

@@ -6,42 +6,92 @@ import { getCategoryTitle } from "@/libs/game/categories";
 
 export const dynamic = "force-dynamic";
 
-const benefits = [
-  "Build airtight fact sheets from messy narratives",
-  "Spot weak arguments before they break your case",
-  "Practice defending your position under pressure",
-  "Improve structured thinking and persuasive writing",
+const navItems = [
+  { label: "How It Works", href: "#how-it-works" },
+  { label: "Features", href: "#features" },
+  { label: "Case Library", href: "#case-library" },
+  { label: "Leaderboard", href: "#leaderboard" },
 ];
 
-const audience = [
-  "Law students preparing for litigation",
-  "Founders learning structured thinking",
-  "Debaters sharpening argument skills",
+const featureHighlights = [
+  {
+    title: "AI Opponent",
+    description: "Face adaptive lawyers that shift strategy as your argument evolves.",
+  },
+  {
+    title: "Instant Feedback",
+    description: "See exactly where your logic weakens, and what evidence would save it.",
+  },
+  {
+    title: "Track Progress",
+    description: "Level up across practice areas and build courtroom instincts that stick.",
+  },
+  {
+    title: "Real Cases",
+    description: "Practice with grounded scenarios instead of abstract hypotheticals.",
+  },
 ];
 
 const steps = [
   {
-    number: "01",
-    title: "Extract the truth",
-    description: "Interrogate the client and uncover what actually matters.",
+    number: "1",
+    title: "Pick a Case",
+    description: "Choose a matter, scan the record, and understand what is really in dispute.",
   },
   {
-    number: "02",
-    title: "Build your case",
-    description: "Turn raw facts into a structured legal record.",
+    number: "2",
+    title: "Build Your Argument",
+    description: "Interrogate the facts, organize evidence, and craft a position that can survive pressure.",
   },
   {
-    number: "03",
-    title: "Fight it out",
-    description: "Argue your case in real time against an AI opponent.",
+    number: "3",
+    title: "Argue and Get Verdict",
+    description: "Present your reasoning against an AI opponent and see how a judge scores the round.",
   },
 ];
 
-const judgeMetrics = [
-  "Use of facts",
-  "Logical consistency",
-  "Handling counterarguments",
-  "Weak spots in your reasoning",
+const skillPoints = [
+  "Sharpen legal reasoning",
+  "Improve research and analysis",
+  "Learn from detailed AI feedback",
+  "Climb the leaderboard with every matter",
+];
+
+const testimonials = [
+  {
+    quote:
+      "It feels like a real courtroom rehearsal. I can see where my argument starts slipping before it is too late.",
+    name: "Rohan M.",
+    title: "Law Student",
+  },
+  {
+    quote:
+      "The game loop makes practice addictive. You finish one case and immediately want to run a stronger version.",
+    name: "Priya K.",
+    title: "Aspiring Lawyer",
+  },
+  {
+    quote:
+      "Legal Arena is the first tool that made case analysis feel active instead of passive reading.",
+    name: "Ananya S.",
+    title: "Law Student",
+  },
+];
+
+const categoryFallbacks = [
+  { title: "Criminal Law", cases: "120+ Cases" },
+  { title: "Civil Litigation", cases: "150+ Cases" },
+  { title: "Corporate Law", cases: "90+ Cases" },
+  { title: "Constitutional Law", cases: "80+ Cases" },
+  { title: "Family Law", cases: "60+ Cases" },
+  { title: "And More", cases: "Growing Library" },
+];
+
+const verdictReasons = [
+  "Fact control",
+  "Counterarguments",
+  "Use of precedent",
+  "Structure under pressure",
 ];
 
 const loadFeaturedCases = async () => {
@@ -49,7 +99,7 @@ const loadFeaturedCases = async () => {
     await connectMongo();
 
     const [templates, totalActiveCases] = await Promise.all([
-      CaseTemplate.find({ status: "active" }).sort({ updatedAt: -1 }).limit(3),
+      CaseTemplate.find({ status: "active" }).sort({ updatedAt: -1 }).limit(6),
       CaseTemplate.countDocuments({ status: "active" }),
     ]);
 
@@ -73,296 +123,547 @@ const getPlaintiffClaim = (template) =>
     )
     .find((claim) => claim.claimedDetail?.trim())?.claimedDetail || "";
 
-const getFactPrompt = (template) =>
+const getDefendantClaim = (template) =>
   template.canonicalFacts
-    ?.slice()
-    .sort(
-      (left, right) =>
-        (right.discoverability?.priority || 0) - (left.discoverability?.priority || 0)
+    ?.flatMap((fact) =>
+      (fact.claims || []).filter((claim) => claim.party === "defendant")
     )
-    .slice(0, 2)
-    .map((fact) => fact.label)
-    .join(" and ") || "";
+    .find((claim) => claim.claimedDetail?.trim())?.claimedDetail || "";
+
+const trimStatement = (value, fallback) => {
+  const text = (value || fallback || "").trim();
+  if (!text) return fallback;
+  return text.length > 120 ? `${text.slice(0, 117)}...` : text;
+};
+
+const Icon = ({ kind, className = "h-5 w-5" }) => {
+  const props = {
+    className,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: "1.8",
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    "aria-hidden": "true",
+  };
+
+  switch (kind) {
+    case "spark":
+      return (
+        <svg {...props}>
+          <path d="M12 3l1.8 4.2L18 9l-4.2 1.8L12 15l-1.8-4.2L6 9l4.2-1.8L12 3Z" />
+          <path d="M5 16l.9 2.1L8 19l-2.1.9L5 22l-.9-2.1L2 19l2.1-.9L5 16Z" />
+          <path d="M19 14l.9 2.1L22 17l-2.1.9L19 20l-.9-2.1L16 17l2.1-.9L19 14Z" />
+        </svg>
+      );
+    case "bolt":
+      return (
+        <svg {...props}>
+          <path d="M13 2 5 13h5l-1 9 8-11h-5l1-9Z" />
+        </svg>
+      );
+    case "trophy":
+      return (
+        <svg {...props}>
+          <path d="M8 3h8v3a4 4 0 0 1-4 4 4 4 0 0 1-4-4V3Z" />
+          <path d="M8 5H5a2 2 0 0 0 2 3h1" />
+          <path d="M16 5h3a2 2 0 0 1-2 3h-1" />
+          <path d="M12 10v4" />
+          <path d="M9 21h6" />
+          <path d="M10 18h4v3h-4z" />
+        </svg>
+      );
+    case "brief":
+      return (
+        <svg {...props}>
+          <path d="M3 8h18v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8Z" />
+          <path d="M8 8V6a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+          <path d="M3 12h18" />
+        </svg>
+      );
+    case "folder":
+      return (
+        <svg {...props}>
+          <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z" />
+        </svg>
+      );
+    case "pen":
+      return (
+        <svg {...props}>
+          <path d="m4 20 4.5-1 9.7-9.7a1.8 1.8 0 0 0 0-2.6l-.9-.9a1.8 1.8 0 0 0-2.6 0L5 15.5 4 20Z" />
+          <path d="m13.5 6.5 4 4" />
+        </svg>
+      );
+    case "gavel":
+      return (
+        <svg {...props}>
+          <path d="m14 4 6 6" />
+          <path d="m12 6 6 6" />
+          <path d="m3 21 9-9" />
+          <path d="m11 13 3 3" />
+          <path d="M2 22h8" />
+        </svg>
+      );
+    case "scale":
+      return (
+        <svg {...props}>
+          <path d="M12 4v16" />
+          <path d="M7 7h10" />
+          <path d="m7 7-3 5h6L7 7Z" />
+          <path d="m17 7-3 5h6l-3-5Z" />
+          <path d="M8 20h8" />
+        </svg>
+      );
+    case "users":
+      return (
+        <svg {...props}>
+          <path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2" />
+          <path d="M9.5 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" />
+          <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+        </svg>
+      );
+    case "star":
+      return (
+        <svg {...props}>
+          <path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.2l-5.6 3 1.1-6.2L3 9.6l6.2-.9L12 3Z" />
+        </svg>
+      );
+    default:
+      return (
+        <svg {...props}>
+          <circle cx="12" cy="12" r="9" />
+        </svg>
+      );
+  }
+};
 
 export default async function Page() {
   const { featuredCases, totalActiveCases } = await loadFeaturedCases();
   const heroCase = featuredCases[0] || null;
-  const trustSignals = [
-    {
-      value: totalActiveCases > 0 ? totalActiveCases.toLocaleString("en-US") : "0",
-      label: "cases and growing every day",
-    },
-    { value: "8 min", label: "average session" },
-    { value: "3-part", label: "practice loop" },
-  ];
+  const displayCases =
+    featuredCases.length > 0
+      ? featuredCases.slice(0, 6).map((template) => ({
+          title: getCategoryTitle(template.primaryCategory),
+          cases: `${template.practiceArea || "Live"} Matter`,
+        }))
+      : categoryFallbacks;
+
+  const plaintiffStatement = trimStatement(
+    heroCase ? getPlaintiffClaim(heroCase) || heroCase.openingStatement : "",
+    "The defendant breached the duty of care by failing to maintain a safe environment."
+  );
+  const defendantStatement = trimStatement(
+    heroCase ? getDefendantClaim(heroCase) : "",
+    "The plaintiff has not established causation and the record leaves material gaps."
+  );
+  const totalCasesLabel =
+    totalActiveCases > 0 ? totalActiveCases.toLocaleString("en-US") : "500+";
 
   return (
-    <main className="min-h-screen bg-base-200">
-      <header className="sticky top-0 z-30 border-b border-base-300 bg-base-100/90 backdrop-blur">
-        <div className="navbar mx-auto max-w-7xl px-4 md:px-6">
-          <div className="flex-1">
+    <main className="arena-landing min-h-screen overflow-hidden bg-[#020202] text-white">
+      <header className="sticky top-0 z-40 border-b border-white/10 bg-black/80 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 md:px-8">
+          <Link href="/" className="inline-flex items-center gap-3" aria-label="Legal Arena home">
+            <Image
+              src="/logoAndName.png"
+              alt="Legal Arena logo"
+              width={160}
+              height={36}
+              className="h-9 w-auto object-contain"
+              priority
+            />
+          </Link>
+
+          <nav className="hidden items-center gap-8 text-sm text-white/72 lg:flex">
+            {navItems.map((item) => (
+              <a key={item.href} href={item.href} className="transition hover:text-white">
+                {item.label}
+              </a>
+            ))}
+          </nav>
+
+          <div className="flex items-center gap-3">
             <Link
-              href="/"
-              className="inline-flex items-center gap-3"
-              aria-label="Legal Arena home"
+              href="/api/auth/signin"
+              className="hidden text-sm text-white/72 transition hover:text-white md:inline-flex"
             >
-              <Image
-                src="/logoAndName.png"
-                alt="Legal Arena logo"
-                width={40}
-                height={40}
-                className="h-8 w-8 object-contain md:h-9 md:w-9"
-                priority
-              />
-              <span className="text-sm font-semibold uppercase tracking-[0.35em] text-base-content/70 md:text-base">
-                Legal Arena
-              </span>
+              Log in
             </Link>
-          </div>
-          <div className="flex-none">
-            <Link href="/dashboard" className="btn btn-primary">
-              Start Playing
+            <Link
+              href="/dashboard"
+              className="rounded-2xl border border-white/15 bg-white px-5 py-3 text-sm font-semibold text-black transition hover:bg-white/90"
+            >
+              Start Free
             </Link>
           </div>
         </div>
       </header>
 
-      <section className="mx-auto max-w-7xl px-6 py-12 md:px-8 md:py-16 xl:py-20">
-        <div className="grid items-start gap-8 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,0.85fr)] xl:gap-12">
-          <div className="space-y-8 xl:space-y-10">
-            <div className="space-y-5">
-              <p className="text-xs uppercase tracking-[0.4em] text-primary/75">
-                AI courtroom simulator
-              </p>
-              <h1 className="max-w-4xl font-serif text-5xl leading-[0.95] text-base-content md:text-6xl xl:text-[5.25rem]">
-                Practice real courtroom arguments in an AI-powered simulation game
+      <section className="arena-column-bg relative">
+        <div className="mx-auto max-w-7xl px-5 pb-12 pt-10 md:px-8 md:pb-16 md:pt-16">
+          <div className="grid items-start gap-12 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+            <div className="max-w-2xl">
+              <p className="arena-kicker">The AI-powered courtroom simulator for future lawyers</p>
+              <h1 className="arena-headline mt-6 text-6xl uppercase leading-[0.9] md:text-7xl xl:text-[6.4rem]">
+                Argue.
+                <br />
+                Adapt.
+                <br />
+                Win.
               </h1>
-              <p className="max-w-2xl text-lg leading-8 text-base-content/75">
-                Turn messy client stories into structured cases, then defend them
-                under pressure in a live trial.
+              <p className="mt-6 max-w-xl text-lg leading-8 text-white/72 md:text-2xl md:leading-10">
+                Practice real legal reasoning against an adaptive AI opponent and build the instincts that make arguments hold up under pressure.
               </p>
-              <p className="max-w-2xl text-base leading-7 text-base-content/65">
-                Each case plays like a short, replayable match. Test your reasoning,
-                adapt your strategy, and try again.
-              </p>
-              <p className="max-w-2xl text-sm uppercase tracking-[0.22em] text-primary/80">
-                {totalActiveCases.toLocaleString("en-US")} cases and growing every day
-              </p>
-            </div>
 
-            <div className="flex flex-wrap items-center gap-4">
-              <Link href="/dashboard" className="btn btn-primary">
-                Play Your First Case
-              </Link>
-              <p className="text-sm text-base-content/60">
-                One clear loop: investigate, organize, argue.
-              </p>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-3 xl:max-w-4xl">
-              {trustSignals.map((signal) => (
-                <div
-                  key={signal.label}
-                  className="rounded-box border border-base-300 bg-base-100 p-4 shadow-sm"
+              <div className="mt-8 flex flex-wrap items-center gap-4">
+                <Link
+                  href="/dashboard"
+                  className="rounded-2xl bg-white px-6 py-4 text-sm font-semibold text-black transition hover:bg-white/90"
                 >
-                  <p className="text-2xl font-bold text-base-content">{signal.value}</p>
-                  <p className="mt-2 max-w-[12ch] text-xs uppercase tracking-[0.16em] text-base-content/55 md:text-sm">
-                    {signal.label}
-                  </p>
-                </div>
-              ))}
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-3 xl:max-w-5xl">
-              {steps.map((step) => (
-                <div
-                  key={step.number}
-                  className="card border border-base-300 bg-base-100 shadow-sm"
+                  Start Your First Case
+                </Link>
+                <a
+                  href="#how-it-works"
+                  className="rounded-2xl border border-white/15 bg-white/5 px-6 py-4 text-sm font-semibold text-white transition hover:bg-white/10"
                 >
-                  <div className="card-body min-h-40 p-5">
-                    <p className="text-sm uppercase tracking-[0.25em] text-base-content/50">
-                      Step {step.number}
-                    </p>
-                    <p className="mt-3 text-lg font-semibold">{step.title}</p>
-                    <p className="mt-2 text-sm leading-6 text-base-content/70">
-                      {step.description}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="card border border-base-300 bg-base-100 shadow-2xl xl:sticky xl:top-24">
-            <div className="card-body gap-5 p-6 md:p-8">
-              <div className="rounded-box bg-neutral p-5 text-neutral-content">
-                <p className="text-sm uppercase tracking-[0.25em] text-primary-content/75">
-                  Playable case
-                </p>
-                <h2 className="mt-2 text-3xl font-bold">
-                  {heroCase ? heroCase.title : "The Lease Dispute Duel"}
-                </h2>
-                <p className="mt-3 leading-7 text-neutral-content/75">
-                  {heroCase
-                    ? heroCase.subtitle || heroCase.overview
-                    : "A fast courtroom scenario designed to show how intake, fact-building, and live argument come together."}
-                </p>
-                {heroCase ? (
-                  <div className="mt-4 flex flex-wrap gap-2 text-sm text-neutral-content/75">
-                    <span className="badge badge-outline">{heroCase.practiceArea}</span>
-                    <span className="badge badge-outline">
-                      {getCategoryTitle(heroCase.primaryCategory)}
-                    </span>
-                    <span className="badge badge-outline">
-                      Complexity {heroCase.complexity}
-                    </span>
-                  </div>
-                ) : null}
-                <div className="mt-5 flex flex-wrap items-center gap-4">
-                  <Link href="/dashboard" className="btn btn-primary">
-                    Play This Case
-                  </Link>
-                  <div className="text-sm text-neutral-content/65">
-                    <p>Takes 3 to 5 minutes.</p>
-                    <p>Replay with different strategies.</p>
-                  </div>
-                </div>
+                  Watch Demo
+                </a>
               </div>
 
-              <div className="space-y-4">
-                <div className="rounded-box bg-base-200 p-5 shadow-sm">
-                  <p className="font-semibold">Plaintiff says</p>
-                  <p className="mt-2 text-sm leading-6 text-base-content/75">
-                    {heroCase
-                      ? `"${getPlaintiffClaim(heroCase) || heroCase.openingStatement}"`
-                      : "The tenant claims the other side broke the agreement and left the record full of contradictions."}
-                  </p>
-                </div>
-                <div className="rounded-box bg-primary/10 p-5 shadow-sm">
-                  <p className="font-semibold">Your move</p>
-                  <p className="mt-2 text-sm leading-6 text-base-content/75">
-                    {heroCase
-                      ? `Press on ${getFactPrompt(heroCase) || "the timeline and the records"} before you lock the fact sheet.`
-                      : "Ask for dates, records, and missing proof before you finalize the file."}
-                  </p>
-                </div>
-                <div className="rounded-box border border-dashed border-primary/40 bg-base-100 p-5">
-                  <p className="font-semibold">Hidden judge</p>
-                  <div className="mt-3 grid gap-2 text-sm text-base-content/75 sm:grid-cols-2">
-                    {judgeMetrics.map((metric) => (
-                      <p key={metric}>- {metric}</p>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="mx-auto max-w-7xl px-6 pb-12 md:px-8 md:pb-16">
-        <div className="space-y-6">
-          <div className="rounded-[2rem] border border-base-300 bg-base-100 p-6 shadow-xl md:p-8">
-            <div className="grid gap-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:items-start">
-              <div className="max-w-2xl">
-                <p className="text-sm uppercase tracking-[0.3em] text-base-content/45">
-                  What you get
-                </p>
-                <h2 className="mt-3 font-serif text-4xl leading-tight text-base-content">
-                  Train like a litigator
-                </h2>
-              </div>
-              <div className="grid gap-3 text-base leading-7 text-base-content/75 md:grid-cols-2">
-                {benefits.map((benefit) => (
-                  <p key={benefit}>- {benefit}</p>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {(featuredCases.length > 0 ? featuredCases : [null, null, null]).map(
-              (template, index) => (
-                <div
-                  key={template?.id || `placeholder-${index}`}
-                  className="card border border-base-300 bg-base-100 shadow-lg"
-                >
-                  <div className="card-body min-h-80 p-6">
-                    <p className="text-sm uppercase tracking-[0.25em] text-base-content/45">
-                      {template ? getCategoryTitle(template.primaryCategory) : "Case"}
-                    </p>
-                    <p className="mt-3 text-xl font-bold">
-                      {template ? template.title : "More matters coming online"}
-                    </p>
-                    <p className="mt-3 text-sm leading-6 text-base-content/70">
-                      {template
-                        ? template.overview
-                        : "New courtroom scenarios rotate in so there is always another argument to test."}
-                    </p>
-                    {template ? (
-                      <div className="mt-4 flex flex-wrap gap-2 text-xs text-base-content/60">
-                        <span>{template.plaintiffName || template.clientName}</span>
-                        <span>vs.</span>
-                        <span>{template.defendantName || template.opponentName}</span>
+              <div className="mt-10 grid gap-4 border-t border-white/10 pt-8 sm:grid-cols-2 xl:grid-cols-4">
+                {featureHighlights.map((item, index) => {
+                  const iconKinds = ["spark", "bolt", "trophy", "brief"];
+                  return (
+                    <div key={item.title} className="space-y-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/12 bg-white/5 text-white/75">
+                        <Icon kind={iconKinds[index]} />
                       </div>
-                    ) : null}
+                      <div>
+                        <p className="text-sm font-semibold text-white">{item.title}</p>
+                        <p className="mt-2 text-sm leading-6 text-white/56">{item.description}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="relative xl:pt-4">
+              <div className="arena-glass rounded-[2rem] p-4 md:p-6">
+                <div className="grid gap-0 overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/[0.02] lg:grid-cols-[minmax(0,1fr)_120px_minmax(0,1fr)]">
+                  <div className="p-6 md:p-8">
+                    <p className="text-xs font-semibold uppercase tracking-[0.28em] text-white/45">
+                      You
+                    </p>
+                    <p className="mt-5 text-xl font-semibold text-white">Your Argument</p>
+                    <p className="mt-4 text-base leading-8 text-white/72">{plaintiffStatement}</p>
+                    <div className="mt-8 flex items-center justify-between rounded-2xl border border-white/10 bg-black/30 px-4 py-3">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.24em] text-white/40">
+                          Exhibits
+                        </p>
+                        <p className="mt-2 text-2xl font-semibold text-white">3</p>
+                      </div>
+                      <div className="rounded-xl border border-white/10 p-3 text-white/55">
+                        <Icon kind="brief" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-center border-y border-white/10 py-8 text-center lg:border-x lg:border-y-0">
+                    <span className="text-5xl font-semibold tracking-tight text-white/88">VS</span>
+                  </div>
+
+                  <div className="p-6 md:p-8">
+                    <p className="text-xs font-semibold uppercase tracking-[0.28em] text-white/45">
+                      AI Opponent
+                    </p>
+                    <p className="mt-5 text-xl font-semibold text-white">Counter Argument</p>
+                    <p className="mt-4 text-base leading-8 text-white/72">{defendantStatement}</p>
+                    <div className="mt-8 flex items-center justify-between rounded-2xl border border-white/10 bg-black/30 px-4 py-3">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.24em] text-white/40">
+                          Exhibits
+                        </p>
+                        <p className="mt-2 text-2xl font-semibold text-white">2</p>
+                      </div>
+                      <div className="rounded-xl border border-white/10 p-3 text-white/55">
+                        <Icon kind="scale" />
+                      </div>
+                    </div>
                   </div>
                 </div>
-              )
-            )}
-          </div>
-        </div>
-      </section>
+              </div>
 
-      <section className="mx-auto max-w-7xl px-6 pb-12 md:px-8 md:pb-16">
-        <div className="grid gap-6 lg:grid-cols-2">
-          <div className="card border border-base-300 bg-base-100 shadow-lg">
-            <div className="card-body p-6">
-              <p className="text-sm uppercase tracking-[0.3em] text-base-content/45">
-                Who this is for
-              </p>
-              <h2 className="mt-3 font-serif text-4xl leading-tight text-base-content">
-                Built for people who need to think under pressure
-              </h2>
-              <div className="mt-6 space-y-3 text-base leading-7 text-base-content/75">
-                {audience.map((item) => (
-                  <p key={item}>- {item}</p>
-                ))}
+              <div className="arena-glass relative -mt-3 ml-auto max-w-[88%] rounded-[1.75rem] p-5 md:-mt-6 md:p-6">
+                <p className="text-center text-sm uppercase tracking-[0.26em] text-white/45">
+                  Judge&apos;s Verdict
+                </p>
+                <p className="mt-3 text-center text-3xl font-semibold uppercase tracking-tight text-white">
+                  Plaintiff Wins
+                </p>
+                <p className="mt-3 text-center text-sm leading-6 text-white/62">
+                  Well reasoned argument. Stronger use of precedent and tighter control of the facts.
+                </p>
+                <div className="mt-6 flex flex-wrap justify-center gap-2">
+                  {verdictReasons.map((reason) => (
+                    <span
+                      key={reason}
+                      className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.18em] text-white/55"
+                    >
+                      {reason}
+                    </span>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
+        </div>
+      </section>
 
-          <div className="card border border-base-300 bg-neutral text-neutral-content shadow-lg">
-            <div className="card-body p-6">
-              <p className="text-sm uppercase tracking-[0.3em] text-primary-content/70">
-                Why it works
-              </p>
-              <h2 className="mt-3 font-serif text-4xl leading-tight text-neutral-content">
-                Think clearly. Argue better. Win decisions.
-              </h2>
-              <p className="mt-6 text-base leading-7 text-neutral-content/75">
-                Legal Arena turns abstract argument practice into a repeatable
-                simulation: gather facts, pressure test your logic, and learn what
-                makes a case hold up when someone pushes back.
-              </p>
-            </div>
+      <section id="how-it-works" className="border-y border-white/10 bg-black/60">
+        <div className="mx-auto max-w-7xl px-5 py-16 md:px-8 md:py-20">
+          <p className="text-center text-sm font-semibold uppercase tracking-[0.34em] text-white/45">
+            How It Works
+          </p>
+          <div className="mt-12 grid gap-8 lg:grid-cols-3">
+            {steps.map((step, index) => {
+              const iconKinds = ["folder", "pen", "gavel"];
+              return (
+                <div key={step.number} className="relative rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-8">
+                  <div className="flex items-center justify-between">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-white/12 bg-black/30 text-lg font-semibold text-white">
+                      {step.number}
+                    </div>
+                    <div className="text-white/28">
+                      <Icon kind={iconKinds[index]} className="h-8 w-8" />
+                    </div>
+                  </div>
+                  <h2 className="mt-10 text-3xl font-semibold tracking-tight text-white">
+                    {step.title}
+                  </h2>
+                  <p className="mt-4 max-w-sm text-base leading-8 text-white/64">
+                    {step.description}
+                  </p>
+                </div>
+              );
+            })}
           </div>
         </div>
       </section>
 
-      <section className="mx-auto max-w-7xl px-6 pb-16 md:px-8 md:pb-20">
-        <div className="rounded-[2rem] border border-base-300 bg-base-100 px-6 py-10 text-center shadow-xl md:px-10">
-          <p className="text-sm uppercase tracking-[0.3em] text-base-content/45">
-            Ready to test your argument skills?
-          </p>
-          <h2 className="mt-4 font-serif text-4xl leading-tight text-base-content md:text-5xl">
-            Start your first case and see where your reasoning holds.
-          </h2>
-          <div className="mt-8 flex justify-center">
-            <Link href="/dashboard" className="btn btn-primary">
-              Play Your First Case
+      <section id="features" className="mx-auto max-w-7xl px-5 py-16 md:px-8 md:py-20">
+        <div className="grid gap-10 xl:grid-cols-[minmax(0,0.78fr)_minmax(0,1.22fr)] xl:items-start">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.3em] text-white/45">
+              A game that builds real skills
+            </p>
+            <h2 className="arena-headline mt-5 max-w-md text-4xl uppercase md:text-5xl">
+              Train like court is tomorrow.
+            </h2>
+            <p className="mt-6 max-w-md text-lg leading-8 text-white/66">
+              Legal Arena turns learning law into an active routine: analyze the record, build your case, argue under pressure, then run it back stronger.
+            </p>
+            <div className="mt-8 space-y-4">
+              {skillPoints.map((point) => (
+                <div key={point} className="flex items-start gap-3 text-white/72">
+                  <span className="mt-1 flex h-5 w-5 items-center justify-center rounded-full border border-white/15 text-[10px]">
+                    +
+                  </span>
+                  <p className="leading-7">{point}</p>
+                </div>
+              ))}
+            </div>
+            <Link
+              href="/dashboard"
+              className="mt-10 inline-flex rounded-2xl border border-white/15 bg-white/5 px-5 py-4 text-sm font-semibold text-white transition hover:bg-white/10"
+            >
+              Explore Features
             </Link>
           </div>
+
+          <div className="arena-glass rounded-[2rem] p-5 md:p-7" id="leaderboard">
+            <p className="text-sm font-semibold uppercase tracking-[0.28em] text-white/45">
+              Your Progress
+            </p>
+            <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_240px]">
+              <div className="space-y-4">
+                <div className="rounded-[1.4rem] border border-white/10 bg-black/30 p-5">
+                  <p className="text-sm text-white/50">Career Level</p>
+                  <p className="mt-3 text-3xl font-semibold text-white">Associate I</p>
+                  <div className="mt-5 h-2 rounded-full bg-white/10">
+                    <div className="h-2 w-[52%] rounded-full bg-white" />
+                  </div>
+                  <p className="mt-3 text-sm text-white/45">1280 / 2500 XP</p>
+                </div>
+                <div className="rounded-[1.4rem] border border-white/10 bg-black/30 p-5">
+                  <p className="text-sm text-white/50">Win Rate</p>
+                  <div className="mt-4 flex items-end justify-between">
+                    <p className="text-5xl font-semibold text-white">68%</p>
+                    <div className="flex h-24 w-24 items-center justify-center rounded-full border-[10px] border-white/15 border-t-white text-sm text-white/60">
+                      Climbing
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-[1.4rem] border border-white/10 bg-black/30 p-5">
+                <p className="text-sm text-white/50">Specializations</p>
+                <div className="mt-5 space-y-5">
+                  {[
+                    { name: "Criminal Law", level: "Level 6", width: "78%" },
+                    { name: "Corporate Law", level: "Level 4", width: "54%" },
+                    { name: "Constitutional Law", level: "Level 3", width: "41%" },
+                  ].map((item) => (
+                    <div key={item.name}>
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="font-medium text-white">{item.name}</p>
+                          <p className="text-sm text-white/45">{item.level}</p>
+                        </div>
+                        <div className="rounded-xl border border-white/10 p-2 text-white/40">
+                          <Icon kind="brief" className="h-4 w-4" />
+                        </div>
+                      </div>
+                      <div className="mt-3 h-2 rounded-full bg-white/10">
+                        <div className="h-2 rounded-full bg-white" style={{ width: item.width }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-[1.4rem] border border-white/10 bg-black/30 p-5 text-center">
+                <p className="text-sm text-white/50">Global Rank</p>
+                <p className="mt-4 text-6xl font-semibold tracking-tight text-white">#142</p>
+                <p className="mt-2 text-sm uppercase tracking-[0.2em] text-white/45">Top 1%</p>
+                <div className="mt-8 flex justify-center text-white/45">
+                  <Icon kind="trophy" className="h-16 w-16" />
+                </div>
+                <Link
+                  href="/dashboard"
+                  className="mt-8 inline-flex rounded-2xl border border-white/15 bg-white px-4 py-3 text-sm font-semibold text-black transition hover:bg-white/90"
+                >
+                  View Leaderboard
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="case-library" className="border-y border-white/10 bg-black/60">
+        <div className="mx-auto max-w-7xl px-5 py-16 md:px-8 md:py-20">
+          <p className="text-center text-sm font-semibold uppercase tracking-[0.28em] text-white/45">
+            Diverse Cases. Endless Challenges.
+          </p>
+          <p className="mx-auto mt-4 max-w-2xl text-center text-lg leading-8 text-white/62">
+            Practice across multiple areas of law with a growing stream of new matters and replayable courtroom scenarios.
+          </p>
+          <div className="mt-12 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+            {displayCases.map((category) => (
+              <div
+                key={`${category.title}-${category.cases}`}
+                className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-5 text-center"
+              >
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl border border-white/10 bg-black/30 text-white/55">
+                  <Icon kind="scale" />
+                </div>
+                <p className="mt-5 text-lg font-semibold text-white">{category.title}</p>
+                <p className="mt-2 text-sm text-white/45">{category.cases}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-14 grid gap-5 lg:grid-cols-3">
+            {featuredCases.slice(0, 3).map((template, index) => (
+              <div
+                key={template.id || `featured-case-${index}`}
+                className="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-6"
+              >
+                <p className="text-xs uppercase tracking-[0.28em] text-white/42">
+                  {getCategoryTitle(template.primaryCategory)}
+                </p>
+                <h3 className="mt-4 text-2xl font-semibold text-white">{template.title}</h3>
+                <p className="mt-4 text-sm leading-7 text-white/62">
+                  {trimStatement(
+                    template.subtitle || template.overview,
+                    "A replayable legal matter with shifting facts, argument pressure, and judge feedback."
+                  )}
+                </p>
+                <div className="mt-6 flex items-center justify-between text-sm text-white/45">
+                  <span>{template.practiceArea || "Live matter"}</span>
+                  <span>Complexity {template.complexity || 3}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-5 py-16 md:px-8 md:py-20">
+        <p className="text-center text-sm font-semibold uppercase tracking-[0.28em] text-white/45">
+          Loved by law students and aspiring lawyers
+        </p>
+        <div className="mt-12 grid gap-5 lg:grid-cols-3">
+          {testimonials.map((item) => (
+            <div key={item.name} className="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-6">
+              <div className="flex items-center gap-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-black/30 text-sm font-semibold text-white/72">
+                  {item.name
+                    .split(" ")
+                    .map((part) => part[0])
+                    .join("")}
+                </div>
+                <div>
+                  <p className="font-medium text-white">{item.name}</p>
+                  <p className="text-sm text-white/45">{item.title}</p>
+                </div>
+              </div>
+              <p className="mt-6 text-base leading-8 text-white/68">&quot;{item.quote}&quot;</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-12 grid gap-6 border-t border-white/10 pt-8 text-center sm:grid-cols-2 xl:grid-cols-4">
+          {[
+            { icon: "users", value: "10,000+", label: "Users" },
+            { icon: "brief", value: totalCasesLabel, label: "Cases" },
+            { icon: "spark", value: "50,000+", label: "Arguments Made" },
+            { icon: "star", value: "4.8/5", label: "Average Rating" },
+          ].map((stat) => (
+            <div key={stat.label} className="flex items-center justify-center gap-4">
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-white/55">
+                <Icon kind={stat.icon} />
+              </div>
+              <div className="text-left">
+                <p className="text-3xl font-semibold text-white">{stat.value}</p>
+                <p className="text-sm text-white/45">{stat.label}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="arena-column-bg border-t border-white/10">
+        <div className="mx-auto max-w-7xl px-5 py-16 text-center md:px-8 md:py-20">
+          <p className="text-sm font-semibold uppercase tracking-[0.28em] text-white/45">
+            Ready to step into the arena?
+          </p>
+          <h2 className="arena-headline mx-auto mt-5 max-w-4xl text-4xl uppercase md:text-6xl">
+            Start your first case today.
+          </h2>
+          <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-white/62">
+            Build your argument, face the AI, and see whether your reasoning actually holds when someone pushes back.
+          </p>
+          <Link
+            href="/dashboard"
+            className="mt-8 inline-flex rounded-2xl bg-white px-6 py-4 text-sm font-semibold text-black transition hover:bg-white/90"
+          >
+            Start Your First Case
+          </Link>
         </div>
       </section>
     </main>

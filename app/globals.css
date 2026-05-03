@@ -61,6 +61,14 @@ progress::-webkit-progress-value {
       );
   }
 
+  .arena-app-shell {
+    color: #f3f3f0;
+    background:
+      radial-gradient(circle at 18% 10%, rgba(255, 255, 255, 0.08), transparent 26%),
+      radial-gradient(circle at 82% 8%, rgba(255, 255, 255, 0.05), transparent 22%),
+      linear-gradient(180deg, #050505 0%, #020202 40%, #060606 100%);
+  }
+
   .arena-shell a {
     @apply transition-colors;
   }
@@ -68,9 +76,149 @@ progress::-webkit-progress-value {
   .arena-shell a:hover {
     color: #d9e8fb;
   }
+
+  .arena-landing {
+    background:
+      radial-gradient(circle at 18% 16%, rgba(255, 255, 255, 0.08), transparent 28%),
+      radial-gradient(circle at 82% 12%, rgba(255, 255, 255, 0.05), transparent 24%),
+      linear-gradient(180deg, #050505 0%, #020202 34%, #070707 100%);
+  }
+
+  .arena-column-bg {
+    position: relative;
+    isolation: isolate;
+  }
+
+  .arena-column-bg::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -2;
+    opacity: 0.4;
+    background:
+      linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.025) 10%, transparent 20%),
+      linear-gradient(90deg, transparent 28%, rgba(255, 255, 255, 0.025) 38%, transparent 48%),
+      linear-gradient(90deg, transparent 56%, rgba(255, 255, 255, 0.025) 66%, transparent 76%),
+      linear-gradient(90deg, transparent 82%, rgba(255, 255, 255, 0.025) 92%, transparent 100%);
+    filter: blur(1px);
+  }
+
+  .arena-column-bg::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background:
+      radial-gradient(circle at 50% 8%, rgba(255, 255, 255, 0.08), transparent 24%),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 22%),
+      linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.62) 100%);
+  }
 }
 
 @layer components {
+  .arena-glass {
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background:
+      linear-gradient(180deg, rgba(17, 17, 17, 0.94), rgba(6, 6, 6, 0.92)),
+      radial-gradient(circle at top, rgba(255, 255, 255, 0.06), transparent 42%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.06),
+      0 20px 60px rgba(0, 0, 0, 0.48);
+    backdrop-filter: blur(18px);
+  }
+
+  .arena-surface {
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 1.75rem;
+    background:
+      linear-gradient(180deg, rgba(16, 16, 16, 0.96), rgba(5, 5, 5, 0.94)),
+      radial-gradient(circle at top, rgba(255, 255, 255, 0.05), transparent 44%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.05),
+      0 24px 60px rgba(0, 0, 0, 0.45);
+    backdrop-filter: blur(16px);
+  }
+
+  .arena-surface-soft {
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 1.35rem;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.02)),
+      rgba(0, 0, 0, 0.28);
+  }
+
+  .arena-pill {
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(255, 255, 255, 0.78);
+  }
+
+  .arena-btn-light {
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 1rem;
+    background: #ffffff;
+    color: #040404;
+    font-weight: 600;
+    text-transform: none;
+  }
+
+  .arena-btn-light:hover {
+    background: rgba(255, 255, 255, 0.92);
+  }
+
+  .arena-btn-dark {
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 1rem;
+    background: rgba(255, 255, 255, 0.04);
+    color: #f4f4f0;
+    font-weight: 600;
+    text-transform: none;
+  }
+
+  .arena-btn-dark:hover {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .arena-btn-danger {
+    border: 1px solid rgba(248, 113, 113, 0.32);
+    border-radius: 1rem;
+    background: rgba(127, 29, 29, 0.28);
+    color: #fecaca;
+    font-weight: 600;
+    text-transform: none;
+  }
+
+  .arena-btn-danger:hover {
+    background: rgba(153, 27, 27, 0.4);
+  }
+
+  .arena-field,
+  .arena-select {
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 1rem;
+    background: rgba(255, 255, 255, 0.04);
+    color: #f3f3f0;
+  }
+
+  .arena-field::placeholder {
+    color: rgba(255, 255, 255, 0.4);
+  }
+
+  .arena-select option {
+    background: #080808;
+    color: #f3f3f0;
+  }
+
+  .arena-stat-card {
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 1.35rem;
+    padding: 1rem;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.015)),
+      rgba(0, 0, 0, 0.2);
+  }
+
   .arena-console {
     border: 1px solid var(--arena-line);
     border-radius: 0.9rem;
@@ -163,24 +311,31 @@ progress::-webkit-progress-value {
   }
 
   .arena-shell .arena-textarea,
+  .arena-app-shell .arena-textarea,
   .arena-shell .arena-textarea:disabled,
-  .arena-shell .arena-textarea[readonly] {
+  .arena-app-shell .arena-textarea:disabled,
+  .arena-shell .arena-textarea[readonly],
+  .arena-app-shell .arena-textarea[readonly] {
     color: #edf5ff;
     -webkit-text-fill-color: #edf5ff;
-    background-color: rgba(2, 6, 12, 0.48);
-    border-color: rgba(122, 160, 201, 0.38);
+    background-color: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.14);
+    border-radius: 1rem;
     opacity: 1;
   }
 
-  .arena-shell .arena-textarea::placeholder {
+  .arena-shell .arena-textarea::placeholder,
+  .arena-app-shell .arena-textarea::placeholder {
     color: rgba(203, 213, 225, 0.72);
   }
 
-  .arena-shell .arena-textarea[readonly] {
+  .arena-shell .arena-textarea[readonly],
+  .arena-app-shell .arena-textarea[readonly] {
     cursor: text;
   }
 
   .arena-shell .btn:disabled,
+  .arena-app-shell .btn:disabled,
   .arena-shell .btn.btn-disabled {
     color: rgba(241, 245, 249, 0.86);
     opacity: 0.72;
