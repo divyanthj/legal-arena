@@ -455,18 +455,18 @@ export default async function Page() {
       </section>
 
       <section id="features" className="mx-auto max-w-7xl px-5 py-16 md:px-8 md:py-20">
-        <div className="grid gap-10 xl:grid-cols-[minmax(0,0.78fr)_minmax(0,1.22fr)] xl:items-start">
-          <div>
+        <div className="grid gap-10 xl:grid-cols-[minmax(0,0.86fr)_minmax(0,1.14fr)] xl:items-start">
+          <div className="xl:pr-6">
             <p className="text-sm font-semibold uppercase tracking-[0.3em] text-white/45">
               A game that builds real skills
             </p>
-            <h2 className="arena-headline mt-5 max-w-md text-4xl uppercase md:text-5xl">
+            <h2 className="arena-headline mt-5 max-w-lg text-4xl uppercase leading-[0.92] md:text-[4.25rem]">
               Train like court is tomorrow.
             </h2>
-            <p className="mt-6 max-w-md text-lg leading-8 text-white/66">
+            <p className="mt-6 max-w-lg text-lg leading-8 text-white/66">
               Legal Arena turns learning law into an active routine: analyze the record, build your case, argue under pressure, then run it back stronger.
             </p>
-            <div className="mt-8 space-y-4">
+            <div className="mt-8 max-w-md space-y-4">
               {skillPoints.map((point) => (
                 <div key={point} className="flex items-start gap-3 text-white/72">
                   <span className="mt-1 flex h-5 w-5 items-center justify-center rounded-full border border-white/15 text-[10px]">
@@ -484,15 +484,17 @@ export default async function Page() {
             </Link>
           </div>
 
-          <div className="arena-glass rounded-[2rem] p-5 md:p-7" id="leaderboard">
+          <div className="arena-glass overflow-hidden rounded-[2rem] p-5 md:p-7" id="leaderboard">
             <p className="text-sm font-semibold uppercase tracking-[0.28em] text-white/45">
               Your Progress
             </p>
-            <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_240px]">
-              <div className="space-y-4">
+            <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)_minmax(0,0.8fr)]">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
                 <div className="rounded-[1.4rem] border border-white/10 bg-black/30 p-5">
                   <p className="text-sm text-white/50">Career Level</p>
-                  <p className="mt-3 text-3xl font-semibold text-white">Associate I</p>
+                  <p className="mt-3 max-w-[8ch] text-[2.15rem] font-semibold leading-[1.05] text-white">
+                    Associate I
+                  </p>
                   <div className="mt-5 h-2 rounded-full bg-white/10">
                     <div className="h-2 w-[52%] rounded-full bg-white" />
                   </div>
@@ -500,16 +502,16 @@ export default async function Page() {
                 </div>
                 <div className="rounded-[1.4rem] border border-white/10 bg-black/30 p-5">
                   <p className="text-sm text-white/50">Win Rate</p>
-                  <div className="mt-4 flex items-end justify-between">
-                    <p className="text-5xl font-semibold text-white">68%</p>
-                    <div className="flex h-24 w-24 items-center justify-center rounded-full border-[10px] border-white/15 border-t-white text-sm text-white/60">
-                      Climbing
-                    </div>
+                  <div className="mt-4">
+                    <p className="text-4xl font-semibold tracking-tight text-white">68%</p>
+                    <p className="mt-3 text-sm uppercase tracking-[0.18em] text-white/42">
+                      Strong trajectory
+                    </p>
                   </div>
                 </div>
               </div>
 
-              <div className="rounded-[1.4rem] border border-white/10 bg-black/30 p-5">
+              <div className="min-w-0 rounded-[1.4rem] border border-white/10 bg-black/30 p-5">
                 <p className="text-sm text-white/50">Specializations</p>
                 <div className="mt-5 space-y-5">
                   {[
@@ -519,8 +521,8 @@ export default async function Page() {
                   ].map((item) => (
                     <div key={item.name}>
                       <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="font-medium text-white">{item.name}</p>
+                        <div className="min-w-0">
+                          <p className="font-medium leading-snug text-white">{item.name}</p>
                           <p className="text-sm text-white/45">{item.level}</p>
                         </div>
                         <div className="rounded-xl border border-white/10 p-2 text-white/40">
@@ -535,16 +537,16 @@ export default async function Page() {
                 </div>
               </div>
 
-              <div className="rounded-[1.4rem] border border-white/10 bg-black/30 p-5 text-center">
+              <div className="min-w-0 rounded-[1.4rem] border border-white/10 bg-black/30 p-5 text-center">
                 <p className="text-sm text-white/50">Global Rank</p>
-                <p className="mt-4 text-6xl font-semibold tracking-tight text-white">#142</p>
+                <p className="mt-4 text-5xl font-semibold tracking-tight text-white md:text-6xl">#142</p>
                 <p className="mt-2 text-sm uppercase tracking-[0.2em] text-white/45">Top 1%</p>
-                <div className="mt-8 flex justify-center text-white/45">
-                  <Icon kind="trophy" className="h-16 w-16" />
+                <div className="mt-7 flex justify-center text-white/45">
+                  <Icon kind="trophy" className="h-14 w-14" />
                 </div>
                 <Link
                   href="/dashboard"
-                  className="mt-8 inline-flex rounded-2xl border border-white/15 bg-white px-4 py-3 text-sm font-semibold text-black transition hover:bg-white/90"
+                  className="mt-7 inline-flex rounded-2xl border border-white/15 bg-white px-4 py-3 text-sm font-semibold text-black transition hover:bg-white/90"
                 >
                   View Leaderboard
                 </Link>
