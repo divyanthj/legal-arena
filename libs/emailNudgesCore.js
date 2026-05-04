@@ -24,6 +24,45 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
 const toMillis = (value) => new Date(value).getTime();
 
+export const DEFAULT_RETENTION_RUNTIME_SETTINGS = {
+  automationEnabled: true,
+  perUserCooldownHours: 24,
+  nudgeTypes: {
+    resume_interview: true,
+    resume_courtroom: true,
+    post_verdict_next_case: true,
+    cooldown_return: true,
+    new_unlock: true,
+    leaderboard_milestone: true,
+    new_content_relevant: true,
+    dormant_winback: true,
+  },
+  thresholds: {
+    resumeInterviewIdleHours: 6,
+    resumeInterviewWindowHours: 72,
+    resumeCourtroomIdleHours: 3,
+    resumeCourtroomWindowHours: 72,
+    postVerdictDelayHours: 18,
+    postVerdictWindowDays: 7,
+    cooldownReturnHours: 24,
+    dormantWinbackDays: 14,
+    newContentWindowDays: 7,
+  },
+};
+
+export const normalizeRetentionRuntimeSettings = (settings = {}) => ({
+  ...DEFAULT_RETENTION_RUNTIME_SETTINGS,
+  ...settings,
+  nudgeTypes: {
+    ...DEFAULT_RETENTION_RUNTIME_SETTINGS.nudgeTypes,
+    ...(settings.nudgeTypes || {}),
+  },
+  thresholds: {
+    ...DEFAULT_RETENTION_RUNTIME_SETTINGS.thresholds,
+    ...(settings.thresholds || {}),
+  },
+});
+
 export const makeNudgeDedupeKey = ({ nudgeType, caseSessionId = null }) =>
   `${nudgeType}:${caseSessionId || "user"}`;
 
@@ -171,13 +210,30 @@ export const determineRetentionNudge = ({
   logs = [],
   lifecycleCandidates = [],
   now = new Date(),
+  settings = {},
 } = {}) => {
-  if (hasRecentRetentionEmail({ logs, now })) {
+  const runtimeSettings = normalizeRetentionRuntimeSettings(settings);
+  const cooldownWindowMs =
+    Math.max(1, Number(runtimeSettings.perUserCooldownHours) || 24) * HOUR_MS;
+
+  if (
+    logs.some((log) => toMillis(log.sentAt) >= now.getTime() - cooldownWindowMs)
+  ) {
     return {
       candidate: null,
       skipReason: "global_cap",
     };
   }
+
+  const {
+    postVerdictDelayHours,
+    postVerdictWindowDays,
+    cooldownReturnHours,
+    resumeCourtroomIdleHours,
+    resumeCourtroomWindowHours,
+    resumeInterviewIdleHours,
+    resumeInterviewWindowHours,
+  } = runtimeSettings.thresholds;
 
   const latestCase = findLatestCase(caseSessions);
   const latestNonExitedCase = findLatestCase(
@@ -186,10 +242,13 @@ export const determineRetentionNudge = ({
   );
 
   if (
+    runtimeSettings.nudgeTypes[NUDGE_TYPES.POST_VERDICT_NEXT_CASE] &&
     latestCase &&
     latestCase.status === "verdict" &&
-    toMillis(latestCase.updatedAt) <= now.getTime() - 18 * HOUR_MS &&
-    toMillis(latestCase.updatedAt) >= now.getTime() - 7 * DAY_MS &&
+    toMillis(latestCase.updatedAt) <=
+      now.getTime() - postVerdictDelayHours * HOUR_MS &&
+    toMillis(latestCase.updatedAt) >=
+      now.getTime() - postVerdictWindowDays * DAY_MS &&
     !caseSessions.some(
       (caseSession) =>
         ["interview", "courtroom"].includes(caseSession.status) &&
@@ -218,7 +277,8 @@ export const determineRetentionNudge = ({
     (caseSession) =>
       caseSession.status === "exited" &&
       caseSession.exitedAt &&
-      toMillis(caseSession.exitedAt) <= now.getTime() - DAY_MS &&
+      toMillis(caseSession.exitedAt) <=
+        now.getTime() - cooldownReturnHours * HOUR_MS &&
       !caseSessions.some(
         (otherCase) =>
           String(otherCase.caseTemplateId) === String(caseSession.caseTemplateId) &&
@@ -226,7 +286,7 @@ export const determineRetentionNudge = ({
       )
   );
 
-  if (eligibleExitedCase) {
+  if (runtimeSettings.nudgeTypes[NUDGE_TYPES.COOLDOWN_RETURN] && eligibleExitedCase) {
     if (
       !hasSentNudge({
         logs,
@@ -246,10 +306,13 @@ export const determineRetentionNudge = ({
   }
 
   if (
+    runtimeSettings.nudgeTypes[NUDGE_TYPES.RESUME_COURTROOM] &&
     latestCase &&
     latestCase.status === "courtroom" &&
-    toMillis(latestCase.updatedAt) <= now.getTime() - 3 * HOUR_MS &&
-    toMillis(latestCase.updatedAt) >= now.getTime() - 72 * HOUR_MS
+    toMillis(latestCase.updatedAt) <=
+      now.getTime() - resumeCourtroomIdleHours * HOUR_MS &&
+    toMillis(latestCase.updatedAt) >=
+      now.getTime() - resumeCourtroomWindowHours * HOUR_MS
   ) {
     if (
       !hasSentNudge({
@@ -270,10 +333,13 @@ export const determineRetentionNudge = ({
   }
 
   if (
+    runtimeSettings.nudgeTypes[NUDGE_TYPES.RESUME_INTERVIEW] &&
     latestNonExitedCase &&
     latestNonExitedCase.status === "interview" &&
-    toMillis(latestNonExitedCase.updatedAt) <= now.getTime() - 6 * HOUR_MS &&
-    toMillis(latestNonExitedCase.createdAt) >= now.getTime() - 72 * HOUR_MS
+    toMillis(latestNonExitedCase.updatedAt) <=
+      now.getTime() - resumeInterviewIdleHours * HOUR_MS &&
+    toMillis(latestNonExitedCase.createdAt) >=
+      now.getTime() - resumeInterviewWindowHours * HOUR_MS
   ) {
     if (
       !hasSentNudge({

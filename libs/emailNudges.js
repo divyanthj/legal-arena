@@ -2,6 +2,7 @@ import "server-only";
 
 import connectMongo from "@/libs/mongoose";
 import config from "@/config";
+import { getAdminOpsConfig } from "@/libs/adminOps";
 import { emailTemplate } from "@/libs/emailTemplate";
 import { sendEmail } from "@/libs/resend";
 import {
@@ -10,6 +11,7 @@ import {
   getCategoryUnlockLevel,
   makeNudgeDedupeKey,
   NUDGE_TYPES,
+  normalizeRetentionRuntimeSettings,
   parseNudgeRunOptions,
   selectRecommendedTemplate,
 } from "@/libs/emailNudgesCore";
@@ -256,17 +258,21 @@ const buildLifecycleCandidates = ({
   templates,
   leaderboardContext,
   now,
+  settings,
 }) => {
+  const runtimeSettings = normalizeRetentionRuntimeSettings(settings);
   const candidates = [];
   const latestVerdict = caseSessions
     .filter(
       (caseSession) =>
         caseSession.status === "verdict" &&
-        toMillis(caseSession.updatedAt) >= now.getTime() - WEEK_MS
+        toMillis(caseSession.updatedAt) >=
+          now.getTime() -
+            runtimeSettings.thresholds.postVerdictWindowDays * DAY_MS
     )
     .sort((left, right) => toMillis(right.updatedAt) - toMillis(left.updatedAt))[0];
 
-  if (latestVerdict) {
+  if (runtimeSettings.nudgeTypes[NUDGE_TYPES.NEW_UNLOCK] && latestVerdict) {
     const categorySlug = latestVerdict.primaryCategory;
     const unlockedComplexity = getCategoryUnlockLevel({
       progression,
@@ -303,7 +309,10 @@ const buildLifecycleCandidates = ({
     leaderboardContext,
   });
 
-  if (leaderboardCandidate) {
+  if (
+    runtimeSettings.nudgeTypes[NUDGE_TYPES.LEADERBOARD_MILESTONE] &&
+    leaderboardCandidate
+  ) {
     candidates.push(leaderboardCandidate);
   }
 
@@ -314,7 +323,11 @@ const buildLifecycleCandidates = ({
   });
   const newContentTemplate = templates
     .filter((template) => template.unlocked)
-    .filter((template) => toMillis(template.createdAt) >= now.getTime() - WEEK_MS)
+    .filter(
+      (template) =>
+        toMillis(template.createdAt) >=
+        now.getTime() - runtimeSettings.thresholds.newContentWindowDays * DAY_MS
+    )
     .filter((template) =>
       latestNewContentLog ? toMillis(template.createdAt) > toMillis(latestNewContentLog.sentAt) : true
     )
@@ -329,7 +342,10 @@ const buildLifecycleCandidates = ({
       return toMillis(right.createdAt) - toMillis(left.createdAt);
     })[0];
 
-  if (newContentTemplate) {
+  if (
+    runtimeSettings.nudgeTypes[NUDGE_TYPES.NEW_CONTENT_RELEVANT] &&
+    newContentTemplate
+  ) {
     candidates.push(
       buildCandidate({
         type: NUDGE_TYPES.NEW_CONTENT_RELEVANT,
@@ -352,9 +368,15 @@ const buildLifecycleCandidates = ({
   const latestActivityAt = getLatestActivityAt({ user, caseSessions });
   const inactiveForMs = latestActivityAt ? now.getTime() - latestActivityAt : 0;
 
-  if (!hasActiveCase && latestActivityAt && inactiveForMs >= FORTNIGHT_MS) {
+  if (
+    runtimeSettings.nudgeTypes[NUDGE_TYPES.DORMANT_WINBACK] &&
+    !hasActiveCase &&
+    latestActivityAt &&
+    inactiveForMs >= runtimeSettings.thresholds.dormantWinbackDays * DAY_MS
+  ) {
     const inactivityBucket = Math.floor(
-      (inactiveForMs - FORTNIGHT_MS) / THIRTY_DAYS_MS
+      (inactiveForMs - runtimeSettings.thresholds.dormantWinbackDays * DAY_MS) /
+        THIRTY_DAYS_MS
     );
 
     candidates.push(
@@ -676,6 +698,7 @@ const evaluateUserNudge = async ({
   user,
   leaderboardContext = {},
   now = new Date(),
+  settings = {},
 }) => {
   const [caseSessions, logs] = await Promise.all([
     CaseSession.find({ userId: user._id }).sort({ updatedAt: -1 }).lean(),
@@ -691,6 +714,7 @@ const evaluateUserNudge = async ({
     templates,
     leaderboardContext,
     now,
+    settings,
   });
 
   const { candidate, skipReason } = determineRetentionNudge({
@@ -698,6 +722,7 @@ const evaluateUserNudge = async ({
     logs,
     lifecycleCandidates,
     now,
+    settings,
   });
 
   if (!candidate) {
@@ -801,8 +826,38 @@ export const runRetentionEmailNudges = async ({
   dryRun = false,
   limit = null,
   now = new Date(),
+  settingsOverride = null,
+  ignoreAutomationState = false,
 } = {}) => {
   await connectMongo();
+  const adminOpsConfig = await getAdminOpsConfig();
+  const settings = normalizeRetentionRuntimeSettings(
+    settingsOverride || adminOpsConfig.retention
+  );
+
+  if (!settings.automationEnabled && !ignoreAutomationState) {
+    return {
+      dryRun,
+      limit,
+      automationEnabled: false,
+      scannedUsers: 0,
+      eligibleByType: {
+        resume_interview: 0,
+        resume_courtroom: 0,
+        post_verdict_next_case: 0,
+        cooldown_return: 0,
+        new_unlock: 0,
+        leaderboard_milestone: 0,
+        new_content_relevant: 0,
+        dormant_winback: 0,
+      },
+      sentCount: 0,
+      skipped: {
+        automation_disabled: 1,
+      },
+      candidates: [],
+    };
+  }
 
   const [users, leaderboardContext] = await Promise.all([
     User.find({
@@ -817,6 +872,7 @@ export const runRetentionEmailNudges = async ({
   const summary = {
     dryRun,
     limit,
+    automationEnabled: settings.automationEnabled,
     scannedUsers: users.length,
     eligibleByType: {
       resume_interview: 0,
@@ -847,6 +903,7 @@ export const runRetentionEmailNudges = async ({
       user,
       leaderboardContext,
       now,
+      settings,
     });
 
     if (!result.candidate) {

@@ -5,6 +5,8 @@ import AdminCaseLab from "@/components/legal-arena/AdminCaseLab";
 import connectMongo from "@/libs/mongoose";
 import CaseTemplate from "@/models/CaseTemplate";
 import CaseSession from "@/models/CaseSession";
+import User from "@/models/User";
+import Lead from "@/models/Lead";
 import { getAdminEmails, isAdminEmail } from "@/libs/admin";
 import { listCategoryOptions } from "@/libs/game/templates";
 import { toClientJSON } from "@/libs/serialize";
@@ -24,7 +26,7 @@ export default async function AdminPage() {
 
   await connectMongo();
 
-  const [templates, templateStats] = await Promise.all([
+  const [templates, templateStats, userCount, leadCount] = await Promise.all([
     CaseTemplate.find({}).sort({ updatedAt: -1 }),
     CaseSession.aggregate([
       {
@@ -49,6 +51,8 @@ export default async function AdminPage() {
         },
       },
     ]),
+    User.countDocuments({}),
+    Lead.countDocuments({}),
   ]);
 
   const statsByTemplateId = new Map(
@@ -72,6 +76,11 @@ export default async function AdminPage() {
       categories={toClientJSON(listCategoryOptions())}
       initialTemplates={toClientJSON(templatesWithStats)}
       adminEmails={toClientJSON(getAdminEmails())}
+      adminStats={toClientJSON({
+        templateCount: templatesWithStats.length,
+        userCount,
+        leadCount,
+      })}
     />
   );
 }
