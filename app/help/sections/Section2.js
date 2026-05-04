@@ -1,11 +1,13 @@
 export default function Section2({ id }) {
   return (
-    <div id={id} className="scroll-mt-28">
-      <h2>{`Building Your File`}</h2>
-      <p>
+    <section id={id} className="arena-surface scroll-mt-28">
+      <div className="p-6 md:p-8">
+      <p className="arena-kicker">02</p>
+      <h2 className="arena-headline mt-2 text-3xl">{`Building Your File`}</h2>
+      <p className="mt-4 text-base leading-8 text-white/72">
         {`The intake stage is not filler. It is where you turn a messy client story into a structured file you can actually argue from. During this phase, your questions update the transcript and help shape the fact sheet that sits beside the conversation.`}
       </p>
-      <ul>
+      <ul className="mt-6 space-y-4 pl-6 text-base leading-8 text-white/72">
         <li>
           <strong>{`Interview for dates, records, and pressure points:`}</strong>{" "}
           {`Ask about timeline details, witnesses, notice, documents, missing records, and anything else that could move a judge. The most useful questions narrow uncertainty rather than repeating the opening story in different words.`}
@@ -27,8 +29,8 @@ export default function Section2({ id }) {
           {`When your theory, facts, risks, and requested relief all line up, use Finalize Fact Sheet to leave intake and move into the courtroom stage.`}
         </li>
       </ul>
-      <h3>{`What a strong draft usually includes`}</h3>
-      <ol>
+      <h3 className="mt-8 text-2xl font-semibold text-white">{`What a strong draft usually includes`}</h3>
+      <ol className="mt-5 space-y-3 pl-6 text-base leading-8 text-white/72">
         <li>{`A short summary that explains the dispute in plain language.`}</li>
         <li>{`A theory that says why your side should prevail.`}</li>
         <li>{`A timeline that anchors events in a usable sequence.`}</li>
@@ -36,16 +38,17 @@ export default function Section2({ id }) {
         <li>{`A realistic note of risks, proof gaps, and disputed facts.`}</li>
         <li>{`A clear statement of the remedy or relief you want.`}</li>
       </ol>
-      <div className="alert mt-6 border border-warning/30 bg-warning/10">
-        <span className="text-sm leading-relaxed">
-          <strong className="font-medium text-base-content">Important:</strong>{" "}
+      <div className="arena-surface-soft mt-6 border border-amber-500/20 bg-amber-500/[0.06] p-4">
+        <span className="text-sm leading-7 text-white/70">
+          <strong className="font-medium text-white">Important:</strong>{" "}
           If you exit a case during intake, the same matter cannot be started again for
           24 hours. Leave only if you are sure you want to abandon the run.
         </span>
       </div>
-      <p>
+      <p className="mt-5 text-base leading-8 text-white/72">
         {`A disciplined intake produces better courtroom turns, cleaner verdict summaries, and more reliable progression over time.`}
       </p>
-    </div>
+      </div>
+    </section>
   );
 }

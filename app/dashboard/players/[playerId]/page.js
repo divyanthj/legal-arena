@@ -22,5 +22,10 @@ export default async function PlayerProfilePage({ params }) {
     notFound();
   }
 
-  return <PlayerProfileDossier profile={toClientJSON(profile)} />;
+  return (
+    <PlayerProfileDossier
+      profile={toClientJSON(profile)}
+      viewerUserId={session.user.id}
+    />
+  );
 }

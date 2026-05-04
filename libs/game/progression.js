@@ -3,6 +3,7 @@ import "server-only";
 import connectMongo from "@/libs/mongoose";
 import User from "@/models/User";
 import { LEGAL_CASE_CATEGORIES } from "./categories";
+import { getDefaultLawyerProfileSummary } from "./profileSummary";
 
 const DEFAULT_RATING = 1000;
 
@@ -73,6 +74,10 @@ export const ensureUserProfile = async (userId, profile = null) => {
       image: profile?.image?.trim?.() || undefined,
       emailVerified:
         profile?.emailVerified === undefined ? null : profile.emailVerified,
+      lawyerProfileSummary: getDefaultLawyerProfileSummary(
+        profile?.name?.trim?.() || email.split("@")[0] || "This lawyer"
+      ),
+      lawyerProfileSummarySource: "default",
       progression: getDefaultProgression(),
     });
   }
@@ -95,6 +100,14 @@ export const ensureUserProfile = async (userId, profile = null) => {
 
   if (profile?.image?.trim?.() && user.image !== profile.image.trim()) {
     user.image = profile.image.trim();
+    shouldSave = true;
+  }
+
+  if (!String(user.lawyerProfileSummary || "").trim()) {
+    user.lawyerProfileSummary = getDefaultLawyerProfileSummary(
+      user.name || user.email?.split("@")[0] || "This lawyer"
+    );
+    user.lawyerProfileSummarySource = "default";
     shouldSave = true;
   }
 

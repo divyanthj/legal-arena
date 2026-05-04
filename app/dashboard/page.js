@@ -42,6 +42,7 @@ export default async function Dashboard() {
       overallLeaderboard={toClientJSON(overallLeaderboard)}
       categoryLeaderboards={toClientJSON(Object.fromEntries(categoryLeaderboards))}
       isAdmin={isAdminEmail(session.user?.email)}
+      userId={session.user?.id || ""}
       userName={session.user?.name || session.user?.email}
       userEmail={session.user?.email || ""}
       hasArenaAccess={hasArenaAccess}

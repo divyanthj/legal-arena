@@ -35,13 +35,15 @@ export async function generateMetadata() {
 export default function HelpLayout({ children }) {
   return (
     <>
-      <Suspense fallback={<div className="bg-base-200 px-8 py-4">Loading help...</div>}>
+      <Suspense
+        fallback={<div className="arena-app-shell px-8 py-4 text-white">Loading help...</div>}
+      >
         <HelpHeader links={links} />
       </Suspense>
 
-      <main className="min-h-screen bg-base-200 p-8 pb-24">
-        <section className="mx-auto flex max-w-7xl space-x-8">
-          <div className="hidden lg:block lg:w-80">
+      <main className="arena-app-shell min-h-screen px-4 py-6 md:px-8 md:py-8">
+        <section className="mx-auto grid max-w-[1600px] gap-6 xl:grid-cols-[280px_minmax(0,1fr)]">
+          <div className="hidden xl:block">
             <div className="sticky top-8 h-fit">
               <Sidebar links={links} />
             </div>

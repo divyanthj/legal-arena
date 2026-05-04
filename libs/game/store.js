@@ -26,6 +26,7 @@ import {
   normalizeProgression,
 } from "./progression";
 import { DEFAULT_CATEGORY_SLUG } from "./categories";
+import { ensureStoredLawyerProfileSummary } from "./profileSummary";
 
 const toPlain = (doc) => (doc?.toJSON ? doc.toJSON() : doc);
 const CASE_EXIT_COOLDOWN_MS = 24 * 60 * 60 * 1000;
@@ -829,20 +830,28 @@ export const getPublicPlayerProfile = async (playerId) => {
     );
   }
 
+  const publicCases = cases.map((caseSession) => {
+    const template =
+      toPlain(caseSession.caseTemplateId) ||
+      fallbackMap.get(getTemplateSlugFromSession(caseSession)) ||
+      null;
+
+    return buildCasePayload(caseSession, template);
+  });
+
+  const lawyerProfileSummary = await ensureStoredLawyerProfileSummary({
+    user: hydratedUser,
+    cases: publicCases,
+  });
+
   return {
     player: {
       ...buildPublicLeaderboardEntry(hydratedUser),
       joinedAt: hydratedUser.createdAt,
       updatedAt: hydratedUser.updatedAt,
+      lawyerProfileSummary,
       categoryStats: normalizeProgression(hydratedUser.progression).categoryStats,
     },
-    cases: cases.map((caseSession) => {
-      const template =
-        toPlain(caseSession.caseTemplateId) ||
-        fallbackMap.get(getTemplateSlugFromSession(caseSession)) ||
-        null;
-
-      return buildCasePayload(caseSession, template);
-    }),
+    cases: publicCases,
   };
 };

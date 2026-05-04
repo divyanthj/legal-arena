@@ -2,19 +2,21 @@ import Link from "next/link";
 
 export default function Section1({ id }) {
   return (
-    <div id={id} className="scroll-mt-28">
-      <h2>{`Getting Started`}</h2>
-      <p>
+    <section id={id} className="arena-surface scroll-mt-28">
+      <div className="p-6 md:p-8">
+      <p className="arena-kicker">01</p>
+      <h2 className="arena-headline mt-2 text-3xl">{`Getting Started`}</h2>
+      <p className="mt-4 text-base leading-8 text-white/72">
         {`Legal Arena is a courtroom training game built around one repeatable loop: choose a dispute, interview your side, build a usable fact sheet, and then argue the matter in open text against AI-powered opposing counsel.`}
       </p>
-      <p>
+      <p className="mt-5 text-base leading-8 text-white/72">
         {`If you are opening the app for the first time, this section will help you understand what each stage is for and how to get into a case quickly without wasting early turns.`}
       </p>
-      <ol>
+      <ol className="mt-6 space-y-4 pl-6 text-base leading-8 text-white/72">
         <li>
           <strong>{`Sign in and open the dashboard:`}</strong>{" "}
           {`After access is granted, head to the `}
-          <Link href="/dashboard" className="link link-primary">
+          <Link href="/dashboard" className="text-white underline underline-offset-4">
             dashboard
           </Link>
           {`. This is your case hub, leaderboard view, and progression screen.`}
@@ -36,17 +38,18 @@ export default function Section1({ id }) {
           {`A session can place you on either side of the dispute. Once the case opens, Legal Arena clearly tells you which party you represent so you can question your client and frame your theory from the correct angle.`}
         </li>
       </ol>
-      <div className="alert mt-6 border border-base-300 bg-base-200">
-        <span className="text-sm leading-relaxed">
-          <strong className="font-medium text-base-content">Tip:</strong>{" "}
+      <div className="arena-surface-soft mt-6 border border-white/10 p-4">
+        <span className="text-sm leading-7 text-white/70">
+          <strong className="font-medium text-white">Tip:</strong>{" "}
           Start with a category where you already understand the rhythm of the facts.
           Progression compounds faster when you can complete matters cleanly instead of
           bouncing between unfamiliar specialties.
         </span>
       </div>
-      <p>
+      <p className="mt-5 text-base leading-8 text-white/72">
         {`Once you start a case, the game moves into intake mode. That stage is where strong runs are usually won or lost.`}
       </p>
-    </div>
+      </div>
+    </section>
   );
 }

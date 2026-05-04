@@ -16,6 +16,9 @@
   --arena-favorable: #55d5a0;
   --arena-accent: #6fb7ff;
   --arena-ink: #02060b;
+  --arena-scroll-track: rgba(255, 255, 255, 0.05);
+  --arena-scroll-thumb: rgba(255, 255, 255, 0.22);
+  --arena-scroll-thumb-hover: rgba(255, 255, 255, 0.34);
 }
 
 html,
@@ -427,23 +430,68 @@ progress::-webkit-progress-value {
 }
 
 @layer utilities {
+  .arena-app-shell,
+  .arena-app-shell * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--arena-scroll-thumb) var(--arena-scroll-track);
+  }
+
+  .arena-app-shell::-webkit-scrollbar,
+  .arena-app-shell *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  .arena-app-shell::-webkit-scrollbar-thumb,
+  .arena-app-shell *::-webkit-scrollbar-thumb {
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background: var(--arena-scroll-thumb);
+    background-clip: padding-box;
+  }
+
+  .arena-app-shell::-webkit-scrollbar-thumb:hover,
+  .arena-app-shell *::-webkit-scrollbar-thumb:hover {
+    background: var(--arena-scroll-thumb-hover);
+    background-clip: padding-box;
+  }
+
+  .arena-app-shell::-webkit-scrollbar-track,
+  .arena-app-shell *::-webkit-scrollbar-track {
+    border-radius: 999px;
+    background: var(--arena-scroll-track);
+  }
+
+  .arena-app-shell::-webkit-scrollbar-corner,
+  .arena-app-shell *::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+
   .arena-scroll {
     scrollbar-width: thin;
-    scrollbar-color: rgba(135, 174, 215, 0.45) rgba(11, 23, 37, 0.9);
+    scrollbar-color: var(--arena-scroll-thumb) var(--arena-scroll-track);
   }
 
   .arena-scroll::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
+    width: 10px;
+    height: 10px;
   }
 
   .arena-scroll::-webkit-scrollbar-thumb {
+    border: 2px solid transparent;
     border-radius: 999px;
-    background: rgba(129, 170, 211, 0.45);
+    background: var(--arena-scroll-thumb);
+    background-clip: padding-box;
+  }
+
+  .arena-scroll::-webkit-scrollbar-thumb:hover {
+    background: var(--arena-scroll-thumb-hover);
+    background-clip: padding-box;
   }
 
   .arena-scroll::-webkit-scrollbar-track {
-    background: rgba(11, 23, 37, 0.85);
+    border-radius: 999px;
+    background: var(--arena-scroll-track);
   }
 }
 

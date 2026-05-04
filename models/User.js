@@ -64,6 +64,16 @@ const userSchema = mongoose.Schema(
     image: {
       type: String,
     },
+    lawyerProfileSummary: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    lawyerProfileSummarySource: {
+      type: String,
+      enum: ["default", "generated"],
+      default: "default",
+    },
     // Used in the Stripe webhook to identify the user in Stripe and later create Customer Portal or prefill user credit card details
     customerId: {
       type: String,
