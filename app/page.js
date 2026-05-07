@@ -15,20 +15,20 @@ const navItems = [
 
 const featureHighlights = [
   {
-    title: "AI Opponent",
-    description: "Face adaptive lawyers that shift strategy as your argument evolves.",
+    title: "AI Opposing Counsel",
+    description: "Argue against counsel responses grounded in the case file and lawbook.",
   },
   {
-    title: "Instant Feedback",
-    description: "See exactly where your logic weakens, and what evidence would save it.",
+    title: "Bench Signals",
+    description: "Get round-by-round scoring signals, strengths, and weaknesses.",
   },
   {
-    title: "Track Progress",
-    description: "Level up across practice areas and build courtroom instincts that stick.",
+    title: "Progression",
+    description: "Earn XP, ratings, category tiers, and leaderboard standing from verdicts.",
   },
   {
-    title: "Real Cases",
-    description: "Practice with grounded scenarios instead of abstract hypotheticals.",
+    title: "Structured Matters",
+    description: "Practice on authored disputes with parties, claims, evidence, and rules.",
   },
 ];
 
@@ -36,62 +36,59 @@ const steps = [
   {
     number: "1",
     title: "Pick a Case",
-    description: "Choose a matter, scan the record, and understand what is really in dispute.",
+    description: "Choose an unlocked matter from the dashboard and review the dispute, parties, court, and category.",
   },
   {
     number: "2",
-    title: "Build Your Argument",
-    description: "Interrogate the facts, organize evidence, and craft a position that can survive pressure.",
+    title: "Interview Your Party",
+    description: "Ask intake questions, capture risks and proof gaps, and turn the conversation into a working fact sheet.",
   },
   {
     number: "3",
-    title: "Argue and Get Verdict",
-    description: "Present your reasoning against an AI opponent and see how a judge scores the round.",
+    title: "Argue in Court",
+    description: "Submit courtroom arguments, face opposing counsel, and receive a final ruling after the scheduled rounds.",
   },
 ];
 
 const skillPoints = [
-  "Sharpen legal reasoning",
-  "Improve research and analysis",
-  "Learn from detailed AI feedback",
-  "Climb the leaderboard with every matter",
+  "Practice intake questions and fact development",
+  "Build a court-ready fact sheet before arguing",
+  "Use lawbook rules and case facts in courtroom rounds",
+  "Track ratings, XP, records, and category tiers",
 ];
 
-const testimonials = [
+const practiceCards = [
   {
-    quote:
-      "It feels like a real courtroom rehearsal. I can see where my argument starts slipping before it is too late.",
-    name: "Rohan M.",
-    title: "Law Student",
+    title: "Intake",
+    detail:
+      "Ask your represented party questions and watch the private case file fill with summaries, timeline points, risks, proof gaps, and requested relief.",
   },
   {
-    quote:
-      "The game loop makes practice addictive. You finish one case and immediately want to run a stronger version.",
-    name: "Priya K.",
-    title: "Aspiring Lawyer",
+    title: "Courtroom",
+    detail:
+      "Draft arguments from your fact sheet, cite the lawbook, confront the weak points, and answer pressure from the other side.",
   },
   {
-    quote:
-      "Legal Arena is the first tool that made case analysis feel active instead of passive reading.",
-    name: "Ananya S.",
-    title: "Law Student",
+    title: "Verdict",
+    detail:
+      "Each completed matter closes with a ruling, highlights, concerns, final score, XP, rating movement, and leaderboard impact.",
   },
 ];
 
 const categoryFallbacks = [
-  { title: "Criminal Law", cases: "120+ Cases" },
-  { title: "Civil Litigation", cases: "150+ Cases" },
-  { title: "Corporate Law", cases: "90+ Cases" },
-  { title: "Constitutional Law", cases: "80+ Cases" },
-  { title: "Family Law", cases: "60+ Cases" },
+  { title: "Criminal Law", cases: "Case Track" },
+  { title: "Civil Litigation", cases: "Case Track" },
+  { title: "Corporate Law", cases: "Case Track" },
+  { title: "Constitutional Law", cases: "Case Track" },
+  { title: "Family Law", cases: "Case Track" },
   { title: "And More", cases: "Growing Library" },
 ];
 
 const verdictReasons = [
-  "Fact control",
-  "Counterarguments",
-  "Use of precedent",
-  "Structure under pressure",
+  "Fact sheet",
+  "Lawbook use",
+  "Proof gaps",
+  "Bench scoring",
 ];
 
 const loadFeaturedCases = async () => {
@@ -259,7 +256,7 @@ export default async function Page() {
     "The plaintiff has not established causation and the record leaves material gaps."
   );
   const totalCasesLabel =
-    totalActiveCases > 0 ? totalActiveCases.toLocaleString("en-US") : "500+";
+    totalActiveCases > 0 ? totalActiveCases.toLocaleString("en-US") : "Growing";
 
   return (
     <main className="arena-landing min-h-screen overflow-hidden bg-[#020202] text-white">
@@ -305,7 +302,7 @@ export default async function Page() {
         <div className="mx-auto max-w-7xl px-5 pb-12 pt-10 md:px-8 md:pb-16 md:pt-16">
           <div className="grid items-start gap-12 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
             <div className="max-w-2xl">
-              <p className="arena-kicker">The AI-powered courtroom simulator for future lawyers</p>
+              <p className="arena-kicker">A playable legal practice arena for future lawyers</p>
               <h1 className="arena-headline mt-6 text-6xl uppercase leading-[0.9] md:text-7xl xl:text-[6.4rem]">
                 Argue.
                 <br />
@@ -314,7 +311,7 @@ export default async function Page() {
                 Win.
               </h1>
               <p className="mt-6 max-w-xl text-lg leading-8 text-white/72 md:text-2xl md:leading-10">
-                Practice real legal reasoning against an adaptive AI opponent and build the instincts that make arguments hold up under pressure.
+                Interview your party, build a fact sheet, argue against AI opposing counsel, and learn from the bench signals that decide each matter.
               </p>
 
               <div className="mt-8 flex flex-wrap items-center gap-4">
@@ -328,7 +325,7 @@ export default async function Page() {
                   href="#how-it-works"
                   className="rounded-2xl border border-white/15 bg-white/5 px-6 py-4 text-sm font-semibold text-white transition hover:bg-white/10"
                 >
-                  Watch Demo
+                  See How It Works
                 </a>
               </div>
 
@@ -362,9 +359,9 @@ export default async function Page() {
                     <div className="mt-8 flex items-center justify-between rounded-2xl border border-white/10 bg-black/30 px-4 py-3">
                       <div>
                         <p className="text-xs uppercase tracking-[0.24em] text-white/40">
-                          Exhibits
+                          Case File
                         </p>
-                        <p className="mt-2 text-2xl font-semibold text-white">3</p>
+                        <p className="mt-2 text-2xl font-semibold text-white">Draft</p>
                       </div>
                       <div className="rounded-xl border border-white/10 p-3 text-white/55">
                         <Icon kind="brief" />
@@ -385,9 +382,9 @@ export default async function Page() {
                     <div className="mt-8 flex items-center justify-between rounded-2xl border border-white/10 bg-black/30 px-4 py-3">
                       <div>
                         <p className="text-xs uppercase tracking-[0.24em] text-white/40">
-                          Exhibits
+                          Response
                         </p>
-                        <p className="mt-2 text-2xl font-semibold text-white">2</p>
+                        <p className="mt-2 text-2xl font-semibold text-white">Round</p>
                       </div>
                       <div className="rounded-xl border border-white/10 p-3 text-white/55">
                         <Icon kind="scale" />
@@ -402,10 +399,10 @@ export default async function Page() {
                   Judge&apos;s Verdict
                 </p>
                 <p className="mt-3 text-center text-3xl font-semibold uppercase tracking-tight text-white">
-                  Plaintiff Wins
+                  Final Ruling
                 </p>
                 <p className="mt-3 text-center text-sm leading-6 text-white/62">
-                  Well reasoned argument. Stronger use of precedent and tighter control of the facts.
+                  The bench weighs your fact sheet, courtroom argument, proof gaps, lawbook fit, and opposing counsel response.
                 </p>
                 <div className="mt-6 flex flex-wrap justify-center gap-2">
                   {verdictReasons.map((reason) => (
@@ -486,26 +483,26 @@ export default async function Page() {
 
           <div className="arena-glass overflow-hidden rounded-[2rem] p-5 md:p-7" id="leaderboard">
             <p className="text-sm font-semibold uppercase tracking-[0.28em] text-white/45">
-              Your Progress
+              Dashboard Systems
             </p>
             <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)_minmax(0,0.8fr)]">
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
                 <div className="rounded-[1.4rem] border border-white/10 bg-black/30 p-5">
-                  <p className="text-sm text-white/50">Career Level</p>
+                  <p className="text-sm text-white/50">Overall Rating</p>
                   <p className="mt-3 max-w-[8ch] text-[2.15rem] font-semibold leading-[1.05] text-white">
-                    Associate I
+                    1000+
                   </p>
                   <div className="mt-5 h-2 rounded-full bg-white/10">
                     <div className="h-2 w-[52%] rounded-full bg-white" />
                   </div>
-                  <p className="mt-3 text-sm text-white/45">1280 / 2500 XP</p>
+                  <p className="mt-3 text-sm text-white/45">XP updates after verdicts</p>
                 </div>
                 <div className="rounded-[1.4rem] border border-white/10 bg-black/30 p-5">
-                  <p className="text-sm text-white/50">Win Rate</p>
+                  <p className="text-sm text-white/50">Record</p>
                   <div className="mt-4">
-                    <p className="text-4xl font-semibold tracking-tight text-white">68%</p>
+                    <p className="text-4xl font-semibold tracking-tight text-white">W-L-D</p>
                     <p className="mt-3 text-sm uppercase tracking-[0.18em] text-white/42">
-                      Strong trajectory
+                      Tracked by matter
                     </p>
                   </div>
                 </div>
@@ -515,9 +512,9 @@ export default async function Page() {
                 <p className="text-sm text-white/50">Specializations</p>
                 <div className="mt-5 space-y-5">
                   {[
-                    { name: "Criminal Law", level: "Level 6", width: "78%" },
-                    { name: "Corporate Law", level: "Level 4", width: "54%" },
-                    { name: "Constitutional Law", level: "Level 3", width: "41%" },
+                    { name: "Criminal Law", level: "Category tier", width: "78%" },
+                    { name: "Corporate Law", level: "Rating track", width: "54%" },
+                    { name: "Constitutional Law", level: "Unlock progress", width: "41%" },
                   ].map((item) => (
                     <div key={item.name}>
                       <div className="flex items-center justify-between gap-3">
@@ -538,9 +535,9 @@ export default async function Page() {
               </div>
 
               <div className="min-w-0 rounded-[1.4rem] border border-white/10 bg-black/30 p-5 text-center">
-                <p className="text-sm text-white/50">Global Rank</p>
-                <p className="mt-4 text-5xl font-semibold tracking-tight text-white md:text-6xl">#142</p>
-                <p className="mt-2 text-sm uppercase tracking-[0.2em] text-white/45">Top 1%</p>
+                <p className="text-sm text-white/50">Leaderboard</p>
+                <p className="mt-4 text-5xl font-semibold tracking-tight text-white md:text-6xl">Rank</p>
+                <p className="mt-2 text-sm uppercase tracking-[0.2em] text-white/45">Overall + category</p>
                 <div className="mt-7 flex justify-center text-white/45">
                   <Icon kind="trophy" className="h-14 w-14" />
                 </div>
@@ -559,10 +556,10 @@ export default async function Page() {
       <section id="case-library" className="border-y border-white/10 bg-black/60">
         <div className="mx-auto max-w-7xl px-5 py-16 md:px-8 md:py-20">
           <p className="text-center text-sm font-semibold uppercase tracking-[0.28em] text-white/45">
-            Diverse Cases. Endless Challenges.
+            Diverse Case Tracks
           </p>
           <p className="mx-auto mt-4 max-w-2xl text-center text-lg leading-8 text-white/62">
-            Practice across multiple areas of law with a growing stream of new matters and replayable courtroom scenarios.
+            Practice across multiple areas of law with available matters, complexity tiers, and replayable courtroom runs.
           </p>
           <div className="mt-12 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
             {displayCases.map((category) => (
@@ -592,7 +589,7 @@ export default async function Page() {
                 <p className="mt-4 text-sm leading-7 text-white/62">
                   {trimStatement(
                     template.subtitle || template.overview,
-                    "A replayable legal matter with shifting facts, argument pressure, and judge feedback."
+                    "A playable legal matter with intake, argument pressure, lawbook rules, and judge feedback."
                   )}
                 </p>
                 <div className="mt-6 flex items-center justify-between text-sm text-white/45">
@@ -607,34 +604,35 @@ export default async function Page() {
 
       <section className="mx-auto max-w-7xl px-5 py-16 md:px-8 md:py-20">
         <p className="text-center text-sm font-semibold uppercase tracking-[0.28em] text-white/45">
-          Loved by law students and aspiring lawyers
+          What You Actually Practice
         </p>
         <div className="mt-12 grid gap-5 lg:grid-cols-3">
-          {testimonials.map((item) => (
-            <div key={item.name} className="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-6">
+          {practiceCards.map((item, index) => {
+            const iconKinds = ["users", "gavel", "star"];
+
+            return (
+            <div key={item.title} className="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-6">
               <div className="flex items-center gap-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-black/30 text-sm font-semibold text-white/72">
-                  {item.name
-                    .split(" ")
-                    .map((part) => part[0])
-                    .join("")}
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-white/10 bg-black/30 text-white/55">
+                  <Icon kind={iconKinds[index]} />
                 </div>
                 <div>
-                  <p className="font-medium text-white">{item.name}</p>
-                  <p className="text-sm text-white/45">{item.title}</p>
+                  <p className="font-medium text-white">{item.title}</p>
+                  <p className="text-sm text-white/45">In the current game loop</p>
                 </div>
               </div>
-              <p className="mt-6 text-base leading-8 text-white/68">&quot;{item.quote}&quot;</p>
+              <p className="mt-6 text-base leading-8 text-white/68">{item.detail}</p>
             </div>
-          ))}
+            );
+          })}
         </div>
 
         <div className="mt-12 grid gap-6 border-t border-white/10 pt-8 text-center sm:grid-cols-2 xl:grid-cols-4">
           {[
-            { icon: "users", value: "10,000+", label: "Users" },
-            { icon: "brief", value: totalCasesLabel, label: "Cases" },
-            { icon: "spark", value: "50,000+", label: "Arguments Made" },
-            { icon: "star", value: "4.8/5", label: "Average Rating" },
+            { icon: "brief", value: totalCasesLabel, label: "Active Cases" },
+            { icon: "users", value: "Intake", label: "Party Interview" },
+            { icon: "gavel", value: "Rounds", label: "Courtroom Argument" },
+            { icon: "star", value: "XP", label: "Progression" },
           ].map((stat) => (
             <div key={stat.label} className="flex items-center justify-center gap-4">
               <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-white/55">
