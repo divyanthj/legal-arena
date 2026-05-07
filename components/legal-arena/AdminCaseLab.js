@@ -55,6 +55,7 @@ export default function AdminCaseLab({
   initialTemplates,
   adminEmails,
   adminStats = {},
+  initialFreeAccessGrants = [],
 }) {
   const defaultCategory = categories[0]?.slug || "contract-violation";
   const categoryMap = useMemo(
@@ -90,6 +91,8 @@ export default function AdminCaseLab({
   });
   const [working, setWorking] = useState(false);
   const [emailWorking, setEmailWorking] = useState(false);
+  const [accessWorking, setAccessWorking] = useState(false);
+  const [revokingAccessEmail, setRevokingAccessEmail] = useState("");
   const [opsLoading, setOpsLoading] = useState(true);
   const [opsSaving, setOpsSaving] = useState(false);
   const [retentionRunWorking, setRetentionRunWorking] = useState(false);
@@ -110,6 +113,10 @@ export default function AdminCaseLab({
     content: "",
     footerNote: "",
   });
+  const [accessForm, setAccessForm] = useState({
+    email: "",
+  });
+  const [freeAccessGrants, setFreeAccessGrants] = useState(initialFreeAccessGrants);
   const [generationProgress, setGenerationProgress] = useState({
     total: 0,
     completed: 0,
@@ -547,6 +554,83 @@ export default function AdminCaseLab({
       toast.error(error?.response?.data?.error || error?.message || "Failed to send email.");
     } finally {
       setEmailWorking(false);
+    }
+  };
+
+  const handleGrantFreeAccess = async (event) => {
+    event.preventDefault();
+    const email = accessForm.email.trim();
+
+    if (!email) {
+      toast.error("Enter an email address.");
+      return;
+    }
+
+    setAccessWorking(true);
+
+    try {
+      const result = await apiClient.post("/admin/access", { email });
+      const grant = result.grant;
+
+      if (grant) {
+        setFreeAccessGrants((current) => [
+          grant,
+          ...current.filter((item) => item.email !== grant.email),
+        ]);
+      }
+
+      setAccessForm({ email: "" });
+      if (result.emailSent === false) {
+        toast(
+          `Free access granted to ${grant?.email || email}, but the email did not send: ${
+            result.emailError || "unknown email error"
+          }`
+        );
+      } else {
+        toast.success(`Free access granted and emailed ${grant?.email || email}.`);
+      }
+    } catch (error) {
+      toast.error(error?.response?.data?.error || error?.message || "Failed to grant access.");
+    } finally {
+      setAccessWorking(false);
+    }
+  };
+
+  const handleRevokeFreeAccess = async (grant) => {
+    const email = grant?.email?.trim?.();
+
+    if (!email) {
+      return;
+    }
+
+    const confirmed = window.confirm(`Revoke manually granted free access for ${email}?`);
+
+    if (!confirmed) {
+      return;
+    }
+
+    setRevokingAccessEmail(email);
+
+    try {
+      const result = await apiClient.delete("/admin/access", {
+        data: { email },
+      });
+
+      setFreeAccessGrants((current) => current.filter((item) => item.email !== email));
+
+      if (result.emailSent === false) {
+        toast(
+          `Free access revoked for ${email}, but the email did not send: ${
+            result.emailError || "unknown email error"
+          }`
+        );
+      } else {
+        toast.success(`Free access revoked and emailed ${email}.`);
+      }
+    } catch (error) {
+      toast.error(error?.response?.data?.error || error?.message || "Failed to revoke access.");
+    } finally {
+      setRevokingAccessEmail("");
     }
   };
 
@@ -1759,19 +1843,78 @@ export default function AdminCaseLab({
 
             <div className="arena-surface">
               <div className="p-6">
-                <p className="arena-kicker">Operational Space</p>
-                <h2 className="arena-headline mt-2 text-2xl">Future admin tools</h2>
-                <div className="mt-5 space-y-3">
-                  {[
-                    "User access management",
-                    "Billing support shortcuts",
-                    "Template health audits",
-                    "System-wide announcements and reporting",
-                  ].map((item) => (
-                    <div key={item} className="arena-surface-soft p-4 text-sm text-white/66">
-                      {item}
+                <p className="arena-kicker">User Access</p>
+                <h2 className="arena-headline mt-2 text-2xl">Free access grants</h2>
+                <form className="mt-5 grid gap-4" onSubmit={handleGrantFreeAccess}>
+                  <label className="form-control">
+                    <span className="label-text font-semibold text-white">Email address</span>
+                    <input
+                      className={arenaInputClass}
+                      type="email"
+                      value={accessForm.email}
+                      onChange={(event) =>
+                        setAccessForm((current) => ({
+                          ...current,
+                          email: event.target.value,
+                        }))
+                      }
+                      placeholder="person@example.com"
+                    />
+                  </label>
+
+                  <button className="arena-btn-light px-5 py-3" disabled={accessWorking}>
+                    {accessWorking ? "Granting access..." : "Grant Free Access"}
+                  </button>
+                </form>
+
+                <div className="mt-6">
+                  <div className="flex items-end justify-between gap-3">
+                    <div>
+                      <p className="arena-kicker">Recent Grants</p>
+                      <p className="mt-2 text-sm text-white/56">
+                        {freeAccessGrants.length || 0} manual grants
+                      </p>
                     </div>
-                  ))}
+                  </div>
+
+                  <div className="mt-4 space-y-3">
+                    {freeAccessGrants.length ? (
+                      freeAccessGrants.map((grant) => (
+                        <div
+                          key={grant.id || grant.email}
+                          className="arena-surface-soft flex flex-col gap-3 p-4 text-sm leading-6 text-white/72 sm:flex-row sm:items-center sm:justify-between"
+                        >
+                          <div className="min-w-0">
+                            <p className="break-words font-semibold text-white">
+                              {grant.email}
+                            </p>
+                            <p className="mt-1 text-xs uppercase tracking-[0.18em] text-white/42">
+                              {grant.freeAccessGrantedAt
+                                ? new Date(grant.freeAccessGrantedAt).toLocaleString()
+                                : "Grant time unknown"}
+                              {grant.freeAccessGrantedBy
+                                ? ` by ${grant.freeAccessGrantedBy}`
+                                : ""}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            className="arena-btn-danger min-h-0 shrink-0 px-3 py-2 text-xs"
+                            disabled={Boolean(revokingAccessEmail)}
+                            onClick={() => handleRevokeFreeAccess(grant)}
+                          >
+                            {revokingAccessEmail === grant.email
+                              ? "Revoking..."
+                              : "Revoke Access"}
+                          </button>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="arena-surface-soft p-4 text-sm text-white/56">
+                        No manual free-access grants yet.
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

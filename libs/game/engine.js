@@ -3,6 +3,10 @@ import "server-only";
 import { requestStructuredCompletion } from "@/libs/gpt";
 import { getLawbookRules } from "@/data/legalArenaLawbook";
 import {
+  lockCaseAssessment,
+  normalizeCaseAssessment,
+} from "./caseAssessment";
+import {
   buildDesiredReliefForSide,
   buildInterviewAgentContext,
   buildOverviewForSide,
@@ -12,6 +16,8 @@ import {
   getPlayerSide,
   getTemplate,
   mergeFactSheet,
+  normalizeFactSheetPatch,
+  coerceStringList,
 } from "./engine/shared";
 import {
   buildInterviewFallback,
@@ -84,7 +90,7 @@ export const continueInterview = async ({ caseSession, question, userId }) => {
     }),
   });
 
-  return normalizeInterviewResult({
+  const interviewResult = normalizeInterviewResult({
     aiResult,
     fallback,
     template,
@@ -93,6 +99,241 @@ export const continueInterview = async ({ caseSession, question, userId }) => {
     factSheet: caseSession.factSheet,
     playerSide,
   });
+
+  const conversationPatch = await buildConversationFactSheetPatch({
+    userId,
+    currentFactSheet: caseSession.factSheet,
+    recentTranscript: caseSession.interviewTranscript.slice(-8),
+    latestQuestion: question,
+    latestAnswer: interviewResult.partyResponse,
+  });
+  const nextFactSheet = mergeFactSheet(caseSession.factSheet, conversationPatch, template, {
+    playerSide,
+  });
+  const nextAssessment = await assessCaseSuccessChance({
+    userId,
+    caseSession,
+    factSheet: nextFactSheet,
+    latestQuestion: question,
+    latestAnswer: interviewResult.partyResponse,
+    previousAssessment: caseSession.caseAssessment,
+  });
+
+  return {
+    ...interviewResult,
+    patch: conversationPatch,
+    nextFactSheet,
+    caseAssessment: nextAssessment,
+  };
+};
+
+export const assessCaseSuccessChance = async ({
+  userId,
+  caseSession,
+  factSheet,
+  latestQuestion = "",
+  latestAnswer = "",
+  previousAssessment = null,
+}) => {
+  const template = ensureTemplate(getTemplate(caseSession));
+  const playerSide = getPlayerSide(caseSession);
+  const rules = getLawbookRules(template.legalTags).map((rule) => ({
+    id: rule.id,
+    title: rule.title,
+    principle: rule.principle,
+  }));
+  const visibleTranscript = [
+    ...(caseSession.interviewTranscript || []).slice(-8),
+    latestQuestion
+      ? {
+          role: "player",
+          speaker: "You",
+          text: latestQuestion,
+        }
+      : null,
+    latestAnswer
+      ? {
+          role: "party",
+          speaker: getPartyName(template, playerSide),
+          text: latestAnswer,
+        }
+      : null,
+  ].filter(Boolean);
+
+  try {
+    const aiResult = await requestStructuredCompletion({
+      userId,
+      temperature: 0.25,
+      maxTokens: 600,
+      retryAttempts: 1,
+      systemPrompt:
+        "You estimate the player's chance of winning a legal simulation if they go to court with only the visible case file. Use only the supplied transcript, fact sheet, side, and public lawbook labels. Do not infer from hidden truth, canonical story, template facts, or evidence that is not visible. Output valid JSON only.",
+      userPrompt: JSON.stringify({
+        task: "Estimate the player's success chance from the visible intake record.",
+        representedSide: playerSide,
+        representedPartyName: getPartyName(template, playerSide),
+        opposingPartyName: getPartyName(template, getOpposingSide(playerSide)),
+        factSheet,
+        recentTranscript: visibleTranscript,
+        lawbookRules: rules,
+        scoringGuidance: [
+          "Higher chance for corroborated facts, specific timeline, clear requested relief, and addressed disputes.",
+          "Lower chance for missing evidence, vague memory, unresolved risks, unsupported key points, and thin legal fit.",
+          "Return 0-100 as the player's chance to win in court with this record.",
+          "Give 2-3 short tooltip reasons.",
+        ],
+        outputSchema: {
+          successChance: "number",
+          reasons: ["string"],
+        },
+      }),
+    });
+
+    return normalizeCaseAssessment(aiResult, previousAssessment);
+  } catch (error) {
+    console.error("case success assessment failed", error);
+    return normalizeCaseAssessment(previousAssessment);
+  }
+};
+
+export const lockAssessmentForCourt = (assessment = null) => lockCaseAssessment(assessment);
+
+const buildConversationFactSheetPatch = async ({
+  userId,
+  currentFactSheet,
+  recentTranscript,
+  latestQuestion,
+  latestAnswer,
+}) => {
+  const fallbackPatch = buildConversationFactSheetFallback({
+    latestQuestion,
+    latestAnswer,
+  });
+
+  try {
+    const aiResult = await requestStructuredCompletion({
+      userId,
+      temperature: 0.35,
+      maxTokens: 900,
+      retryAttempts: 1,
+      systemPrompt:
+        "You update a lawyer's private working fact sheet from the conversation only. You do not know the hidden case truth, canonical story, template facts, evidence graph, or any source outside the transcript you are given. Write concise bullet notes as the player's own internal thoughts after speaking with the client. If something was not said or clearly implied in the conversation, leave it out. Output valid JSON only.",
+      userPrompt: JSON.stringify({
+        task: "Create a fact-sheet patch from only the visible intake conversation.",
+        currentFactSheet,
+        recentTranscript,
+        latestExchange: {
+          playerQuestion: latestQuestion,
+          clientAnswer: latestAnswer,
+        },
+        styleRules: [
+          "Use bullets, not paragraphs.",
+          "Prefer concise internal notes such as 'Client says...' or 'I still need...'.",
+          "Do not state anything as proven unless the client actually said it or produced it.",
+          "Do not mention canonical truth, hidden facts, templates, schemas, or source of truth.",
+          "Return only new or revised notes supported by the visible conversation.",
+        ],
+        outputSchema: {
+          summary: ["string"],
+          theory: ["string"],
+          desiredRelief: ["string"],
+          timeline: ["string"],
+          supportingFacts: ["string"],
+          risks: ["string"],
+          knownClaims: ["string"],
+          disputedFacts: ["string"],
+          corroboratedFacts: ["string"],
+          sourceLinks: ["string"],
+          missingEvidence: ["string"],
+          openQuestions: ["string"],
+        },
+      }),
+    });
+
+    const patch = normalizeFactSheetPatch({
+      summary: coerceStringList(aiResult?.summary, 3),
+      theory: coerceStringList(aiResult?.theory, 3),
+      desiredRelief: coerceStringList(aiResult?.desiredRelief, 2),
+      timeline: coerceStringList(aiResult?.timeline, 4),
+      supportingFacts: coerceStringList(aiResult?.supportingFacts, 5),
+      risks: coerceStringList(aiResult?.risks, 4),
+      knownFacts: [],
+      knownClaims: coerceStringList(aiResult?.knownClaims, 5),
+      disputedFacts: coerceStringList(aiResult?.disputedFacts, 4),
+      corroboratedFacts: coerceStringList(aiResult?.corroboratedFacts, 4),
+      sourceLinks: coerceStringList(aiResult?.sourceLinks, 4),
+      missingEvidence: coerceStringList(aiResult?.missingEvidence, 4),
+      openQuestions: coerceStringList(aiResult?.openQuestions, 3),
+      discoveredFactIds: [],
+      discoveredClaimIds: [],
+      discoveredEvidenceIds: [],
+    });
+
+    if (
+      patch.summary.length ||
+      patch.theory.length ||
+      patch.desiredRelief.length ||
+      patch.timeline.length ||
+      patch.supportingFacts.length ||
+      patch.risks.length ||
+      patch.disputedFacts.length ||
+      patch.corroboratedFacts.length ||
+      patch.missingEvidence.length
+    ) {
+      return patch;
+    }
+  } catch (error) {
+    console.error("conversation fact sheet update failed", error);
+  }
+
+  return fallbackPatch;
+};
+
+const buildConversationFactSheetFallback = ({ latestQuestion, latestAnswer }) => {
+  const answer = String(latestAnswer || "").trim();
+  const question = String(latestQuestion || "").trim();
+
+  if (!answer) {
+    return normalizeFactSheetPatch({});
+  }
+
+  const lower = `${question} ${answer}`.toLowerCase();
+  const patch = {
+    summary: [],
+    theory: [],
+    desiredRelief: [],
+    timeline: [],
+    supportingFacts: [],
+    risks: [],
+    knownFacts: [],
+    knownClaims: [],
+    disputedFacts: [],
+    corroboratedFacts: [],
+    sourceLinks: [],
+    missingEvidence: [],
+    openQuestions: [],
+    discoveredFactIds: [],
+    discoveredClaimIds: [],
+    discoveredEvidenceIds: [],
+  };
+
+  if (/\b(need|want|asking|request|relief|deposit|damages|refund|return)\b/i.test(lower)) {
+    patch.desiredRelief.push(`Client says: ${answer}`);
+  } else if (/\b(when|date|before|after|during|then|timeline|moved|signed|paid|sent)\b/i.test(lower)) {
+    patch.timeline.push(`Client says: ${answer}`);
+  } else if (/\b(proof|record|document|photo|invoice|receipt|witness|evidence)\b/i.test(lower)) {
+    if (/\b(no|not|do not|don't|cannot|can't|missing|need to find|need to confirm)\b/i.test(lower)) {
+      patch.missingEvidence.push(`I still need to pin down: ${answer}`);
+    } else {
+      patch.corroboratedFacts.push(`Client points me to this proof: ${answer}`);
+    }
+  } else if (/\b(risk|worry|problem|weak|unsure|not sure|don't remember|do not remember)\b/i.test(lower)) {
+    patch.risks.push(`Risk I heard from the client: ${answer}`);
+  } else {
+    patch.supportingFacts.push(`Client says: ${answer}`);
+  }
+
+  return normalizeFactSheetPatch(patch);
 };
 
 export const runCourtroomRound = async ({ caseSession, argument, userId }) => {
@@ -204,12 +445,12 @@ export const finalizeFactSheetInput = ({ factSheet, caseTemplate }) => {
   );
   const normalized = mergeFactSheet(
     {
-      summary: "",
+      summary: [],
       timeline: [],
       supportingFacts: [],
       risks: [],
-      theory: "",
-      desiredRelief: "",
+      theory: [],
+      desiredRelief: [],
       openQuestions: [],
       knownFacts: [],
       knownClaims: [],
@@ -228,10 +469,10 @@ export const finalizeFactSheetInput = ({ factSheet, caseTemplate }) => {
 
   const missing = [];
 
-  if (!normalized.summary) {
+  if (!normalized.summary.length) {
     missing.push("summary");
   }
-  if (!normalized.theory) {
+  if (!normalized.theory.length) {
     missing.push("case theory");
   }
   if (!normalized.timeline.length) {
@@ -243,13 +484,10 @@ export const finalizeFactSheetInput = ({ factSheet, caseTemplate }) => {
   ) {
     missing.push("at least two supporting facts or one corroborated fact");
   }
-  if (!normalized.desiredRelief) {
+  if (!normalized.desiredRelief.length) {
     missing.push("requested relief");
   }
-  if (
-    (normalized.risks.length === 0 && normalized.disputedFacts.length === 0) &&
-    (template?.canonicalFacts || []).some((fact) => fact.kind === "risk" || fact.kind === "dispute")
-  ) {
+  if (normalized.risks.length === 0 && normalized.disputedFacts.length === 0) {
     missing.push("at least one identified dispute or risk");
   }
 

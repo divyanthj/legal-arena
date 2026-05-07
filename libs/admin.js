@@ -1,4 +1,5 @@
 import "server-only";
+import mongoose from "mongoose";
 import connectMongo from "@/libs/mongoose";
 import User from "@/models/User";
 
@@ -46,8 +47,56 @@ export const userCanAccessArena = async (session) => {
   }
 
   await connectMongo();
-  const user = await User.findById(session.user.id).select("hasAccess");
-  return Boolean(user?.hasAccess);
+  const selectors = [];
+  const normalizedEmail = normalizeEmail(session.user?.email || "");
+
+  if (mongoose.Types.ObjectId.isValid(session.user.id)) {
+    selectors.push({ _id: session.user.id });
+  }
+
+  if (normalizedEmail) {
+    selectors.push({ email: normalizedEmail });
+  }
+
+  if (!selectors.length) {
+    return false;
+  }
+
+  const users = await User.find({ $or: selectors }).select(
+    "_id email hasAccess freeAccessGranted freeAccessGrantedAt freeAccessGrantedBy"
+  );
+  const grantingUser = users.find(
+    (user) => user?.hasAccess || user?.freeAccessGranted
+  );
+
+  if (!grantingUser) {
+    return false;
+  }
+
+  const sessionUser = users.find(
+    (user) => user?._id?.toString() === session.user.id
+  );
+
+  if (
+    sessionUser &&
+    !sessionUser.freeAccessGranted &&
+    grantingUser.freeAccessGranted &&
+    normalizedEmail &&
+    normalizeEmail(grantingUser.email || "") === normalizedEmail
+  ) {
+    await User.updateOne(
+      { _id: session.user.id },
+      {
+        $set: {
+          freeAccessGranted: true,
+          freeAccessGrantedAt: grantingUser.freeAccessGrantedAt || new Date(),
+          freeAccessGrantedBy: grantingUser.freeAccessGrantedBy || "email-grant",
+        },
+      }
+    );
+  }
+
+  return true;
 };
 
 export const getCaseGeneratorApiKey = () =>

@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/libs/next-auth";
-import { finalizeFactSheetInput } from "@/libs/game/engine";
 import {
+  assessCaseSuccessChance,
+  finalizeFactSheetInput,
+  lockAssessmentForCourt,
+} from "@/libs/game/engine";
+import {
+  buildPlaintiffCourtOpeningStatement,
   buildCasePayload,
   getCaseSessionDocumentForUser,
 } from "@/libs/game/store";
@@ -56,7 +61,43 @@ export async function POST(req, { params }) {
     }
 
     caseSession.factSheet = finalized.factSheet;
+    let assessmentToLock = caseSession.caseAssessment;
+
+    if (assessmentToLock?.currentSuccessChance === null || assessmentToLock?.currentSuccessChance === undefined) {
+      assessmentToLock = await assessCaseSuccessChance({
+        userId: session.user.id,
+        caseSession,
+        factSheet: finalized.factSheet,
+        previousAssessment: caseSession.caseAssessment,
+      });
+    }
+
+    const lockedAssessment = lockAssessmentForCourt(assessmentToLock);
+    if (lockedAssessment) {
+      caseSession.caseAssessment = lockedAssessment;
+    }
     caseSession.status = "courtroom";
+
+    if (
+      caseSession.playerSide === "opponent" &&
+      !caseSession.courtroomTranscript?.length
+    ) {
+      caseSession.courtroomTranscript.push({
+        round: 1,
+        speaker: "opponent",
+        text: buildPlaintiffCourtOpeningStatement(caseSession.caseTemplateId),
+        citedFacts: [],
+        citedClaimIds: [],
+        citedRules: [],
+        judgeNotes: {
+          playerDelta: 0,
+          opponentDelta: 0,
+          strengths: [],
+          weaknesses: [],
+          benchSignal: "",
+        },
+      });
+    }
 
     await caseSession.save();
 

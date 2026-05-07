@@ -190,6 +190,38 @@ const buildOpeningStatementForSide = (template, side) => {
   return `${template.opponentName} disputes ${template.clientName}'s request for relief and wants the court to reject or reduce it.`;
 };
 
+export const buildPlaintiffCourtOpeningStatement = (templateInput = {}) => {
+  const template = toPlain(templateInput) || {};
+  const plaintiffName = template.clientName || template.plaintiffName || "Plaintiff";
+  const defendantName = template.opponentName || template.defendantName || "Defendant";
+  const requestedRelief = String(template.desiredRelief || "").trim();
+  const theory = String(template.starterTheory || template.overview || "").trim();
+  const prioritizedFacts = (template.canonicalFacts || [])
+    .slice()
+    .sort(
+      (left, right) =>
+        (right.discoverability?.priority || 0) - (left.discoverability?.priority || 0)
+    );
+  const supportingClaims = prioritizedFacts
+    .map((fact) =>
+      (fact.claims || []).find((item) => item.party === "plaintiff")?.claimedDetail ||
+      fact.canonicalDetail ||
+      ""
+    )
+    .map(cleanPartyClaimText)
+    .filter(Boolean)
+    .slice(0, 2);
+
+  return [
+    `May it please the Court. I represent ${plaintiffName}.`,
+    theory || `${plaintiffName} brings this claim against ${defendantName}.`,
+    ...supportingClaims.map((claim) => `The evidence will show that ${claim}`),
+    requestedRelief ? `${plaintiffName} asks the Court for ${requestedRelief}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+};
+
 const getTemplateSlugFromSession = (caseSession) =>
   caseSession.templateSlug || caseSession.scenarioId || "";
 
@@ -592,12 +624,12 @@ export const createCaseSession = async ({ userId, userProfile = null, caseTempla
       },
     ],
     factSheet: {
-      summary: buildOverviewForSide(template, playerSide),
+      summary: [],
       timeline: [],
       supportingFacts: [],
       risks: [],
-      theory: buildStarterTheoryForSide(template, playerSide),
-      desiredRelief: buildDesiredReliefForSide(template, playerSide),
+      theory: [],
+      desiredRelief: [],
       openQuestions: defaultOpenQuestions(template, playerSide),
       knownFacts: [],
       knownClaims: [],

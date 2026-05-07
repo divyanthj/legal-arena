@@ -366,6 +366,22 @@ export const formatOpponentPosition = (value = "") => {
 
 export const normalizeFactSheetPatch = (patch = {}) => ({
   ...patch,
+  summary: sanitizeFactSheetList(
+    "summary",
+    Array.isArray(patch.summary) ? patch.summary : patch.summary ? [patch.summary] : []
+  ),
+  theory: sanitizeFactSheetList(
+    "theory",
+    Array.isArray(patch.theory) ? patch.theory : patch.theory ? [patch.theory] : []
+  ),
+  desiredRelief: sanitizeFactSheetList(
+    "desiredRelief",
+    Array.isArray(patch.desiredRelief)
+      ? patch.desiredRelief
+      : patch.desiredRelief
+      ? [patch.desiredRelief]
+      : []
+  ),
   timeline: sanitizeFactSheetList(
     "timeline",
     (patch.timeline || []).map((item) => humanizeClaimText(item))
@@ -487,10 +503,10 @@ export const mergeFactSheet = (current, patch, template, options = {}) => {
   });
   const next = {
     ...current,
-    summary:
-      normalizedPatch.summary?.trim() ||
-      normalizedCurrent.summary ||
-      buildSummaryForSide(safeTemplate, playerSide),
+    summary: uniqueList([
+      ...(normalizedCurrent.summary || []),
+      ...(normalizedPatch.summary || []),
+    ]),
     timeline: uniqueList([
       ...(normalizedCurrent.timeline || []),
       ...(normalizedPatch.timeline || []),
@@ -503,14 +519,14 @@ export const mergeFactSheet = (current, patch, template, options = {}) => {
       ...(normalizedCurrent.risks || []),
       ...(normalizedPatch.risks || []),
     ]),
-    theory:
-      normalizedPatch.theory?.trim() ||
-      normalizedCurrent.theory ||
-      buildTheoryForSide(safeTemplate, playerSide),
-    desiredRelief:
-      normalizedPatch.desiredRelief?.trim() ||
-      normalizedCurrent.desiredRelief ||
-      buildDesiredReliefForSide(safeTemplate, playerSide),
+    theory: uniqueList([
+      ...(normalizedCurrent.theory || []),
+      ...(normalizedPatch.theory || []),
+    ]),
+    desiredRelief: uniqueList([
+      ...(normalizedCurrent.desiredRelief || []),
+      ...(normalizedPatch.desiredRelief || []),
+    ]),
     openQuestions,
     knownFacts: uniqueList([
       ...(normalizedCurrent.knownFacts || []),
@@ -542,7 +558,9 @@ export const mergeFactSheet = (current, patch, template, options = {}) => {
   };
 
   next.ready =
-    Boolean(next.summary && next.theory && next.desiredRelief) &&
+    next.summary.length >= 1 &&
+    next.theory.length >= 1 &&
+    next.desiredRelief.length >= 1 &&
     next.timeline.length >= 1 &&
     (next.supportingFacts.length >= 2 || next.corroboratedFacts.length >= 1);
 

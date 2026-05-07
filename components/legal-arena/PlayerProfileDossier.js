@@ -17,6 +17,7 @@ import {
   statusTone,
   summarizeCount,
 } from "./playerDossierShared";
+import { CollapseChevron } from "./caseWorkspaceUtils";
 
 const getNextRatingMilestone = (rating = 1000) => {
   const milestones = [1200, 1500, 1800, 2100];
@@ -301,9 +302,7 @@ export default function PlayerProfileDossier({
                       <p className="text-sm text-white/42">
                         {filteredCases.length} of {cases.length} visible matters
                       </p>
-                      <span className="text-sm text-white/55 transition group-open:rotate-180">
-                        ˅
-                      </span>
+                      <CollapseChevron />
                     </div>
                   </div>
                 </summary>

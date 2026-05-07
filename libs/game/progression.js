@@ -3,6 +3,7 @@ import "server-only";
 import connectMongo from "@/libs/mongoose";
 import User from "@/models/User";
 import { LEGAL_CASE_CATEGORIES } from "./categories";
+import { calculateUnderdogBonus } from "./caseAssessment";
 import { getDefaultLawyerProfileSummary } from "./profileSummary";
 
 const DEFAULT_RATING = 1000;
@@ -145,6 +146,7 @@ export const applyVerdictToProgression = async ({
   complexity,
   verdictWinner,
   highlights = [],
+  lockedCourtEntryChance = null,
 }) => {
   const user = await ensureUserProfile(userId, userProfile);
   if (!user) {
@@ -167,19 +169,25 @@ export const applyVerdictToProgression = async ({
   const didDraw = verdictWinner === "draw";
   const xpEarned = 25 + complexity * 10 + (didWin ? 20 : didDraw ? 10 : 0);
   const ratingDelta = didWin ? 18 : didDraw ? 6 : -8;
+  const underdogBonus = calculateUnderdogBonus(
+    lockedCourtEntryChance,
+    verdictWinner
+  );
+  const totalXpEarned = xpEarned + underdogBonus.bonusXp;
+  const totalRatingDelta = ratingDelta + underdogBonus.bonusRating;
 
-  progression.overallXp += xpEarned;
+  progression.overallXp += totalXpEarned;
   progression.overallRating = Math.max(
     800,
-    progression.overallRating + ratingDelta
+    progression.overallRating + totalRatingDelta
   );
   progression.completedCases += 1;
   progression.wins += didWin ? 1 : 0;
   progression.losses += !didWin && !didDraw ? 1 : 0;
   progression.draws += didDraw ? 1 : 0;
 
-  categoryStat.xp += xpEarned;
-  categoryStat.rating = Math.max(800, categoryStat.rating + ratingDelta);
+  categoryStat.xp += totalXpEarned;
+  categoryStat.rating = Math.max(800, categoryStat.rating + totalRatingDelta);
   categoryStat.completedCases += 1;
   categoryStat.wins += didWin ? 1 : 0;
   categoryStat.losses += !didWin && !didDraw ? 1 : 0;
@@ -193,6 +201,7 @@ export const applyVerdictToProgression = async ({
   );
   categoryStat.recentPerformance = uniqueList([
     `${didWin ? "Won" : didDraw ? "Drew" : "Lost"} a level ${complexity} matter`,
+    underdogBonus.note,
     ...categoryStat.recentPerformance,
     ...highlights,
   ]).slice(0, 5);

@@ -15,6 +15,7 @@ export const emailTemplate = ({
   title = config.appName,
   subtitle = config.appDescription,
   content,
+  contentHtml = "",
   ctaLabel = `Open ${config.appName}`,
   ctaUrl = `https://${config.domainName}`,
   footer = `You're receiving this email because you have an account or requested updates from ${config.appName}.`,
@@ -136,7 +137,7 @@ export const emailTemplate = ({
               </td>
             </tr>
             <tr>
-              <td class="content">${formatContent(content)}</td>
+              <td class="content">${contentHtml || formatContent(content)}</td>
             </tr>
             <tr>
               <td class="cta-wrap">

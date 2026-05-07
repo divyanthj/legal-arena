@@ -94,6 +94,20 @@ const userSchema = mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    freeAccessGranted: {
+      type: Boolean,
+      default: false,
+    },
+    freeAccessGrantedAt: {
+      type: Date,
+      default: null,
+    },
+    freeAccessGrantedBy: {
+      type: String,
+      trim: true,
+      lowercase: true,
+      default: "",
+    },
     progression: {
       overallXp: {
         type: Number,

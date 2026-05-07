@@ -386,6 +386,11 @@ progress::-webkit-progress-value {
     animation: arena-round 500ms ease both;
   }
 
+  .arena-loading-bar {
+    animation: arena-loading-bar 1250ms ease-in-out infinite;
+    transform-origin: left center;
+  }
+
   .help-prose {
     @apply max-w-none text-base text-base-content/80;
   }
@@ -527,10 +532,23 @@ progress::-webkit-progress-value {
   }
 }
 
+@keyframes arena-loading-bar {
+  0% {
+    transform: translateX(-120%);
+  }
+  55% {
+    transform: translateX(135%);
+  }
+  100% {
+    transform: translateX(330%);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .arena-reveal,
   .arena-pulse,
-  .arena-round-transition {
+  .arena-round-transition,
+  .arena-loading-bar {
     animation: none !important;
   }
 

@@ -72,6 +72,9 @@ export async function POST(req, { params }) {
       relatedFactIds: result.relatedFactIds || [],
     });
     caseSession.factSheet = result.nextFactSheet;
+    if (result.caseAssessment) {
+      caseSession.caseAssessment = result.caseAssessment;
+    }
 
     await caseSession.save();
 

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Tooltip } from "react-tooltip";
 import ButtonAccount from "@/components/ButtonAccount";
 import apiClient from "@/libs/api";
 import { sanitizeFactSheet } from "@/libs/game/factSheetSanitizer";
@@ -10,16 +11,14 @@ import { useCaseVoiceRecorder } from "./useCaseVoiceRecorder";
 
 import {
   formatDateTime,
-  joinLines,
-  splitLines,
   normalizeCourtroomEntry,
-  caseFileFieldClass,
   winnerLabel,
   winnerSignal,
   verdictTone,
   statusTone,
   helpText,
   InfoDot,
+  CollapseChevron,
   getRuleTooltip,
   buildCanonicalFactLookup,
   resolveFactReference,
@@ -31,13 +30,53 @@ import {
   clampPercent,
 } from "./caseWorkspaceUtils";
 
-const countFieldCharacters = (value = "") => String(value || "").trim().length;
+const ensureDraftList = (value) => {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item || ""));
+  }
 
-const countListEntries = (value = "") =>
-  String(value || "")
-    .split("\n")
+  if (typeof value === "string") {
+    return value
+      .split("\n")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+};
+
+const cleanDraftList = (value) =>
+  ensureDraftList(value)
     .map((item) => item.trim())
-    .filter(Boolean).length;
+    .filter(Boolean);
+
+const LoadingBar = ({ label = "Loading" }) => (
+  <div className="space-y-2" role="status" aria-label={label}>
+    <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+      <div className="arena-loading-bar h-full w-1/3 rounded-full bg-amber-300/85" />
+    </div>
+    <span className="sr-only">{label}</span>
+  </div>
+);
+
+const SuccessChanceTooltip = ({ reasons, isInterview }) => (
+  <div className="w-72 text-left text-sm leading-5">
+    <p className="font-semibold text-white">Success chance factors</p>
+    {reasons.length > 0 ? (
+      <ul className="mt-2 list-disc space-y-1.5 pl-5 text-white/82">
+        {reasons.map((reason, index) => (
+          <li key={`${reason}-${index}`}>{reason}</li>
+        ))}
+      </ul>
+    ) : (
+      <p className="mt-2 text-white/72">
+        {isInterview
+          ? "Updates after client answers."
+          : "Locked when the case entered court."}
+      </p>
+    )}
+  </div>
+);
 
 export default function CaseWorkspace({ initialCase }) {
   const router = useRouter();
@@ -49,6 +88,7 @@ export default function CaseWorkspace({ initialCase }) {
   const [question, setQuestion] = useState("");
   const [argument, setArgument] = useState("");
   const [working, setWorking] = useState(false);
+  const [pendingAction, setPendingAction] = useState("");
   const [pendingSpeaker, setPendingSpeaker] = useState("");
   const [optimisticTranscriptEntry, setOptimisticTranscriptEntry] = useState(null);
   const interviewTranscriptRef = useRef(null);
@@ -62,44 +102,44 @@ export default function CaseWorkspace({ initialCase }) {
     handleArgumentVoiceInput,
   } = useCaseVoiceRecorder({ setQuestion, setArgument });
   const [factSheetDraft, setFactSheetDraft] = useState({
-    summary: initialFactSheet.summary || "",
-    theory: initialFactSheet.theory || "",
-    desiredRelief: initialFactSheet.desiredRelief || "",
-    timeline: joinLines(initialFactSheet.timeline),
-    supportingFacts: joinLines(initialFactSheet.supportingFacts),
-    risks: joinLines(initialFactSheet.risks),
-    disputedFacts: joinLines(initialFactSheet.disputedFacts),
-    corroboratedFacts: joinLines(initialFactSheet.corroboratedFacts),
-    missingEvidence: joinLines(initialFactSheet.missingEvidence || []),
+    summary: ensureDraftList(initialFactSheet.summary),
+    theory: ensureDraftList(initialFactSheet.theory),
+    desiredRelief: ensureDraftList(initialFactSheet.desiredRelief),
+    timeline: ensureDraftList(initialFactSheet.timeline),
+    supportingFacts: ensureDraftList(initialFactSheet.supportingFacts),
+    risks: ensureDraftList(initialFactSheet.risks),
+    disputedFacts: ensureDraftList(initialFactSheet.disputedFacts),
+    corroboratedFacts: ensureDraftList(initialFactSheet.corroboratedFacts),
+    missingEvidence: ensureDraftList(initialFactSheet.missingEvidence),
   });
 
   useEffect(() => {
     const sanitizedFactSheet = sanitizeFactSheet(caseSession.factSheet || {});
     setFactSheetDraft({
-      summary: sanitizedFactSheet.summary || "",
-      theory: sanitizedFactSheet.theory || "",
-      desiredRelief: sanitizedFactSheet.desiredRelief || "",
-      timeline: joinLines(sanitizedFactSheet.timeline),
-      supportingFacts: joinLines(sanitizedFactSheet.supportingFacts),
-      risks: joinLines(sanitizedFactSheet.risks),
-      disputedFacts: joinLines(sanitizedFactSheet.disputedFacts),
-      corroboratedFacts: joinLines(sanitizedFactSheet.corroboratedFacts),
-      missingEvidence: joinLines(sanitizedFactSheet.missingEvidence || []),
+      summary: ensureDraftList(sanitizedFactSheet.summary),
+      theory: ensureDraftList(sanitizedFactSheet.theory),
+      desiredRelief: ensureDraftList(sanitizedFactSheet.desiredRelief),
+      timeline: ensureDraftList(sanitizedFactSheet.timeline),
+      supportingFacts: ensureDraftList(sanitizedFactSheet.supportingFacts),
+      risks: ensureDraftList(sanitizedFactSheet.risks),
+      disputedFacts: ensureDraftList(sanitizedFactSheet.disputedFacts),
+      corroboratedFacts: ensureDraftList(sanitizedFactSheet.corroboratedFacts),
+      missingEvidence: ensureDraftList(sanitizedFactSheet.missingEvidence),
     });
   }, [caseSession]);
 
 
   const buildFactSheetPayload = () => ({
     ...caseSession.factSheet,
-    summary: factSheetDraft.summary.trim(),
-    theory: factSheetDraft.theory.trim(),
-    desiredRelief: factSheetDraft.desiredRelief.trim(),
-    timeline: splitLines(factSheetDraft.timeline),
-    supportingFacts: splitLines(factSheetDraft.supportingFacts),
-    risks: splitLines(factSheetDraft.risks),
-    disputedFacts: splitLines(factSheetDraft.disputedFacts),
-    corroboratedFacts: splitLines(factSheetDraft.corroboratedFacts),
-    missingEvidence: splitLines(factSheetDraft.missingEvidence),
+    summary: cleanDraftList(factSheetDraft.summary),
+    theory: cleanDraftList(factSheetDraft.theory),
+    desiredRelief: cleanDraftList(factSheetDraft.desiredRelief),
+    timeline: cleanDraftList(factSheetDraft.timeline),
+    supportingFacts: cleanDraftList(factSheetDraft.supportingFacts),
+    risks: cleanDraftList(factSheetDraft.risks),
+    disputedFacts: cleanDraftList(factSheetDraft.disputedFacts),
+    corroboratedFacts: cleanDraftList(factSheetDraft.corroboratedFacts),
+    missingEvidence: cleanDraftList(factSheetDraft.missingEvidence),
   });
 
   const visibleInterviewTranscript = optimisticTranscriptEntry
@@ -137,9 +177,23 @@ export default function CaseWorkspace({ initialCase }) {
     });
   }, [isInterview, normalizedCourtroomTranscript.length, working, pendingSpeaker]);
 
+  const handleChatTextareaKeyDown = (event) => {
+    if (event.key !== "Enter" || event.shiftKey || event.nativeEvent?.isComposing) {
+      return;
+    }
+
+    event.preventDefault();
+
+    if (working) {
+      return;
+    }
+
+    event.currentTarget.form?.requestSubmit();
+  };
+
   const handleInterviewSubmit = async (event) => {
     event.preventDefault();
-    if (!question.trim()) return;
+    if (working || !question.trim()) return;
 
     const submittedQuestion = question.trim();
 
@@ -151,6 +205,7 @@ export default function CaseWorkspace({ initialCase }) {
     });
     setQuestion("");
     setWorking(true);
+    setPendingAction("interview");
     setPendingSpeaker(getPlayerPartyName(caseSession));
 
     try {
@@ -169,12 +224,14 @@ export default function CaseWorkspace({ initialCase }) {
     } finally {
       setOptimisticTranscriptEntry(null);
       setPendingSpeaker("");
+      setPendingAction("");
       setWorking(false);
     }
   };
 
   const handleFinalize = async () => {
     setWorking(true);
+    setPendingAction("finalize");
 
     try {
       const { caseSession: nextCase } = await apiClient.post(
@@ -191,13 +248,14 @@ export default function CaseWorkspace({ initialCase }) {
     } catch (error) {
       console.error(error);
     } finally {
+      setPendingAction("");
       setWorking(false);
     }
   };
 
   const handleCourtroomSubmit = async (event) => {
     event.preventDefault();
-    if (!argument.trim()) return;
+    if (working || !argument.trim()) return;
 
     const submittedArgument = argument.trim();
 
@@ -212,6 +270,7 @@ export default function CaseWorkspace({ initialCase }) {
     });
     setArgument("");
     setWorking(true);
+    setPendingAction("courtroom");
     setPendingSpeaker(getOpponentPartyName(caseSession));
 
     try {
@@ -230,6 +289,7 @@ export default function CaseWorkspace({ initialCase }) {
     } finally {
       setOptimisticTranscriptEntry(null);
       setPendingSpeaker("");
+      setPendingAction("");
       setWorking(false);
     }
   };
@@ -244,6 +304,7 @@ export default function CaseWorkspace({ initialCase }) {
     }
 
     setWorking(true);
+    setPendingAction("exit");
 
     try {
       await apiClient.post(`/cases/${getCaseRouteRef(caseSession)}/exit`);
@@ -252,6 +313,7 @@ export default function CaseWorkspace({ initialCase }) {
     } catch (error) {
       console.error(error);
     } finally {
+      setPendingAction("");
       setWorking(false);
     }
   };
@@ -292,20 +354,39 @@ export default function CaseWorkspace({ initialCase }) {
     factSheetDraft.desiredRelief,
   ];
   const completedFactSheetItems = factSheetCompletionItems.filter((item) =>
-    String(item || "").trim()
+    cleanDraftList(item).length > 0
   ).length;
   const factSheetProgressPercent = clampPercent(
     (completedFactSheetItems / factSheetCompletionItems.length) * 100
   );
   const roundedFactSheetProgressPercent = Math.round(factSheetProgressPercent);
   const nextFactSheetStep =
-    (!factSheetDraft.timeline.trim() && "Add timeline of events") ||
-    (!factSheetDraft.supportingFacts.trim() && "Capture supporting facts") ||
-    (!factSheetDraft.risks.trim() && "Document key risks") ||
-    (!factSheetDraft.missingEvidence.trim() && "List proof gaps") ||
+    (!cleanDraftList(factSheetDraft.summary).length && "Add a case summary") ||
+    (!cleanDraftList(factSheetDraft.theory).length && "Shape the case theory") ||
+    (!cleanDraftList(factSheetDraft.timeline).length && "Add timeline of events") ||
+    (!cleanDraftList(factSheetDraft.supportingFacts).length && "Capture supporting facts") ||
+    (!cleanDraftList(factSheetDraft.risks).length &&
+      !cleanDraftList(factSheetDraft.disputedFacts).length &&
+      "Document a key risk or dispute") ||
+    (!cleanDraftList(factSheetDraft.desiredRelief).length && "Add requested relief") ||
     "Review and finalize fact sheet";
   const isCourtroom = !isInterview && !isExited && !isVerdict;
   const courtroomRoundLabel = `Courtroom Round ${caseSession.score.roundsCompleted + 1}`;
+  const assessment = caseSession.caseAssessment || {};
+  const displayedSuccessChance = isInterview
+    ? assessment.currentSuccessChance
+    : assessment.lockedCourtEntryChance ?? assessment.currentSuccessChance;
+  const successChanceReasons = isInterview
+    ? assessment.currentReasons || []
+    : assessment.lockedReasons?.length
+    ? assessment.lockedReasons
+    : assessment.currentReasons || [];
+  const successChanceLabel =
+    successChanceReasons.length > 0
+      ? `Success chance factors: ${successChanceReasons.join("; ")}`
+      : isInterview
+      ? "Updates after client answers."
+      : "Locked when the case entered court.";
   const heroPanelStyle = {
     backgroundImage: [
       "linear-gradient(90deg, rgba(4,4,4,0.96) 0%, rgba(4,4,4,0.88) 42%, rgba(4,4,4,0.5) 68%, rgba(4,4,4,0.9) 100%)",
@@ -317,11 +398,250 @@ export default function CaseWorkspace({ initialCase }) {
     backgroundSize: "cover, cover, auto 108%",
   };
 
-  const applyArgumentSnippet = (snippet) => {
+  const firstDraftItem = (...lists) =>
+    lists.flatMap((list) => cleanDraftList(list)).find(Boolean) || "";
+
+  const appendArgumentSnippet = (snippet) => {
+    const text = String(snippet || "").trim();
+
+    if (!text) {
+      return;
+    }
+
     setArgument((current) => {
       const trimmedCurrent = String(current || "").trim();
-      return trimmedCurrent ? `${trimmedCurrent}\n${snippet}` : snippet;
+      return trimmedCurrent ? `${trimmedCurrent}\n\n${text}` : text;
     });
+  };
+
+  const openingStatementSnippet = () => {
+    const theory = firstDraftItem(factSheetDraft.theory, factSheetDraft.summary);
+    const strongestFact = firstDraftItem(
+      factSheetDraft.corroboratedFacts,
+      factSheetDraft.supportingFacts,
+      factSheetDraft.timeline
+    );
+    const liveRisk = firstDraftItem(factSheetDraft.risks, factSheetDraft.disputedFacts);
+    const relief = firstDraftItem(factSheetDraft.desiredRelief);
+    const rule = caseSession.lawbook[0];
+
+    return [
+      `May it please the Court. I represent ${playerPartyName}.`,
+      theory ? `Our position is straightforward: ${theory}` : "",
+      strongestFact ? `The record starts with this point: ${strongestFact}` : "",
+      rule ? `The governing lens is ${rule.title}: ${rule.principle}` : "",
+      liveRisk ? `I also want to address the main weakness directly: ${liveRisk}` : "",
+      relief ? `For that reason, ${playerPartyName} asks for ${relief}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+  };
+
+  const strongestFactSnippet = () => {
+    const fact = firstDraftItem(
+      factSheetDraft.corroboratedFacts,
+      factSheetDraft.supportingFacts,
+      factSheetDraft.timeline
+    );
+
+    return fact ? `The fact sheet supports this point: ${fact}` : "";
+  };
+
+  const riskResponseSnippet = () => {
+    const risk = firstDraftItem(factSheetDraft.risks, factSheetDraft.disputedFacts);
+    const support = firstDraftItem(factSheetDraft.corroboratedFacts, factSheetDraft.supportingFacts);
+
+    if (!risk) {
+      return "";
+    }
+
+    return support
+      ? `The weakness I need to confront is this: ${risk}\nEven with that pressure, the stronger point for my side is: ${support}`
+      : `The weakness I need to confront is this: ${risk}`;
+  };
+
+  const proofGapSnippet = () => {
+    const gap = firstDraftItem(factSheetDraft.missingEvidence);
+
+    return gap
+      ? `The proof gap is real: ${gap}\nSo I am asking the Court to weigh only what the current record actually supports.`
+      : "";
+  };
+
+  const lawbookSnippet = () => {
+    const rule = caseSession.lawbook[0];
+
+    return rule ? `Under ${rule.title}, ${rule.principle}` : "";
+  };
+
+  const argumentQuickTools = [
+    ["Opening statement", openingStatementSnippet()],
+    ["Add strongest fact", strongestFactSnippet()],
+    ["Address risk", riskResponseSnippet()],
+    ["Handle proof gap", proofGapSnippet()],
+    ["Cite lawbook", lawbookSnippet()],
+  ].filter((tool) => tool[1]);
+
+  const factSheetSections = [
+    {
+      key: "summary",
+      title: "Case summary",
+      empty: "No summary notes yet.",
+      placeholder: "Client says...",
+    },
+    {
+      key: "theory",
+      title: "Theory",
+      empty: "No theory notes yet.",
+      placeholder: "My current theory is...",
+    },
+    {
+      key: "timeline",
+      title: "Timeline",
+      empty: "No timeline points yet.",
+      placeholder: "Client says this happened when...",
+    },
+    {
+      key: "supportingFacts",
+      title: "Supporting facts",
+      empty: "No supporting facts yet.",
+      placeholder: "Client says...",
+    },
+    {
+      key: "risks",
+      title: "Risks",
+      empty: "No risks captured yet.",
+      placeholder: "Risk I need to manage...",
+    },
+    {
+      key: "disputedFacts",
+      title: "Disputed facts",
+      empty: "No disputed facts yet.",
+      placeholder: "The other side may dispute...",
+    },
+    {
+      key: "corroboratedFacts",
+      title: "Corroborated facts",
+      empty: "No corroborated facts yet.",
+      placeholder: "Record or witness support...",
+    },
+    {
+      key: "missingEvidence",
+      title: "Missing evidence / proof gaps",
+      empty: "No proof gaps listed yet.",
+      placeholder: "I still need...",
+    },
+    {
+      key: "desiredRelief",
+      title: "Requested relief",
+      empty: "No relief notes yet.",
+      placeholder: "Client wants...",
+    },
+  ];
+
+  const updateFactSheetBullet = (sectionKey, index, value) => {
+    setFactSheetDraft((current) => ({
+      ...current,
+      [sectionKey]: ensureDraftList(current[sectionKey]).map((item, itemIndex) =>
+        itemIndex === index ? value : item
+      ),
+    }));
+  };
+
+  const addFactSheetBullet = (sectionKey) => {
+    setFactSheetDraft((current) => ({
+      ...current,
+      [sectionKey]: [...ensureDraftList(current[sectionKey]), ""],
+    }));
+  };
+
+  const removeFactSheetBullet = (sectionKey, index) => {
+    setFactSheetDraft((current) => ({
+      ...current,
+      [sectionKey]: ensureDraftList(current[sectionKey]).filter(
+        (_item, itemIndex) => itemIndex !== index
+      ),
+    }));
+  };
+
+  const renderFactSheetSection = (section) => {
+    const items = ensureDraftList(factSheetDraft[section.key]);
+    const completedItems = cleanDraftList(items);
+    const hasItems = completedItems.length > 0;
+    const hasDraftRows = items.length > 0;
+
+    return (
+      <details
+        key={section.key}
+        className="group overflow-hidden rounded-xl border border-white/10 bg-white/[0.025]"
+      >
+        <summary className="list-none cursor-pointer px-4 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm font-semibold text-white">{section.title}</span>
+                <span
+                  className={`h-2 w-2 rounded-full ${
+                    hasItems ? "bg-emerald-300" : "bg-white/18"
+                  }`}
+                />
+              </div>
+              <p className="mt-1 text-xs text-white/42">
+                {completedItems.length} {completedItems.length === 1 ? "item" : "items"}
+              </p>
+            </div>
+            <CollapseChevron />
+          </div>
+        </summary>
+        <div className="border-t border-white/8 px-4 pb-4 pt-3">
+          {hasDraftRows ? (
+            <div className="space-y-3">
+              {items.map((item, itemIndex) => (
+                <div key={`${section.key}-${itemIndex}`} className="flex items-start gap-3">
+                  <span className="mt-3 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-300/80" />
+                  {isInterview ? (
+                    <>
+                      <textarea
+                        className="textarea textarea-bordered arena-textarea arena-field min-h-12 flex-1 resize-none text-sm leading-6 text-slate-100"
+                        value={item}
+                        onChange={(event) =>
+                          updateFactSheetBullet(section.key, itemIndex, event.target.value)
+                        }
+                        placeholder={section.placeholder}
+                      />
+                      <button
+                        type="button"
+                        className="arena-btn-dark min-h-0 shrink-0 px-3 py-2 text-xs"
+                        onClick={() => removeFactSheetBullet(section.key, itemIndex)}
+                        aria-label={`Remove ${section.title} item`}
+                      >
+                        Remove
+                      </button>
+                    </>
+                  ) : (
+                    <p className="flex-1 text-sm leading-7 text-white/78">{item}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-lg border border-dashed border-white/10 bg-black/15 p-4 text-sm text-white/42">
+              {section.empty}
+            </div>
+          )}
+
+          {isInterview ? (
+            <button
+              type="button"
+              className="arena-btn-dark mt-3 min-h-0 px-3 py-2 text-xs"
+              onClick={() => addFactSheetBullet(section.key)}
+            >
+              Add Item
+            </button>
+          ) : null}
+        </div>
+      </details>
+    );
   };
 
   return (
@@ -481,11 +801,16 @@ export default function CaseWorkspace({ initialCase }) {
                       <article className="arena-transcript-opponent rounded-xl border border-amber-500/30 p-4">
                         <div className="flex items-center justify-between gap-3">
                           <p className="font-semibold text-white">{pendingSpeaker}</p>
-                          <span className="loading loading-dots loading-sm" />
+                          <p className="text-xs uppercase tracking-[0.14em] text-amber-100/46">
+                            Thinking
+                          </p>
                         </div>
                         <p className="mt-2 leading-7 text-white">
-                          {pendingSpeaker} is typing...
+                          {pendingSpeaker} is answering...
                         </p>
+                        <div className="mt-4">
+                          <LoadingBar label={`${pendingSpeaker} is answering`} />
+                        </div>
                       </article>
                     )}
                   </div>
@@ -496,6 +821,7 @@ export default function CaseWorkspace({ initialCase }) {
                       placeholder={`Ask ${playerPartyName} about dates, records, witnesses, notice, or any proof gaps you need to pin down.`}
                       value={question}
                       onChange={(event) => setQuestion(event.target.value)}
+                      onKeyDown={handleChatTextareaKeyDown}
                       disabled={transcribingQuestion}
                     />
                     <div className="flex items-center justify-end text-xs uppercase tracking-[0.14em] text-white/38">
@@ -567,8 +893,9 @@ export default function CaseWorkspace({ initialCase }) {
                         className="arena-btn-light px-6 py-3"
                         disabled={working || recordingQuestion || transcribingQuestion}
                       >
-                        {working && <span className="loading loading-spinner loading-xs" />}
-                        Continue Intake
+                        {pendingAction === "interview"
+                          ? "Continuing Intake..."
+                          : "Continue Intake"}
                       </button>
                       <button
                         type="button"
@@ -576,7 +903,7 @@ export default function CaseWorkspace({ initialCase }) {
                         disabled={working || recordingQuestion || transcribingQuestion}
                         onClick={handleExitCase}
                       >
-                        Exit Case
+                        {pendingAction === "exit" ? "Exiting..." : "Exit Case"}
                       </button>
                     </div>
                   </form>
@@ -741,11 +1068,16 @@ export default function CaseWorkspace({ initialCase }) {
                       <article className="arena-transcript-opponent rounded-xl p-4">
                         <div className="flex items-center justify-between gap-3">
                           <p className="font-semibold text-white">{opponentPartyName}</p>
-                          <span className="loading loading-dots loading-sm" />
+                          <p className="text-xs uppercase tracking-[0.14em] text-amber-100/46">
+                            Preparing
+                          </p>
                         </div>
                         <p className="mt-2 leading-7 text-white">
-                          {opponentPartyName} is typing...
+                          {opponentPartyName} is preparing a response...
                         </p>
+                        <div className="mt-4">
+                          <LoadingBar label={`${opponentPartyName} is preparing a response`} />
+                        </div>
                       </article>
                     )}
                   </div>
@@ -765,51 +1097,38 @@ export default function CaseWorkspace({ initialCase }) {
                         placeholder={`Deliver your argument for ${playerPartyName}. Cite the fact sheet, confront the weakest point on ${opponentPartyName}'s side, and tie your position to the lawbook.`}
                         value={argument}
                         onChange={(event) => setArgument(event.target.value)}
+                        onKeyDown={handleChatTextareaKeyDown}
                         disabled={transcribingArgument}
                       />
                       <div className="flex items-center justify-end text-xs uppercase tracking-[0.14em] text-white/38">
                         {argument.trim().length} / 2500
                       </div>
-                      <div>
-                        <p className="arena-kicker">Quick Tools</p>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            className="arena-btn-dark min-h-0 px-3 py-2 text-sm"
-                            onClick={() => applyArgumentSnippet("The record shows the key fact is supported by the available evidence.")}
-                          >
-                            Insert Fact
-                          </button>
-                          <button
-                            type="button"
-                            className="arena-btn-dark min-h-0 px-3 py-2 text-sm"
-                            onClick={() => applyArgumentSnippet("Under the lawbook, the burden remains on the claimant to prove that point with reliable proof.")}
-                          >
-                            Cite Law
-                          </button>
-                          <button
-                            type="button"
-                            className="arena-btn-dark min-h-0 px-3 py-2 text-sm"
-                            onClick={() => applyArgumentSnippet("The timeline matters here: first the notice, then the condition evidence, then the claimed deduction.")}
-                          >
-                            Use Timeline
-                          </button>
-                          <button
-                            type="button"
-                            className="arena-btn-dark min-h-0 px-3 py-2 text-sm"
-                            onClick={() => applyArgumentSnippet("The strongest exhibit is the documentary record created closest in time to the disputed events.")}
-                          >
-                            Add Exhibit
-                          </button>
-                          <button
-                            type="button"
-                            className="arena-btn-dark min-h-0 px-3 py-2 text-sm"
-                            onClick={() => setArgument("")}
-                          >
-                            Clear
-                          </button>
+                      {argumentQuickTools.length ? (
+                        <div>
+                          <p className="arena-kicker">Quick Tools</p>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {argumentQuickTools.map(([label, snippet]) => (
+                              <button
+                                key={label}
+                                type="button"
+                                className="arena-btn-dark min-h-0 px-3 py-2 text-sm"
+                                onClick={() => appendArgumentSnippet(snippet)}
+                              >
+                                {label}
+                              </button>
+                            ))}
+                            {argument.trim() ? (
+                              <button
+                                type="button"
+                                className="arena-btn-dark min-h-0 px-3 py-2 text-sm"
+                                onClick={() => setArgument("")}
+                              >
+                                Clear draft
+                              </button>
+                            ) : null}
+                          </div>
                         </div>
-                      </div>
+                      ) : null}
                       <div className="flex flex-wrap items-center gap-3">
                         <button
                           type="button"
@@ -861,10 +1180,9 @@ export default function CaseWorkspace({ initialCase }) {
                           className="arena-btn-light ml-auto px-5 py-3"
                           disabled={working || recordingArgument || transcribingArgument}
                         >
-                          {working && (
-                            <span className="loading loading-spinner loading-xs" />
-                          )}
-                          Submit Argument
+                          {pendingAction === "courtroom"
+                            ? "Submitting Argument..."
+                            : "Submit Argument"}
                         </button>
                       </div>
                       <div className="arena-surface-soft flex items-start gap-3 p-4 text-sm text-white/62">
@@ -890,9 +1208,7 @@ export default function CaseWorkspace({ initialCase }) {
                         <span className="text-xs uppercase tracking-[0.15em] text-white/40">
                           {caseSession.lawbook.length} rules active
                         </span>
-                        <span className="text-sm text-white/55 transition group-open:rotate-180">
-                          ˅
-                        </span>
+                        <CollapseChevron />
                       </div>
                     </div>
                   </summary>
@@ -976,118 +1292,46 @@ export default function CaseWorkspace({ initialCase }) {
                     <p className="arena-kicker">Fact Sheet</p>
                     <h2 className="arena-headline mt-2 text-2xl">Case file</h2>
                   </div>
-                  <span
-                    className={`badge border arena-status ${
-                      caseSession.factSheet.ready
-                        ? "arena-status-favorable"
-                        : "arena-status-caution"
-                    }`}
-                  >
-                    {caseSession.factSheet.ready ? "Court-ready" : "Draft"}
-                  </span>
+                  <div className="flex flex-col items-end gap-2">
+                    <span
+                      className={`badge border arena-status ${
+                        caseSession.factSheet.ready
+                          ? "arena-status-favorable"
+                          : "arena-status-caution"
+                      }`}
+                    >
+                      {caseSession.factSheet.ready ? "Court-ready" : "Draft"}
+                    </span>
+                    {Number.isFinite(Number(displayedSuccessChance)) ? (
+                      <span
+                        className="badge border border-sky-300/35 bg-sky-300/10 px-3 py-3 text-sky-100"
+                        data-tooltip-id="success-chance-tooltip"
+                        aria-label={successChanceLabel}
+                      >
+                        {Math.round(Number(displayedSuccessChance))}% chance
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
 
-                <div className="mt-5 space-y-4">
-                  <label className="form-control">
-                    <div className="mb-2 flex items-center justify-between gap-3">
-                      <span className="label-text font-semibold text-white">Case summary</span>
-                      <span className="text-xs text-white/38">
-                        {countFieldCharacters(factSheetDraft.summary)} / 1000
-                      </span>
-                    </div>
-                    <textarea
-                      className={caseFileFieldClass}
-                      value={factSheetDraft.summary}
-                      onChange={(event) =>
-                        setFactSheetDraft((current) => ({
-                          ...current,
-                          summary: event.target.value,
-                        }))
-                      }
-                      readOnly={!isInterview}
-                    />
-                  </label>
-
-                  <label className="form-control">
-                    <div className="mb-2 flex items-center justify-between gap-3">
-                      <span className="label-text font-semibold text-white">Theory</span>
-                      <span className="text-xs text-white/38">
-                        {countFieldCharacters(factSheetDraft.theory)} / 1000
-                      </span>
-                    </div>
-                    <textarea
-                      className={caseFileFieldClass}
-                      value={factSheetDraft.theory}
-                      onChange={(event) =>
-                        setFactSheetDraft((current) => ({
-                          ...current,
-                          theory: event.target.value,
-                        }))
-                      }
-                      readOnly={!isInterview}
-                    />
-                  </label>
-
-                  {[
-                    ["Timeline", "timeline", factSheetDraft.timeline],
-                    ["Supporting facts", "supportingFacts", factSheetDraft.supportingFacts],
-                    ["Risks", "risks", factSheetDraft.risks],
-                    ["Disputed facts", "disputedFacts", factSheetDraft.disputedFacts],
-                    ["Corroborated facts", "corroboratedFacts", factSheetDraft.corroboratedFacts],
-                    ["Missing evidence / proof gaps", "missingEvidence", factSheetDraft.missingEvidence],
-                  ].map(([label, key, value]) => (
-                    <label key={key} className="form-control">
-                      <div className="mb-2 flex items-center justify-between gap-3">
-                        <span className="label-text font-semibold text-white">{label}</span>
-                        <span className="text-xs text-white/38">
-                          {countListEntries(value)} entries
-                        </span>
-                      </div>
-                      <textarea
-                        className="textarea textarea-bordered arena-textarea arena-field h-24 text-slate-100"
-                        value={value}
-                        onChange={(event) =>
-                          setFactSheetDraft((current) => ({
-                            ...current,
-                            [key]: event.target.value,
-                          }))
-                        }
-                        readOnly={!isInterview}
-                      />
-                    </label>
-                  ))}
-
-                  <label className="form-control">
-                    <div className="mb-2 flex items-center justify-between gap-3">
-                      <span className="label-text font-semibold text-white">
-                        Requested relief
-                      </span>
-                      <span className="text-xs text-white/38">
-                        {countFieldCharacters(factSheetDraft.desiredRelief)} / 1000
-                      </span>
-                    </div>
-                    <textarea
-                      className="textarea textarea-bordered arena-textarea arena-field h-20 text-slate-100"
-                      value={factSheetDraft.desiredRelief}
-                      onChange={(event) =>
-                        setFactSheetDraft((current) => ({
-                          ...current,
-                          desiredRelief: event.target.value,
-                        }))
-                      }
-                      readOnly={!isInterview}
-                    />
-                  </label>
+                <div className="mt-5 space-y-3">
+                  {factSheetSections.map(renderFactSheetSection)}
 
                   {isInterview && (
-                    <button
-                      className="arena-btn-light w-full px-5 py-3"
-                      onClick={handleFinalize}
-                      disabled={working}
-                    >
-                      {working && <span className="loading loading-spinner loading-xs" />}
-                      Finalize Fact Sheet
-                    </button>
+                    <div className="space-y-3">
+                      <button
+                        className="arena-btn-light w-full px-5 py-3"
+                        onClick={handleFinalize}
+                        disabled={working}
+                      >
+                        {pendingAction === "finalize"
+                          ? "Finalizing Fact Sheet..."
+                          : "Finalize Fact Sheet"}
+                      </button>
+                      {pendingAction === "finalize" ? (
+                        <LoadingBar label="Finalizing fact sheet" />
+                      ) : null}
+                    </div>
                   )}
                 </div>
               </div>
@@ -1098,7 +1342,18 @@ export default function CaseWorkspace({ initialCase }) {
                 <div className="arena-surface">
                   <div className="p-6">
                     <p className="arena-kicker">Intake Progress</p>
-                    <h2 className="arena-headline mt-2 text-2xl">Build the record</h2>
+                    <div className="mt-2 flex flex-wrap items-center gap-3">
+                      <h2 className="arena-headline text-2xl">Build the record</h2>
+                      {Number.isFinite(Number(displayedSuccessChance)) ? (
+                        <span
+                          className="badge border border-sky-300/35 bg-sky-300/10 px-3 py-3 text-sky-100"
+                          data-tooltip-id="success-chance-tooltip"
+                          aria-label={successChanceLabel}
+                        >
+                          {Math.round(Number(displayedSuccessChance))}% chance
+                        </span>
+                      ) : null}
+                    </div>
                     <div className="mt-5 flex items-center gap-4">
                       <div className="radial-progress text-white" style={{ "--value": roundedFactSheetProgressPercent, "--size": "5rem", "--thickness": "0.5rem" }}>
                         {roundedFactSheetProgressPercent}%
@@ -1153,9 +1408,7 @@ export default function CaseWorkspace({ initialCase }) {
                         <p className="arena-kicker">Lawbook</p>
                         <h2 className="arena-headline mt-2 text-2xl">Rules in play</h2>
                       </div>
-                      <span className="text-sm text-white/55 transition group-open:rotate-180">
-                        ˅
-                      </span>
+                      <CollapseChevron />
                     </div>
                   </summary>
                   <div className="px-6 pb-6">
@@ -1179,6 +1432,14 @@ export default function CaseWorkspace({ initialCase }) {
           </aside>
         </div>
       </section>
+      {Number.isFinite(Number(displayedSuccessChance)) ? (
+        <Tooltip
+          id="success-chance-tooltip"
+          className="z-[70] !max-w-none !rounded-lg !border !border-white/10 !bg-[#141414] !px-4 !py-3 !opacity-100 shadow-xl"
+        >
+          <SuccessChanceTooltip reasons={successChanceReasons} isInterview={isInterview} />
+        </Tooltip>
+      ) : null}
     </main>
   );
 }

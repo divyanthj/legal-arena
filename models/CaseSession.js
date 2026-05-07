@@ -191,8 +191,8 @@ const caseSessionSchema = mongoose.Schema(
     },
     factSheet: {
       summary: {
-        type: String,
-        default: "",
+        type: [String],
+        default: [],
       },
       timeline: {
         type: [String],
@@ -207,12 +207,12 @@ const caseSessionSchema = mongoose.Schema(
         default: [],
       },
       theory: {
-        type: String,
-        default: "",
+        type: [String],
+        default: [],
       },
       desiredRelief: {
-        type: String,
-        default: "",
+        type: [String],
+        default: [],
       },
       openQuestions: {
         type: [String],
@@ -257,6 +257,32 @@ const caseSessionSchema = mongoose.Schema(
       ready: {
         type: Boolean,
         default: false,
+      },
+    },
+    caseAssessment: {
+      currentSuccessChance: {
+        type: Number,
+        default: null,
+      },
+      currentReasons: {
+        type: [String],
+        default: [],
+      },
+      lockedCourtEntryChance: {
+        type: Number,
+        default: null,
+      },
+      lockedReasons: {
+        type: [String],
+        default: [],
+      },
+      assessedAt: {
+        type: Date,
+        default: null,
+      },
+      lockedAt: {
+        type: Date,
+        default: null,
       },
     },
     courtroomTranscript: {

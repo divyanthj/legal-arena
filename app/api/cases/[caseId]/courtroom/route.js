@@ -122,6 +122,8 @@ export async function POST(req, { params }) {
         complexity: caseSession.complexity,
         verdictWinner: result.verdict.winner,
         highlights: result.verdict.highlights,
+        lockedCourtEntryChance:
+          caseSession.caseAssessment?.lockedCourtEntryChance ?? null,
       });
     }
 

@@ -155,8 +155,9 @@ export default function PlayerMatterDossier({ player, caseSession }) {
                           <span>Represented side: {getSidePlayed(matter)}</span>
                         </div>
                       </div>
-                      <FactList title="Theory" items={[factSheet.theory]} />
-                      <FactList title="Requested relief" items={[factSheet.desiredRelief]} />
+                      <FactList title="Case summary" items={factSheet.summary} />
+                      <FactList title="Theory" items={factSheet.theory} />
+                      <FactList title="Requested relief" items={factSheet.desiredRelief} />
                       <FactList title="Timeline" items={factSheet.timeline} />
                       <FactList title="Supporting facts" items={factSheet.supportingFacts} />
                       <FactList title="Risks" items={factSheet.risks} />

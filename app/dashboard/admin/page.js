@@ -26,34 +26,40 @@ export default async function AdminPage() {
 
   await connectMongo();
 
-  const [templates, templateStats, userCount, leadCount] = await Promise.all([
-    CaseTemplate.find({}).sort({ updatedAt: -1 }),
-    CaseSession.aggregate([
-      {
-        $group: {
-          _id: "$caseTemplateId",
-          plays: { $sum: 1 },
-          wins: {
-            $sum: {
-              $cond: [{ $eq: ["$verdict.winner", "player"] }, 1, 0],
+  const [templates, templateStats, userCount, leadCount, freeAccessGrants] =
+    await Promise.all([
+      CaseTemplate.find({}).sort({ updatedAt: -1 }),
+      CaseSession.aggregate([
+        {
+          $group: {
+            _id: "$caseTemplateId",
+            plays: { $sum: 1 },
+            wins: {
+              $sum: {
+                $cond: [{ $eq: ["$verdict.winner", "player"] }, 1, 0],
+              },
             },
-          },
-          losses: {
-            $sum: {
-              $cond: [{ $eq: ["$verdict.winner", "opponent"] }, 1, 0],
+            losses: {
+              $sum: {
+                $cond: [{ $eq: ["$verdict.winner", "opponent"] }, 1, 0],
+              },
             },
-          },
-          draws: {
-            $sum: {
-              $cond: [{ $eq: ["$verdict.winner", "draw"] }, 1, 0],
+            draws: {
+              $sum: {
+                $cond: [{ $eq: ["$verdict.winner", "draw"] }, 1, 0],
+              },
             },
           },
         },
-      },
-    ]),
-    User.countDocuments({}),
-    Lead.countDocuments({}),
-  ]);
+      ]),
+      User.countDocuments({}),
+      Lead.countDocuments({}),
+      User.find({ freeAccessGranted: true })
+        .select("email freeAccessGrantedAt freeAccessGrantedBy")
+        .sort({ freeAccessGrantedAt: -1 })
+        .limit(50)
+        .lean(),
+    ]);
 
   const statsByTemplateId = new Map(
     templateStats.map((entry) => [String(entry._id), entry])
@@ -81,6 +87,14 @@ export default async function AdminPage() {
         userCount,
         leadCount,
       })}
+      initialFreeAccessGrants={toClientJSON(
+        freeAccessGrants.map((user) => ({
+          id: user._id.toString(),
+          email: user.email || "",
+          freeAccessGrantedAt: user.freeAccessGrantedAt,
+          freeAccessGrantedBy: user.freeAccessGrantedBy || "",
+        }))
+      )}
     />
   );
 }

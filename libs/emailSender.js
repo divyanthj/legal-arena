@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import connectMongo from "@/libs/mongoose";
 import { sendEmail, sendBatchEmails } from "@/libs/resend";
 import { emailTemplate } from "@/libs/emailTemplate";
+import { createMagicLoginLink } from "@/libs/authMagicLink";
 import User from "@/models/User";
 import Lead from "@/models/Lead";
 import config from "@/config";
@@ -12,6 +13,14 @@ const greeting = (name) => (name ? `Hello ${name},\n\n` : "Hello,\n\n");
 
 const getDigestSignature = (type) =>
   type === "marketing" ? `${config.appName} team` : config.appName;
+
+const escapeHtml = (value = "") =>
+  String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 
 async function getRecipientsForAudience({ audience = "all_users", userId = "" } = {}) {
   if (audience === "single_user") {
@@ -146,6 +155,132 @@ export async function sendMagicLinkEmail({ email, url }) {
       footer: "This sign-in link expires shortly for your security.",
     }),
     from: process.env.RESEND_AUTH_FROM || config.email.fromNoReply,
+  });
+}
+
+export async function sendFreeAccessGrantedEmail({
+  email,
+  name = "",
+  grantedBy = "",
+} = {}) {
+  if (!email) {
+    throw new Error("Email is required.");
+  }
+
+  const subject = `You're in: free ${config.appName} access is unlocked`;
+  const recipientName = name?.trim?.() || email.split("@")[0] || "Counsel";
+  const adminLine = grantedBy
+    ? `Access was granted by ${grantedBy}.`
+    : "Access was granted by the Legal Arena team.";
+  const content =
+    `Hi ${recipientName},\n\n` +
+    `Good news: your ${config.appName} access has been unlocked.\n\n` +
+    "Your account can now enter the arena, run client intake, build case files, argue in court, and chase leaderboard glory without needing to purchase access.\n\n" +
+    "A few things waiting for you:\n" +
+    "- AI-powered client interviews\n" +
+    "- Conversation-built fact sheets\n" +
+    "- Courtroom rounds with scoring\n" +
+    "- Progression, ratings, and specialty leaderboards\n\n" +
+    `${adminLine}\n\n` +
+    "Bring sharp questions. The court is open.";
+  const magicLoginUrl = await createMagicLoginLink({
+    email,
+    callbackUrl: "/dashboard",
+  });
+
+  return sendEmail({
+    to: email,
+    subject,
+    text:
+      `${content}\n\nUse this secure magic link to enter Legal Arena: ${magicLoginUrl}\n\n` +
+      "This link expires in 24 hours. If you were not expecting this, you can ignore this email.",
+    html: emailTemplate({
+      title: "You're in",
+      subtitle: `Free ${config.appName} access has been unlocked for your account.`,
+      content,
+      contentHtml: `
+        <p style="margin:0 0 18px;">Hi ${escapeHtml(recipientName)},</p>
+        <p style="margin:0 0 18px;">Good news: your <strong>${escapeHtml(
+          config.appName
+        )}</strong> access has been unlocked.</p>
+        <p style="margin:0 0 18px;">Your account can now enter the arena without needing to purchase access.</p>
+        <p style="margin:0 0 10px;"><strong>A few things waiting for you:</strong></p>
+        <ul style="margin:0 0 20px 22px; padding:0;">
+          <li style="margin:0 0 8px;">AI-powered client interviews</li>
+          <li style="margin:0 0 8px;">Conversation-built fact sheets</li>
+          <li style="margin:0 0 8px;">Courtroom rounds with scoring</li>
+          <li style="margin:0;">Progression, ratings, and specialty leaderboards</li>
+        </ul>
+        <p style="margin:0 0 18px;">${escapeHtml(adminLine)}</p>
+        <p style="margin:0;">Bring sharp questions. The court is open.</p>
+      `,
+      ctaLabel: "Enter with magic link",
+      ctaUrl: magicLoginUrl,
+      footer:
+        `You're receiving this because an admin granted free access to ${config.appName}. ` +
+        "This secure sign-in link expires in 24 hours. If this was unexpected, you can ignore this email.",
+    }),
+    from: config.email.fromSupport,
+  });
+}
+
+export async function sendFreeAccessRevokedEmail({
+  email,
+  name = "",
+  revokedBy = "",
+} = {}) {
+  if (!email) {
+    throw new Error("Email is required.");
+  }
+
+  const subject = `${config.appName} free access has been updated`;
+  const recipientName = name?.trim?.() || email.split("@")[0] || "Counsel";
+  const adminLine = revokedBy
+    ? `This change was made by ${revokedBy}.`
+    : "This change was made by the Legal Arena team.";
+  const content =
+    `Hi ${recipientName},\n\n` +
+    `A quick heads-up: your manually granted free access to ${config.appName} has been revoked.\n\n` +
+    "That means the free-access override on your account is no longer active. If you still have access through another route, such as a purchase or admin status, that separate access is unchanged.\n\n" +
+    `${adminLine}\n\n` +
+    "If this was unexpected, reply to support and we will help sort it out.";
+  const magicLoginUrl = await createMagicLoginLink({
+    email,
+    callbackUrl: "/dashboard",
+  });
+
+  return sendEmail({
+    to: email,
+    subject,
+    text:
+      `${content}\n\nUse this secure magic link to view your account: ${magicLoginUrl}\n\n` +
+      "This link expires in 24 hours.\n\n" +
+      `Support: ${config.email.supportEmail}`,
+    html: emailTemplate({
+      title: "Access updated",
+      subtitle: `Your manually granted free ${config.appName} access has changed.`,
+      content,
+      contentHtml: `
+        <p style="margin:0 0 18px;">Hi ${escapeHtml(recipientName)},</p>
+        <p style="margin:0 0 18px;">A quick heads-up: your manually granted free access to <strong>${escapeHtml(
+          config.appName
+        )}</strong> has been revoked.</p>
+        <p style="margin:0 0 18px;">The free-access override on your account is no longer active.</p>
+        <ul style="margin:0 0 20px 22px; padding:0;">
+          <li style="margin:0 0 8px;">Paid access, if you have it, is unchanged.</li>
+          <li style="margin:0 0 8px;">Admin access, if applicable, is unchanged.</li>
+          <li style="margin:0;">If this was unexpected, support can help sort it out.</li>
+        </ul>
+        <p style="margin:0 0 18px;">${escapeHtml(adminLine)}</p>
+        <p style="margin:0;">Thanks for being part of ${escapeHtml(config.appName)}.</p>
+      `,
+      ctaLabel: "View your account",
+      ctaUrl: magicLoginUrl,
+      footer:
+        `You're receiving this because an admin changed your free-access status for ${config.appName}. ` +
+        "This secure sign-in link expires in 24 hours.",
+    }),
+    from: config.email.fromSupport,
   });
 }
 

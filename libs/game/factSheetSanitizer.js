@@ -43,6 +43,21 @@ const uniqueList = (items = []) => {
   });
 };
 
+const coerceFactSheetList = (value) => {
+  if (Array.isArray(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    return value
+      .split("\n")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  return [];
+};
+
 const hasMemoryQualifier = (text = "") =>
   /\b(from memory|in memory|without the file|without my file|without reviewing|right now)\b/i.test(
     text
@@ -92,8 +107,8 @@ const normalizeLeadingFraming = (field, text = "") => {
     .replace(/^the other side is likely to argue that\s+/i, "")
     .replace(/^the other side may dispute\s+/i, "Whether ")
     .replace(/^whether whether\s+/i, "Whether ")
-    .replace(/^([A-Z][A-Za-z0-9&'. -]+?) says\s+that\s+/i, "")
-    .replace(/^([A-Z][A-Za-z0-9&'. -]+?) says\s+/i, "")
+    .replace(/^((?!Client\b)[A-Z][A-Za-z0-9&'. -]+?) says\s+that\s+/i, "")
+    .replace(/^((?!Client\b)[A-Z][A-Za-z0-9&'. -]+?) says\s+/i, "")
     .replace(/^([A-Z][A-Za-z0-9&'. -]+?)'s position is that\s+/i, "")
     .replace(/^([A-Z][A-Za-z0-9&'. -]+?)'s understanding is that\s+/i, "")
     .replace(/^([A-Z][A-Za-z0-9&'. -]+?) does not deny that\s+/i, "")
@@ -272,10 +287,13 @@ const rewriteFactSheetEntry = (field, value = "") => {
 };
 
 export const sanitizeFactSheetList = (field, items = []) =>
-  uniqueList((Array.isArray(items) ? items : []).map((item) => rewriteFactSheetEntry(field, item)));
+  uniqueList(coerceFactSheetList(items).map((item) => rewriteFactSheetEntry(field, item)));
 
 export const sanitizeFactSheet = (factSheet = {}) => ({
   ...factSheet,
+  summary: sanitizeFactSheetList("summary", factSheet.summary),
+  theory: sanitizeFactSheetList("theory", factSheet.theory),
+  desiredRelief: sanitizeFactSheetList("desiredRelief", factSheet.desiredRelief),
   timeline: sanitizeFactSheetList("timeline", factSheet.timeline),
   supportingFacts: sanitizeFactSheetList("supportingFacts", factSheet.supportingFacts),
   risks: sanitizeFactSheetList("risks", factSheet.risks),
