@@ -6,21 +6,7 @@ import clientPromise from "@/libs/mongo";
 const EMAIL_PROVIDER_ID = "email";
 const ONE_DAY_IN_SECONDS = 86400;
 
-const isLocalAuthUrl = (value = "") =>
-  /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?(?:\/|$)/i.test(value);
-
-const getAuthBaseUrl = () => {
-  const configuredUrl = (process.env.NEXTAUTH_URL || "").trim().replace(/\/$/, "");
-
-  if (
-    configuredUrl &&
-    (process.env.NODE_ENV === "development" || !isLocalAuthUrl(configuredUrl))
-  ) {
-    return configuredUrl;
-  }
-
-  return `https://${config.domainName}`;
-};
+const getAuthBaseUrl = () => `https://${config.domainName}`;
 
 const hashVerificationToken = (token) =>
   createHash("sha256")
