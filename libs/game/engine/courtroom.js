@@ -48,6 +48,13 @@ import {
   buildCanonicalWorldPacket,
   buildInterviewAgentContext,
 } from "./shared";
+import {
+  getCourtroomDifficultyProfile,
+  limitOpponentResponseForDifficulty,
+  normalizeCourtroomDeltasForDifficulty,
+  normalizePlayerPerspectiveVerdictLists,
+  normalizeVerdictForDifficulty,
+} from "../courtroomDifficulty";
 
 const PROOF_GAP_PATTERN =
   /\b(photo|photos|receipt|receipts|invoice|invoices|inspection|dated|document|documentation|record|records|log|logs|itemized|itemised|support|supported|proof)\b/i;
@@ -59,6 +66,21 @@ const DISCRETE_DAMAGE_PATTERN =
   /\b(broken|replacement|replace|fixture|blind|window latch|lock|door|cracked|hole|missing|damaged)\b/i;
 const SUBJECTIVE_CHARGE_PATTERN =
   /\b(cleaning|carpet|stain|wall marks?|paint|scuff|turnover|ordinary wear|routine)\b/i;
+
+const hasMeaningfulAdvocacyMove = ({
+  citedFacts = [],
+  citedRules = [],
+  citedClaims = [],
+  addressesRisk = false,
+  addressesDispute = false,
+  argument = "",
+}) =>
+  citedFacts.length > 0 ||
+  citedRules.length > 0 ||
+  citedClaims.length > 0 ||
+  addressesRisk ||
+  addressesDispute ||
+  String(argument || "").trim().length >= 180;
 
 const proofTextCorpus = (factSheet = {}) =>
   [
@@ -187,6 +209,7 @@ export const buildCourtroomAgentContext = ({
   const playerSide = getPlayerSide(caseSession);
   const opponentSide = getOpposingSide(playerSide);
   const proofStrategy = buildProofStrategyContext({ caseSession });
+  const difficultyProfile = getCourtroomDifficultyProfile(caseSession.complexity);
 
   return {
     shouldReturnVerdict,
@@ -225,6 +248,20 @@ export const buildCourtroomAgentContext = ({
       judgeProfile: caseSession.judgeProfile || null,
       recentCourtroomTranscript: caseSession.courtroomTranscript.slice(-6),
       proofStrategy,
+      courtroomCalibration: {
+        counselPosture: difficultyProfile.counselPosture,
+        scoringBounds: {
+          playerMinDelta: difficultyProfile.playerMinDelta,
+          playerMaxDelta: difficultyProfile.playerMaxDelta,
+          opponentMinDelta: difficultyProfile.opponentMinDelta,
+          opponentMaxDelta: difficultyProfile.opponentMaxDelta,
+        },
+        responseLimits: difficultyProfile.opponentResponseLimits,
+        closeCaseBand: difficultyProfile.verdictCloseCaseBand,
+        guidance: difficultyProfile.promptGuidance,
+        confidentiality:
+          "Never mention calibration, difficulty, complexity scaling, junior counsel, senior counsel, scoring bounds, or hidden tuning in player-facing text.",
+      },
     },
   };
 };
@@ -301,6 +338,12 @@ export const buildCourtroomFallback = ({ caseSession, argument, rules, template 
   const proofStrictness =
     typeof judgeProfile.proofStrictness === "number" ? judgeProfile.proofStrictness : 0.6;
   const proofStrategy = buildProofStrategyContext({ caseSession });
+  const difficultyProfile = getCourtroomDifficultyProfile(caseSession.complexity);
+  const adjustedProofStrictness = clamp(
+    proofStrictness + difficultyProfile.proofStrictnessOffset,
+    0.25,
+    0.95
+  );
 
   const addressesRisk = (caseSession.factSheet.risks || []).some((risk) =>
     risk
@@ -331,7 +374,7 @@ export const buildCourtroomFallback = ({ caseSession, argument, rules, template 
       (addressesRisk ? 2 : 0) +
       (addressesDispute ? 3 : 0) +
       (argument.length > 240 ? 2 : 0) +
-      (corroboratedHits > 0 ? Math.round(proofStrictness * 2) : 0) +
+      (corroboratedHits > 0 ? Math.round(adjustedProofStrictness * 2) : 0) +
       judgeVariance,
     4,
     20
@@ -352,11 +395,24 @@ export const buildCourtroomFallback = ({ caseSession, argument, rules, template 
       unresolvedDisputes * 3 +
       unresolvedRisks * 2 +
       (citedRules.length === 0 ? 2 : 0) +
-      (corroboratedHits === 0 ? Math.round(proofStrictness * 2) : 0) -
+      (corroboratedHits === 0 ? Math.round(adjustedProofStrictness * 2) : 0) -
       judgeVariance,
     4,
     18
   );
+  const normalizedDeltas = normalizeCourtroomDeltasForDifficulty({
+    playerDelta,
+    opponentDelta,
+    difficultyProfile,
+    hasPartialCredit: hasMeaningfulAdvocacyMove({
+      citedFacts,
+      citedRules,
+      citedClaims,
+      addressesRisk,
+      addressesDispute,
+      argument,
+    }),
+  });
 
   const templateFacts = safeTemplate.canonicalFacts || [];
   const pressureFact =
@@ -409,14 +465,14 @@ export const buildCourtroomFallback = ({ caseSession, argument, rules, template 
     proofStrategy.mode === "salvage"
       ? `The ${judgeProfile.label || "judge"} judge needs a decision-ready partial remedy tied to the strongest documented item, not repeated broad damage categories.`
       : 
-    playerDelta >= opponentDelta
+    normalizedDeltas.playerDelta >= normalizedDeltas.opponentDelta
       ? `The ${judgeProfile.label || "judge"} judge seems to trust arguments more when they rest on facts that were actually gathered and presented.`
       : `The ${judgeProfile.label || "judge"} judge appears concerned that the opposing side still has room to reframe the disputed record.`;
 
   return {
     opponentResponse,
-    playerDelta,
-    opponentDelta,
+    playerDelta: normalizedDeltas.playerDelta,
+    opponentDelta: normalizedDeltas.opponentDelta,
     citedFacts,
     citedRules,
     citedClaimIds: citedClaims.slice(0, 3),
@@ -462,6 +518,26 @@ export const buildVerdictFallback = ({ updatedScore, rules, factSheet, template,
   };
 };
 
+const normalizeVerdictForPlayerPerspective = ({
+  verdict,
+  playerStrengths,
+  playerWeaknesses,
+  fallbackVerdict,
+}) => {
+  const lists = normalizePlayerPerspectiveVerdictLists({
+    verdict,
+    playerStrengths,
+    playerWeaknesses,
+    fallbackVerdict,
+  });
+
+  return {
+    ...verdict,
+    highlights: lists.highlights,
+    concerns: lists.concerns,
+  };
+};
+
 export const normalizeCourtResult = ({
   aiResult,
   fallback,
@@ -475,6 +551,14 @@ export const normalizeCourtResult = ({
     aiResult: counselAnalysis,
     caseSession,
     rules,
+  });
+  const difficultyProfile = getCourtroomDifficultyProfile(caseSession.complexity);
+  const aiReturnedPlayerDelta = typeof aiResult.playerDelta === "number";
+  const aiReturnedOpponentDelta = typeof aiResult.opponentDelta === "number";
+  const hasPartialCredit = aiReturnedPlayerDelta && hasMeaningfulAdvocacyMove({
+    citedFacts: fallback.citedFacts,
+    citedRules: fallback.citedRules,
+    citedClaims: fallback.citedClaimIds,
   });
   const fallbackVerdict = shouldReturnVerdict
       ? buildVerdictFallback({
@@ -514,18 +598,18 @@ export const normalizeCourtResult = ({
   }
 
   const normalized = {
-    opponentResponse: normalizeOpponentResponse(
-      aiResult.opponentResponse,
-      fallback.opponentResponse
+    opponentResponse: limitOpponentResponseForDifficulty(
+      normalizeOpponentResponse(aiResult.opponentResponse, fallback.opponentResponse),
+      difficultyProfile
     ),
-    playerDelta:
-      typeof aiResult.playerDelta === "number"
-        ? clamp(aiResult.playerDelta, 1, 20)
-        : fallback.playerDelta,
-    opponentDelta:
-      typeof aiResult.opponentDelta === "number"
-        ? clamp(aiResult.opponentDelta, 1, 20)
-        : fallback.opponentDelta,
+    ...normalizeCourtroomDeltasForDifficulty({
+      playerDelta:
+        aiReturnedPlayerDelta ? aiResult.playerDelta : fallback.playerDelta,
+      opponentDelta:
+        aiReturnedOpponentDelta ? aiResult.opponentDelta : fallback.opponentDelta,
+      difficultyProfile,
+      hasPartialCredit,
+    }),
     citedFacts: Array.isArray(aiResult.citedFacts)
       ? aiResult.citedFacts
       : normalizedCounsel.citedFacts.length
@@ -561,20 +645,32 @@ export const normalizeCourtResult = ({
     };
   }
 
+  const normalizedUpdatedScore = {
+    player: caseSession.score.player + normalized.playerDelta,
+    opponent: caseSession.score.opponent + normalized.opponentDelta,
+    highlights: normalized.strengths,
+    weaknesses: normalized.weaknesses,
+  };
+  const normalizedFallbackVerdict = buildVerdictFallback({
+    updatedScore: normalizedUpdatedScore,
+    rules,
+    factSheet: caseSession.factSheet,
+    template,
+    playerSide: getPlayerSide(caseSession),
+  });
+
   return {
     ...normalized,
-    verdict:
-      aiResult.verdict && typeof aiResult.verdict === "object"
-        ? {
-            winner: aiResult.verdict.winner || fallbackVerdict?.winner || "draw",
-            summary: aiResult.verdict.summary || fallbackVerdict?.summary || "",
-            highlights: Array.isArray(aiResult.verdict.highlights)
-              ? aiResult.verdict.highlights
-              : fallbackVerdict?.highlights || [],
-            concerns: Array.isArray(aiResult.verdict.concerns)
-              ? aiResult.verdict.concerns
-              : fallbackVerdict?.concerns || [],
-          }
-        : fallbackVerdict,
+    verdict: normalizeVerdictForPlayerPerspective({
+      verdict: normalizeVerdictForDifficulty({
+      verdict: aiResult.verdict,
+      updatedScore: normalizedUpdatedScore,
+      fallbackVerdict: normalizedFallbackVerdict,
+      difficultyProfile,
+    }),
+      playerStrengths: normalized.strengths,
+      playerWeaknesses: normalized.weaknesses,
+      fallbackVerdict: normalizedFallbackVerdict,
+    }),
   };
 };

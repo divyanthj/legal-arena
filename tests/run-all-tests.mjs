@@ -3,6 +3,7 @@ await import("./run-case-template-rebalancer-tests.mjs");
 await import("./run-story-world-tests.mjs");
 await import("./run-fact-sheet-tests.mjs");
 await import("./run-case-assessment-tests.mjs");
+await import("./run-courtroom-difficulty-tests.mjs");
 await import("./run-template-builder-no-undef-tests.mjs");
 await import("./run-template-title-tests.mjs");
 await import("./run-lemonsqueezy-tests.mjs");

@@ -74,6 +74,11 @@ const userSchema = mongoose.Schema(
       enum: ["default", "generated"],
       default: "default",
     },
+    lastGameplayResetAt: {
+      type: Date,
+      default: null,
+      private: true,
+    },
     // Used in the Stripe webhook to identify the user in Stripe and later create Customer Portal or prefill user credit card details
     customerId: {
       type: String,

@@ -1,7 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import { toast } from "react-hot-toast";
+import apiClient from "@/libs/api";
 import {
   EmptyPanel,
   formatDate,
@@ -24,16 +27,33 @@ const getNextRatingMilestone = (rating = 1000) => {
   return milestones.find((value) => value > rating) || rating + 300;
 };
 
+const formatResetDateTime = (value) => {
+  if (!isValidDate(value)) {
+    return "";
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(value));
+};
+
 export default function PlayerProfileDossier({
   profile,
   viewerUserId = "",
 }) {
+  const router = useRouter();
   const { player, cases = [] } = profile;
   const normalizedCases = useMemo(() => cases.map(normalizeMatter), [cases]);
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [outcomeFilter, setOutcomeFilter] = useState("all");
   const [avatarPreview, setAvatarPreview] = useState("");
+  const [showResetDialog, setShowResetDialog] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   const categoryOptions = useMemo(
     () => getUniqueOptions(normalizedCases.map((caseSession) => caseSession.primaryCategory)),
@@ -95,6 +115,42 @@ export default function PlayerProfileDossier({
       ? Math.round(((player.wins || 0) / totalDecidedMatters) * 100)
       : 0;
   const canEditAvatar = String(viewerUserId || "") === String(player.id || "");
+  const resetAvailableAt = isValidDate(player.gameplayResetAvailableAt)
+    ? new Date(player.gameplayResetAvailableAt)
+    : null;
+  const lastResetLabel = formatResetDateTime(player.lastGameplayResetAt);
+  const nextResetLabel = formatResetDateTime(player.gameplayResetAvailableAt);
+  const resetCooldownActive =
+    Boolean(resetAvailableAt) && resetAvailableAt.getTime() > Date.now();
+  const resetCooldownLabel = resetCooldownActive
+    ? `Fresh Start opens again ${nextResetLabel || "soon"}.`
+    : "";
+
+  const openResetDialog = () => {
+    setShowResetDialog(true);
+  };
+
+  const handleResetProgress = async () => {
+    if (resetting || resetCooldownActive) {
+      if (resetCooldownActive) {
+        toast(resetCooldownLabel || "Fresh Start is cooling down.");
+      }
+      return;
+    }
+
+    setResetting(true);
+
+    try {
+      await apiClient.post("/players/reset");
+      toast.success("Clean slate ready. The arena is yours again.");
+      setShowResetDialog(false);
+      router.refresh();
+    } catch (error) {
+      toast.error(error?.message || "Could not reset your arena record.");
+    } finally {
+      setResetting(false);
+    }
+  };
 
   const handleAvatarChange = (event) => {
     const file = event.target.files?.[0];
@@ -137,6 +193,15 @@ export default function PlayerProfileDossier({
               <span className="badge badge-outline border-white/15 text-white/80">
                 Lawyer Dossier
               </span>
+              {canEditAvatar ? (
+                <button
+                  type="button"
+                  className="arena-btn-danger ml-auto hidden px-4 py-2 text-sm xl:inline-flex"
+                  onClick={openResetDialog}
+                >
+                  Fresh Start
+                </button>
+              ) : null}
             </div>
 
             <div className="mt-6 grid gap-6 xl:grid-cols-[220px_minmax(0,1fr)_460px]">
@@ -149,15 +214,24 @@ export default function PlayerProfileDossier({
                   />
                 </div>
                 {canEditAvatar ? (
-                  <label className="arena-btn-dark mt-5 flex cursor-pointer items-center justify-center px-4 py-3 text-sm">
-                    Upload Image
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={handleAvatarChange}
-                    />
-                  </label>
+                  <div className="mt-5 flex flex-col gap-2">
+                    <label className="arena-btn-dark flex cursor-pointer items-center justify-center px-4 py-3 text-sm">
+                      Upload Image
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleAvatarChange}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="arena-btn-danger flex items-center justify-center px-4 py-3 text-sm xl:hidden"
+                      onClick={openResetDialog}
+                    >
+                      Fresh Start
+                    </button>
+                  </div>
                 ) : null}
               </div>
 
@@ -435,6 +509,83 @@ export default function PlayerProfileDossier({
           </section>
         </div>
       </section>
+      {showResetDialog ? (
+        <dialog className="modal modal-open">
+          <div className="modal-box border border-rose-400/30 bg-[#170707] text-white shadow-2xl shadow-black/60">
+            <p className="arena-kicker text-rose-300">Fresh Start</p>
+            <h3 className="arena-headline mt-2 text-3xl uppercase">
+              {resetCooldownActive ? "Fresh Start is cooling down" : "Wipe the slate clean?"}
+            </h3>
+            {resetCooldownActive ? (
+              <div className="mt-4 space-y-3 text-sm leading-7 text-white/68">
+                <p>
+                  Your clean docket is still settling. Fresh Start can be used once every
+                  7 days.
+                </p>
+                <div className="arena-surface-soft grid gap-3 p-4 sm:grid-cols-2">
+                  <div>
+                    <p className="arena-kicker">Last Fresh Start</p>
+                    <p className="mt-2 font-semibold text-white">
+                      {lastResetLabel || "Recently"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="arena-kicker">Next Fresh Start</p>
+                    <p className="mt-2 font-semibold text-white">
+                      {nextResetLabel || "Soon"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <p className="mt-4 text-sm leading-7 text-white/68">
+                This clears your case history, transcripts, wins, losses, rating progress,
+                and cooldowns. Completed cases reopen, exited cases come back, and your
+                lawyer starts over with a clean docket.
+              </p>
+            )}
+            <div className="modal-action flex flex-wrap gap-3">
+              {resetCooldownActive ? (
+                <button
+                  type="button"
+                  className="arena-btn-dark px-5 py-3"
+                  onClick={() => setShowResetDialog(false)}
+                >
+                  Okay..
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="arena-btn-dark px-5 py-3"
+                    disabled={resetting}
+                    onClick={() => setShowResetDialog(false)}
+                  >
+                    Keep My Record
+                  </button>
+                  <button
+                    type="button"
+                    className="arena-btn-danger px-5 py-3"
+                    disabled={resetting}
+                    onClick={handleResetProgress}
+                  >
+                    {resetting ? "Resetting..." : "Yes, Start Fresh"}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+          <form method="dialog" className="modal-backdrop">
+            <button
+              type="button"
+              disabled={resetting}
+              onClick={() => setShowResetDialog(false)}
+            >
+              close
+            </button>
+          </form>
+        </dialog>
+      ) : null}
     </main>
   );
 }

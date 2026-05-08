@@ -30,7 +30,6 @@ import { ensureStoredLawyerProfileSummary } from "./profileSummary";
 
 const toPlain = (doc) => (doc?.toJSON ? doc.toJSON() : doc);
 const CASE_EXIT_COOLDOWN_MS = 24 * 60 * 60 * 1000;
-const CASE_COMPLETION_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
 const DEFAULT_PLAYER_SIDE = "client";
 const OPPOSING_SIDE = {
   client: "opponent",
@@ -299,42 +298,24 @@ const getActiveExitCooldowns = async (userId) => {
 };
 
 const getActiveCompletedCooldowns = async (userId) => {
-  const threshold = new Date(Date.now() - CASE_COMPLETION_COOLDOWN_MS);
   const completedSessions = await CaseSession.find({
     userId,
     status: "verdict",
-    $or: [
-      { completedAt: { $gte: threshold } },
-      {
-        completedAt: null,
-        updatedAt: { $gte: threshold },
-      },
-    ],
   })
-    .select("caseTemplateId completedAt updatedAt")
+    .select("caseTemplateId")
     .sort({ updatedAt: -1 });
 
-  const cooldowns = new Map();
+  const completedTemplateLocks = new Map();
 
   completedSessions.forEach((session) => {
     const templateId = String(session.caseTemplateId);
-    const completedAt = session.completedAt || session.updatedAt;
 
-    if (!completedAt) {
-      return;
-    }
-
-    const cooldownEndsAt = new Date(
-      new Date(completedAt).getTime() + CASE_COMPLETION_COOLDOWN_MS
-    );
-    const current = cooldowns.get(templateId);
-
-    if (!current || cooldownEndsAt > current) {
-      cooldowns.set(templateId, cooldownEndsAt);
+    if (templateId) {
+      completedTemplateLocks.set(templateId, true);
     }
   });
 
-  return cooldowns;
+  return completedTemplateLocks;
 };
 
 const getTemplateAvailability = ({
@@ -349,19 +330,16 @@ const getTemplateAvailability = ({
   );
   const now = new Date();
   const exitCooldownActive = exitCooldownEndsAt && exitCooldownEndsAt > now;
-  const completionCooldownActive =
-    completionCooldownEndsAt && completionCooldownEndsAt > now;
+  const completionLockActive = Boolean(completionCooldownEndsAt);
   const unlockedByProgression = template.complexity <= eligibleComplexity;
 
-  if (completionCooldownActive) {
+  if (completionLockActive) {
     return {
       visible: false,
       unlocked: false,
-      cooldownEndsAt: completionCooldownEndsAt,
-      unlockReason: "Available again soon.",
-      blockReason: `This case is locked until ${formatCooldownEndsAt(
-        completionCooldownEndsAt
-      )}.`,
+      cooldownEndsAt: null,
+      unlockReason: "Case completed.",
+      blockReason: "This case has already been completed.",
     };
   }
 
@@ -881,6 +859,15 @@ export const getPublicPlayerProfile = async (playerId) => {
       ...buildPublicLeaderboardEntry(hydratedUser),
       joinedAt: hydratedUser.createdAt,
       updatedAt: hydratedUser.updatedAt,
+      lastGameplayResetAt: hydratedUser.lastGameplayResetAt
+        ? new Date(hydratedUser.lastGameplayResetAt).toISOString()
+        : null,
+      gameplayResetAvailableAt: hydratedUser.lastGameplayResetAt
+        ? new Date(
+            new Date(hydratedUser.lastGameplayResetAt).getTime() +
+              7 * 24 * 60 * 60 * 1000
+          ).toISOString()
+        : null,
       lawyerProfileSummary,
       categoryStats: normalizeProgression(hydratedUser.progression).categoryStats,
     },
