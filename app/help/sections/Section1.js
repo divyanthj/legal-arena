@@ -7,7 +7,7 @@ export default function Section1({ id }) {
       <p className="arena-kicker">01</p>
       <h2 className="arena-headline mt-2 text-3xl">{`Getting Started`}</h2>
       <p className="mt-4 text-base leading-8 text-white/72">
-        {`Legal Arena is a courtroom training game built around one repeatable loop: choose a dispute, interview your side, build a usable fact sheet, and then argue the matter in open text against AI-powered opposing counsel.`}
+        {`Legal Arena is an online lawyer game built around one repeatable loop: choose a dispute, interview your side, build a usable fact sheet, and then argue the matter in open text against AI-powered opposing counsel.`}
       </p>
       <p className="mt-5 text-base leading-8 text-white/72">
         {`If you are opening the app for the first time, this section will help you understand what each stage is for and how to get into a case quickly without wasting early turns.`}
@@ -47,7 +47,11 @@ export default function Section1({ id }) {
         </span>
       </div>
       <p className="mt-5 text-base leading-8 text-white/72">
-        {`Once you start a case, the game moves into intake mode. That stage is where strong runs are usually won or lost.`}
+        {`If you want the quick game-focused overview before reading the full manual, start with the `}
+        <Link href="/lawyer-game" className="text-white underline underline-offset-4">
+          lawyer game page
+        </Link>
+        {`. Once you start a case, the game moves into intake mode. That stage is where strong runs are usually won or lost.`}
       </p>
       </div>
     </section>

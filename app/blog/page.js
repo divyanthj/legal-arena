@@ -5,9 +5,9 @@ import config from "@/config";
 import { getSEOTags } from "@/libs/seo";
 
 export const metadata = getSEOTags({
-  title: `${config.appName} Blog | Stripe Chargeback Protection`,
+  title: `${config.appName} Blog | Lawyer Game & Courtroom Strategy`,
   description:
-    "Learn how to prevent chargebacks, how to accept payments online, and keep your Stripe account in good standing",
+    "Articles about lawyer games, AI courtroom simulations, case-building, and argument strategy in Legal Arena.",
   canonicalUrlRelative: "/blog",
 });
 
@@ -22,8 +22,8 @@ export default async function Blog() {
           The {config.appName} Blog
         </h1>
         <p className="text-lg opacity-80 leading-relaxed">
-          Learn how to ship your startup in days, not weeks. And get the latest
-          updates about the boilerplate
+          Read about online lawyer games, courtroom simulation, case-building,
+          and argument strategy.
         </p>
       </section>
 

@@ -3,6 +3,13 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/libs/next-auth";
 import config from "@/config";
 
+export const metadata = {
+  robots: {
+    index: false,
+    follow: false,
+  },
+};
+
 // This is a server-side component to ensure the user is logged in.
 // If not, it will redirect to the login page.
 // It's applied to all subpages of /dashboard in /app/dashboard/*** pages

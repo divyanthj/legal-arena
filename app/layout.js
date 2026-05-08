@@ -30,6 +30,40 @@ export const viewport = {
 // You can override them in each page passing params to getSOTags() function.
 export const metadata = getSEOTags();
 
+const websiteSchema = {
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  name: config.appName,
+  alternateName: ["Legal Arena lawyer game", "AI courtroom game"],
+  url: `https://${config.domainName}/`,
+  description: config.appDescription,
+};
+
+const webApplicationSchema = {
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  name: config.appName,
+  url: `https://${config.domainName}/`,
+  description:
+    "Legal Arena is an online lawyer game and AI courtroom simulator where players interview clients, build fact sheets, argue cases, and receive rulings.",
+  applicationCategory: "GameApplication",
+  operatingSystem: "Web",
+  browserRequirements: "Requires a modern web browser.",
+  isAccessibleForFree: true,
+  offers: {
+    "@type": "Offer",
+    name: "Early Access",
+    price: "9.99",
+    priceCurrency: "USD",
+    availability: "https://schema.org/InStock",
+  },
+  publisher: {
+    "@type": "Organization",
+    name: config.appName,
+    url: `https://${config.domainName}/`,
+  },
+};
+
 export default function RootLayout({ children }) {
   return (
     <html
@@ -40,6 +74,16 @@ export default function RootLayout({ children }) {
       {config.domainName && (
         <head>
           <PlausibleProvider domain={config.domainName} />
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }}
+          />
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{
+              __html: JSON.stringify(webApplicationSchema),
+            }}
+          />
           <Script
             defer
             data-website-id="dfid_jj19izF8dJN5YpCrXoA2G"

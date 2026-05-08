@@ -13,7 +13,8 @@ export default function HelpPage() {
           </h1>
           <p className="mt-4 max-w-3xl text-sm leading-7 text-white/66 md:text-base">
             A practical guide to choosing disputes, building stronger fact sheets, and turning
-            better intake work into better courtroom outcomes.
+            better intake work into better courtroom outcomes. New players can also start with
+            the lawyer game overview for the shortest path into play.
           </p>
         </div>
       </section>

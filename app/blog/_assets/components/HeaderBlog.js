@@ -12,14 +12,16 @@ import ButtonSignin from "@/components/ButtonSignin";
 
 const links = [
   {
+    href: "/lawyer-game",
+    label: "Lawyer Game",
+  },
+  {
     href: "/blog/",
     label: "All Posts",
   },
 ];
 
-const cta = (
-  <ButtonSignin text="Prevent disputes" extraStyle="btn-primary md:btn-sm" />
-);
+const cta = <ButtonSignin text="Start playing" extraStyle="btn-primary md:btn-sm" />;
 
 const ButtonPopoverCategories = () => {
   return (

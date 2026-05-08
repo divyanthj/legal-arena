@@ -3,10 +3,33 @@ import Image from "next/image";
 import connectMongo from "@/libs/mongoose";
 import CaseTemplate from "@/models/CaseTemplate";
 import { getCategoryTitle } from "@/libs/game/categories";
+import { getSEOTags } from "@/libs/seo";
+import config from "@/config";
 
 export const dynamic = "force-dynamic";
 
+export const metadata = getSEOTags({
+  title: "Legal Arena | Online Lawyer Game & AI Courtroom Simulator",
+  description:
+    "Play an online lawyer game where you interview clients, build fact sheets, argue courtroom cases against AI, and get a ruling.",
+  keywords: [
+    "lawyer game",
+    "online lawyer game",
+    "courtroom game",
+    "AI courtroom simulator",
+    "legal simulation game",
+    "law game",
+  ],
+  canonicalUrlRelative: "/",
+  openGraph: {
+    title: "Legal Arena | Online Lawyer Game & AI Courtroom Simulator",
+    description:
+      "Play courtroom cases against AI: interview your client, build the facts, argue your case, and see how the judge rules.",
+  },
+});
+
 const navItems = [
+  { label: "Lawyer Game", href: "/lawyer-game" },
   { label: "How It Works", href: "#how-it-works" },
   { label: "Features", href: "#features" },
   { label: "Case Library", href: "#case-library" },
@@ -257,9 +280,30 @@ export default async function Page() {
   );
   const totalCasesLabel =
     totalActiveCases > 0 ? totalActiveCases.toLocaleString("en-US") : "Growing";
+  const homepageSchema = {
+    "@context": "https://schema.org",
+    "@type": "VideoGame",
+    name: config.appName,
+    url: `https://${config.domainName}/`,
+    description:
+      "Legal Arena is an online lawyer game and AI courtroom simulator where players interview clients, build fact sheets, argue cases, and receive rulings.",
+    gamePlatform: "Web browser",
+    genre: ["Courtroom game", "Legal simulation game", "Educational game"],
+    applicationCategory: "GameApplication",
+    audience: {
+      "@type": "Audience",
+      audienceType:
+        "People interested in law, courtroom drama, legal shows, debate, and legal reasoning.",
+    },
+    isAccessibleForFree: true,
+  };
 
   return (
     <main className="arena-landing min-h-screen overflow-hidden bg-[#020202] text-white">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(homepageSchema) }}
+      />
       <header className="sticky top-0 z-40 border-b border-white/10 bg-black/80 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 md:px-8">
           <Link href="/" className="inline-flex items-center gap-3" aria-label="Legal Arena home">
@@ -302,16 +346,16 @@ export default async function Page() {
         <div className="mx-auto max-w-7xl px-5 pb-12 pt-10 md:px-8 md:pb-16 md:pt-16">
           <div className="grid items-start gap-12 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
             <div className="max-w-2xl">
-              <p className="arena-kicker">A playable legal practice arena for future lawyers</p>
+              <p className="arena-kicker">Online lawyer game with AI courtroom cases</p>
               <h1 className="arena-headline mt-6 text-6xl uppercase leading-[0.9] md:text-7xl xl:text-[6.4rem]">
-                Argue.
+                Play.
                 <br />
-                Adapt.
+                Argue.
                 <br />
                 Win.
               </h1>
               <p className="mt-6 max-w-xl text-lg leading-8 text-white/72 md:text-2xl md:leading-10">
-                Interview your party, build a fact sheet, argue against AI opposing counsel, and learn from the bench signals that decide each matter.
+                Step into a lawyer game where you interview your client, build the fact sheet, argue against AI opposing counsel, and see how the judge rules.
               </p>
 
               <div className="mt-8 flex flex-wrap items-center gap-4">
@@ -319,7 +363,7 @@ export default async function Page() {
                   href="/dashboard"
                   className="rounded-2xl bg-white px-6 py-4 text-sm font-semibold text-black transition hover:bg-white/90"
                 >
-                  Start Your First Case
+                  Play Your First Case
                 </Link>
                 <a
                   href="#how-it-works"
@@ -455,13 +499,13 @@ export default async function Page() {
         <div className="grid gap-10 xl:grid-cols-[minmax(0,0.86fr)_minmax(0,1.14fr)] xl:items-start">
           <div className="xl:pr-6">
             <p className="text-sm font-semibold uppercase tracking-[0.3em] text-white/45">
-              A game that builds real skills
+              A lawyer game that builds real skills
             </p>
             <h2 className="arena-headline mt-5 max-w-lg text-4xl uppercase leading-[0.92] md:text-[4.25rem]">
-              Train like court is tomorrow.
+              Play like court is tomorrow.
             </h2>
             <p className="mt-6 max-w-lg text-lg leading-8 text-white/66">
-              Legal Arena turns learning law into an active routine: analyze the record, build your case, argue under pressure, then run it back stronger.
+              Legal Arena turns courtroom drama into an active browser game: analyze the record, build your case, argue under pressure, then run it back stronger.
             </p>
             <div className="mt-8 max-w-md space-y-4">
               {skillPoints.map((point) => (
@@ -474,10 +518,10 @@ export default async function Page() {
               ))}
             </div>
             <Link
-              href="/dashboard"
+              href="/lawyer-game"
               className="mt-10 inline-flex rounded-2xl border border-white/15 bg-white/5 px-5 py-4 text-sm font-semibold text-white transition hover:bg-white/10"
             >
-              Explore Features
+              Explore the Lawyer Game
             </Link>
           </div>
 
@@ -603,8 +647,8 @@ export default async function Page() {
       </section>
 
       <section className="mx-auto max-w-7xl px-5 py-16 md:px-8 md:py-20">
-        <p className="text-center text-sm font-semibold uppercase tracking-[0.28em] text-white/45">
-          What You Actually Practice
+          <p className="text-center text-sm font-semibold uppercase tracking-[0.28em] text-white/45">
+          What You Actually Play
         </p>
         <div className="mt-12 grid gap-5 lg:grid-cols-3">
           {practiceCards.map((item, index) => {
@@ -653,7 +697,7 @@ export default async function Page() {
             Ready to step into the arena?
           </p>
           <h2 className="arena-headline mx-auto mt-5 max-w-4xl text-4xl uppercase md:text-6xl">
-            Start your first case today.
+            Play your first case today.
           </h2>
           <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-white/62">
             Build your argument, face the AI, and see whether your reasoning actually holds when someone pushes back.

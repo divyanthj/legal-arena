@@ -28,7 +28,7 @@ const Footer = () => {
             </Link>
 
             <p className="mt-3 text-sm text-white/70">
-              Argue cases against AI in a courtroom battle of facts, law, and strategy.
+              Play an online lawyer game where cases turn on facts, law, and strategy.
             </p>
             <p className="mt-3 text-sm text-white/40">
               Copyright © {new Date().getFullYear()} {config.appName}. All rights reserved.
@@ -42,6 +42,9 @@ const Footer = () => {
               </div>
 
               <div className="mb-10 flex flex-col items-center justify-center gap-2 text-sm md:items-start">
+                <Link href="/lawyer-game" className="text-white/72 transition hover:text-white">
+                  Lawyer Game
+                </Link>
                 <Link href="/faq" className="text-white/72 transition hover:text-white">
                   FAQ
                 </Link>

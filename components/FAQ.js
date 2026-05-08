@@ -5,6 +5,51 @@ import Link from "next/link";
 
 export const faqList = [
   {
+    question: "Is Legal Arena a lawyer game?",
+    answer: (
+      <div className="space-y-2 leading-relaxed">
+        <p>
+          Yes. Legal Arena is an online lawyer game where you interview a client,
+          build a fact sheet, argue against AI opposing counsel, and receive a
+          ruling from the judge.
+        </p>
+        <p>
+          If you want the game-focused overview, start with the{" "}
+          <Link href="/lawyer-game" className="link link-primary">
+            lawyer game page
+          </Link>
+          .
+        </p>
+      </div>
+    ),
+  },
+  {
+    question: "Do I need legal experience to play?",
+    answer: (
+      <div className="space-y-2 leading-relaxed">
+        <p>
+          No. Legal Arena is built for people interested in law, courtroom drama,
+          legal shows, debate, and strategic argument.
+        </p>
+        <p>
+          Law students and lawyers can use it for practice, but curious players
+          can still play by reading the case file and lawbook for each matter.
+        </p>
+      </div>
+    ),
+  },
+  {
+    question: "Is Legal Arena legal advice?",
+    answer: (
+      <div className="space-y-2 leading-relaxed">
+        <p>
+          No. Legal Arena is a game and training simulator. It is not a lawyer,
+          law firm, legal advice service, or substitute for hiring an attorney.
+        </p>
+      </div>
+    ),
+  },
+  {
     question: "How does Legal Arena actually work?",
     answer: (
       <div className="space-y-2 leading-relaxed">

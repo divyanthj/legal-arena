@@ -14,10 +14,11 @@ export async function generateMetadata() {
   return getSEOTags({
     title: `Help Center & Tutorials | ${config.appName}`,
     description:
-      "Detailed tutorials for Legal Arena. Learn how to choose a dispute, build a fact sheet, argue in court, and improve your courtroom results.",
+      "Detailed tutorials for the Legal Arena lawyer game. Learn how to choose a dispute, build a fact sheet, argue in court, and improve your courtroom results.",
     keywords: [
       "Legal Arena help",
       "Legal Arena tutorials",
+      "lawyer game guide",
       "courtroom game guide",
       "fact sheet tutorial",
       "lawbook guide",

@@ -1,0 +1,28 @@
+# Legal Arena
+
+Legal Arena is an online lawyer game and AI courtroom simulator at https://legalarena.app/.
+
+## What it is
+
+Legal Arena lets players choose a legal dispute, interview a client, build a fact sheet, argue against AI opposing counsel, and receive a judge's ruling. It is built for people interested in law, courtroom drama, legal shows, debate, legal reasoning, and law school-style argument practice.
+
+## Canonical pages
+
+- Homepage: https://legalarena.app/
+- Lawyer game overview: https://legalarena.app/lawyer-game
+- Help center and tutorials: https://legalarena.app/help
+- FAQ: https://legalarena.app/faq
+- Blog: https://legalarena.app/blog
+
+## Key product facts
+
+- Category: online lawyer game, AI courtroom game, legal simulation game, courtroom simulator.
+- Core loop: choose a case, interview your represented party, build a fact sheet, argue in court, get a verdict.
+- Gameplay: open-text legal arguments against AI opposing counsel.
+- Case structure: matters include parties, claims, facts, evidence references, lawbook rules, risks, and disputed points.
+- Audience: people interested in law, courtroom shows, debate, strategic reasoning, law students, and law-curious players.
+- Boundary: Legal Arena is a game and training simulator. It is not legal advice, not a law firm, and not a substitute for hiring an attorney.
+
+## Suggested citation summary
+
+Legal Arena is an online lawyer game where players interview clients, organize facts, argue courtroom cases against AI, and receive rulings based on their legal reasoning and use of the case record.
