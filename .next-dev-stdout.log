@@ -1,0 +1,153 @@
+
+> ship-fast-code@0.1.0 dev
+> next dev
+
+  ▲ Next.js 14.2.35
+  - Local:        http://localhost:3000
+  - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 1153ms
+ ○ Compiling / ...
+
+🌼   [35mdaisyUI[39m [2m4.10.1[22m
+├─ [32m✔︎[39m 3 themes added[2m		https://daisyui.com/docs/themes[22m
+╰─ [32m❤︎[39m [0mSupport daisyUI project:[0m	[2mhttps://opencollective.com/daisyui[22m
+
+ ✓ Compiled / in 2.2s (766 modules)
+ ✓ Compiled in 258ms (350 modules)
+ GET / 200 in 3578ms
+ GET / 200 in 236ms
+ GET / 200 in 369ms
+ GET / 200 in 558ms
+ GET / 200 in 338ms
+ GET / 200 in 325ms
+ ✓ Compiled /api/auth/[...nextauth] in 133ms (421 modules)
+ ✓ Compiled (913 modules)
+ GET /?cachebust=codex 200 in 417ms
+ ✓ Compiled /_not-found in 131ms (728 modules)
+ GET / 404 in 212ms
+ GET /_next/static/css/app/layout.css?v=1778251248712 404 in 50ms
+ GET /_next/static/chunks/app-pages-internals.js 404 in 37ms
+ GET /_next/static/chunks/main-app.js?v=1778251248712 404 in 38ms
+ GET /_next/static/chunks/app/error.js 404 in 37ms
+ GET /_next/static/chunks/app/not-found.js 404 in 37ms
+ GET /_next/static/chunks/app/layout.js 404 in 37ms
+ ✓ Compiled /favicon.ico in 44ms (423 modules)
+ GET /favicon.ico 200 in 75ms
+ GET / 200 in 344ms
+ GET /_next/static/css/app/layout.css?v=1778251251998 404 in 20ms
+ GET /_next/static/chunks/main-app.js?v=1778251251998 404 in 42ms
+ GET /_next/static/chunks/app-pages-internals.js 404 in 42ms
+ GET /_next/static/chunks/app/layout.js 404 in 17ms
+ GET /_next/static/chunks/app/error.js 404 in 35ms
+ GET /_next/static/chunks/app/not-found.js 404 in 35ms
+ GET / 200 in 365ms
+ GET /_next/static/media/icon.ba81cf86.png 404 in 14ms
+ GET /_next/static/css/app/layout.css?v=1778251264807 404 in 18ms
+ GET /_next/static/chunks/main-app.js?v=1778251264807 404 in 59ms
+ GET /_next/static/chunks/app/layout.js 404 in 59ms
+ GET /_next/static/chunks/app/error.js 404 in 58ms
+ GET /_next/static/chunks/app/not-found.js 404 in 57ms
+ GET /_next/static/chunks/app-pages-internals.js 404 in 59ms
+ GET /favicon.ico 200 in 5ms
+
+🌼   [35mdaisyUI[39m [2m4.10.1[22m
+├─ [32m✔︎[39m 3 themes added[2m		https://daisyui.com/docs/themes[22m
+╰─ [32m★[39m [0mStar daisyUI on GitHub[0m	[2mhttps://github.com/saadeghi/daisyui[22m
+
+ ✓ Compiled in 478ms (774 modules)
+ ○ Compiling /_error ...
+ ✓ Compiled /_error in 528ms (954 modules)
+ GET / 404 in 993ms
+ GET / 200 in 331ms
+ GET /_next/static/css/app/layout.css?v=1778251342104 404 in 41ms
+ GET /_next/static/chunks/main-app.js?v=1778251342104 404 in 40ms
+ GET /_next/static/chunks/app/layout.js 404 in 39ms
+ GET /_next/static/chunks/app-pages-internals.js 404 in 39ms
+ GET /_next/static/chunks/app/error.js 404 in 20ms
+ GET /_next/static/chunks/app/not-found.js 404 in 21ms
+ GET / 200 in 359ms
+ ✓ Compiled in 127ms (537 modules)
+ ✓ Compiled in 104ms (537 modules)
+ ✓ Compiled in 98ms (537 modules)
+
+🌼   [35mdaisyUI[39m [2m4.10.1[22m
+├─ [32m✔︎[39m 3 themes added[2m		https://daisyui.com/docs/themes[22m
+╰─ [32m❤︎[39m [0mSupport daisyUI project:[0m	[2mhttps://opencollective.com/daisyui[22m
+
+ ✓ Compiled in 320ms (586 modules)
+ ✓ Compiled /lawyer-game in 198ms (948 modules)
+ GET /lawyer-game 200 in 300ms
+ ✓ Compiled / in 123ms (429 modules)
+ GET / 500 in 370ms
+ GET / 500 in 221ms
+ GET / 500 in 218ms
+ GET / 500 in 216ms
+ GET / 500 in 220ms
+ GET / 500 in 227ms
+ GET / 500 in 226ms
+ GET / 500 in 50ms
+ ✓ Compiled /api/auth/[...nextauth] in 241ms (923 modules)
+ POST /api/auth/signin/google 302 in 455ms
+ GET /api/auth/callback/google?state=Yfvj_PE9dwy0-vmu9ZMFR9XxtO_vUWvBb0JqwRiJekU&iss=https%3A%2F%2Faccounts.google.com&code=4%2F0AeoWuM8UDqXUADIO9pU9Xybl9ubcsCbl4H0hDSm8ZOUBB-ntb7sNgDuV8j5-adXLCgb3XA&scope=email+profile+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fuserinfo.email+https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fuserinfo.profile+openid&authuser=0&prompt=none 302 in 644ms
+ ○ Compiling /dashboard ...
+ ✓ Compiled /dashboard in 778ms (1748 modules)
+ GET /dashboard 200 in 5765ms
+ GET /api/auth/session 200 in 44ms
+ GET /api/auth/session 200 in 61ms
+ ✓ Compiled /api/auth/session-status in 130ms (1138 modules)
+ GET /api/auth/session-status 200 in 240ms
+ ✓ Compiled /dashboard/cases/[caseId] in 250ms (1772 modules)
+ GET /dashboard/cases/the-deposit-fight-c72f30?_rsc=1xugz 200 in 252ms
+ GET /api/auth/session-status 200 in 81ms
+ ✓ Compiled /api/transcribe in 104ms (1149 modules)
+ POST /api/transcribe 200 in 2254ms
+ ✓ Compiled /api/cases/[caseId]/interview in 198ms (1159 modules)
+ POST /api/cases/the-deposit-fight-c72f30/interview 200 in 40665ms
+ POST /api/transcribe 200 in 4973ms
+ POST /api/cases/the-deposit-fight-c72f30/interview 200 in 25703ms
+ POST /api/transcribe 200 in 2858ms
+ POST /api/cases/the-deposit-fight-c72f30/interview 200 in 20397ms
+ POST /api/transcribe 200 in 1147ms
+ POST /api/cases/the-deposit-fight-c72f30/interview 200 in 17132ms
+ POST /api/transcribe 200 in 1377ms
+ POST /api/cases/the-deposit-fight-c72f30/interview 200 in 29738ms
+ POST /api/transcribe 200 in 2988ms
+ POST /api/cases/the-deposit-fight-c72f30/interview 200 in 23596ms
+ POST /api/transcribe 200 in 1862ms
+ POST /api/cases/the-deposit-fight-c72f30/interview 200 in 21324ms
+ POST /api/transcribe 200 in 1839ms
+ POST /api/cases/the-deposit-fight-c72f30/interview 200 in 21872ms
+ GET /api/auth/session 200 in 39ms
+ GET /api/auth/session 200 in 33ms
+ POST /api/transcribe 200 in 1263ms
+ GET /api/auth/session 200 in 32ms
+ ✓ Compiled in 132ms (1144 modules)
+ ✓ Compiled /api/cases/[caseId]/interview in 87ms (1154 modules)
+ GET /dashboard/cases/the-deposit-fight-c72f30?_rsc=2fqr0 200 in 367ms
+ ✓ Compiled in 88ms (1154 modules)
+ GET /dashboard/cases/the-deposit-fight-c72f30?_rsc=2fqr0 200 in 371ms
+ POST /api/cases/the-deposit-fight-c72f30/interview 200 in 28872ms
+ GET /api/auth/session 200 in 44ms
+ ✓ Compiled in 100ms (1152 modules)
+ GET /dashboard/cases/the-deposit-fight-c72f30?_rsc=2fqr0 200 in 457ms
+ GET /api/auth/session 500 in 556ms
+ POST /api/auth/_log 500 in 8ms
+ ✓ Compiled /_not-found in 138ms (1117 modules)
+ GET /dashboard/cases/the-deposit-fight-c72f30 500 in 358ms
+ GET /dashboard/cases/the-deposit-fight-c72f30?_rsc=2fqr0 200 in 210ms
+ GET /_next/static/chunks/fallback/webpack.js 500 in 223ms
+ GET /_next/static/chunks/fallback/react-refresh.js 500 in 223ms
+ GET /_next/static/chunks/fallback/main.js 500 in 222ms
+ GET /_next/static/chunks/fallback/pages/_app.js 500 in 220ms
+ GET /_next/static/chunks/fallback/pages/_error.js 500 in 219ms
+ ✓ Compiled /favicon.ico in 110ms (1149 modules)
+ GET /favicon.ico 200 in 138ms
+ GET /dashboard/cases/the-deposit-fight-c72f30 500 in 346ms
+ GET /dashboard/cases/the-deposit-fight-c72f30 500 in 353ms
+ GET /dashboard/cases/the-deposit-fight-c72f30 500 in 349ms
+ GET /dashboard/cases/the-deposit-fight-c72f30 500 in 349ms
+ GET /dashboard/cases/the-deposit-fight-c72f30 500 in 350ms
+ GET /dashboard/cases/the-deposit-fight-c72f30 500 in 357ms
+ GET /dashboard/cases/the-deposit-fight-c72f30 200 in 999ms

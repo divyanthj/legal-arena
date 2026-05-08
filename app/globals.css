@@ -395,6 +395,30 @@ progress::-webkit-progress-value {
     animation: arena-typing-dot 1100ms ease-in-out infinite;
   }
 
+  .arena-voice-waveform {
+    --voice-level: 0;
+    display: inline-flex;
+    width: 2rem;
+    height: 1.35rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.18rem;
+  }
+
+  .arena-voice-waveform-bar {
+    --bar-level: 0;
+    width: 0.18rem;
+    height: calc(0.35rem + (var(--bar-level) * 0.9rem));
+    border-radius: 999px;
+    background: currentColor;
+    opacity: calc(0.42 + (var(--voice-level) * 0.58));
+    transform: scaleY(calc(0.9 + (var(--voice-level) * 0.12)));
+    transition:
+      height 80ms ease,
+      opacity 80ms ease,
+      transform 80ms ease;
+  }
+
   .help-prose {
     @apply max-w-none text-base text-base-content/80;
   }
@@ -568,6 +592,10 @@ progress::-webkit-progress-value {
   .arena-loading-bar,
   .arena-typing-dot {
     animation: none !important;
+  }
+
+  .arena-voice-waveform-bar {
+    transition: none !important;
   }
 
   .arena-progress-fill {

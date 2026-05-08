@@ -72,6 +72,27 @@ const TypingIndicator = ({ speaker }) => (
   </div>
 );
 
+const VoiceWaveform = ({ level = 0 }) => {
+  const normalizedLevel = Math.min(1, Math.max(0, Number(level) || 0));
+  const bars = [0.35, 0.65, 1, 0.8, 0.45];
+
+  return (
+    <span
+      className="arena-voice-waveform"
+      aria-hidden="true"
+      style={{ "--voice-level": normalizedLevel }}
+    >
+      {bars.map((weight, index) => (
+        <span
+          key={`${weight}-${index}`}
+          className="arena-voice-waveform-bar"
+          style={{ "--bar-level": normalizedLevel * weight }}
+        />
+      ))}
+    </span>
+  );
+};
+
 const SuccessChanceTooltip = ({ reasons, isInterview }) => (
   <div className="w-72 text-left text-sm leading-5">
     <p className="font-semibold text-white">Success chance factors</p>
@@ -109,8 +130,10 @@ export default function CaseWorkspace({ initialCase }) {
   const {
     recordingQuestion,
     transcribingQuestion,
+    questionAudioLevel,
     recordingArgument,
     transcribingArgument,
+    argumentAudioLevel,
     handleQuestionVoiceInput,
     handleArgumentVoiceInput,
   } = useCaseVoiceRecorder({ setQuestion, setArgument });
@@ -892,11 +915,14 @@ export default function CaseWorkspace({ initialCase }) {
                             />
                           </svg>
                         )}
+                        {recordingQuestion ? (
+                          <VoiceWaveform level={questionAudioLevel} />
+                        ) : null}
                         {recordingQuestion
-                          ? "Stop Voice Interview"
+                          ? "Stop Voice Input"
                           : transcribingQuestion
                           ? "Transcribing"
-                          : "Voice Interview"}
+                          : "Voice Input"}
                       </button>
                       <button
                         className="arena-btn-light px-6 py-3"
@@ -1179,6 +1205,9 @@ export default function CaseWorkspace({ initialCase }) {
                               />
                             </svg>
                           )}
+                          {recordingArgument ? (
+                            <VoiceWaveform level={argumentAudioLevel} />
+                          ) : null}
                           {recordingArgument
                             ? "Stop"
                             : transcribingArgument

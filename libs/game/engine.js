@@ -236,6 +236,8 @@ const buildConversationFactSheetPatch = async ({
           "Use bullets, not paragraphs.",
           "Prefer concise internal notes such as 'Client says...' or 'I still need...'.",
           "Do not state anything as proven unless the client actually said it or produced it.",
+          "If the client confirms a photo, record, invoice, receipt, document, witness, or other proof exists, was shown, was produced, or is in hand, put that note in corroboratedFacts.",
+          "If the client says proof does not exist, was not shown, cannot be provided, or still needs to be found, put that note in missingEvidence.",
           "Do not mention canonical truth, hidden facts, templates, schemas, or source of truth.",
           "Return only new or revised notes supported by the visible conversation.",
         ],
@@ -274,25 +276,85 @@ const buildConversationFactSheetPatch = async ({
       discoveredClaimIds: [],
       discoveredEvidenceIds: [],
     });
+    const proofPatch = buildConversationProofClassificationFallback({
+      latestQuestion,
+      latestAnswer,
+    });
+    const proofAlreadyClassified =
+      patch.corroboratedFacts.length || patch.missingEvidence.length;
+    const mergedPatch = normalizeFactSheetPatch({
+      ...patch,
+      corroboratedFacts: proofAlreadyClassified
+        ? patch.corroboratedFacts
+        : proofPatch.corroboratedFacts,
+      missingEvidence: proofAlreadyClassified
+        ? patch.missingEvidence
+        : proofPatch.missingEvidence,
+      sourceLinks:
+        patch.sourceLinks.length > 0 ? patch.sourceLinks : proofPatch.sourceLinks,
+    });
 
     if (
-      patch.summary.length ||
-      patch.theory.length ||
-      patch.desiredRelief.length ||
-      patch.timeline.length ||
-      patch.supportingFacts.length ||
-      patch.risks.length ||
-      patch.disputedFacts.length ||
-      patch.corroboratedFacts.length ||
-      patch.missingEvidence.length
+      mergedPatch.summary.length ||
+      mergedPatch.theory.length ||
+      mergedPatch.desiredRelief.length ||
+      mergedPatch.timeline.length ||
+      mergedPatch.supportingFacts.length ||
+      mergedPatch.risks.length ||
+      mergedPatch.disputedFacts.length ||
+      mergedPatch.corroboratedFacts.length ||
+      mergedPatch.missingEvidence.length
     ) {
-      return patch;
+      return mergedPatch;
     }
   } catch (error) {
     console.error("conversation fact sheet update failed", error);
   }
 
   return fallbackPatch;
+};
+
+const proofTermPattern =
+  /\b(proof|record|records|document|documents|photo|photos|picture|pictures|invoice|invoices|receipt|receipts|witness|witnesses|evidence|inspection|statement|statements|breakdown|itemized|itemised|ledger|email|emails|text|texts|message|messages)\b/i;
+const missingProofPattern =
+  /(^|\b)(no|nope|not really|never|none|without|do not|don't|does not|doesn't|did not|didn't|cannot|can't|could not|couldn't|missing|need to find|need to confirm|wasn't shown|were not shown|not shown|not provided|not produced|not in hand|do not remember|don't remember|not sure)\b/i;
+const confirmedProofPattern =
+  /(^|\b)(yes|yeah|yep|showed|shown|provided|produced|sent|shared|gave|received|kept|saved|attached|uploaded|photographed|documented|itemized|itemised|confirmed|in hand)\b/i;
+
+const buildConversationProofClassificationFallback = ({
+  latestQuestion,
+  latestAnswer,
+}) => {
+  const answer = String(latestAnswer || "").trim();
+  const question = String(latestQuestion || "").trim();
+  const lowerQuestion = question.toLowerCase();
+  const lowerAnswer = answer.toLowerCase();
+  const patch = {
+    corroboratedFacts: [],
+    sourceLinks: [],
+    missingEvidence: [],
+  };
+
+  if (!answer || !proofTermPattern.test(`${lowerQuestion} ${lowerAnswer}`)) {
+    return patch;
+  }
+
+  const answerShowsProofPossession =
+    /\b(have|has|had|hold|holds|held)\b/i.test(lowerAnswer) &&
+    proofTermPattern.test(lowerAnswer);
+
+  if (missingProofPattern.test(lowerAnswer)) {
+    patch.missingEvidence.push(`Proof gap: ${answer}`);
+  } else if (
+    confirmedProofPattern.test(lowerAnswer) ||
+    answerShowsProofPossession ||
+    proofTermPattern.test(lowerAnswer)
+  ) {
+    patch.corroboratedFacts.push(`Client points me to this proof: ${answer}`);
+    patch.sourceLinks.push("Client intake answer");
+  }
+
+  return patch;
 };
 
 const buildConversationFactSheetFallback = ({ latestQuestion, latestAnswer }) => {
@@ -327,11 +389,17 @@ const buildConversationFactSheetFallback = ({ latestQuestion, latestAnswer }) =>
     patch.desiredRelief.push(`Client says: ${answer}`);
   } else if (/\b(when|date|before|after|during|then|timeline|moved|signed|paid|sent)\b/i.test(lower)) {
     patch.timeline.push(`Client says: ${answer}`);
-  } else if (/\b(proof|record|document|photo|invoice|receipt|witness|evidence)\b/i.test(lower)) {
-    if (/\b(no|not|do not|don't|cannot|can't|missing|need to find|need to confirm)\b/i.test(lower)) {
+  } else if (proofTermPattern.test(lower)) {
+    const proofPatch = buildConversationProofClassificationFallback({
+      latestQuestion,
+      latestAnswer,
+    });
+
+    if (proofPatch.missingEvidence.length) {
       patch.missingEvidence.push(`I still need to pin down: ${answer}`);
-    } else {
+    } else if (proofPatch.corroboratedFacts.length) {
       patch.corroboratedFacts.push(`Client points me to this proof: ${answer}`);
+      patch.sourceLinks.push(...proofPatch.sourceLinks);
     }
   } else if (/\b(risk|worry|problem|weak|unsure|not sure|don't remember|do not remember)\b/i.test(lower)) {
     patch.risks.push(`Risk I heard from the client: ${answer}`);

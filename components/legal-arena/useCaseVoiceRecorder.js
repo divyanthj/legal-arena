@@ -6,14 +6,86 @@ import apiClient from "@/libs/api";
 export const useCaseVoiceRecorder = ({ setQuestion, setArgument }) => {
   const [recordingQuestion, setRecordingQuestion] = useState(false);
   const [transcribingQuestion, setTranscribingQuestion] = useState(false);
+  const [questionAudioLevel, setQuestionAudioLevel] = useState(0);
   const [recordingArgument, setRecordingArgument] = useState(false);
   const [transcribingArgument, setTranscribingArgument] = useState(false);
+  const [argumentAudioLevel, setArgumentAudioLevel] = useState(0);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const streamRef = useRef(null);
+  const audioContextRef = useRef(null);
+  const audioSourceRef = useRef(null);
+  const audioFrameRef = useRef(null);
+
+  const stopAudioLevelMonitor = () => {
+    if (audioFrameRef.current) {
+      cancelAnimationFrame(audioFrameRef.current);
+      audioFrameRef.current = null;
+    }
+
+    audioSourceRef.current?.disconnect();
+    audioSourceRef.current = null;
+
+    if (audioContextRef.current?.state !== "closed") {
+      audioContextRef.current?.close().catch(() => {});
+    }
+    audioContextRef.current = null;
+  };
+
+  const startAudioLevelMonitor = (stream, setAudioLevel) => {
+    const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+
+    if (!AudioContextCtor) {
+      return;
+    }
+
+    try {
+      stopAudioLevelMonitor();
+
+      const audioContext = new AudioContextCtor();
+      const analyser = audioContext.createAnalyser();
+      const source = audioContext.createMediaStreamSource(stream);
+      analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.75;
+      source.connect(analyser);
+
+      audioContextRef.current = audioContext;
+      audioSourceRef.current = source;
+
+      const samples = new Uint8Array(analyser.fftSize);
+      let previousLevel = 0;
+
+      const readLevel = () => {
+        analyser.getByteTimeDomainData(samples);
+
+        let total = 0;
+        for (const sample of samples) {
+          const centered = sample - 128;
+          total += centered * centered;
+        }
+
+        const rms = Math.sqrt(total / samples.length);
+        const rawLevel = Math.min(1, rms / 36);
+        const nextLevel = Math.max(rawLevel, previousLevel * 0.82);
+
+        if (Math.abs(nextLevel - previousLevel) > 0.015) {
+          previousLevel = nextLevel;
+          setAudioLevel(nextLevel);
+        }
+
+        audioFrameRef.current = requestAnimationFrame(readLevel);
+      };
+
+      readLevel();
+    } catch (error) {
+      console.error(error);
+      stopAudioLevelMonitor();
+    }
+  };
 
   useEffect(
     () => () => {
+      stopAudioLevelMonitor();
       streamRef.current?.getTracks().forEach((track) => track.stop());
     },
     []
@@ -30,6 +102,7 @@ export const useCaseVoiceRecorder = ({ setQuestion, setArgument }) => {
     setRecording,
     setTranscribing,
     setText,
+    setAudioLevel,
   }) => {
     if (recording) {
       stopRecording();
@@ -48,6 +121,8 @@ export const useCaseVoiceRecorder = ({ setQuestion, setArgument }) => {
       streamRef.current = stream;
       audioChunksRef.current = [];
       mediaRecorderRef.current = recorder;
+      setAudioLevel(0);
+      startAudioLevelMonitor(stream, setAudioLevel);
 
       recorder.ondataavailable = (event) => {
         if (event.data?.size > 0) {
@@ -63,6 +138,8 @@ export const useCaseVoiceRecorder = ({ setQuestion, setArgument }) => {
         streamRef.current?.getTracks().forEach((track) => track.stop());
         streamRef.current = null;
         mediaRecorderRef.current = null;
+        stopAudioLevelMonitor();
+        setAudioLevel(0);
         setRecording(false);
 
         if (!audioBlob.size) {
@@ -94,6 +171,8 @@ export const useCaseVoiceRecorder = ({ setQuestion, setArgument }) => {
       streamRef.current?.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
       mediaRecorderRef.current = null;
+      stopAudioLevelMonitor();
+      setAudioLevel(0);
       setRecording(false);
     }
   };
@@ -104,6 +183,7 @@ export const useCaseVoiceRecorder = ({ setQuestion, setArgument }) => {
       setRecording: setRecordingQuestion,
       setTranscribing: setTranscribingQuestion,
       setText: setQuestion,
+      setAudioLevel: setQuestionAudioLevel,
     });
 
   const handleArgumentVoiceInput = () =>
@@ -112,13 +192,16 @@ export const useCaseVoiceRecorder = ({ setQuestion, setArgument }) => {
       setRecording: setRecordingArgument,
       setTranscribing: setTranscribingArgument,
       setText: setArgument,
+      setAudioLevel: setArgumentAudioLevel,
     });
 
   return {
     recordingQuestion,
     transcribingQuestion,
+    questionAudioLevel,
     recordingArgument,
     transcribingArgument,
+    argumentAudioLevel,
     handleQuestionVoiceInput,
     handleArgumentVoiceInput,
   };
