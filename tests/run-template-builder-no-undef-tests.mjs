@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { ESLint } from "eslint";
 
 const templateBuilderFiles = [
+  "libs/game/engine.js",
   "libs/game/generation.js",
   "libs/game/templateBuilder.js",
   "libs/game/templateBuilder/deterministic.js",

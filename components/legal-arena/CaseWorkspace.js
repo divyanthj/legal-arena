@@ -59,6 +59,19 @@ const LoadingBar = ({ label = "Loading" }) => (
   </div>
 );
 
+const TypingIndicator = ({ speaker }) => (
+  <div
+    className="mt-3 inline-flex items-center gap-2 rounded-full border border-amber-200/12 bg-black/20 px-3 py-2"
+    role="status"
+    aria-label={`${speaker} is typing`}
+  >
+    <span className="sr-only">{speaker} is typing</span>
+    <span className="h-2 w-2 rounded-full bg-amber-200/80 arena-typing-dot" />
+    <span className="h-2 w-2 rounded-full bg-amber-200/80 arena-typing-dot [animation-delay:140ms]" />
+    <span className="h-2 w-2 rounded-full bg-amber-200/80 arena-typing-dot [animation-delay:280ms]" />
+  </div>
+);
+
 const SuccessChanceTooltip = ({ reasons, isInterview }) => (
   <div className="w-72 text-left text-sm leading-5">
     <p className="font-semibold text-white">Success chance factors</p>
@@ -798,19 +811,15 @@ export default function CaseWorkspace({ initialCase }) {
                       </article>
                     ))}
                     {working && pendingSpeaker && (
-                      <article className="arena-transcript-opponent rounded-xl border border-amber-500/30 p-4">
+                      <article className="arena-transcript-opponent arena-reveal max-w-[90%] rounded-xl border border-amber-500/30 p-4">
                         <div className="flex items-center justify-between gap-3">
                           <p className="font-semibold text-white">{pendingSpeaker}</p>
-                          <p className="text-xs uppercase tracking-[0.14em] text-amber-100/46">
-                            Thinking
-                          </p>
+                          <p className="text-xs text-white/40">typing</p>
                         </div>
-                        <p className="mt-2 leading-7 text-white">
+                        <p className="mt-2 leading-7 text-white/88">
                           {pendingSpeaker} is answering...
                         </p>
-                        <div className="mt-4">
-                          <LoadingBar label={`${pendingSpeaker} is answering`} />
-                        </div>
+                        <TypingIndicator speaker={pendingSpeaker} />
                       </article>
                     )}
                   </div>
