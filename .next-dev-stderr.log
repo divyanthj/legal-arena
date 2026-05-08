@@ -1185,3 +1185,96 @@ Require stack:
 <w>  at file dependencies C:\projects\legal-arena\node_modules\next\dist\build\webpack\loaders\next-barrel-loader.js
 <w>  at file C:\projects\legal-arena\node_modules\next\dist\build\webpack\loaders\next-barrel-loader.js
 <w>  at resolve commonjs C:\projects\legal-arena\node_modules\next\dist\build\webpack\loaders\next-barrel-loader.js
+ ⨯ TypeError: Cannot read properties of undefined (reading 'clientModules')
+    at C:\projects\legal-arena\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:40:25679
+    at C:\projects\legal-arena\node_modules\next\dist\server\lib\trace\tracer.js:191:62
+    at C:\projects\legal-arena\node_modules\next\dist\server\lib\trace\tracer.js:140:36
+    at NoopContextManager.with (C:\projects\legal-arena\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:7062)
+    at ContextAPI.with (C:\projects\legal-arena\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:518)
+    at NoopTracer.startActiveSpan (C:\projects\legal-arena\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:18093)
+    at ProxyTracer.startActiveSpan (C:\projects\legal-arena\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:18854)
+    at C:\projects\legal-arena\node_modules\next\dist\server\lib\trace\tracer.js:122:103
+    at NoopContextManager.with (C:\projects\legal-arena\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:7062)
+    at ContextAPI.with (C:\projects\legal-arena\node_modules\next\dist\compiled\@opentelemetry\api\index.js:1:518)
+    at NextTracerImpl.trace (C:\projects\legal-arena\node_modules\next\dist\server\lib\trace\tracer.js:122:28)
+    at C:\projects\legal-arena\node_modules\next\dist\server\lib\trace\tracer.js:191:31
+    at ne (C:\projects\legal-arena\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:42:1678)
+    at runNextTicks (node:internal/process/task_queues:65:5)
+    at listOnTimeout (node:internal/timers:567:9)
+    at process.processTimers (node:internal/timers:541:7)
+    at async doRender (C:\projects\legal-arena\node_modules\next\dist\server\base-server.js:1427:30)
+    at async cacheEntry.responseCache.get.routeKind (C:\projects\legal-arena\node_modules\next\dist\server\base-server.js:1588:28) {
+  page: '/'
+}
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, lstat 'C:\projects\legal-arena\.next\server\app\lawyer-game'
+<w> [webpack.cache.PackFileCacheStrategy/webpack.FileSystemInfo] Resolving '../../../../.next/server/app/lawyer-game/page' in C:\projects\legal-arena\node_modules\next\dist\server for build dependencies doesn't lead to expected result 'C:\projects\legal-arena\.next\server\app\lawyer-game\page.js', but to 'Error: Can't resolve '../../../../.next/server/app/lawyer-game/page' in 'C:\projects\legal-arena\node_modules\next\dist\server'' instead. Resolving dependencies are ignored for this path.
+<w>  at resolve commonjs file ../../../../.next/server/app/lawyer-game/page (expected C:\projects\legal-arena\.next\server\app\lawyer-game\page.js)
+<w>  at file dependencies C:\projects\legal-arena\node_modules\next\dist\server\require.js
+<w>  at file C:\projects\legal-arena\node_modules\next\dist\server\require.js
+<w>  at file dependencies C:\projects\legal-arena\node_modules\next\dist\server\load-components.js
+<w>  at file C:\projects\legal-arena\node_modules\next\dist\server\load-components.js
+<w>  at file dependencies C:\projects\legal-arena\node_modules\next\dist\build\utils.js
+<w>  at file C:\projects\legal-arena\node_modules\next\dist\build\utils.js
+<w>  at file dependencies C:\projects\legal-arena\node_modules\next\dist\build\webpack\loaders\next-route-loader\index.js
+<w>  at file C:\projects\legal-arena\node_modules\next\dist\build\webpack\loaders\next-route-loader\index.js
+<w>  at file dependencies C:\projects\legal-arena\node_modules\next\dist\compiled\loader-runner\LoaderRunner.js
+<w>  at file C:\projects\legal-arena\node_modules\next\dist\compiled\loader-runner\LoaderRunner.js
+<w>  at file dependencies C:\projects\legal-arena\node_modules\next\dist\compiled\webpack\bundle5.js
+<w>  at file C:\projects\legal-arena\node_modules\next\dist\compiled\webpack\bundle5.js
+<w>  at file dependencies C:\projects\legal-arena\node_modules\next\dist\compiled\webpack\webpack.js
+<w>  at file C:\projects\legal-arena\node_modules\next\dist\compiled\webpack\webpack.js
+<w>  at file dependencies C:\projects\legal-arena\node_modules\next\dist\build\webpack\plugins\define-env-plugin.js
+<w>  at file C:\projects\legal-arena\node_modules\next\dist\build\webpack\plugins\define-env-plugin.js
+<w>  at file dependencies C:\projects\legal-arena\node_modules\next\dist\build\swc\index.js
+<w>  at file C:\projects\legal-arena\node_modules\next\dist\build\swc\index.js
+<w>  at file dependencies C:\projects\legal-arena\node_modules\next\dist\build\webpack\loaders\next-barrel-loader.js
+<w>  at file C:\projects\legal-arena\node_modules\next\dist\build\webpack\loaders\next-barrel-loader.js
+<w>  at resolve commonjs C:\projects\legal-arena\node_modules\next\dist\build\webpack\loaders\next-barrel-loader.js
+<w> [webpack.cache.PackFileCacheStrategy/webpack.FileSystemInfo] Resolving '../../../../.next/server/app/lawyer-game/page' in C:\projects\legal-arena\node_modules\next\dist\server for build dependencies doesn't lead to expected result 'C:\projects\legal-arena\.next\server\app\lawyer-game\page.js', but to 'Error: Can't resolve '../../../../.next/server/app/lawyer-game/page' in 'C:\projects\legal-arena\node_modules\next\dist\server'' instead. Resolving dependencies are ignored for this path.
+<w>  at resolve commonjs file ../../../../.next/server/app/lawyer-game/page (expected C:\projects\legal-arena\.next\server\app\lawyer-game\page.js)
+<w>  at file dependencies C:\projects\legal-arena\node_modules\next\dist\server\require.js
+<w>  at file C:\projects\legal-arena\node_modules\next\dist\server\require.js
+<w>  at file dependencies C:\projects\legal-arena\node_modules\next\dist\server\load-components.js
+<w>  at file C:\projects\legal-arena\node_modules\next\dist\server\load-components.js
+<w>  at file dependencies C:\projects\legal-arena\node_modules\next\dist\build\utils.js
+<w>  at file C:\projects\legal-arena\node_modules\next\dist\build\utils.js
+<w>  at file dependencies C:\projects\legal-arena\node_modules\next\dist\build\webpack\loaders\next-route-loader\index.js
+<w>  at file C:\projects\legal-arena\node_modules\next\dist\build\webpack\loaders\next-route-loader\index.js
+<w>  at file dependencies C:\projects\legal-arena\node_modules\next\dist\compiled\loader-runner\LoaderRunner.js
+<w>  at file C:\projects\legal-arena\node_modules\next\dist\compiled\loader-runner\LoaderRunner.js
+<w>  at file dependencies C:\projects\legal-arena\node_modules\next\dist\compiled\webpack\bundle5.js
+<w>  at file C:\projects\legal-arena\node_modules\next\dist\compiled\webpack\bundle5.js
+<w>  at file dependencies C:\projects\legal-arena\node_modules\next\dist\compiled\webpack\webpack.js
+<w>  at file C:\projects\legal-arena\node_modules\next\dist\compiled\webpack\webpack.js
+<w>  at file dependencies C:\projects\legal-arena\node_modules\next\dist\build\webpack\plugins\define-env-plugin.js
+<w>  at file C:\projects\legal-arena\node_modules\next\dist\build\webpack\plugins\define-env-plugin.js
+<w>  at file dependencies C:\projects\legal-arena\node_modules\next\dist\build\swc\index.js
+<w>  at file C:\projects\legal-arena\node_modules\next\dist\build\swc\index.js
+<w>  at file dependencies C:\projects\legal-arena\node_modules\next\dist\build\webpack\loaders\next-swc-loader.js
+<w>  at file C:\projects\legal-arena\node_modules\next\dist\build\webpack\loaders\next-swc-loader.js
+<w>  at resolve commonjs C:\projects\legal-arena\node_modules\next\dist\build\webpack\loaders\next-swc-loader.js
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, lstat 'C:\projects\legal-arena\.next\server\app\lawyer-game\page.js'
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, lstat 'C:\projects\legal-arena\.next\server\app\lawyer-game\page.js'
+<w> [webpack.cache.PackFileCacheStrategy/webpack.FileSystemInfo] Resolving '../../../../.next/server/app/lawyer-game/page' in C:\projects\legal-arena\node_modules\next\dist\server for build dependencies doesn't lead to expected result 'C:\projects\legal-arena\.next\server\app\lawyer-game\page.js', but to 'Error: Can't resolve '../../../../.next/server/app/lawyer-game/page' in 'C:\projects\legal-arena\node_modules\next\dist\server'' instead. Resolving dependencies are ignored for this path.
+<w>  at resolve commonjs file ../../../../.next/server/app/lawyer-game/page (expected C:\projects\legal-arena\.next\server\app\lawyer-game\page.js)
+<w>  at file dependencies C:\projects\legal-arena\node_modules\next\dist\server\require.js
+<w>  at file C:\projects\legal-arena\node_modules\next\dist\server\require.js
+<w>  at file dependencies C:\projects\legal-arena\node_modules\next\dist\server\load-components.js
+<w>  at file C:\projects\legal-arena\node_modules\next\dist\server\load-components.js
+<w>  at file dependencies C:\projects\legal-arena\node_modules\next\dist\build\utils.js
+<w>  at file C:\projects\legal-arena\node_modules\next\dist\build\utils.js
+<w>  at file dependencies C:\projects\legal-arena\node_modules\next\dist\build\webpack\loaders\next-route-loader\index.js
+<w>  at file C:\projects\legal-arena\node_modules\next\dist\build\webpack\loaders\next-route-loader\index.js
+<w>  at file dependencies C:\projects\legal-arena\node_modules\next\dist\compiled\loader-runner\LoaderRunner.js
+<w>  at file C:\projects\legal-arena\node_modules\next\dist\compiled\loader-runner\LoaderRunner.js
+<w>  at file dependencies C:\projects\legal-arena\node_modules\next\dist\compiled\webpack\bundle5.js
+<w>  at file C:\projects\legal-arena\node_modules\next\dist\compiled\webpack\bundle5.js
+<w>  at file dependencies C:\projects\legal-arena\node_modules\next\dist\compiled\webpack\webpack.js
+<w>  at file C:\projects\legal-arena\node_modules\next\dist\compiled\webpack\webpack.js
+<w>  at file dependencies C:\projects\legal-arena\node_modules\next\dist\build\webpack\plugins\define-env-plugin.js
+<w>  at file C:\projects\legal-arena\node_modules\next\dist\build\webpack\plugins\define-env-plugin.js
+<w>  at file dependencies C:\projects\legal-arena\node_modules\next\dist\build\swc\index.js
+<w>  at file C:\projects\legal-arena\node_modules\next\dist\build\swc\index.js
+<w>  at file dependencies C:\projects\legal-arena\node_modules\next\dist\build\webpack\loaders\next-barrel-loader.js
+<w>  at file C:\projects\legal-arena\node_modules\next\dist\build\webpack\loaders\next-barrel-loader.js
+<w>  at resolve commonjs C:\projects\legal-arena\node_modules\next\dist\build\webpack\loaders\next-barrel-loader.js

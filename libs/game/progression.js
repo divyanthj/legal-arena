@@ -72,7 +72,6 @@ export const ensureUserProfile = async (userId, profile = null) => {
       _id: userId,
       email,
       name: profile?.name?.trim?.() || undefined,
-      image: profile?.image?.trim?.() || undefined,
       emailVerified:
         profile?.emailVerified === undefined ? null : profile.emailVerified,
       lawyerProfileSummary: getDefaultLawyerProfileSummary(
@@ -96,11 +95,6 @@ export const ensureUserProfile = async (userId, profile = null) => {
 
   if (profile?.name?.trim?.() && user.name !== profile.name.trim()) {
     user.name = profile.name.trim();
-    shouldSave = true;
-  }
-
-  if (profile?.image?.trim?.() && user.image !== profile.image.trim()) {
-    user.image = profile.image.trim();
     shouldSave = true;
   }
 

@@ -151,3 +151,13 @@
  GET /dashboard/cases/the-deposit-fight-c72f30 500 in 350ms
  GET /dashboard/cases/the-deposit-fight-c72f30 500 in 357ms
  GET /dashboard/cases/the-deposit-fight-c72f30 200 in 999ms
+ ✓ Compiled / in 166ms (1119 modules)
+ ✓ Compiled in 307ms (1755 modules)
+ ✓ Compiled in 142ms (639 modules)
+ ✓ Compiled in 124ms (639 modules)
+ ✓ Compiled in 97ms (639 modules)
+ ✓ Compiled in 177ms (1741 modules)
+   Reload env: .env.local
+ ○ Compiling / ...
+ GET /dashboard 404 in 9290ms
+[?25h

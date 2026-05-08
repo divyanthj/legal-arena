@@ -82,6 +82,25 @@ const getRecordRatio = (wins, losses, draws) => {
   return Math.round((wins / total) * 100);
 };
 
+const getArenaHeadshot = (value = "") => {
+  const image = String(value || "").trim();
+
+  return image.startsWith("/api/players/avatar/") || image.startsWith("data:image/")
+    ? image
+    : "/images/profile.jpg";
+};
+
+const LeaderboardPortrait = ({ image = "", name = "" }) => (
+  <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full border border-white/15 bg-white/[0.04] shadow-[0_0_0_3px_rgba(255,255,255,0.025)]">
+    <img
+      src={getArenaHeadshot(image)}
+      alt={`${name || "Counsel"} headshot`}
+      style={{ objectPosition: "center calc(50% + 1px)" }}
+      className="block h-full w-full scale-[1.09] object-cover object-center"
+    />
+  </div>
+);
+
 export default function DashboardHub({
   initialCases,
   templates,
@@ -627,14 +646,17 @@ export default function DashboardHub({
                       href={`/dashboard/players/${entry.id}`}
                       className="arena-surface-soft flex items-center justify-between gap-3 px-4 py-3 transition hover:-translate-y-0.5 hover:border-white/20"
                     >
-                      <div className="min-w-0">
-                        <p className="truncate font-semibold text-white">
-                          <span className="mr-2 text-white/55">{entry.rank}</span>
-                          {entry.name}
-                        </p>
-                        <p className="mt-1 text-sm text-white/50">
-                          {entry.completedCases} matters | {entry.wins} wins
-                        </p>
+                      <div className="flex min-w-0 items-center gap-3">
+                        <LeaderboardPortrait image={entry.image} name={entry.name} />
+                        <div className="min-w-0">
+                          <p className="truncate font-semibold text-white">
+                            <span className="mr-2 text-white/55">{entry.rank}</span>
+                            {entry.name}
+                          </p>
+                          <p className="mt-1 text-sm text-white/50">
+                            {entry.completedCases} matters | {entry.wins} wins
+                          </p>
+                        </div>
                       </div>
                       <span className="text-lg font-semibold text-emerald-300">
                         {entry.overallRating}
@@ -648,11 +670,17 @@ export default function DashboardHub({
                     className="mt-4 block rounded-[1.5rem] border border-white/15 bg-white/[0.03] px-4 py-4 transition hover:-translate-y-0.5 hover:border-white/25"
                   >
                     <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-sm text-white/50">Your standing</p>
-                        <p className="mt-1 font-semibold text-white">
-                          #{currentLeaderboardEntry.rank} {userName}
-                        </p>
+                      <div className="flex min-w-0 items-center gap-3">
+                        <LeaderboardPortrait
+                          image={currentLeaderboardEntry.image}
+                          name={userName}
+                        />
+                        <div className="min-w-0">
+                          <p className="text-sm text-white/50">Your standing</p>
+                          <p className="mt-1 truncate font-semibold text-white">
+                            #{currentLeaderboardEntry.rank} {userName}
+                          </p>
+                        </div>
                       </div>
                       <p className="text-2xl font-semibold text-white">
                         {currentLeaderboardEntry.overallRating}
@@ -675,14 +703,17 @@ export default function DashboardHub({
                         href={`/dashboard/players/${entry.id}`}
                         className="arena-surface-soft flex items-center justify-between gap-3 px-4 py-3 transition hover:-translate-y-0.5 hover:border-white/20"
                       >
-                        <div className="min-w-0">
-                          <p className="truncate font-semibold text-white">
-                            <span className="mr-2 text-white/55">{entry.rank}</span>
-                            {entry.name}
-                          </p>
-                          <p className="mt-1 text-sm text-white/50">
-                            {entry.category?.completedCases || 0} completed
-                          </p>
+                        <div className="flex min-w-0 items-center gap-3">
+                          <LeaderboardPortrait image={entry.image} name={entry.name} />
+                          <div className="min-w-0">
+                            <p className="truncate font-semibold text-white">
+                              <span className="mr-2 text-white/55">{entry.rank}</span>
+                              {entry.name}
+                            </p>
+                            <p className="mt-1 text-sm text-white/50">
+                              {entry.category?.completedCases || 0} completed
+                            </p>
+                          </div>
                         </div>
                         <span className="text-lg font-semibold text-white">
                           {entry.category?.rating || 1000}

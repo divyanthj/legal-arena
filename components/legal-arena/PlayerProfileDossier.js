@@ -27,6 +27,19 @@ const getNextRatingMilestone = (rating = 1000) => {
   return milestones.find((value) => value > rating) || rating + 300;
 };
 
+const isArenaHeadshot = (value = "") => {
+  const image = String(value || "").trim();
+
+  return (
+    image.startsWith("/api/players/avatar/") ||
+    image.startsWith("data:image/") ||
+    image.startsWith("blob:")
+  );
+};
+
+const getArenaHeadshot = (value = "") =>
+  isArenaHeadshot(value) ? String(value || "").trim() : "";
+
 const formatResetDateTime = (value) => {
   if (!isValidDate(value)) {
     return "";
@@ -51,7 +64,8 @@ export default function PlayerProfileDossier({
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [outcomeFilter, setOutcomeFilter] = useState("all");
-  const [avatarPreview, setAvatarPreview] = useState("");
+  const [avatarPreview, setAvatarPreview] = useState(getArenaHeadshot(player.image));
+  const [avatarUploading, setAvatarUploading] = useState(false);
   const [showResetDialog, setShowResetDialog] = useState(false);
   const [resetting, setResetting] = useState(false);
 
@@ -152,21 +166,53 @@ export default function PlayerProfileDossier({
     }
   };
 
-  const handleAvatarChange = (event) => {
+  const handleAvatarChange = async (event) => {
     const file = event.target.files?.[0];
 
     if (!file) {
       return;
     }
 
+    if (avatarUploading) {
+      return;
+    }
+
     const previewUrl = URL.createObjectURL(file);
     setAvatarPreview((current) => {
-      if (current) {
+      if (current?.startsWith("blob:")) {
         URL.revokeObjectURL(current);
       }
 
       return previewUrl;
     });
+
+    const formData = new FormData();
+    formData.append("image", file);
+    setAvatarUploading(true);
+
+    try {
+      const response = await apiClient.post("/players/avatar", formData);
+      setAvatarPreview((current) => {
+        if (current?.startsWith("blob:")) {
+          URL.revokeObjectURL(current);
+        }
+
+        return response.image || "";
+      });
+      toast.success("Professional headshot generated.");
+      router.refresh();
+    } catch (error) {
+      setAvatarPreview((current) => {
+        if (current?.startsWith("blob:")) {
+          URL.revokeObjectURL(current);
+        }
+
+        return getArenaHeadshot(player.image);
+      });
+    } finally {
+      setAvatarUploading(false);
+      event.target.value = "";
+    }
   };
 
   return (
@@ -206,21 +252,30 @@ export default function PlayerProfileDossier({
 
             <div className="mt-6 grid gap-6 xl:grid-cols-[220px_minmax(0,1fr)_460px]">
               <div className="flex flex-col items-center justify-start xl:pt-2">
-                <div className="h-40 w-40 overflow-hidden rounded-full border border-white/15 bg-white/[0.04] shadow-[0_0_0_6px_rgba(255,255,255,0.03)]">
+                <div className="relative h-40 w-40 overflow-hidden rounded-full border border-white/15 bg-white/[0.04] shadow-[0_0_0_6px_rgba(255,255,255,0.03)]">
                   <img
                     src={avatarPreview || "/images/profile.jpg"}
                     alt={`${player.name} profile`}
-                    className="block h-full w-full scale-[1.42] object-cover"
+                    style={{ objectPosition: "center calc(50% + 2px)" }}
+                    className={`block h-full w-full object-cover object-center transition duration-500 ${
+                      avatarUploading ? "scale-[1.07] blur-sm opacity-60" : "scale-[1.025]"
+                    }`}
                   />
+                  {avatarUploading ? (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/28 backdrop-blur-[2px]">
+                      <span className="h-11 w-11 animate-spin rounded-full border-2 border-white/20 border-t-white/80" />
+                    </div>
+                  ) : null}
                 </div>
                 {canEditAvatar ? (
                   <div className="mt-5 flex flex-col gap-2">
                     <label className="arena-btn-dark flex cursor-pointer items-center justify-center px-4 py-3 text-sm">
-                      Upload Image
+                      {avatarUploading ? "Creating Headshot..." : "Upload Image"}
                       <input
                         type="file"
                         accept="image/*"
                         className="hidden"
+                        disabled={avatarUploading}
                         onChange={handleAvatarChange}
                       />
                     </label>
