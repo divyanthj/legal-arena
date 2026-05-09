@@ -71,6 +71,7 @@ export default function PlayerMatterDossier({ player, caseSession }) {
           <div className="p-6 md:p-8">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
               <div className="max-w-4xl">
+                <p className="arena-kicker mb-4">LEGAL ARENA</p>
                 <div className="flex flex-wrap items-center gap-2">
                   <Link
                     href={`/dashboard/players/${player.id}`}

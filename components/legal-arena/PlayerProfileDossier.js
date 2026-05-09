@@ -113,15 +113,24 @@ export default function PlayerProfileDossier({
       }),
     [player.categoryStats]
   );
+  const activeCategories = useMemo(
+    () =>
+      sortedCategories.filter(
+        (category) =>
+          (category.completedCases || 0) > 0 ||
+          (category.wins || 0) > 0 ||
+          (category.losses || 0) > 0 ||
+          (category.draws || 0) > 0
+      ),
+    [sortedCategories]
+  );
 
   const joinedLabel = isValidDate(player.joinedAt)
     ? `Joined ${formatDate(player.joinedAt)}`
     : "Join date unavailable";
   const nextMilestone = getNextRatingMilestone(player.overallRating || 1000);
-  const completedCategories = sortedCategories.filter(
-    (category) => (category.completedCases || 0) > 0
-  ).length;
-  const topCategory = sortedCategories[0] || null;
+  const completedCategories = activeCategories.length;
+  const topCategory = activeCategories[0] || null;
   const totalDecidedMatters =
     (player.wins || 0) + (player.losses || 0) + (player.draws || 0);
   const winRate =
@@ -232,6 +241,7 @@ export default function PlayerProfileDossier({
           }}
         >
           <div className="p-6 md:p-8">
+            <p className="arena-kicker mb-4">LEGAL ARENA</p>
             <div className="flex flex-wrap items-center gap-2">
               <Link href="/dashboard" className="arena-btn-dark inline-flex px-4 py-2 text-sm">
                 Back to Dashboard
@@ -258,7 +268,11 @@ export default function PlayerProfileDossier({
                     alt={`${player.name} profile`}
                     style={{ objectPosition: "center calc(50% + 2px)" }}
                     className={`block h-full w-full object-cover object-center transition duration-500 ${
-                      avatarUploading ? "scale-[1.07] blur-sm opacity-60" : "scale-[1.025]"
+                      avatarUploading
+                        ? "scale-[1.07] blur-sm opacity-60"
+                        : avatarPreview
+                        ? "scale-[1.025]"
+                        : "scale-[1.62]"
                     }`}
                   />
                   {avatarUploading ? (
@@ -349,33 +363,40 @@ export default function PlayerProfileDossier({
                   <span>{player.completedCases} matters completed</span>
                 </div>
                 <div className="mt-5 space-y-3">
-                  {sortedCategories.map((category) => (
-                    <article
-                      key={category.categorySlug}
-                      className="arena-surface-soft flex min-h-[9rem] flex-col p-4"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="font-semibold text-white">
-                            {getCategoryTitle(category.categorySlug)}
-                          </p>
-                          <p className="mt-2 text-sm text-white/64">
-                            {category.completedCases} completed | unlock{" "}
-                            {category.unlockedComplexity}
-                          </p>
-                          <p className="mt-1 text-sm text-white/42">
-                            Record {category.wins}-{category.losses}-{category.draws}
-                          </p>
+                  {activeCategories.length > 0 ? (
+                    activeCategories.map((category) => (
+                      <article
+                        key={category.categorySlug}
+                        className="arena-surface-soft flex min-h-[9rem] flex-col p-4"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="font-semibold text-white">
+                              {getCategoryTitle(category.categorySlug)}
+                            </p>
+                            <p className="mt-2 text-sm text-white/64">
+                              {category.completedCases} completed | unlock{" "}
+                              {category.unlockedComplexity}
+                            </p>
+                            <p className="mt-1 text-sm text-white/42">
+                              Record {category.wins}-{category.losses}-{category.draws}
+                            </p>
+                          </div>
+                          <span className="badge border arena-status arena-status-neutral">
+                            {category.rating}
+                          </span>
                         </div>
-                        <span className="badge border arena-status arena-status-neutral">
-                          {category.rating}
-                        </span>
-                      </div>
-                      <p className="mt-auto pt-4 text-xs uppercase tracking-[0.15em] text-white/38">
-                        Category strength archive
-                      </p>
-                    </article>
-                  ))}
+                        <p className="mt-auto pt-4 text-xs uppercase tracking-[0.15em] text-white/38">
+                          Category strength archive
+                        </p>
+                      </article>
+                    ))
+                  ) : (
+                    <EmptyPanel
+                      title="No category record yet"
+                      detail="Complete a matter to start building a specialty progression record."
+                    />
+                  )}
                 </div>
               </div>
             </div>

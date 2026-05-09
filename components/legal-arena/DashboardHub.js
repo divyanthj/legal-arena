@@ -90,16 +90,24 @@ const getArenaHeadshot = (value = "") => {
     : "/images/profile.jpg";
 };
 
-const LeaderboardPortrait = ({ image = "", name = "" }) => (
-  <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full border border-white/15 bg-white/[0.04] shadow-[0_0_0_3px_rgba(255,255,255,0.025)]">
-    <img
-      src={getArenaHeadshot(image)}
-      alt={`${name || "Counsel"} headshot`}
-      style={{ objectPosition: "center calc(50% + 1px)" }}
-      className="block h-full w-full scale-[1.09] object-cover object-center"
-    />
-  </div>
-);
+const isDefaultHeadshot = (value = "") => getArenaHeadshot(value) === "/images/profile.jpg";
+
+const LeaderboardPortrait = ({ image = "", name = "" }) => {
+  const headshot = getArenaHeadshot(image);
+
+  return (
+    <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full border border-white/15 bg-white/[0.04] shadow-[0_0_0_3px_rgba(255,255,255,0.025)]">
+      <img
+        src={headshot}
+        alt={`${name || "Counsel"} headshot`}
+        style={{ objectPosition: "center calc(50% + 1px)" }}
+        className={`block h-full w-full object-cover object-center ${
+          isDefaultHeadshot(image) ? "scale-[1.62]" : "scale-[1.09]"
+        }`}
+      />
+    </div>
+  );
+};
 
 export default function DashboardHub({
   initialCases,
@@ -237,7 +245,7 @@ export default function DashboardHub({
         <div className="grid gap-4 xl:grid-cols-[240px_minmax(0,1fr)_360px]">
           <aside className="arena-surface arena-column-bg flex h-full flex-col overflow-visible">
             <div className="border-b border-white/10 px-5 py-6">
-              <p className="arena-kicker">Legal Arena</p>
+              <p className="arena-kicker">LEGAL ARENA</p>
               <h2 className="arena-headline mt-3 text-3xl uppercase leading-none">
                 Command
               </h2>

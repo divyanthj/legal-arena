@@ -970,6 +970,7 @@ export default function CaseWorkspace({ initialCase }) {
           <div className="p-4 sm:p-6 md:p-8">
             <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
               <div className="min-w-0">
+                <p className="arena-kicker mb-4">LEGAL ARENA</p>
                 <div className="flex flex-wrap items-center gap-2">
                   <Link
                     href="/dashboard"

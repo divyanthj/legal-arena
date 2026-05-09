@@ -310,11 +310,14 @@ export default async function Page() {
             <Image
               src="/logoAndName.png"
               alt="Legal Arena logo"
-              width={160}
+              width={36}
               height={36}
               className="h-9 w-auto object-contain"
               priority
             />
+            <span className="text-sm font-semibold uppercase tracking-[0.18em] text-white">
+              LEGAL ARENA
+            </span>
           </Link>
 
           <nav className="hidden items-center gap-8 text-sm text-white/72 lg:flex">
