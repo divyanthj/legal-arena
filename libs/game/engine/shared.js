@@ -8,9 +8,9 @@ import {
   getEvidenceItemsForFact,
   getInterviewBlueprintForSide,
   normalizeTemplateParty,
-} from "../templateInterview";
-import { buildStoryContextForSide, getCanonicalStoryWorld } from "../storyWorld";
-import { sanitizeFactSheet, sanitizeFactSheetList } from "../factSheetSanitizer";
+} from "../templateInterview.js";
+import { buildStoryContextForSide, getCanonicalStoryWorld } from "../storyWorld.js";
+import { sanitizeFactSheet, sanitizeFactSheetList } from "../factSheetSanitizer.js";
 
 export const uniqueList = (items = []) =>
   [...new Set(items.filter(Boolean).map((item) => String(item).trim()).filter(Boolean))];

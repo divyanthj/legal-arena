@@ -488,7 +488,7 @@ export const buildCasePayload = (caseSession, templateOverride = null) => {
           practiceArea: template.practiceArea,
         }
       : null,
-    lawbook: getLawbookRules(template?.legalTags || []),
+    lawbook: getLawbookRules(),
   };
 };
 

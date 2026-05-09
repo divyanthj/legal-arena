@@ -143,7 +143,7 @@ export const assessCaseSuccessChance = async ({
 }) => {
   const template = ensureTemplate(getTemplate(caseSession));
   const playerSide = getPlayerSide(caseSession);
-  const rules = getLawbookRules(template.legalTags).map((rule) => ({
+  const rules = getLawbookRules().map((rule) => ({
     id: rule.id,
     title: rule.title,
     principle: rule.principle,
@@ -412,7 +412,7 @@ const buildConversationFactSheetFallback = ({ latestQuestion, latestAnswer }) =>
 
 export const runCourtroomRound = async ({ caseSession, argument, userId }) => {
   const template = ensureTemplate(getTemplate(caseSession));
-  const rules = getLawbookRules(template.legalTags);
+  const rules = getLawbookRules();
   const playerSide = getPlayerSide(caseSession);
   const opponentSide = getOpposingSide(playerSide);
   const shouldReturnVerdict =

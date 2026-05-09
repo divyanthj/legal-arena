@@ -47,14 +47,17 @@ import {
   buildRoleFactPacket,
   buildCanonicalWorldPacket,
   buildInterviewAgentContext,
-} from "./shared";
+} from "./shared.js";
 import {
   getCourtroomDifficultyProfile,
   limitOpponentResponseForDifficulty,
   normalizeCourtroomDeltasForDifficulty,
   normalizePlayerPerspectiveVerdictLists,
   normalizeVerdictForDifficulty,
-} from "../courtroomDifficulty";
+} from "../courtroomDifficulty.js";
+import { pickRuleMentions } from "../lawbookCitation.js";
+
+export { pickRuleMentions } from "../lawbookCitation.js";
 
 const PROOF_GAP_PATTERN =
   /\b(photo|photos|receipt|receipts|invoice|invoices|inspection|dated|document|documentation|record|records|log|logs|itemized|itemised|support|supported|proof)\b/i;
@@ -284,26 +287,6 @@ export const pickFactMentions = (argument, factSheet) => {
       return tokens.some((token) => lowerArgument.includes(token));
     })
   ).slice(0, 4);
-};
-
-export const pickRuleMentions = (argument, rules) => {
-  const lowerArgument = argument.toLowerCase();
-
-  return rules
-    .filter((rule) => {
-      const titleTokens = rule.title
-        .toLowerCase()
-        .replace(/[^a-z0-9\s]/g, " ")
-        .split(/\s+/)
-        .filter((token) => token.length > 4);
-
-      return (
-        titleTokens.some((token) => lowerArgument.includes(token)) ||
-        lowerArgument.includes(rule.id.replace(/-/g, " "))
-      );
-    })
-    .map((rule) => rule.id)
-    .slice(0, 3);
 };
 
 export const pickClaimMentions = (argument, factSheet) => {

@@ -4,8 +4,14 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Tooltip } from "react-tooltip";
+import * as HeroIcons from "@heroicons/react/24/outline";
 import ButtonAccount from "@/components/ButtonAccount";
 import apiClient from "@/libs/api";
+import {
+  LAWBOOK_ALL_CATEGORIES,
+  legalArenaLawbook,
+} from "@/data/legalArenaLawbook";
+import { LEGAL_CASE_CATEGORIES } from "@/libs/game/categories";
 import { sanitizeFactSheet } from "@/libs/game/factSheetSanitizer";
 import { useCaseVoiceRecorder } from "./useCaseVoiceRecorder";
 
@@ -93,6 +99,31 @@ const VoiceWaveform = ({ level = 0 }) => {
   );
 };
 
+const categoryTitleBySlug = new Map(
+  LEGAL_CASE_CATEGORIES.map((category) => [category.slug, category.title])
+);
+
+const lawbookFilterOptions = [
+  { slug: LAWBOOK_ALL_CATEGORIES, title: "All" },
+  ...LEGAL_CASE_CATEGORIES,
+];
+
+const LawbookRuleIcon = ({ icon, className = "h-5 w-5" }) => {
+  const Icon = HeroIcons[icon] || HeroIcons.ScaleIcon;
+
+  return <Icon className={className} aria-hidden="true" />;
+};
+
+const filterLawbookRulesByCategory = (rules, categorySlug) => {
+  if (!categorySlug || categorySlug === LAWBOOK_ALL_CATEGORIES) {
+    return rules;
+  }
+
+  return rules.filter(
+    (rule) => rule.universal || rule.categorySlugs?.includes(categorySlug)
+  );
+};
+
 const SuccessChanceTooltip = ({ reasons, isInterview }) => (
   <div className="w-72 text-left text-sm leading-5">
     <p className="font-semibold text-white">Success chance factors</p>
@@ -112,6 +143,50 @@ const SuccessChanceTooltip = ({ reasons, isInterview }) => (
   </div>
 );
 
+const IntakeProgressRing = ({ value }) => {
+  const progress = clampPercent(Number(value) || 0);
+  const radius = 25;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference - (progress / 100) * circumference;
+
+  return (
+    <div
+      className="relative grid h-16 w-16 shrink-0 place-items-center"
+      role="img"
+      aria-label={`${Math.round(progress)}% fact sheet complete`}
+    >
+      <svg
+        className="h-16 w-16 -rotate-90"
+        viewBox="0 0 64 64"
+        aria-hidden="true"
+      >
+        <circle
+          cx="32"
+          cy="32"
+          r={radius}
+          fill="none"
+          stroke="rgba(255,255,255,0.14)"
+          strokeWidth="8"
+        />
+        <circle
+          cx="32"
+          cy="32"
+          r={radius}
+          fill="none"
+          stroke="rgba(255,255,255,0.95)"
+          strokeWidth="8"
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={offset}
+        />
+      </svg>
+      <span className="absolute text-xs font-bold tabular-nums text-white">
+        {Math.round(progress)}%
+      </span>
+    </div>
+  );
+};
+
 export default function CaseWorkspace({ initialCase }) {
   const router = useRouter();
   const initialFactSheet = sanitizeFactSheet(initialCase.factSheet || {});
@@ -125,6 +200,9 @@ export default function CaseWorkspace({ initialCase }) {
   const [pendingAction, setPendingAction] = useState("");
   const [pendingSpeaker, setPendingSpeaker] = useState("");
   const [optimisticTranscriptEntry, setOptimisticTranscriptEntry] = useState(null);
+  const [selectedLawbookCategory, setSelectedLawbookCategory] = useState(
+    initialCase.primaryCategory || LAWBOOK_ALL_CATEGORIES
+  );
   const interviewTranscriptRef = useRef(null);
   const courtroomTranscriptRef = useRef(null);
   const {
@@ -363,6 +441,18 @@ export default function CaseWorkspace({ initialCase }) {
   const verdictStyle =
     verdictTone[caseSession.verdict?.winner] || verdictTone.draw;
   const canonicalFactLookup = buildCanonicalFactLookup(caseSession);
+  const lawbookRules =
+    Array.isArray(caseSession.lawbook) && caseSession.lawbook.length >= legalArenaLawbook.length
+      ? caseSession.lawbook
+      : legalArenaLawbook;
+  const visibleLawbookRules = useMemo(
+    () => filterLawbookRulesByCategory(lawbookRules, selectedLawbookCategory),
+    [lawbookRules, selectedLawbookCategory]
+  );
+  const selectedLawbookCategoryTitle =
+    selectedLawbookCategory === LAWBOOK_ALL_CATEGORIES
+      ? "All"
+      : categoryTitleBySlug.get(selectedLawbookCategory) || "Case category";
 
   const pressureTotal = Math.max(caseSession.score.player + caseSession.score.opponent, 1);
   const playerPressurePct = clampPercent((caseSession.score.player / pressureTotal) * 100);
@@ -459,7 +549,8 @@ export default function CaseWorkspace({ initialCase }) {
     );
     const liveRisk = firstDraftItem(factSheetDraft.risks, factSheetDraft.disputedFacts);
     const relief = firstDraftItem(factSheetDraft.desiredRelief);
-    const rule = caseSession.lawbook[0];
+    const rule =
+      visibleLawbookRules.find((item) => !item.universal) || visibleLawbookRules[0];
 
     return [
       `May it please the Court. I represent ${playerPartyName}.`,
@@ -505,7 +596,8 @@ export default function CaseWorkspace({ initialCase }) {
   };
 
   const lawbookSnippet = () => {
-    const rule = caseSession.lawbook[0];
+    const rule =
+      visibleLawbookRules.find((item) => !item.universal) || visibleLawbookRules[0];
 
     return rule ? `Under ${rule.title}, ${rule.principle}` : "";
   };
@@ -517,6 +609,59 @@ export default function CaseWorkspace({ initialCase }) {
     ["Handle proof gap", proofGapSnippet()],
     ["Cite lawbook", lawbookSnippet()],
   ].filter((tool) => tool[1]);
+
+  const renderLawbookFilters = () => (
+    <div className="mt-5 flex gap-2 overflow-x-auto pb-1">
+      {lawbookFilterOptions.map((category) => {
+        const isSelected = selectedLawbookCategory === category.slug;
+
+        return (
+          <button
+            key={category.slug}
+            type="button"
+            className={`shrink-0 rounded-full border px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] transition ${
+              isSelected
+                ? "border-amber-200/55 bg-amber-200/15 text-amber-100"
+                : "border-white/10 bg-white/[0.03] text-white/48 hover:border-white/20 hover:text-white/75"
+            }`}
+            onClick={() => setSelectedLawbookCategory(category.slug)}
+          >
+            {category.title}
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  const renderLawbookRuleCard = (rule, compact = false) => (
+    <article
+      key={rule.id}
+      className={`arena-surface-soft flex flex-col ${compact ? "p-4" : "min-h-[15rem] p-4"}`}
+    >
+      <div className="flex items-start gap-3">
+        <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-amber-200/15 bg-amber-200/10 text-amber-100">
+          <LawbookRuleIcon icon={rule.icon} />
+        </span>
+        <div className="min-w-0">
+          <p className="font-semibold leading-6 text-white">{rule.title}</p>
+          <p className="mt-1 text-xs uppercase tracking-[0.12em] text-white/36">
+            {rule.universal
+              ? "Universal"
+              : (rule.categorySlugs || [])
+                  .map((slug) => categoryTitleBySlug.get(slug) || slug)
+                  .join(" | ")}
+          </p>
+        </div>
+      </div>
+      <p className="mt-3 text-sm leading-6 text-white/68">{rule.principle}</p>
+      {!compact ? (
+        <p className="mt-3 text-sm leading-6 text-white/50">{rule.guidance}</p>
+      ) : null}
+      <p className="mt-4 text-xs uppercase tracking-[0.15em] text-white/40">
+        {(rule.tags || []).join(" | ")}
+      </p>
+    </article>
+  );
 
   const factSheetSections = [
     {
@@ -1244,28 +1389,20 @@ export default function CaseWorkspace({ initialCase }) {
                       </div>
                       <div className="flex items-center gap-3">
                         <span className="text-xs uppercase tracking-[0.15em] text-white/40">
-                          {caseSession.lawbook.length} rules active
+                          {visibleLawbookRules.length} of {lawbookRules.length} rules
                         </span>
                         <CollapseChevron />
                       </div>
                     </div>
+                    {renderLawbookFilters()}
                   </summary>
                   <div className="px-6 pb-6">
+                    <p className="mb-4 text-sm text-white/48">
+                      Showing {selectedLawbookCategoryTitle.toLowerCase()} rules plus universal
+                      courtroom principles.
+                    </p>
                     <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
-                      {caseSession.lawbook.map((rule) => (
-                        <article
-                          key={rule.id}
-                          className="arena-surface-soft flex min-h-[17rem] flex-col p-4"
-                        >
-                          <p className="font-semibold text-white">{rule.title}</p>
-                          <p className="mt-3 flex-1 text-sm leading-6 text-white/66">
-                            {rule.principle}
-                          </p>
-                          <p className="mt-4 text-xs uppercase tracking-[0.15em] text-white/40">
-                            {rule.tags.join(" | ")}
-                          </p>
-                        </article>
-                      ))}
+                      {visibleLawbookRules.map((rule) => renderLawbookRuleCard(rule))}
                     </div>
                   </div>
                 </details>
@@ -1393,9 +1530,7 @@ export default function CaseWorkspace({ initialCase }) {
                       ) : null}
                     </div>
                     <div className="mt-5 flex items-center gap-4">
-                      <div className="radial-progress text-white" style={{ "--value": roundedFactSheetProgressPercent, "--size": "5rem", "--thickness": "0.5rem" }}>
-                        {roundedFactSheetProgressPercent}%
-                      </div>
+                      <IntakeProgressRing value={roundedFactSheetProgressPercent} />
                       <div className="text-sm text-white/62">
                         <p className="font-semibold text-white">Next up</p>
                         <p className="mt-1">{nextFactSheetStep}</p>
@@ -1446,22 +1581,22 @@ export default function CaseWorkspace({ initialCase }) {
                         <p className="arena-kicker">Lawbook</p>
                         <h2 className="arena-headline mt-2 text-2xl">Rules in play</h2>
                       </div>
-                      <CollapseChevron />
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs uppercase tracking-[0.15em] text-white/40">
+                          {visibleLawbookRules.length} of {lawbookRules.length}
+                        </span>
+                        <CollapseChevron />
+                      </div>
                     </div>
+                    {renderLawbookFilters()}
                   </summary>
                   <div className="px-6 pb-6">
+                    <p className="mb-4 text-sm text-white/48">
+                      Showing {selectedLawbookCategoryTitle.toLowerCase()} rules plus universal
+                      courtroom principles.
+                    </p>
                     <div className="space-y-3">
-                      {caseSession.lawbook.map((rule) => (
-                        <article key={rule.id} className="arena-surface-soft p-4">
-                          <p className="font-semibold text-white">{rule.title}</p>
-                          <p className="mt-2 text-sm leading-6 text-white/66">
-                            {rule.principle}
-                          </p>
-                          <p className="mt-2 text-xs uppercase tracking-[0.15em] text-white/40">
-                            {rule.tags.join(" | ")}
-                          </p>
-                        </article>
-                      ))}
+                      {visibleLawbookRules.map((rule) => renderLawbookRuleCard(rule, true))}
                     </div>
                   </div>
                 </details>

@@ -1,5 +1,7 @@
 "use client";
 
+import { getLawbookRuleById } from "@/data/legalArenaLawbook";
+
 export const formatDateTime = (value) =>
   new Intl.DateTimeFormat("en", {
     month: "short",
@@ -146,6 +148,7 @@ export const CollapseChevron = () => (
 
 export const getRuleTooltip = (rule) =>
   ruleExplainers[rule] ||
+  getLawbookRuleById(rule)?.guidance ||
   `${rule
     .split("-")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))

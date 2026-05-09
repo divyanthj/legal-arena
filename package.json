@@ -14,6 +14,7 @@
   "dependencies": {
     "@auth/mongodb-adapter": "^3.11.1",
     "@headlessui/react": "^1.7.18",
+    "@heroicons/react": "^2.2.0",
     "@lemonsqueezy/lemonsqueezy.js": "^4.0.0",
     "@vercel/blob": "^2.3.3",
     "axios": "^1.6.8",
@@ -34,6 +35,7 @@
     "react-syntax-highlighter": "^16.1.1",
     "react-tooltip": "^5.26.3",
     "resend": "^6.9.3",
+    "server-only": "^0.0.1",
     "sharp": "^0.34.5",
     "stripe": "^13.11.0"
   },
