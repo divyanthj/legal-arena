@@ -8,6 +8,7 @@ const {
   normalizePlayerPerspectiveVerdictLists,
   normalizeCourtroomDeltasForDifficulty,
   normalizeVerdictForDifficulty,
+  reconcileVerdictWinnerWithSummary,
 } = await import("../libs/game/courtroomDifficulty.js");
 
 const lowestProfile = getCourtroomDifficultyProfile(-10);
@@ -87,6 +88,40 @@ assert.equal(
       concerns: [],
     },
     difficultyProfile: highestProfile,
+  }).winner,
+  "opponent"
+);
+
+assert.equal(
+  reconcileVerdictWinnerWithSummary({
+    winner: "player",
+    summary:
+      "Judgment for Jordan Lee. The State has not carried its burden to prove knowing possession beyond a reasonable doubt.",
+    playerPartyName: "The State",
+    opponentPartyName: "Jordan Lee",
+  }),
+  "opponent"
+);
+
+assert.equal(
+  normalizeVerdictForDifficulty({
+    verdict: {
+      winner: "player",
+      summary:
+        "Judgment for Jordan Lee. The State has not carried its burden to prove knowing possession beyond a reasonable doubt.",
+      highlights: [],
+      concerns: [],
+    },
+    updatedScore: { player: 32, opponent: 26 },
+    fallbackVerdict: {
+      winner: "player",
+      summary: "The State carried the record.",
+      highlights: [],
+      concerns: [],
+    },
+    difficultyProfile: highestProfile,
+    playerPartyName: "The State",
+    opponentPartyName: "Jordan Lee",
   }).winner,
   "opponent"
 );

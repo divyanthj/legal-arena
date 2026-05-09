@@ -130,6 +130,77 @@ const normalizeVerdictList = (items = [], limit = 3) =>
   [...new Set((Array.isArray(items) ? items : []).map(cleanVerdictListItem).filter(Boolean))]
     .slice(0, limit);
 
+const normalizeVerdictText = (value = "") =>
+  String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const hasJudgmentForParty = (summary = "", partyName = "") => {
+  const text = normalizeVerdictText(summary);
+  const party = normalizeVerdictText(partyName);
+  if (!text || !party) return false;
+
+  return [
+    `judgment for ${party}`,
+    `judgement for ${party}`,
+    `ruling for ${party}`,
+    `verdict for ${party}`,
+    `decision for ${party}`,
+    `finds for ${party}`,
+    `court finds for ${party}`,
+    `judgment in favor of ${party}`,
+    `judgement in favor of ${party}`,
+    `ruling in favor of ${party}`,
+    `verdict in favor of ${party}`,
+  ].some((phrase) => text.includes(phrase));
+};
+
+const hasBurdenFailureForParty = (summary = "", partyName = "") => {
+  const text = normalizeVerdictText(summary);
+  const party = normalizeVerdictText(partyName);
+  if (!text || !party) return false;
+
+  const partyIndex = text.indexOf(party);
+  if (partyIndex === -1) return false;
+
+  const windowText = text.slice(partyIndex, partyIndex + 220);
+  const failure =
+    /\b(has not|have not|did not|failed to|fails to|failure to)\b/.test(windowText);
+  const burden =
+    /\b(burden|prove|proven|proved|establish|established|show|shown|carried|carry)\b/.test(
+      windowText
+    );
+
+  return failure && burden;
+};
+
+export const reconcileVerdictWinnerWithSummary = ({
+  winner,
+  summary = "",
+  playerPartyName = "",
+  opponentPartyName = "",
+}) => {
+  const safeWinner = ["player", "opponent", "draw"].includes(winner) ? winner : "draw";
+  const text = String(summary || "").trim();
+
+  if (!text) return safeWinner;
+
+  const judgmentForPlayer = hasJudgmentForParty(text, playerPartyName);
+  const judgmentForOpponent = hasJudgmentForParty(text, opponentPartyName);
+
+  if (judgmentForPlayer && !judgmentForOpponent) return "player";
+  if (judgmentForOpponent && !judgmentForPlayer) return "opponent";
+
+  const playerWon = hasBurdenFailureForParty(text, opponentPartyName);
+  const opponentWon = hasBurdenFailureForParty(text, playerPartyName);
+
+  if (playerWon && !opponentWon) return "player";
+  if (opponentWon && !playerWon) return "opponent";
+  return safeWinner;
+};
+
 const PLAYER_ADVERSE_PATTERN =
   /\b(did not|does not|has not|have not|cannot|could not|failed|fails|failure|lack(?:s|ed|ing)?|no clean|no detailed|no reliable|no specific|not shown|not prove|not proven|not establish|not carried|not carry|unresolved|unsupported|weak|weakened|gap|gaps|defect|concession|wrong address|old address|proof problem|proof issue|concern|adverse)\b/i;
 
@@ -222,6 +293,8 @@ export const normalizeVerdictForDifficulty = ({
   updatedScore,
   fallbackVerdict,
   difficultyProfile,
+  playerPartyName = "",
+  opponentPartyName = "",
 }) => {
   const profile = difficultyProfile || getCourtroomDifficultyProfile();
   const safeVerdict =
@@ -238,11 +311,18 @@ export const normalizeVerdictForDifficulty = ({
 
   const closeCase = Math.abs(scoreMargin) <= profile.verdictCloseCaseBand;
   const requestedWinner = safeVerdict.winner || fallbackWinner;
-  const winner = closeCase ? requestedWinner : scoreWinner;
+  const scoreAdjustedWinner = closeCase ? requestedWinner : scoreWinner;
+  const summary = safeVerdict.summary || fallbackVerdict?.summary || "";
+  const winner = reconcileVerdictWinnerWithSummary({
+    winner: scoreAdjustedWinner,
+    summary,
+    playerPartyName,
+    opponentPartyName,
+  });
 
   return {
     winner,
-    summary: safeVerdict.summary || fallbackVerdict?.summary || "",
+    summary,
     highlights: Array.isArray(safeVerdict.highlights)
       ? safeVerdict.highlights
       : fallbackVerdict?.highlights || [],

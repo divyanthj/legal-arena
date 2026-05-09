@@ -634,23 +634,27 @@ export const normalizeCourtResult = ({
     highlights: normalized.strengths,
     weaknesses: normalized.weaknesses,
   };
+  const playerSide = getPlayerSide(caseSession);
+  const opponentSide = getOpposingSide(playerSide);
   const normalizedFallbackVerdict = buildVerdictFallback({
     updatedScore: normalizedUpdatedScore,
     rules,
     factSheet: caseSession.factSheet,
     template,
-    playerSide: getPlayerSide(caseSession),
+    playerSide,
   });
 
   return {
     ...normalized,
     verdict: normalizeVerdictForPlayerPerspective({
       verdict: normalizeVerdictForDifficulty({
-      verdict: aiResult.verdict,
-      updatedScore: normalizedUpdatedScore,
-      fallbackVerdict: normalizedFallbackVerdict,
-      difficultyProfile,
-    }),
+        verdict: aiResult.verdict,
+        updatedScore: normalizedUpdatedScore,
+        fallbackVerdict: normalizedFallbackVerdict,
+        difficultyProfile,
+        playerPartyName: getPartyName(template, playerSide),
+        opponentPartyName: getPartyName(template, opponentSide),
+      }),
       playerStrengths: normalized.strengths,
       playerWeaknesses: normalized.weaknesses,
       fallbackVerdict: normalizedFallbackVerdict,

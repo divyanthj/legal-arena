@@ -4,6 +4,11 @@ import Link from "next/link";
 import { useState } from "react";
 import { sanitizeFactSheet } from "@/libs/game/factSheetSanitizer";
 import {
+  verdictTone,
+  winnerLabel,
+  winnerSignal,
+} from "./caseWorkspaceUtils";
+import {
   EmptyPanel,
   FactList,
   TranscriptEntry,
@@ -31,6 +36,33 @@ export default function PlayerMatterDossier({ player, caseSession }) {
   const hasVerdict = matter.status === "verdict" && Boolean(verdict.summary);
   const playerScore = verdict.finalScore?.player || matter.score?.player || 0;
   const opponentScore = verdict.finalScore?.opponent || matter.score?.opponent || 0;
+  const verdictStyle = verdictTone[verdict.winner] || verdictTone.draw;
+
+  const renderVerdictPanel = () => (
+    <div className={`arena-surface border ${verdictStyle.card}`}>
+      <div className="p-5 md:p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex flex-wrap items-center gap-3">
+            <p className={`arena-kicker ${verdictStyle.eyebrow}`}>Final Ruling</p>
+            <span className={`badge border arena-status ${verdictStyle.card}`}>
+              {winnerSignal[verdict.winner] || winnerSignal.draw}
+            </span>
+          </div>
+          <Link href="/dashboard" className="arena-btn-light inline-flex px-5 py-3 text-sm">
+            Back to Cases
+          </Link>
+        </div>
+        <h2 className="arena-headline mt-2 text-3xl uppercase">
+          {winnerLabel[verdict.winner] || winnerLabel.draw}
+        </h2>
+        <p className="mt-3 max-w-3xl leading-7 text-white/66">{verdict.summary}</p>
+        <div className="mt-5 grid gap-4 md:grid-cols-2">
+          <FactList title="What helped your side" items={verdict.highlights} />
+          <FactList title="What weakened your side" items={verdict.concerns} />
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <main className="arena-app-shell min-h-screen overflow-x-hidden px-4 py-6 md:px-8 md:py-10">
@@ -80,6 +112,8 @@ export default function PlayerMatterDossier({ player, caseSession }) {
             </div>
           </div>
         </div>
+
+        {hasVerdict ? renderVerdictPanel() : null}
 
         <div className="grid gap-6 xl:grid-cols-[0.72fr_1.28fr]">
           <aside className="space-y-6">
@@ -228,23 +262,7 @@ export default function PlayerMatterDossier({ player, caseSession }) {
                   {activeTab === "Verdict" && (
                     <div className="space-y-4">
                       {hasVerdict ? (
-                        <>
-                          <div className="arena-surface-soft p-4">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <p className="font-semibold text-white">Final ruling</p>
-                              <span className="badge border arena-status arena-status-favorable">
-                                {outcomeLabel[verdict.winner] || "Drew"}
-                              </span>
-                            </div>
-                            <p className="mt-3 text-sm leading-7 text-white/66">
-                              {verdict.summary}
-                            </p>
-                          </div>
-                          <div className="grid gap-4 md:grid-cols-2">
-                            <FactList title="What helped" items={verdict.highlights} />
-                            <FactList title="What weakened" items={verdict.concerns} />
-                          </div>
-                        </>
+                        renderVerdictPanel()
                       ) : (
                         <EmptyPanel
                           title="No verdict yet"

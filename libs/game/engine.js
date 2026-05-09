@@ -477,6 +477,7 @@ export const runCourtroomRound = async ({ caseSession, argument, userId }) => {
         "Never mention the hidden courtroom calibration or why the response is more focused or more layered.",
       ],
       verdictPerspectiveRules: [
+        "If returning a verdict, winner must match the legal ruling stated in summary: use player when the represented player's side wins, opponent when opposing counsel's side wins, and draw only for a true split or too-close ruling.",
         "If returning a verdict, highlights must list only points that helped the represented player's side.",
         "If returning a verdict, concerns must list only points that weakened the represented player's side.",
         "Do not put adverse findings against the represented player in highlights, even if they were important to the court's ruling.",

@@ -203,6 +203,7 @@ export default function CaseWorkspace({ initialCase }) {
   const [selectedLawbookCategory, setSelectedLawbookCategory] = useState(
     initialCase.primaryCategory || LAWBOOK_ALL_CATEGORIES
   );
+  const [lawbookSearch, setLawbookSearch] = useState("");
   const interviewTranscriptRef = useRef(null);
   const courtroomTranscriptRef = useRef(null);
   const {
@@ -445,10 +446,31 @@ export default function CaseWorkspace({ initialCase }) {
     Array.isArray(caseSession.lawbook) && caseSession.lawbook.length >= legalArenaLawbook.length
       ? caseSession.lawbook
       : legalArenaLawbook;
-  const visibleLawbookRules = useMemo(
-    () => filterLawbookRulesByCategory(lawbookRules, selectedLawbookCategory),
-    [lawbookRules, selectedLawbookCategory]
-  );
+  const visibleLawbookRules = useMemo(() => {
+    const categoryRules = filterLawbookRulesByCategory(
+      lawbookRules,
+      selectedLawbookCategory
+    );
+    const searchTerm = lawbookSearch.trim().toLowerCase();
+
+    if (!searchTerm) {
+      return categoryRules;
+    }
+
+    return categoryRules.filter((rule) =>
+      [
+        rule.title,
+        rule.principle,
+        rule.guidance,
+        rule.id,
+        ...(rule.tags || []),
+        ...(rule.categorySlugs || []).map((slug) => categoryTitleBySlug.get(slug) || slug),
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(searchTerm)
+    );
+  }, [lawbookRules, lawbookSearch, selectedLawbookCategory]);
   const selectedLawbookCategoryTitle =
     selectedLawbookCategory === LAWBOOK_ALL_CATEGORIES
       ? "All"
@@ -527,6 +549,43 @@ export default function CaseWorkspace({ initialCase }) {
   const firstDraftItem = (...lists) =>
     lists.flatMap((list) => cleanDraftList(list)).find(Boolean) || "";
 
+  const sentenceCasePartyName = (partyName = "") => {
+    const trimmed = String(partyName || "").trim();
+    if (!trimmed) return "";
+    if (/^(the|a|an)\s+/i.test(trimmed)) return trimmed;
+    if (/^(state|commonwealth|people|city|county|united states)\b/i.test(trimmed)) {
+      return `the ${trimmed}`;
+    }
+    return trimmed;
+  };
+
+  const capitalizeSentenceStart = (value = "") => {
+    const trimmed = String(value || "").trim();
+    if (!trimmed) return "";
+    return `${trimmed.charAt(0).toUpperCase()}${trimmed.slice(1)}`;
+  };
+
+  const punctuateSentence = (value = "") => {
+    const trimmed = String(value || "").trim();
+    if (!trimmed) return "";
+    return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
+  };
+
+  const reliefSnippet = ({ partyName, relief }) => {
+    const trimmedRelief = String(relief || "").trim();
+    if (!trimmedRelief) return "";
+
+    if (/\b(asks?|seeks?|requests?|moves?)\b/i.test(trimmedRelief)) {
+      return punctuateSentence(trimmedRelief);
+    }
+
+    return punctuateSentence(
+      `For that reason, ${capitalizeSentenceStart(
+        sentenceCasePartyName(partyName)
+      )} asks for ${trimmedRelief}`
+    );
+  };
+
   const appendArgumentSnippet = (snippet) => {
     const text = String(snippet || "").trim();
 
@@ -553,12 +612,12 @@ export default function CaseWorkspace({ initialCase }) {
       visibleLawbookRules.find((item) => !item.universal) || visibleLawbookRules[0];
 
     return [
-      `May it please the Court. I represent ${playerPartyName}.`,
+      `May it please the Court. I represent ${sentenceCasePartyName(playerPartyName)}.`,
       theory ? `Our position is straightforward: ${theory}` : "",
       strongestFact ? `The record starts with this point: ${strongestFact}` : "",
       rule ? `The governing lens is ${rule.title}: ${rule.principle}` : "",
       liveRisk ? `I also want to address the main weakness directly: ${liveRisk}` : "",
-      relief ? `For that reason, ${playerPartyName} asks for ${relief}` : "",
+      reliefSnippet({ partyName: playerPartyName, relief }),
     ]
       .filter(Boolean)
       .join("\n");
@@ -611,7 +670,7 @@ export default function CaseWorkspace({ initialCase }) {
   ].filter((tool) => tool[1]);
 
   const renderLawbookFilters = () => (
-    <div className="mt-5 flex gap-2 overflow-x-auto pb-1">
+    <div className="mt-4 flex min-w-0 max-w-full flex-wrap gap-1.5 sm:mt-5 sm:gap-2">
       {lawbookFilterOptions.map((category) => {
         const isSelected = selectedLawbookCategory === category.slug;
 
@@ -619,7 +678,7 @@ export default function CaseWorkspace({ initialCase }) {
           <button
             key={category.slug}
             type="button"
-            className={`shrink-0 rounded-full border px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] transition ${
+            className={`rounded-full border px-2.5 py-1.5 text-[0.62rem] font-semibold uppercase tracking-[0.08em] transition sm:px-3 sm:py-2 sm:text-xs sm:tracking-[0.12em] ${
               isSelected
                 ? "border-amber-200/55 bg-amber-200/15 text-amber-100"
                 : "border-white/10 bg-white/[0.03] text-white/48 hover:border-white/20 hover:text-white/75"
@@ -634,33 +693,106 @@ export default function CaseWorkspace({ initialCase }) {
   );
 
   const renderLawbookRuleCard = (rule, compact = false) => (
-    <article
+    <details
       key={rule.id}
-      className={`arena-surface-soft flex flex-col ${compact ? "p-4" : "min-h-[15rem] p-4"}`}
+      className="arena-surface-soft group/rule min-w-0 max-w-full overflow-hidden"
     >
-      <div className="flex items-start gap-3">
+      <summary className="flex min-w-0 cursor-pointer list-none items-center gap-3 p-3 sm:p-4">
         <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-amber-200/15 bg-amber-200/10 text-amber-100">
           <LawbookRuleIcon icon={rule.icon} />
         </span>
-        <div className="min-w-0">
-          <p className="font-semibold leading-6 text-white">{rule.title}</p>
-          <p className="mt-1 text-xs uppercase tracking-[0.12em] text-white/36">
-            {rule.universal
-              ? "Universal"
-              : (rule.categorySlugs || [])
-                  .map((slug) => categoryTitleBySlug.get(slug) || slug)
-                  .join(" | ")}
-          </p>
-        </div>
+        <p className="min-w-0 flex-1 break-words text-sm font-semibold leading-5 text-white sm:text-[0.95rem]">
+          {rule.title}
+        </p>
+        <span className="relative inline-flex h-6 w-6 shrink-0 items-center justify-center text-white/55">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            strokeWidth={1.5}
+            stroke="currentColor"
+            className="h-5 w-5 group-open/rule:hidden"
+            aria-hidden="true"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+          </svg>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            strokeWidth={1.5}
+            stroke="currentColor"
+            className="hidden h-5 w-5 group-open/rule:block"
+            aria-hidden="true"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+          </svg>
+        </span>
+      </summary>
+      <div className="border-t border-white/8 px-3 pb-3 pt-2 sm:px-4 sm:pb-4">
+        <p className="text-xs uppercase tracking-[0.12em] text-white/36">
+          {rule.universal
+            ? "Universal"
+            : (rule.categorySlugs || [])
+                .map((slug) => categoryTitleBySlug.get(slug) || slug)
+                .join(" | ")}
+        </p>
+        <p className="mt-3 text-sm leading-6 text-white/68">{rule.principle}</p>
+        {!compact ? (
+          <p className="mt-3 text-sm leading-6 text-white/50">{rule.guidance}</p>
+        ) : null}
+        <p className="mt-4 break-words text-xs uppercase tracking-[0.12em] text-white/40 sm:tracking-[0.15em]">
+          {(rule.tags || []).join(" | ")}
+        </p>
       </div>
-      <p className="mt-3 text-sm leading-6 text-white/68">{rule.principle}</p>
-      {!compact ? (
-        <p className="mt-3 text-sm leading-6 text-white/50">{rule.guidance}</p>
-      ) : null}
-      <p className="mt-4 text-xs uppercase tracking-[0.15em] text-white/40">
-        {(rule.tags || []).join(" | ")}
-      </p>
-    </article>
+    </details>
+  );
+
+  const renderLawbookPanel = (className = "") => (
+    <div className={`arena-surface min-w-0 max-w-full overflow-hidden ${className}`}>
+      <details className="group min-w-0 max-w-full" open>
+        <summary className="list-none cursor-pointer p-4 sm:p-6">
+          <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div className="min-w-0">
+              <p className="arena-kicker">Lawbook</p>
+              <h2 className="arena-headline mt-2 text-2xl">Rules in play</h2>
+            </div>
+            <div className="flex items-center justify-between gap-3 sm:justify-end">
+              <span className="text-xs uppercase tracking-[0.15em] text-white/40">
+                {visibleLawbookRules.length} of {lawbookRules.length} rules
+              </span>
+              <CollapseChevron />
+            </div>
+          </div>
+          {renderLawbookFilters()}
+        </summary>
+        <div className="px-4 pb-4 sm:px-6 sm:pb-6">
+          <label className="block min-w-0">
+            <span className="sr-only">Search lawbook rules</span>
+            <input
+              type="search"
+              className="arena-field min-h-0 w-full px-3 py-2.5 text-sm outline-none transition placeholder:text-white/35 focus:border-amber-200/45"
+              placeholder="Search all rules"
+              value={lawbookSearch}
+              onChange={(event) => setLawbookSearch(event.target.value)}
+            />
+          </label>
+          <p className="mb-4 mt-3 text-sm text-white/48">
+            Showing {selectedLawbookCategoryTitle.toLowerCase()} rules plus universal
+            courtroom principles.
+          </p>
+          <div className="grid min-w-0 max-w-full grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 2xl:grid-cols-4">
+            {visibleLawbookRules.length > 0 ? (
+              visibleLawbookRules.map((rule) => renderLawbookRuleCard(rule))
+            ) : (
+              <div className="arena-surface-soft p-4 text-sm text-white/52">
+                No rules match this search.
+              </div>
+            )}
+          </div>
+        </div>
+      </details>
+    </div>
   );
 
   const factSheetSections = [
@@ -778,8 +910,11 @@ export default function CaseWorkspace({ initialCase }) {
           {hasDraftRows ? (
             <div className="space-y-3">
               {items.map((item, itemIndex) => (
-                <div key={`${section.key}-${itemIndex}`} className="flex items-start gap-3">
-                  <span className="mt-3 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-300/80" />
+                <div
+                  key={`${section.key}-${itemIndex}`}
+                  className="flex flex-col gap-3 sm:flex-row sm:items-start"
+                >
+                  <span className="hidden h-1.5 w-1.5 shrink-0 rounded-full bg-amber-300/80 sm:mt-3 sm:block" />
                   {isInterview ? (
                     <>
                       <textarea
@@ -792,7 +927,7 @@ export default function CaseWorkspace({ initialCase }) {
                       />
                       <button
                         type="button"
-                        className="arena-btn-dark min-h-0 shrink-0 px-3 py-2 text-xs"
+                        className="arena-btn-dark min-h-0 shrink-0 px-3 py-2 text-xs sm:self-start"
                         onClick={() => removeFactSheetBullet(section.key, itemIndex)}
                         aria-label={`Remove ${section.title} item`}
                       >
@@ -826,14 +961,14 @@ export default function CaseWorkspace({ initialCase }) {
   };
 
   return (
-    <main className="arena-app-shell min-h-screen px-4 py-6 md:px-8 md:py-10">
+    <main className="arena-app-shell min-h-screen overflow-x-hidden px-3 py-4 sm:px-4 sm:py-6 md:px-8 md:py-10">
       <section className="mx-auto max-w-[1600px] space-y-6 arena-reveal">
         <div
           className="arena-surface arena-scanline arena-column-bg"
           style={heroPanelStyle}
         >
-          <div className="p-6 md:p-8">
-            <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="p-4 sm:p-6 md:p-8">
+            <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <Link
@@ -855,7 +990,7 @@ export default function CaseWorkspace({ initialCase }) {
                     {sideBadgeLabel}
                   </span>
                 </div>
-                <h1 className="arena-headline mt-5 max-w-5xl text-4xl uppercase leading-[0.92] md:text-6xl">
+                <h1 className="arena-headline mt-5 max-w-5xl text-[2.35rem] uppercase leading-[0.95] sm:text-4xl md:text-6xl">
                   {caseSession.title}
                 </h1>
                 <p className="mt-4 max-w-3xl text-white/66">
@@ -926,12 +1061,12 @@ export default function CaseWorkspace({ initialCase }) {
           </div>
         </div>
 
-        <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-          <section className="space-y-6">
+        <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+          <section className="min-w-0 space-y-6">
             {isInterview ? (
               <div className="arena-surface">
-                <div className="p-6">
-                  <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_240px]">
+                <div className="p-4 sm:p-6">
+                  <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_240px]">
                     <div>
                       <p className="arena-kicker">Step 1</p>
                       <h2 className="arena-headline mt-2 text-2xl">
@@ -941,9 +1076,9 @@ export default function CaseWorkspace({ initialCase }) {
                         Interview {playerPartyName} and tighten the record.
                       </p>
                     </div>
-                    <div className="arena-surface-soft p-4">
+                    <div className="arena-surface-soft min-w-0 p-4">
                       <p className="arena-kicker">Tip</p>
-                      <p className="mt-3 text-sm leading-7 text-white/68">
+                      <p className="mt-3 break-words text-sm leading-7 text-white/68">
                         Ask clear, open-ended questions about dates, records, witnesses, notice,
                         and any gaps in proof.
                       </p>
@@ -952,15 +1087,15 @@ export default function CaseWorkspace({ initialCase }) {
 
                   <div
                     ref={interviewTranscriptRef}
-                    className="arena-scroll mt-5 max-h-[26rem] space-y-4 overflow-y-auto pr-2"
+                    className="arena-scroll mt-5 max-h-[24rem] space-y-4 overflow-y-auto pr-1 sm:max-h-[26rem] sm:pr-2"
                   >
                     {visibleInterviewTranscript.map((entry, index) => (
                       <article
                         key={`${entry.createdAt}-${index}`}
-                        className={`rounded-xl border p-4 ${
+                        className={`min-w-0 max-w-full rounded-xl border p-4 ${
                           entry.role !== "player"
                             ? "arena-transcript-opponent border-amber-500/30"
-                            : "arena-transcript-player ml-auto max-w-[90%] border-white/10"
+                            : "arena-transcript-player sm:ml-auto sm:max-w-[90%] border-white/10"
                         }`}
                       >
                         <div className="flex items-center justify-between gap-3">
@@ -973,7 +1108,7 @@ export default function CaseWorkspace({ initialCase }) {
                             {formatDateTime(entry.createdAt)}
                           </p>
                         </div>
-                        <p className="mt-2 whitespace-pre-wrap leading-7 text-white">
+                        <p className="mt-2 whitespace-pre-wrap break-words leading-7 text-white">
                           {entry.text}
                         </p>
                       </article>
@@ -992,9 +1127,9 @@ export default function CaseWorkspace({ initialCase }) {
                     )}
                   </div>
 
-                  <form className="mt-6 space-y-4" onSubmit={handleInterviewSubmit}>
+                  <form className="mt-6 min-w-0 space-y-4" onSubmit={handleInterviewSubmit}>
                     <textarea
-                      className="textarea textarea-bordered arena-textarea arena-field h-28 w-full text-slate-100"
+                      className="textarea textarea-bordered arena-textarea arena-field h-28 min-w-0 w-full text-slate-100"
                       placeholder={`Ask ${playerPartyName} about dates, records, witnesses, notice, or any proof gaps you need to pin down.`}
                       value={question}
                       onChange={(event) => setQuestion(event.target.value)}
@@ -1021,10 +1156,10 @@ export default function CaseWorkspace({ initialCase }) {
                         </div>
                       </div>
                     ) : null}
-                    <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
                       <button
                         type="button"
-                        className={`border ${
+                        className={`w-full justify-center border sm:w-auto ${
                           recordingQuestion ? "arena-btn-danger" : "arena-btn-dark"
                         } inline-flex items-center gap-2 px-4 py-3`}
                         disabled={working || transcribingQuestion}
@@ -1070,7 +1205,7 @@ export default function CaseWorkspace({ initialCase }) {
                           : "Voice Input"}
                       </button>
                       <button
-                        className="arena-btn-light px-6 py-3"
+                        className="arena-btn-light w-full px-6 py-3 sm:w-auto"
                         disabled={working || recordingQuestion || transcribingQuestion}
                       >
                         {pendingAction === "interview"
@@ -1079,7 +1214,7 @@ export default function CaseWorkspace({ initialCase }) {
                       </button>
                       <button
                         type="button"
-                        className="arena-btn-danger ml-auto px-4 py-3"
+                        className="arena-btn-danger w-full px-4 py-3 sm:ml-auto sm:w-auto"
                         disabled={working || recordingQuestion || transcribingQuestion}
                         onClick={handleExitCase}
                       >
@@ -1091,7 +1226,7 @@ export default function CaseWorkspace({ initialCase }) {
               </div>
             ) : isExited ? (
               <div className="arena-surface">
-                <div className="p-6">
+                <div className="p-4 sm:p-6">
                   <p className="arena-kicker text-rose-300">Case Exited</p>
                   <h2 className="arena-headline mt-2 text-2xl">This intake was closed</h2>
                   <p className="mt-3 max-w-2xl text-white/66">
@@ -1107,8 +1242,8 @@ export default function CaseWorkspace({ initialCase }) {
               </div>
             ) : (
               <div className="arena-surface arena-round-transition">
-                <div className="p-6">
-                  <div className="flex items-end justify-between gap-3">
+                <div className="p-4 sm:p-6">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                     <div>
                       <p className="arena-kicker">Step 2</p>
                       <h2 className="arena-headline mt-2 text-2xl">
@@ -1123,7 +1258,7 @@ export default function CaseWorkspace({ initialCase }) {
                     </span>
                   </div>
 
-                  <div className="mt-5 grid gap-4 md:grid-cols-3">
+                  <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     <div className="arena-stat-card">
                       <div className="flex items-center gap-2">
                         <p className="arena-kicker">Your Pressure</p>
@@ -1179,10 +1314,10 @@ export default function CaseWorkspace({ initialCase }) {
 
                   <div
                     ref={courtroomTranscriptRef}
-                    className="arena-scroll mt-5 max-h-[30rem] space-y-4 overflow-y-auto pr-2"
+                    className="arena-scroll mt-5 max-h-[26rem] space-y-4 overflow-y-auto pr-1 sm:max-h-[30rem] sm:pr-2"
                   >
                     {normalizedCourtroomTranscript.length === 0 ? (
-                      <div className="arena-surface-soft p-5">
+                      <div className="arena-surface-soft min-w-0 p-5">
                         <p className="font-semibold text-white">Court is now in session.</p>
                         <p className="mt-2 text-sm text-white/62">
                           Open with your strongest theory and anchor it to lawbook and fact
@@ -1193,9 +1328,9 @@ export default function CaseWorkspace({ initialCase }) {
                       normalizedCourtroomTranscript.map((entry, index) => (
                         <article
                           key={`${entry.round}-${entry.speaker}-${index}`}
-                          className={`rounded-xl p-4 ${
+                          className={`min-w-0 max-w-full rounded-xl p-4 ${
                             entry.speaker === "player"
-                              ? "arena-transcript-player ml-auto max-w-[95%]"
+                              ? "arena-transcript-player sm:ml-auto sm:max-w-[95%]"
                               : "arena-transcript-opponent"
                           }`}
                         >
@@ -1205,7 +1340,7 @@ export default function CaseWorkspace({ initialCase }) {
                             </p>
                             <p className="text-xs text-white/40">Round {entry.round}</p>
                           </div>
-                          <p className="mt-2 whitespace-pre-wrap leading-7 text-white">
+                          <p className="mt-2 whitespace-pre-wrap break-words leading-7 text-white">
                             {entry.text}
                           </p>
                           {entry.speaker === "player" &&
@@ -1263,7 +1398,7 @@ export default function CaseWorkspace({ initialCase }) {
                   </div>
 
                   {!isVerdict && (
-                    <form className="mt-6 space-y-4" onSubmit={handleCourtroomSubmit}>
+                    <form className="mt-6 min-w-0 space-y-4" onSubmit={handleCourtroomSubmit}>
                       <div>
                         <p className="arena-kicker">Your Argument</p>
                         <p className="mt-2 text-sm text-white/52">
@@ -1273,7 +1408,7 @@ export default function CaseWorkspace({ initialCase }) {
                         </p>
                       </div>
                       <textarea
-                        className="textarea textarea-bordered arena-textarea arena-field h-40 w-full text-slate-100"
+                        className="textarea textarea-bordered arena-textarea arena-field h-40 min-w-0 w-full text-slate-100"
                         placeholder={`Deliver your argument for ${playerPartyName}. Cite the fact sheet, confront the weakest point on ${opponentPartyName}'s side, and tie your position to the lawbook.`}
                         value={argument}
                         onChange={(event) => setArgument(event.target.value)}
@@ -1309,10 +1444,10 @@ export default function CaseWorkspace({ initialCase }) {
                           </div>
                         </div>
                       ) : null}
-                      <div className="flex flex-wrap items-center gap-3">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
                         <button
                           type="button"
-                          className={`border ${
+                          className={`w-full justify-center border sm:w-auto ${
                             recordingArgument
                               ? "arena-btn-danger"
                               : "arena-btn-dark"
@@ -1360,7 +1495,7 @@ export default function CaseWorkspace({ initialCase }) {
                             : "Voice Argument"}
                         </button>
                         <button
-                          className="arena-btn-light ml-auto px-5 py-3"
+                          className="arena-btn-light w-full px-5 py-3 sm:ml-auto sm:w-auto"
                           disabled={working || recordingArgument || transcribingArgument}
                         >
                           {pendingAction === "courtroom"
@@ -1378,45 +1513,21 @@ export default function CaseWorkspace({ initialCase }) {
               </div>
             )}
 
-            {(isInterview || isCourtroom) && (
-              <div className="arena-surface">
-                <details className="group" open>
-                  <summary className="list-none cursor-pointer p-6">
-                    <div className="flex items-end justify-between gap-3">
-                      <div>
-                        <p className="arena-kicker">Lawbook</p>
-                        <h2 className="arena-headline mt-2 text-2xl">Rules in play</h2>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-xs uppercase tracking-[0.15em] text-white/40">
-                          {visibleLawbookRules.length} of {lawbookRules.length} rules
-                        </span>
-                        <CollapseChevron />
-                      </div>
-                    </div>
-                    {renderLawbookFilters()}
-                  </summary>
-                  <div className="px-6 pb-6">
-                    <p className="mb-4 text-sm text-white/48">
-                      Showing {selectedLawbookCategoryTitle.toLowerCase()} rules plus universal
-                      courtroom principles.
-                    </p>
-                    <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
-                      {visibleLawbookRules.map((rule) => renderLawbookRuleCard(rule))}
-                    </div>
-                  </div>
-                </details>
-              </div>
-            )}
+            {(isInterview || isCourtroom) && renderLawbookPanel("hidden xl:block")}
 
             {isVerdict && (
               <div className={`arena-surface border ${verdictStyle.card}`}>
-                <div className="p-6">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <p className={`arena-kicker ${verdictStyle.eyebrow}`}>Final Ruling</p>
-                    <span className={`badge border arena-status ${verdictStyle.card}`}>
-                      {winnerSignal[caseSession.verdict.winner] || winnerSignal.draw}
-                    </span>
+                <div className="p-4 sm:p-6">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <p className={`arena-kicker ${verdictStyle.eyebrow}`}>Final Ruling</p>
+                      <span className={`badge border arena-status ${verdictStyle.card}`}>
+                        {winnerSignal[caseSession.verdict.winner] || winnerSignal.draw}
+                      </span>
+                    </div>
+                    <Link href="/dashboard" className="arena-btn-light inline-flex px-5 py-3 text-sm">
+                      Back to Cases
+                    </Link>
                   </div>
                   <h2 className="arena-headline mt-2 text-3xl uppercase">
                     {winnerLabel[caseSession.verdict.winner]}
@@ -1459,15 +1570,15 @@ export default function CaseWorkspace({ initialCase }) {
             )}
           </section>
 
-          <aside className="space-y-6">
+          <aside className="min-w-0 space-y-6">
             <div className="arena-surface">
-              <div className="p-6">
-                <div className="flex items-end justify-between gap-3">
+              <div className="p-4 sm:p-6">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                   <div>
                     <p className="arena-kicker">Fact Sheet</p>
                     <h2 className="arena-headline mt-2 text-2xl">Case file</h2>
                   </div>
-                  <div className="flex flex-col items-end gap-2">
+                  <div className="flex flex-row flex-wrap gap-2 sm:flex-col sm:items-end">
                     <span
                       className={`badge border arena-status ${
                         caseSession.factSheet.ready
@@ -1515,7 +1626,7 @@ export default function CaseWorkspace({ initialCase }) {
             {isInterview ? (
               <>
                 <div className="arena-surface">
-                  <div className="p-6">
+                  <div className="p-4 sm:p-6">
                     <p className="arena-kicker">Intake Progress</p>
                     <div className="mt-2 flex flex-wrap items-center gap-3">
                       <h2 className="arena-headline text-2xl">Build the record</h2>
@@ -1544,29 +1655,33 @@ export default function CaseWorkspace({ initialCase }) {
                 </div>
 
                 <div className="arena-surface">
-                  <div className="p-6">
+                  <div className="p-4 sm:p-6">
                     <p className="arena-kicker">Case Quick Links</p>
                     <div className="mt-5 space-y-3">
                       <a
                         href="#"
-                        className="arena-surface-soft flex items-center justify-between px-4 py-3 text-sm text-white/72"
+                        className="arena-surface-soft flex min-w-0 items-center justify-between gap-3 px-4 py-3 text-sm text-white/72"
                       >
-                        <span>Case details</span>
-                        <span className="text-white/35">{caseSession.premise.courtName}</span>
+                        <span className="shrink-0">Case details</span>
+                        <span className="min-w-0 truncate text-white/35">
+                          {caseSession.premise.courtName}
+                        </span>
                       </a>
                       <a
                         href="#"
-                        className="arena-surface-soft flex items-center justify-between px-4 py-3 text-sm text-white/72"
+                        className="arena-surface-soft flex min-w-0 items-center justify-between gap-3 px-4 py-3 text-sm text-white/72"
                       >
-                        <span>Opponent</span>
-                        <span className="text-white/35">{opponentPartyName}</span>
+                        <span className="shrink-0">Opponent</span>
+                        <span className="min-w-0 truncate text-white/35">{opponentPartyName}</span>
                       </a>
                       <a
                         href="#"
-                        className="arena-surface-soft flex items-center justify-between px-4 py-3 text-sm text-white/72"
+                        className="arena-surface-soft flex min-w-0 items-center justify-between gap-3 px-4 py-3 text-sm text-white/72"
                       >
-                        <span>Public case feed</span>
-                        <span className="text-white/35">{caseSession.primaryCategory}</span>
+                        <span className="shrink-0">Public case feed</span>
+                        <span className="min-w-0 truncate text-white/35">
+                          {caseSession.primaryCategory}
+                        </span>
                       </a>
                     </div>
                   </div>
@@ -1603,6 +1718,7 @@ export default function CaseWorkspace({ initialCase }) {
               </div>
             )}
           </aside>
+          {(isInterview || isCourtroom) && renderLawbookPanel("xl:hidden")}
         </div>
       </section>
       {Number.isFinite(Number(displayedSuccessChance)) ? (

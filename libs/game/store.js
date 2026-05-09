@@ -189,6 +189,48 @@ const buildOpeningStatementForSide = (template, side) => {
   return `${template.opponentName} disputes ${template.clientName}'s request for relief and wants the court to reject or reduce it.`;
 };
 
+const sentenceCasePartyName = (partyName = "") => {
+  const trimmed = String(partyName || "").trim();
+  if (!trimmed) return "";
+  if (/^(the|a|an)\s+/i.test(trimmed)) return trimmed;
+  if (/^(state|commonwealth|people|city|county|united states)\b/i.test(trimmed)) {
+    return `the ${trimmed}`;
+  }
+  return trimmed;
+};
+
+const capitalizeSentenceStart = (value = "") => {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return "";
+  return `${trimmed.charAt(0).toUpperCase()}${trimmed.slice(1)}`;
+};
+
+const lowerSentenceContinuation = (value = "") => {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return "";
+  if (/^[A-Z]\b/.test(trimmed)) return trimmed;
+  return `${trimmed.charAt(0).toLowerCase()}${trimmed.slice(1)}`;
+};
+
+const punctuateSentence = (value = "") => {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return "";
+  return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
+};
+
+const buildReliefSentence = ({ partyName, requestedRelief }) => {
+  const relief = String(requestedRelief || "").trim();
+  if (!relief) return "";
+
+  if (/\b(asks?|seeks?|requests?|moves?)\b/i.test(relief)) {
+    return punctuateSentence(relief);
+  }
+
+  return punctuateSentence(
+    `${capitalizeSentenceStart(sentenceCasePartyName(partyName))} asks the Court for ${relief}`
+  );
+};
+
 export const buildPlaintiffCourtOpeningStatement = (templateInput = {}) => {
   const template = toPlain(templateInput) || {};
   const plaintiffName = template.clientName || template.plaintiffName || "Plaintiff";
@@ -212,10 +254,15 @@ export const buildPlaintiffCourtOpeningStatement = (templateInput = {}) => {
     .slice(0, 2);
 
   return [
-    `May it please the Court. I represent ${plaintiffName}.`,
-    theory || `${plaintiffName} brings this claim against ${defendantName}.`,
-    ...supportingClaims.map((claim) => `The evidence will show that ${claim}`),
-    requestedRelief ? `${plaintiffName} asks the Court for ${requestedRelief}` : "",
+    `May it please the Court. I represent ${sentenceCasePartyName(plaintiffName)}.`,
+    theory ||
+      `${capitalizeSentenceStart(
+        sentenceCasePartyName(plaintiffName)
+      )} brings this claim against ${defendantName}.`,
+    ...supportingClaims.map(
+      (claim) => `The evidence will show that ${lowerSentenceContinuation(claim)}`
+    ),
+    buildReliefSentence({ partyName: plaintiffName, requestedRelief }),
   ]
     .filter(Boolean)
     .join("\n");
