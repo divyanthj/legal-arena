@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import sharp from "sharp";
-import { put } from "@vercel/blob";
+import { del, put } from "@vercel/blob";
 import { authOptions } from "@/libs/next-auth";
 import connectMongo from "@/libs/mongoose";
 import { userCanAccessArena } from "@/libs/admin";
@@ -18,7 +18,8 @@ const IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL?.trim() || "gpt-image-1.5";
 const HEADSHOT_PROMPT = [
   "Create a photorealistic professional lawyer headshot from the supplied photo.",
   "Preserve the person's facial identity and natural proportions.",
-  "Use a consistent legal-professional presentation: tailored charcoal suit jacket, crisp white shirt, deep burgundy tie, clean courtroom-ready grooming, and a neutral grey studio background that matches a dark legal dashboard.",
+  "Use a consistent legal-professional presentation: polished office-worthy clothing such as a blazer, suit jacket, blouse, dress shirt, formal top, or other courtroom-appropriate business attire, with clean courtroom-ready grooming and a neutral grey studio background that matches a dark legal dashboard.",
+  "Do not force a suit and tie, especially for women; use a tie only when it naturally fits the person's presentation.",
   "Compose as a centered upper-chest bust portrait suitable for a circular profile avatar, with the entire face, forehead, chin, ears, and full head clearly inside the frame.",
   "Leave comfortable grey background margin above the head and around both sides so the face is not cropped when shown in a circle.",
   "The pose and expression may vary naturally, but keep the outfit, grooming standard, lighting, and grey background consistent.",
@@ -156,7 +157,7 @@ export async function POST(request) {
     user.image =
       typeof storedHeadshot === "string"
         ? storedHeadshot
-        : storedHeadshot.imageUrl;
+        : `${storedHeadshot.imageUrl}?v=${Date.now()}`;
     await user.save();
 
     return NextResponse.json({
@@ -171,6 +172,48 @@ export async function POST(request) {
     console.error("Avatar upload failed:", error);
     return NextResponse.json(
       { error: error?.message || "Could not update the profile image." },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE() {
+  const session = await getServerSession(authOptions);
+
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+  }
+
+  if (!(await userCanAccessArena(session))) {
+    return NextResponse.json(
+      { error: "Legal Arena is still in development. Access is currently limited." },
+      { status: 403 }
+    );
+  }
+
+  try {
+    await connectMongo();
+    const user = await User.findById(session.user.id);
+
+    if (!user) {
+      return NextResponse.json({ error: "Player profile not found." }, { status: 404 });
+    }
+
+    if (
+      process.env.BLOB_READ_WRITE_TOKEN &&
+      String(user.image || "").startsWith("/api/players/avatar/")
+    ) {
+      await del(`lawyer-headshots/${session.user.id}.webp`);
+    }
+
+    user.image = "";
+    await user.save();
+
+    return NextResponse.json({ ok: true, image: "" });
+  } catch (error) {
+    console.error("Avatar delete failed:", error);
+    return NextResponse.json(
+      { error: error?.message || "Could not delete the profile image." },
       { status: 500 }
     );
   }

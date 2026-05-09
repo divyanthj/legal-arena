@@ -66,6 +66,7 @@ export default function PlayerProfileDossier({
   const [outcomeFilter, setOutcomeFilter] = useState("all");
   const [avatarPreview, setAvatarPreview] = useState(getArenaHeadshot(player.image));
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarDeleting, setAvatarDeleting] = useState(false);
   const [showResetDialog, setShowResetDialog] = useState(false);
   const [resetting, setResetting] = useState(false);
 
@@ -182,7 +183,7 @@ export default function PlayerProfileDossier({
       return;
     }
 
-    if (avatarUploading) {
+    if (avatarUploading || avatarDeleting) {
       return;
     }
 
@@ -224,6 +225,31 @@ export default function PlayerProfileDossier({
     }
   };
 
+  const handleAvatarDelete = async () => {
+    if (avatarUploading || avatarDeleting || !avatarPreview) {
+      return;
+    }
+
+    setAvatarDeleting(true);
+
+    try {
+      await apiClient.delete("/players/avatar");
+      setAvatarPreview((current) => {
+        if (current?.startsWith("blob:")) {
+          URL.revokeObjectURL(current);
+        }
+
+        return "";
+      });
+      toast.success("Profile photo removed.");
+      router.refresh();
+    } catch (error) {
+      // apiClient already displays the error toast.
+    } finally {
+      setAvatarDeleting(false);
+    }
+  };
+
   return (
     <main className="arena-app-shell min-h-screen overflow-x-hidden px-4 py-6 md:px-8 md:py-10">
       <section className="mx-auto max-w-[1600px] space-y-6 arena-reveal">
@@ -262,23 +288,40 @@ export default function PlayerProfileDossier({
 
             <div className="mt-6 grid gap-6 xl:grid-cols-[220px_minmax(0,1fr)_460px]">
               <div className="flex flex-col items-center justify-start xl:pt-2">
-                <div className="relative h-40 w-40 overflow-hidden rounded-full border border-white/15 bg-white/[0.04] shadow-[0_0_0_6px_rgba(255,255,255,0.03)]">
-                  <img
-                    src={avatarPreview || "/images/profile.jpg"}
-                    alt={`${player.name} profile`}
-                    style={{ objectPosition: "center calc(50% + 2px)" }}
-                    className={`block h-full w-full object-cover object-center transition duration-500 ${
-                      avatarUploading
-                        ? "scale-[1.07] blur-sm opacity-60"
-                        : avatarPreview
-                        ? "scale-[1.025]"
-                        : "scale-[1.62]"
-                    }`}
-                  />
-                  {avatarUploading ? (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/28 backdrop-blur-[2px]">
-                      <span className="h-11 w-11 animate-spin rounded-full border-2 border-white/20 border-t-white/80" />
-                    </div>
+                <div className="relative h-40 w-40">
+                  <div className="h-full w-full overflow-hidden rounded-full border border-white/15 bg-white/[0.04] shadow-[0_0_0_6px_rgba(255,255,255,0.03)]">
+                    <img
+                      src={avatarPreview || "/images/profile.jpg"}
+                      alt={`${player.name} profile`}
+                      style={{ objectPosition: "center calc(50% + 2px)" }}
+                      className={`block h-full w-full object-cover object-center transition duration-500 ${
+                        avatarUploading
+                          ? "scale-[1.07] blur-sm opacity-60"
+                          : avatarPreview
+                          ? "scale-[1.025]"
+                          : "scale-[1.62]"
+                      }`}
+                    />
+                    {avatarUploading ? (
+                      <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/28 backdrop-blur-[2px]">
+                        <span className="h-11 w-11 animate-spin rounded-full border-2 border-white/20 border-t-white/80" />
+                      </div>
+                    ) : null}
+                  </div>
+                  {canEditAvatar && avatarPreview && !avatarUploading ? (
+                    <button
+                      type="button"
+                      className="absolute right-1 top-1 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-white/15 bg-black/80 text-xl font-semibold leading-none text-white shadow-lg shadow-black/40 transition hover:border-rose-300/60 hover:bg-rose-950 focus:outline-none focus:ring-2 focus:ring-rose-300/70 disabled:cursor-not-allowed disabled:opacity-60"
+                      aria-label="Delete profile photo"
+                      disabled={avatarDeleting}
+                      onClick={handleAvatarDelete}
+                    >
+                      {avatarDeleting ? (
+                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-white/80" />
+                      ) : (
+                        "×"
+                      )}
+                    </button>
                   ) : null}
                 </div>
                 {canEditAvatar ? (
@@ -289,7 +332,7 @@ export default function PlayerProfileDossier({
                         type="file"
                         accept="image/*"
                         className="hidden"
-                        disabled={avatarUploading}
+                        disabled={avatarUploading || avatarDeleting}
                         onChange={handleAvatarChange}
                       />
                     </label>

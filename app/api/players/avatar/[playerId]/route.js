@@ -33,7 +33,7 @@ export async function GET(request, { params }) {
   try {
     const blob = await get(`lawyer-headshots/${playerId}.webp`, {
       access: "private",
-      useCache: true,
+      useCache: false,
     });
 
     if (!blob || blob.statusCode === 304 || !blob.stream) {
@@ -44,7 +44,7 @@ export async function GET(request, { params }) {
       status: 200,
       headers: {
         "Content-Type": blob.blob.contentType || "image/webp",
-        "Cache-Control": "private, max-age=300",
+        "Cache-Control": "private, no-store, max-age=0",
         ETag: blob.blob.etag,
       },
     });
