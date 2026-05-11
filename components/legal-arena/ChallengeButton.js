@@ -125,7 +125,7 @@ export default function ChallengeButton({
     open && typeof document !== "undefined"
       ? createPortal(
           <div
-            className="fixed inset-0 z-[120] flex min-h-screen items-center justify-center bg-black/82 px-4 py-6 backdrop-blur-md"
+            className="fixed inset-0 z-[120] flex min-h-[100dvh] items-start justify-center overflow-y-auto bg-black/82 px-3 py-4 backdrop-blur-md sm:px-4 sm:py-6 md:items-center"
             role="dialog"
             aria-modal="true"
             aria-labelledby="challenge-dialog-title"
@@ -137,8 +137,8 @@ export default function ChallengeButton({
               disabled={creating}
               onClick={() => setOpen(false)}
             />
-            <div className="relative w-full max-w-4xl overflow-hidden rounded-lg bg-[#101010] shadow-[0_30px_120px_rgba(0,0,0,0.78),0_0_0_1px_rgba(255,255,255,0.055)]">
-              <div className="bg-white/[0.025] px-5 py-5 md:px-7">
+            <div className="relative flex max-h-[calc(100dvh-2rem)] w-full max-w-4xl flex-col overflow-hidden rounded-lg bg-[#101010] shadow-[0_30px_120px_rgba(0,0,0,0.78),0_0_0_1px_rgba(255,255,255,0.055)] sm:max-h-[calc(100dvh-3rem)]">
+              <div className="shrink-0 bg-white/[0.025] px-5 py-5 md:px-7">
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <p className="arena-kicker text-white">Choose a Case</p>
@@ -160,7 +160,7 @@ export default function ChallengeButton({
                 </div>
               </div>
 
-              <div className="px-5 pb-5 md:px-7 md:pb-7">
+              <div className="arena-scroll min-h-0 flex-1 overflow-y-auto px-5 pb-5 md:px-7 md:pb-7">
                 <div className="min-w-0 space-y-5">
                   <div>
                     <p className="arena-kicker text-white">Case Type</p>
@@ -302,7 +302,8 @@ export default function ChallengeButton({
                 </div>
               </div>
 
-              <div className="flex flex-col-reverse gap-3 bg-black/24 px-5 py-4 sm:flex-row sm:justify-end md:px-7">
+              <div className="shrink-0 border-t border-white/10 bg-black/70 px-5 py-4 backdrop-blur-md md:px-7">
+                <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
                 <button
                   type="button"
                   className="arena-btn-dark px-5 py-3"
@@ -319,6 +320,7 @@ export default function ChallengeButton({
                 >
                   {creating ? "Sending..." : "Send Challenge"}
                 </button>
+                </div>
               </div>
             </div>
           </div>,
