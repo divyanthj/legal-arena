@@ -48,6 +48,36 @@ const getChallengeViewerStatus = (challenge = {}) => {
   return challenge.status;
 };
 
+const normalizeSearchText = (value = "") =>
+  String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+
+const fuzzyNameMatch = (name = "", query = "") => {
+  const normalizedName = normalizeSearchText(name);
+  const normalizedQuery = normalizeSearchText(query);
+
+  if (!normalizedQuery) {
+    return true;
+  }
+
+  if (normalizedName.includes(normalizedQuery)) {
+    return true;
+  }
+
+  let queryIndex = 0;
+  for (const character of normalizedName) {
+    if (character === normalizedQuery[queryIndex]) {
+      queryIndex += 1;
+    }
+    if (queryIndex === normalizedQuery.length) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
 const formatDate = (value) =>
   new Intl.DateTimeFormat("en", {
     month: "short",
@@ -422,6 +452,9 @@ export default function DashboardHub({
   const [activeTemplateIndex, setActiveTemplateIndex] = useState(0);
   const [showPaywallModal, setShowPaywallModal] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [lawyerSearch, setLawyerSearch] = useState("");
+  const [searchedLawyers, setSearchedLawyers] = useState(null);
+  const [lawyerSearchLoading, setLawyerSearchLoading] = useState(false);
   const [dashboardTutorialCompleted, setDashboardTutorialCompleted] = useState(
     Boolean(onboarding?.dashboardTutorialCompleted)
   );
@@ -448,6 +481,12 @@ export default function DashboardHub({
   const selectedCategoryTitle = selectedCategoryMeta?.title || selectedCategory;
   const currentLeaderboardEntry =
     overallLeaderboard.find((entry) => String(entry.id) === String(userId)) || null;
+  const searchedOverallEntries = useMemo(() => {
+    const query = lawyerSearch.trim();
+    const entries = query ? searchedLawyers || [] : overallLeaderboard.slice(0, 5);
+
+    return entries.slice(0, 8);
+  }, [lawyerSearch, overallLeaderboard, searchedLawyers]);
   const topCategoryEntries = selectedLeaderboard.slice(0, 5);
   const recentVerdicts = initialCases.filter((item) => item.status === "verdict").slice(0, 5);
   const canResumeLastCase =
@@ -473,6 +512,45 @@ export default function DashboardHub({
     const detectedTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     setBrowserTimeZone(detectedTimeZone || null);
   }, []);
+
+  useEffect(() => {
+    const query = lawyerSearch.trim();
+    if (!query) {
+      setSearchedLawyers(null);
+      setLawyerSearchLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setLawyerSearchLoading(true);
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        const data = await apiClient.get("/leaderboards/overall", {
+          params: { q: query, limit: 8 },
+        });
+        if (!cancelled) {
+          setSearchedLawyers(data.leaderboard || []);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setSearchedLawyers(
+            overallLeaderboard
+              .filter((entry) => fuzzyNameMatch(entry.name, query))
+              .slice(0, 8)
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setLawyerSearchLoading(false);
+        }
+      }
+    }, 180);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [lawyerSearch, overallLeaderboard]);
 
   useEffect(() => {
     setActiveTemplateIndex(0);
@@ -1024,31 +1102,58 @@ export default function DashboardHub({
             <section id="overall-board" className="arena-surface">
               <div className="p-5 md:p-6">
                 <p className="arena-kicker">Top Counsel Today</p>
-                <h2 className="arena-headline mt-2 text-2xl">Overall board</h2>
-                <div className="mt-5 space-y-2">
-                  {overallLeaderboard.slice(0, 5).map((entry) => (
-                    <Link
-                      key={entry.id}
-                      href={`/dashboard/players/${entry.id}`}
-                      className="arena-surface-soft flex items-center justify-between gap-3 px-4 py-3 transition hover:-translate-y-0.5 hover:border-white/20"
-                    >
-                      <div className="flex min-w-0 items-center gap-3">
-                        <LeaderboardPortrait image={entry.image} name={entry.name} />
-                        <div className="min-w-0">
-                          <p className="truncate font-semibold text-white">
-                            <span className="mr-2 text-white/55">{entry.rank}</span>
-                            {entry.name}
-                          </p>
-                          <p className="mt-1 text-sm text-white/50">
-                            {entry.completedCases} matters | {entry.wins} wins
-                          </p>
-                        </div>
-                      </div>
-                      <span className="text-lg font-semibold text-emerald-300">
-                        {entry.overallRating}
+                <div className="mt-2">
+                  <h2 className="arena-headline text-2xl">Overall board</h2>
+                  <div className="relative mt-4 w-full">
+                    <input
+                      type="search"
+                      value={lawyerSearch}
+                      onChange={(event) => setLawyerSearch(event.target.value)}
+                      placeholder="Search lawyers"
+                      aria-label="Search lawyers by name"
+                      className="h-10 w-full rounded-full border border-white/12 bg-white/[0.04] px-4 pr-16 text-sm font-semibold text-white outline-none transition placeholder:text-white/35 focus:border-sky-300/60"
+                    />
+                    {lawyerSearchLoading ? (
+                      <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-semibold uppercase tracking-[0.14em] text-white/38">
+                        ...
                       </span>
-                    </Link>
-                  ))}
+                    ) : null}
+                  </div>
+                </div>
+                <div className="mt-5 space-y-2">
+                  {lawyerSearchLoading && lawyerSearch.trim() ? (
+                    <div className="arena-surface-soft p-4 text-sm text-white/62">
+                      Searching lawyers...
+                    </div>
+                  ) : searchedOverallEntries.length > 0 ? (
+                    searchedOverallEntries.map((entry) => (
+                      <Link
+                        key={entry.id}
+                        href={`/dashboard/players/${entry.id}`}
+                        className="arena-surface-soft flex items-center justify-between gap-3 px-4 py-3 transition hover:-translate-y-0.5 hover:border-white/20"
+                      >
+                        <div className="flex min-w-0 items-center gap-3">
+                          <LeaderboardPortrait image={entry.image} name={entry.name} />
+                          <div className="min-w-0">
+                            <p className="truncate font-semibold text-white">
+                              <span className="mr-2 text-white/55">#{entry.rank}</span>
+                              {entry.name}
+                            </p>
+                            <p className="mt-1 text-sm text-white/50">
+                              {entry.completedCases} matters | {entry.wins} wins
+                            </p>
+                          </div>
+                        </div>
+                        <span className="text-lg font-semibold text-emerald-300">
+                          {entry.overallRating}
+                        </span>
+                      </Link>
+                    ))
+                  ) : (
+                    <div className="arena-surface-soft p-4 text-sm text-white/62">
+                      No lawyers match that search.
+                    </div>
+                  )}
                 </div>
                 {currentLeaderboardEntry ? (
                   <Link

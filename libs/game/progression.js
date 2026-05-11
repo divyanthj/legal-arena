@@ -337,7 +337,37 @@ export const buildPublicLeaderboardEntry = (user, categorySlug) => {
   };
 };
 
-export const listOverallLeaderboard = async () => {
+const normalizeLeaderboardSearch = (value = "") =>
+  String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "");
+
+const fuzzyLeaderboardNameMatch = (name = "", query = "") => {
+  const normalizedName = normalizeLeaderboardSearch(name);
+  const normalizedQuery = normalizeLeaderboardSearch(query);
+
+  if (!normalizedQuery) {
+    return true;
+  }
+
+  if (normalizedName.includes(normalizedQuery)) {
+    return true;
+  }
+
+  let queryIndex = 0;
+  for (const character of normalizedName) {
+    if (character === normalizedQuery[queryIndex]) {
+      queryIndex += 1;
+    }
+    if (queryIndex === normalizedQuery.length) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
+export const listOverallLeaderboard = async ({ search = "", limit = null } = {}) => {
   await connectMongo();
 
   const users = await User.find({});
@@ -349,10 +379,15 @@ export const listOverallLeaderboard = async () => {
     updatedAt: -1,
   });
 
-  return refreshedUsers.map((user, index) => ({
+  const rankedEntries = refreshedUsers.map((user, index) => ({
     rank: index + 1,
     ...buildPublicLeaderboardEntry(user),
   }));
+  const searchedEntries = search
+    ? rankedEntries.filter((entry) => fuzzyLeaderboardNameMatch(entry.name, search))
+    : rankedEntries;
+
+  return limit ? searchedEntries.slice(0, limit) : searchedEntries;
 };
 
 export const listCategoryLeaderboard = async (categorySlug) => {
