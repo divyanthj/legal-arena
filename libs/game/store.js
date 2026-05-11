@@ -27,6 +27,7 @@ import {
 } from "./progression";
 import { DEFAULT_CATEGORY_SLUG } from "./categories";
 import { ensureStoredLawyerProfileSummary } from "./profileSummary";
+import { normalizeOnboarding } from "./onboarding";
 
 const toPlain = (doc) => (doc?.toJSON ? doc.toJSON() : doc);
 const CASE_EXIT_COOLDOWN_MS = 24 * 60 * 60 * 1000;
@@ -843,6 +844,7 @@ export const listDashboardDataForUser = async (userId, userProfile = null) => {
     cases,
     templates,
     categories: listCategoryOptions(),
+    onboarding: normalizeOnboarding(user?.onboarding),
     progression: normalizeProgression(user?.progression),
   };
 };

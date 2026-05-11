@@ -44,6 +44,20 @@ const categoryProgressSchema = mongoose.Schema(
   { _id: false }
 );
 
+const onboardingSchema = mongoose.Schema(
+  {
+    dashboardTutorialCompleted: {
+      type: Boolean,
+      default: false,
+    },
+    dashboardTutorialCompletedAt: {
+      type: Date,
+      default: null,
+    },
+  },
+  { _id: false }
+);
+
 // USER SCHEMA
 const userSchema = mongoose.Schema(
   {
@@ -112,6 +126,10 @@ const userSchema = mongoose.Schema(
       trim: true,
       lowercase: true,
       default: "",
+    },
+    onboarding: {
+      type: onboardingSchema,
+      default: () => ({}),
     },
     progression: {
       overallXp: {

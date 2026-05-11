@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import ButtonAccount from "@/components/ButtonAccount";
 import apiClient from "@/libs/api";
@@ -109,10 +109,280 @@ const LeaderboardPortrait = ({ image = "", name = "" }) => {
   );
 };
 
+const onboardingSteps = [
+  {
+    target: "quick-start-case",
+    eyebrow: "Quick Start",
+    title: "Start your first case",
+    body: "This is the fast lane into your first matter. Click it when you are ready to meet the facts, ask sharp questions, and begin happy lawyering.",
+  },
+  {
+    target: "case-categories",
+    eyebrow: "Choose a Track",
+    title: "Filter by specialty",
+    body: "Pick the legal lane you feel like training today. Contract chaos, workplace drama, consumer disputes: choose your flavor of courtroom workout.",
+  },
+  {
+    target: "case-library",
+    eyebrow: "Case Library",
+    title: "Pick from live disputes",
+    body: "This is your case shelf. Each matter shows the parties, complexity, access, and enough context to decide which legal puzzle deserves your attention.",
+  },
+  {
+    target: "recent-matters",
+    eyebrow: "Your Matters",
+    title: "Return to active work",
+    body: "Your open files and finished rulings live here. Think of it as the desk where yesterday's legal adventures politely wait for you.",
+  },
+  {
+    target: "leaderboards",
+    eyebrow: "Progress",
+    title: "Track your standing",
+    body: "Ratings, records, specialty progress, and leaderboard bragging rights all gather here. Win cleanly, climb steadily, enjoy the robes-without-robes energy.",
+  },
+];
+
+const getOnboardingTarget = (target) =>
+  typeof document === "undefined"
+    ? null
+    : document.querySelector(`[data-onboarding-target="${target}"]`);
+
+const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+
+const DashboardOnboardingOverlay = ({ isOpen, onComplete }) => {
+  const [stepIndex, setStepIndex] = useState(0);
+  const [targetRect, setTargetRect] = useState(null);
+  const [completing, setCompleting] = useState(false);
+  const step = onboardingSteps[stepIndex] || onboardingSteps[0];
+
+  const completeTutorial = useCallback(async () => {
+    setCompleting(true);
+    onComplete();
+
+    try {
+      await apiClient.post("/onboarding/dashboard-tutorial");
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setCompleting(false);
+    }
+  }, [onComplete]);
+
+  const findAvailableStepIndex = useCallback((startIndex, direction = 1) => {
+    for (
+      let index = startIndex;
+      index >= 0 && index < onboardingSteps.length;
+      index += direction
+    ) {
+      if (getOnboardingTarget(onboardingSteps[index].target)) {
+        return index;
+      }
+    }
+
+    return -1;
+  }, []);
+
+  const measureTarget = useCallback(() => {
+    if (!isOpen || !step) {
+      return;
+    }
+
+    const target = getOnboardingTarget(step.target);
+
+    if (!target) {
+      const nextIndex = findAvailableStepIndex(stepIndex + 1, 1);
+      const previousIndex =
+        nextIndex >= 0 ? -1 : findAvailableStepIndex(stepIndex - 1, -1);
+
+      if (nextIndex >= 0 || previousIndex >= 0) {
+        setStepIndex(nextIndex >= 0 ? nextIndex : previousIndex);
+      } else {
+        completeTutorial();
+      }
+
+      return;
+    }
+
+    const rect = target.getBoundingClientRect();
+    const padding = 8;
+
+    setTargetRect({
+      top: clamp(rect.top - padding, padding, window.innerHeight - padding),
+      left: clamp(rect.left - padding, padding, window.innerWidth - padding),
+      width: Math.min(rect.width + padding * 2, window.innerWidth - padding * 2),
+      height: Math.min(rect.height + padding * 2, window.innerHeight - padding * 2),
+      centerX: rect.left + rect.width / 2,
+      centerY: rect.top + rect.height / 2,
+    });
+  }, [completeTutorial, findAvailableStepIndex, isOpen, step, stepIndex]);
+
+  useEffect(() => {
+    if (!isOpen || !step) {
+      return;
+    }
+
+    const target = getOnboardingTarget(step.target);
+
+    if (target) {
+      target.scrollIntoView({ block: "center", inline: "center", behavior: "smooth" });
+    }
+
+    const timeoutId = window.setTimeout(measureTarget, 260);
+
+    window.addEventListener("resize", measureTarget);
+    window.addEventListener("scroll", measureTarget, true);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      window.removeEventListener("resize", measureTarget);
+      window.removeEventListener("scroll", measureTarget, true);
+    };
+  }, [isOpen, measureTarget, step]);
+
+  useEffect(() => {
+    if (isOpen) {
+      measureTarget();
+    }
+  }, [isOpen, measureTarget]);
+
+  if (!isOpen || !targetRect) {
+    return null;
+  }
+
+  const calloutWidth = Math.min(380, Math.max(280, window.innerWidth - 32));
+  const estimatedCalloutHeight = 248;
+  const hasRoomBelow = targetRect.top + targetRect.height + estimatedCalloutHeight + 28 < window.innerHeight;
+  const calloutTop = hasRoomBelow
+    ? targetRect.top + targetRect.height + 22
+    : Math.max(16, targetRect.top - estimatedCalloutHeight - 22);
+  const calloutLeft = clamp(
+    targetRect.centerX - calloutWidth / 2,
+    16,
+    window.innerWidth - calloutWidth - 16
+  );
+  const arrowLeft = clamp(targetRect.centerX - calloutLeft - 7, 24, calloutWidth - 24);
+  const isFirstStep = stepIndex === 0;
+  const isLastStep = stepIndex >= onboardingSteps.length - 1;
+
+  const goToPreviousStep = () => {
+    const previousIndex = findAvailableStepIndex(stepIndex - 1, -1);
+
+    if (previousIndex >= 0) {
+      setStepIndex(previousIndex);
+    }
+  };
+
+  const goToNextStep = () => {
+    const nextIndex = findAvailableStepIndex(stepIndex + 1, 1);
+
+    if (nextIndex >= 0) {
+      setStepIndex(nextIndex);
+    } else {
+      completeTutorial();
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-[90]"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="dashboard-onboarding-title"
+    >
+      <div
+        className="fixed left-0 right-0 top-0 bg-black/72 backdrop-blur-[3px]"
+        style={{ height: targetRect.top }}
+      />
+      <div
+        className="fixed left-0 bg-black/72 backdrop-blur-[3px]"
+        style={{
+          top: targetRect.top,
+          width: targetRect.left,
+          height: targetRect.height,
+        }}
+      />
+      <div
+        className="fixed right-0 bg-black/72 backdrop-blur-[3px]"
+        style={{
+          top: targetRect.top,
+          left: targetRect.left + targetRect.width,
+          height: targetRect.height,
+        }}
+      />
+      <div
+        className="fixed bottom-0 left-0 right-0 bg-black/72 backdrop-blur-[3px]"
+        style={{ top: targetRect.top + targetRect.height }}
+      />
+      <div
+        className="pointer-events-none fixed rounded-[1.35rem] border border-white/90 bg-transparent shadow-[0_0_0_6px_rgba(255,255,255,0.08),0_20px_80px_rgba(0,0,0,0.55)] transition-all duration-200"
+        style={{
+          top: targetRect.top,
+          left: targetRect.left,
+          width: targetRect.width,
+          height: targetRect.height,
+        }}
+      />
+      <div
+        className="fixed rounded-[1.35rem] border border-white/12 bg-[#111] p-5 text-white shadow-2xl transition-all duration-200"
+        style={{
+          top: calloutTop,
+          left: calloutLeft,
+          width: calloutWidth,
+        }}
+      >
+        <span
+          className={`absolute h-3.5 w-3.5 rotate-45 border-white/12 bg-[#111] ${
+            hasRoomBelow ? "-top-2 border-l border-t" : "-bottom-2 border-b border-r"
+          }`}
+          style={{ left: arrowLeft }}
+          aria-hidden="true"
+        />
+        <p className="arena-kicker">{step.eyebrow}</p>
+        <h2 id="dashboard-onboarding-title" className="mt-2 text-xl font-semibold">
+          {step.title}
+        </h2>
+        <p className="mt-3 text-sm leading-6 text-white/68">{step.body}</p>
+        <div className="mt-5 flex items-center justify-between gap-3">
+          <p className="text-xs uppercase tracking-[0.16em] text-white/42">
+            {stepIndex + 1} / {onboardingSteps.length}
+          </p>
+          <div className="flex flex-wrap justify-end gap-2">
+            <button
+              type="button"
+              className="arena-btn-dark min-h-0 px-3 py-2 text-sm"
+              onClick={completeTutorial}
+              disabled={completing}
+            >
+              Skip
+            </button>
+            <button
+              type="button"
+              className="arena-btn-dark min-h-0 px-3 py-2 text-sm"
+              onClick={goToPreviousStep}
+              disabled={isFirstStep || completing}
+            >
+              Back
+            </button>
+            <button
+              type="button"
+              className="arena-btn-light min-h-0 px-4 py-2 text-sm"
+              onClick={isLastStep ? completeTutorial : goToNextStep}
+              disabled={completing}
+            >
+              {isLastStep ? "Finish" : "Next"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function DashboardHub({
   initialCases,
   templates,
   categories,
+  onboarding = {},
   progression,
   overallLeaderboard,
   categoryLeaderboards,
@@ -128,6 +398,9 @@ export default function DashboardHub({
   const [activeTemplateIndex, setActiveTemplateIndex] = useState(0);
   const [showPaywallModal, setShowPaywallModal] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [dashboardTutorialCompleted, setDashboardTutorialCompleted] = useState(
+    Boolean(onboarding?.dashboardTutorialCompleted)
+  );
 
   const filteredTemplates = useMemo(
     () =>
@@ -330,6 +603,7 @@ export default function DashboardHub({
 
                   <div className="space-y-3">
                     <button
+                      data-onboarding-target="quick-start-case"
                       className="arena-btn-light flex w-full items-center justify-center gap-2 px-5 py-4"
                       onClick={() => handleCreateCase(activeTemplate?.id)}
                       disabled={creating || !activeTemplate?.unlocked}
@@ -420,7 +694,10 @@ export default function DashboardHub({
                   </p>
                 </div>
 
-                <div className="mt-5 grid grid-cols-2 gap-2 lg:flex lg:flex-wrap">
+                <div
+                  data-onboarding-target="case-categories"
+                  className="mt-5 grid grid-cols-2 gap-2 lg:flex lg:flex-wrap"
+                >
                   {categories.map((category) => (
                     <button
                       key={category.slug}
@@ -436,7 +713,7 @@ export default function DashboardHub({
                   ))}
                 </div>
 
-                <div className="mt-5">
+                <div data-onboarding-target="case-library" className="mt-5">
                   {activeTemplate ? (
                     <div className="arena-surface-soft arena-reveal min-h-[34rem] overflow-hidden p-4 md:min-h-[36rem] md:p-5 xl:h-[38rem] xl:min-h-0">
                       <div className="grid gap-5 xl:h-full xl:grid-cols-[240px_minmax(0,1fr)_220px]">
@@ -578,7 +855,11 @@ export default function DashboardHub({
               </div>
             </section>
 
-            <section id="recent-matters" className="arena-surface">
+            <section
+              id="recent-matters"
+              data-onboarding-target="recent-matters"
+              className="arena-surface"
+            >
               <div className="p-5 md:p-6">
                 <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
                   <div>
@@ -642,7 +923,7 @@ export default function DashboardHub({
             </section>
           </div>
 
-          <aside className="space-y-4">
+          <aside data-onboarding-target="leaderboards" className="space-y-4">
             <section id="overall-board" className="arena-surface">
               <div className="p-5 md:p-6">
                 <p className="arena-kicker">Top Counsel Today</p>
@@ -817,6 +1098,10 @@ export default function DashboardHub({
           </aside>
         </div>
       </section>
+      <DashboardOnboardingOverlay
+        isOpen={!dashboardTutorialCompleted}
+        onComplete={() => setDashboardTutorialCompleted(true)}
+      />
       {showPaywallModal ? (
         <dialog className="modal modal-open">
           <div className="modal-box max-h-none max-w-3xl overflow-visible bg-transparent p-0 shadow-none">

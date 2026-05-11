@@ -30,6 +30,7 @@ export async function GET() {
       cases: dashboardData.cases,
       templates: dashboardData.templates,
       categories: dashboardData.categories,
+      onboarding: dashboardData.onboarding,
       progression: dashboardData.progression,
     });
   } catch (error) {
