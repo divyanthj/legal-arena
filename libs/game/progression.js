@@ -33,7 +33,49 @@ export const getDefaultProgression = () => ({
   categoryStats: LEGAL_CASE_CATEGORIES.map((category) =>
     getDefaultCategoryProgress(category.slug)
   ),
+  pvp: {
+    completedChallenges: 0,
+    wins: 0,
+    losses: 0,
+    draws: 0,
+    categoryStats: LEGAL_CASE_CATEGORIES.map((category) => ({
+      categorySlug: category.slug,
+      completedChallenges: 0,
+      wins: 0,
+      losses: 0,
+      draws: 0,
+    })),
+  },
 });
+
+const getDefaultPvpCategoryProgress = (categorySlug) => ({
+  categorySlug,
+  completedChallenges: 0,
+  wins: 0,
+  losses: 0,
+  draws: 0,
+});
+
+export const normalizePvpProgression = (rawPvp) => {
+  const source = toPlain(rawPvp) || {};
+  const existingStats = Array.isArray(source.categoryStats)
+    ? source.categoryStats.map((item) => toPlain(item))
+    : [];
+  const existingMap = new Map(
+    existingStats.map((item) => [item.categorySlug, item])
+  );
+
+  return {
+    completedChallenges: source.completedChallenges || 0,
+    wins: source.wins || 0,
+    losses: source.losses || 0,
+    draws: source.draws || 0,
+    categoryStats: LEGAL_CASE_CATEGORIES.map((category) => ({
+      ...getDefaultPvpCategoryProgress(category.slug),
+      ...(existingMap.get(category.slug) || {}),
+    })),
+  };
+};
 
 export const normalizeProgression = (rawProgression) => {
   const source = toPlain(rawProgression) || {};
@@ -48,11 +90,61 @@ export const normalizeProgression = (rawProgression) => {
   return {
     ...defaultProgression,
     ...source,
+    pvp: normalizePvpProgression(source.pvp),
     categoryStats: LEGAL_CASE_CATEGORIES.map((category) => ({
       ...getDefaultCategoryProgress(category.slug),
       ...(existingMap.get(category.slug) || {}),
     })),
   };
+};
+
+export const applyChallengeVerdictToPvpProgression = async ({
+  userId,
+  userProfile = null,
+  primaryCategory,
+  outcome,
+}) => {
+  const user = await ensureUserProfile(userId, userProfile);
+  if (!user) {
+    return null;
+  }
+
+  const progression = normalizeProgression(user.progression);
+  const pvp = normalizePvpProgression(progression.pvp);
+  const didWin = outcome === "win";
+  const didDraw = outcome === "draw";
+  const didLoss = outcome === "loss";
+  const categoryStats = pvp.categoryStats.map((item) => ({ ...item }));
+  const categoryIndex = categoryStats.findIndex(
+    (item) => item.categorySlug === primaryCategory
+  );
+  const categoryStat =
+    categoryIndex >= 0
+      ? categoryStats[categoryIndex]
+      : getDefaultPvpCategoryProgress(primaryCategory);
+
+  pvp.completedChallenges += 1;
+  pvp.wins += didWin ? 1 : 0;
+  pvp.losses += didLoss ? 1 : 0;
+  pvp.draws += didDraw ? 1 : 0;
+
+  categoryStat.completedChallenges += 1;
+  categoryStat.wins += didWin ? 1 : 0;
+  categoryStat.losses += didLoss ? 1 : 0;
+  categoryStat.draws += didDraw ? 1 : 0;
+
+  if (categoryIndex >= 0) {
+    categoryStats[categoryIndex] = categoryStat;
+  } else {
+    categoryStats.push(categoryStat);
+  }
+
+  pvp.categoryStats = categoryStats;
+  progression.pvp = pvp;
+  user.progression = progression;
+  await user.save();
+
+  return progression;
 };
 
 export const ensureUserProfile = async (userId, profile = null) => {
@@ -239,8 +331,9 @@ export const buildPublicLeaderboardEntry = (user, categorySlug) => {
           wins: categoryStat.wins,
           losses: categoryStat.losses,
           draws: categoryStat.draws,
-        }
+      }
       : null,
+    pvp: progression.pvp,
   };
 };
 

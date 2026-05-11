@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { authOptions } from "@/libs/next-auth";
 import DashboardHub from "@/components/legal-arena/DashboardHub";
 import { listDashboardDataForUser } from "@/libs/game/store";
+import { listChallengesForUser } from "@/libs/game/challenges";
 import {
   listCategoryLeaderboard,
   listOverallLeaderboard,
@@ -22,8 +23,9 @@ export default async function Dashboard() {
 
   const hasArenaAccess = await userCanAccessArena(session);
 
-  const [dashboardData, overallLeaderboard, categoryLeaderboards] = await Promise.all([
+  const [dashboardData, challenges, overallLeaderboard, categoryLeaderboards] = await Promise.all([
     listDashboardDataForUser(session.user.id, session.user),
+    listChallengesForUser(session.user.id),
     listOverallLeaderboard(),
     Promise.all(
       LEGAL_CASE_CATEGORIES.map(async (category) => [
@@ -40,6 +42,7 @@ export default async function Dashboard() {
       categories={toClientJSON(dashboardData.categories)}
       onboarding={toClientJSON(dashboardData.onboarding)}
       progression={toClientJSON(dashboardData.progression)}
+      challenges={toClientJSON(challenges)}
       overallLeaderboard={toClientJSON(overallLeaderboard)}
       categoryLeaderboards={toClientJSON(Object.fromEntries(categoryLeaderboards))}
       isAdmin={isAdminEmail(session.user?.email)}

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { toast } from "react-hot-toast";
 import apiClient from "@/libs/api";
+import ChallengeButton from "./ChallengeButton";
 import {
   EmptyPanel,
   formatDate,
@@ -57,6 +58,8 @@ const formatResetDateTime = (value) => {
 export default function PlayerProfileDossier({
   profile,
   viewerUserId = "",
+  challengeTemplates = [],
+  hasArenaAccess = false,
 }) {
   const router = useRouter();
   const { player, cases = [] } = profile;
@@ -283,7 +286,15 @@ export default function PlayerProfileDossier({
                 >
                   Fresh Start
                 </button>
-              ) : null}
+              ) : (
+                <ChallengeButton
+                  targetPlayerId={player.id}
+                  targetPlayerName={player.name}
+                  templates={challengeTemplates}
+                  hasArenaAccess={hasArenaAccess}
+                  className="arena-btn-light ml-auto hidden px-4 py-2 text-sm xl:inline-flex"
+                />
+              )}
             </div>
 
             <div className="mt-6 grid gap-6 xl:grid-cols-[220px_minmax(0,1fr)_460px]">
@@ -344,7 +355,17 @@ export default function PlayerProfileDossier({
                       Fresh Start
                     </button>
                   </div>
-                ) : null}
+                ) : (
+                  <div className="mt-5 xl:hidden">
+                    <ChallengeButton
+                      targetPlayerId={player.id}
+                      targetPlayerName={player.name}
+                      templates={challengeTemplates}
+                      hasArenaAccess={hasArenaAccess}
+                      className="arena-btn-light flex w-full items-center justify-center px-4 py-3 text-sm"
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="min-w-0">

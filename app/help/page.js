@@ -1,6 +1,7 @@
 import Section1 from "./sections/Section1";
 import Section2 from "./sections/Section2";
 import Section3 from "./sections/Section3";
+import Section4 from "./sections/Section4";
 
 export default function HelpPage() {
   return (
@@ -22,6 +23,7 @@ export default function HelpPage() {
       <Section1 id="getting-started" />
       <Section2 id="building-your-file" />
       <Section3 id="courtroom-playbook" />
+      <Section4 id="asynchronous-pvp-cases" />
     </div>
   );
 }

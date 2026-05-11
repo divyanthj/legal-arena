@@ -284,6 +284,60 @@ export async function sendFreeAccessRevokedEmail({
   });
 }
 
+export async function sendChallengeInviteEmail({
+  toUser,
+  fromUser,
+  challenge,
+} = {}) {
+  if (!toUser?.email) {
+    throw new Error("Challenged player email is required.");
+  }
+
+  const recipientName =
+    toUser.name?.trim?.() || toUser.email.split("@")[0] || "Counsel";
+  const challengerName =
+    fromUser?.name?.trim?.() || fromUser?.email?.split("@")[0] || "Another player";
+  const challengeRef = challenge.slug || challenge.id;
+  const challengePath = `/dashboard/challenges/${challengeRef}`;
+  const magicLoginUrl = await createMagicLoginLink({
+    email: toUser.email,
+    callbackUrl: challengePath,
+  });
+  const subject = `${challengerName} challenged you in ${config.appName}`;
+  const content =
+    `Hi ${recipientName},\n\n` +
+    `${challengerName} challenged you to a Legal Arena PVP match: ${challenge.title}.\n\n` +
+    "You do not need to purchase access for this challenge. The match is sponsored by the player who challenged you.\n\n" +
+    "Accept the challenge, complete your private intake, and the courtroom will open once both sides are ready.";
+
+  return sendEmail({
+    to: toUser.email,
+    subject,
+    text:
+      `${content}\n\nOpen the challenge: ${magicLoginUrl}\n\n` +
+      "This sign-in link expires in 24 hours. The challenge invite expires in 7 days.",
+    html: emailTemplate({
+      title: "Challenge received",
+      subtitle: `${challengerName} wants to face you in ${config.appName}.`,
+      content,
+      contentHtml: `
+        <p style="margin:0 0 18px;">Hi ${escapeHtml(recipientName)},</p>
+        <p style="margin:0 0 18px;"><strong>${escapeHtml(
+          challengerName
+        )}</strong> challenged you to a Legal Arena PVP match.</p>
+        <p style="margin:0 0 10px;"><strong>${escapeHtml(challenge.title)}</strong></p>
+        <p style="margin:0 0 18px;">You do not need to purchase access for this challenge. The match is sponsored by the player who challenged you.</p>
+        <p style="margin:0;">Accept the challenge, complete your private intake, and the courtroom will open once both sides are ready.</p>
+      `,
+      ctaLabel: "Open challenge",
+      ctaUrl: magicLoginUrl,
+      footer:
+        "This secure sign-in link expires in 24 hours. The challenge invite expires in 7 days.",
+    }),
+    from: config.email.fromSupport,
+  });
+}
+
 export async function sendLeadWelcomeEmail(email) {
   const subject = `Welcome to ${config.appName}`;
   const text =

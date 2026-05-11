@@ -44,6 +44,59 @@ const categoryProgressSchema = mongoose.Schema(
   { _id: false }
 );
 
+const pvpCategoryProgressSchema = mongoose.Schema(
+  {
+    categorySlug: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    completedChallenges: {
+      type: Number,
+      default: 0,
+    },
+    wins: {
+      type: Number,
+      default: 0,
+    },
+    losses: {
+      type: Number,
+      default: 0,
+    },
+    draws: {
+      type: Number,
+      default: 0,
+    },
+  },
+  { _id: false }
+);
+
+const pvpProgressSchema = mongoose.Schema(
+  {
+    completedChallenges: {
+      type: Number,
+      default: 0,
+    },
+    wins: {
+      type: Number,
+      default: 0,
+    },
+    losses: {
+      type: Number,
+      default: 0,
+    },
+    draws: {
+      type: Number,
+      default: 0,
+    },
+    categoryStats: {
+      type: [pvpCategoryProgressSchema],
+      default: [],
+    },
+  },
+  { _id: false }
+);
+
 const onboardingSchema = mongoose.Schema(
   {
     dashboardTutorialCompleted: {
@@ -159,6 +212,10 @@ const userSchema = mongoose.Schema(
       categoryStats: {
         type: [categoryProgressSchema],
         default: [],
+      },
+      pvp: {
+        type: pvpProgressSchema,
+        default: () => ({}),
       },
     },
   },

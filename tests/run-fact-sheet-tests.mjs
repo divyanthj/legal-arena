@@ -61,4 +61,60 @@ assert.doesNotMatch(mergeSource, /buildSummaryForSide/);
 assert.doesNotMatch(mergeSource, /buildTheoryForSide/);
 assert.doesNotMatch(mergeSource, /buildDesiredReliefForSide/);
 
+const engineSource = await readFile(new URL("../libs/game/engine.js", import.meta.url), "utf8");
+assert.match(
+  engineSource,
+  /const combinedPatch = mergeFactSheetPatches\(interviewResult\.patch, conversationPatch\)/
+);
+assert.match(
+  engineSource,
+  /const fallbackProofAndClassificationPatch = normalizeFactSheetPatch/
+);
+assert.match(
+  engineSource,
+  /timeline: uniqueList\(\[\.\.\.patch\.timeline, \.\.\.fallbackProofAndClassificationPatch\.timeline\]\)/
+);
+assert.match(
+  engineSource,
+  /patch\.desiredRelief\.push\(`Client says: \$\{answer\}`\);\s*}\s*if \(\s*\/\\b\(when\|date/
+);
+assert.match(
+  engineSource,
+  /const disputePattern =/
+);
+assert.match(
+  engineSource,
+  /const intakeRiskPattern =/
+);
+assert.match(
+  engineSource,
+  /patch\.disputedFacts\.push\(`Live dispute from intake: \$\{answer\}`\);/
+);
+assert.match(
+  engineSource,
+  /patch\.risks\.push\(`Risk from intake: \$\{answer\}`\);/
+);
+assert.match(
+  engineSource,
+  /disputedFacts: uniqueList\(\[\s*\.\.\.patch\.disputedFacts,\s*\.\.\.fallbackProofAndClassificationPatch\.disputedFacts,\s*\]\)/
+);
+assert.match(engineSource, /what i had\|what i have/);
+assert.doesNotMatch(
+  engineSource,
+  /answerShowsProofPossession \|\|\s*proofTermPattern\.test\(lowerAnswer\)/
+);
+
+const challengeSource = await readFile(
+  new URL("../libs/game/challenges.js", import.meta.url),
+  "utf8"
+);
+assert.match(challengeSource, /buildConversationFactSheetFallback/);
+assert.doesNotMatch(challengeSource, /const disputeCuePattern =/);
+assert.match(challengeSource, /\"disputedFacts\"/);
+assert.match(
+  challengeSource,
+  /const exchangePatch = buildConversationFactSheetFallback/
+);
+assert.match(challengeSource, /exchangePatch\[field\]\?\.length/);
+
 console.log("Fact sheet tests passed");

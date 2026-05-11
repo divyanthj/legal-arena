@@ -59,6 +59,7 @@ const config = {
         priceAnchor: 29.99,
         features: [
           { name: "Immediate access to the full Legal Arena build" },
+          { name: "Challenge other players to async PVP cases" },
           { name: "All future early-access updates included" },
           { name: "One-time payment, no subscription" },
         ],

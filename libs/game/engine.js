@@ -18,6 +18,7 @@ import {
   mergeFactSheet,
   normalizeFactSheetPatch,
   coerceStringList,
+  uniqueList,
 } from "./engine/shared";
 import {
   buildInterviewFallback,
@@ -113,7 +114,8 @@ export const continueInterview = async ({ caseSession, question, userId }) => {
     latestQuestion: question,
     latestAnswer: interviewResult.partyResponse,
   });
-  const nextFactSheet = mergeFactSheet(caseSession.factSheet, conversationPatch, template, {
+  const combinedPatch = mergeFactSheetPatches(interviewResult.patch, conversationPatch);
+  const nextFactSheet = mergeFactSheet(caseSession.factSheet, combinedPatch, template, {
     playerSide,
   });
   const nextAssessment = await assessCaseSuccessChance({
@@ -127,10 +129,41 @@ export const continueInterview = async ({ caseSession, question, userId }) => {
 
   return {
     ...interviewResult,
-    patch: conversationPatch,
+    patch: combinedPatch,
     nextFactSheet,
     caseAssessment: nextAssessment,
   };
+};
+
+const mergeFactSheetPatches = (...patches) => {
+  const normalizedPatches = patches
+    .filter(Boolean)
+    .map((patch) => normalizeFactSheetPatch(patch));
+  const listFields = [
+    "summary",
+    "theory",
+    "desiredRelief",
+    "timeline",
+    "supportingFacts",
+    "risks",
+    "knownFacts",
+    "knownClaims",
+    "disputedFacts",
+    "corroboratedFacts",
+    "sourceLinks",
+    "missingEvidence",
+    "openQuestions",
+    "discoveredFactIds",
+    "discoveredClaimIds",
+    "discoveredEvidenceIds",
+  ];
+
+  return normalizeFactSheetPatch(
+    listFields.reduce((merged, field) => {
+      merged[field] = uniqueList(normalizedPatches.flatMap((patch) => patch[field] || []));
+      return merged;
+    }, {})
+  );
 };
 
 export const assessCaseSuccessChance = async ({
@@ -280,18 +313,41 @@ const buildConversationFactSheetPatch = async ({
       latestQuestion,
       latestAnswer,
     });
-    const proofAlreadyClassified =
-      patch.corroboratedFacts.length || patch.missingEvidence.length;
+    const fallbackProofAndClassificationPatch = normalizeFactSheetPatch({
+      ...fallbackPatch,
+      corroboratedFacts: uniqueList([
+        ...(fallbackPatch.corroboratedFacts || []),
+        ...proofPatch.corroboratedFacts,
+      ]),
+      missingEvidence: uniqueList([
+        ...(fallbackPatch.missingEvidence || []),
+        ...proofPatch.missingEvidence,
+      ]),
+      sourceLinks: uniqueList([
+        ...(fallbackPatch.sourceLinks || []),
+        ...proofPatch.sourceLinks,
+      ]),
+    });
     const mergedPatch = normalizeFactSheetPatch({
       ...patch,
-      corroboratedFacts: proofAlreadyClassified
-        ? patch.corroboratedFacts
-        : proofPatch.corroboratedFacts,
-      missingEvidence: proofAlreadyClassified
-        ? patch.missingEvidence
-        : proofPatch.missingEvidence,
-      sourceLinks:
-        patch.sourceLinks.length > 0 ? patch.sourceLinks : proofPatch.sourceLinks,
+      timeline: uniqueList([...patch.timeline, ...fallbackProofAndClassificationPatch.timeline]),
+      risks: uniqueList([...patch.risks, ...fallbackProofAndClassificationPatch.risks]),
+      disputedFacts: uniqueList([
+        ...patch.disputedFacts,
+        ...fallbackProofAndClassificationPatch.disputedFacts,
+      ]),
+      corroboratedFacts: uniqueList([
+        ...patch.corroboratedFacts,
+        ...fallbackProofAndClassificationPatch.corroboratedFacts,
+      ]),
+      sourceLinks: uniqueList([
+        ...patch.sourceLinks,
+        ...fallbackProofAndClassificationPatch.sourceLinks,
+      ]),
+      missingEvidence: uniqueList([
+        ...patch.missingEvidence,
+        ...fallbackProofAndClassificationPatch.missingEvidence,
+      ]),
     });
 
     if (
@@ -319,7 +375,11 @@ const proofTermPattern =
 const missingProofPattern =
   /(^|\b)(no|nope|not really|never|none|without|do not|don't|does not|doesn't|did not|didn't|cannot|can't|could not|couldn't|missing|need to find|need to confirm|wasn't shown|were not shown|not shown|not provided|not produced|not in hand|do not remember|don't remember|not sure)\b/i;
 const confirmedProofPattern =
-  /(^|\b)(yes|yeah|yep|showed|shown|provided|produced|sent|shared|gave|received|kept|saved|attached|uploaded|photographed|documented|itemized|itemised|confirmed|in hand)\b/i;
+  /(^|\b)(yes|yeah|yep|i had|i have|what i had|what i have|showed|shown|provided|produced|sent|shared|gave|received|kept|saved|attached|uploaded|photographed|documented|itemized|itemised|confirmed|in hand|receipt|renewal notice|written notice|city form|paperwork|refund request|copy)\b/i;
+const disputePattern =
+  /\b(accused|allege|alleged|alleges|alleging|claim|claims|claimed|dispute|disputed|disagreement|wrong category|miscategorization|misclassification|misclassified|not acknowledg(?:e|ing)|do not acknowledg(?:e|ing)|don't acknowledg(?:e|ing)|not conced(?:e|ing)|deny|denies|denied|should have been|lower-fee|reduction should have applied|refund was due|no refund was due|no confirmed error)\b/i;
+const intakeRiskPattern =
+  /\b(risk|risks|argue|against|worry|problem|weak|weakness|unsupported|guessing|prove|cannot prove|records showed|not sure|don't remember|do not remember|cannot confirm|can't confirm|not confirmed|no confirmed|do not have|don't have|not have|cannot point to|can't point to|no documented|no clear written|no confirmed written|no confirmed set|exact category|specific actionable response)\b/i;
 
 const buildConversationProofClassificationFallback = ({
   latestQuestion,
@@ -345,10 +405,11 @@ const buildConversationProofClassificationFallback = ({
 
   if (missingProofPattern.test(lowerAnswer)) {
     patch.missingEvidence.push(`Proof gap: ${answer}`);
-  } else if (
+  }
+
+  if (
     confirmedProofPattern.test(lowerAnswer) ||
-    answerShowsProofPossession ||
-    proofTermPattern.test(lowerAnswer)
+    answerShowsProofPossession
   ) {
     patch.corroboratedFacts.push(`Client points me to this proof: ${answer}`);
     patch.sourceLinks.push("Client intake answer");
@@ -357,7 +418,7 @@ const buildConversationProofClassificationFallback = ({
   return patch;
 };
 
-const buildConversationFactSheetFallback = ({ latestQuestion, latestAnswer }) => {
+export const buildConversationFactSheetFallback = ({ latestQuestion, latestAnswer }) => {
   const answer = String(latestAnswer || "").trim();
   const question = String(latestQuestion || "").trim();
 
@@ -387,23 +448,43 @@ const buildConversationFactSheetFallback = ({ latestQuestion, latestAnswer }) =>
 
   if (/\b(need|want|asking|request|relief|deposit|damages|refund|return)\b/i.test(lower)) {
     patch.desiredRelief.push(`Client says: ${answer}`);
-  } else if (/\b(when|date|before|after|during|then|timeline|moved|signed|paid|sent)\b/i.test(lower)) {
+  }
+
+  if (/\b(when|date|before|after|during|then|timeline|moved|signed|paid|sent|received|contacted|followed up|several weeks|later)\b/i.test(lower)) {
     patch.timeline.push(`Client says: ${answer}`);
-  } else if (proofTermPattern.test(lower)) {
+  }
+
+  if (proofTermPattern.test(lower)) {
     const proofPatch = buildConversationProofClassificationFallback({
       latestQuestion,
       latestAnswer,
     });
 
     if (proofPatch.missingEvidence.length) {
-      patch.missingEvidence.push(`I still need to pin down: ${answer}`);
-    } else if (proofPatch.corroboratedFacts.length) {
-      patch.corroboratedFacts.push(`Client points me to this proof: ${answer}`);
+      patch.missingEvidence.push(...proofPatch.missingEvidence);
+    }
+    if (proofPatch.corroboratedFacts.length) {
+      patch.corroboratedFacts.push(...proofPatch.corroboratedFacts);
       patch.sourceLinks.push(...proofPatch.sourceLinks);
     }
-  } else if (/\b(risk|worry|problem|weak|unsure|not sure|don't remember|do not remember)\b/i.test(lower)) {
-    patch.risks.push(`Risk I heard from the client: ${answer}`);
-  } else {
+  }
+
+  if (disputePattern.test(lower)) {
+    patch.disputedFacts.push(`Live dispute from intake: ${answer}`);
+  }
+
+  if (intakeRiskPattern.test(lower)) {
+    patch.risks.push(`Risk from intake: ${answer}`);
+  }
+
+  if (
+    !patch.desiredRelief.length &&
+    !patch.timeline.length &&
+    !patch.risks.length &&
+    !patch.disputedFacts.length &&
+    !patch.corroboratedFacts.length &&
+    !patch.missingEvidence.length
+  ) {
     patch.supportingFacts.push(`Client says: ${answer}`);
   }
 

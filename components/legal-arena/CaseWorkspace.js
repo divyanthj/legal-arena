@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Tooltip } from "react-tooltip";
+import { toast } from "react-hot-toast";
 import * as HeroIcons from "@heroicons/react/24/outline";
 import ButtonAccount from "@/components/ButtonAccount";
 import { useNavigationLoading } from "@/components/NavigationLoadingProvider";
@@ -100,6 +101,38 @@ const VoiceWaveform = ({ level = 0 }) => {
   );
 };
 
+const AutoResizeTextarea = ({ value, onChange, className = "", ...props }) => {
+  const textareaRef = useRef(null);
+
+  const resizeTextarea = () => {
+    const textarea = textareaRef.current;
+    if (!textarea) {
+      return;
+    }
+
+    textarea.style.height = "auto";
+    textarea.style.height = `${textarea.scrollHeight}px`;
+  };
+
+  useEffect(() => {
+    resizeTextarea();
+  }, [value]);
+
+  return (
+    <textarea
+      {...props}
+      ref={textareaRef}
+      value={value}
+      onChange={(event) => {
+        onChange?.(event);
+        requestAnimationFrame(resizeTextarea);
+      }}
+      rows={1}
+      className={`${className} overflow-hidden`}
+    />
+  );
+};
+
 const categoryTitleBySlug = new Map(
   LEGAL_CASE_CATEGORIES.map((category) => [category.slug, category.title])
 );
@@ -188,7 +221,11 @@ const IntakeProgressRing = ({ value }) => {
   );
 };
 
-export default function CaseWorkspace({ initialCase }) {
+export default function CaseWorkspace({
+  initialCase,
+  apiConfig = {},
+  workspaceNotice = null,
+}) {
   const router = useRouter();
   const { startNavigationLoading } = useNavigationLoading();
   const initialFactSheet = sanitizeFactSheet(initialCase.factSheet || {});
@@ -201,6 +238,7 @@ export default function CaseWorkspace({ initialCase }) {
   const [working, setWorking] = useState(false);
   const [pendingAction, setPendingAction] = useState("");
   const [pendingSpeaker, setPendingSpeaker] = useState("");
+  const [finalizeFeedback, setFinalizeFeedback] = useState(null);
   const [optimisticTranscriptEntry, setOptimisticTranscriptEntry] = useState(null);
   const [selectedLawbookCategory, setSelectedLawbookCategory] = useState(
     initialCase.primaryCategory || LAWBOOK_ALL_CATEGORIES
@@ -229,6 +267,24 @@ export default function CaseWorkspace({ initialCase }) {
     corroboratedFacts: ensureDraftList(initialFactSheet.corroboratedFacts),
     missingEvidence: ensureDraftList(initialFactSheet.missingEvidence),
   });
+  const getApiBasePath = (session = caseSession) =>
+    apiConfig.basePath || `/cases/${getCaseRouteRef(session)}`;
+  const getResponseCase = (response) =>
+    apiConfig.responseToCase ? apiConfig.responseToCase(response) : response?.caseSession;
+  const updateCaseFromResponse = (response) => {
+    const nextCase = getResponseCase(response);
+
+    if (!nextCase) {
+      return null;
+    }
+
+    setCaseSession({
+      ...nextCase,
+      factSheet: sanitizeFactSheet(nextCase.factSheet || {}),
+    });
+
+    return nextCase;
+  };
 
   useEffect(() => {
     const sanitizedFactSheet = sanitizeFactSheet(caseSession.factSheet || {});
@@ -271,6 +327,7 @@ export default function CaseWorkspace({ initialCase }) {
   const isInterview = caseSession.status === "interview";
   const isVerdict = caseSession.status === "verdict";
   const isExited = caseSession.status === "exited";
+  const isIntakeLocked = Boolean(apiConfig.intakeLocked);
 
   useEffect(() => {
     if (!isInterview || !interviewTranscriptRef.current) {
@@ -310,7 +367,7 @@ export default function CaseWorkspace({ initialCase }) {
 
   const handleInterviewSubmit = async (event) => {
     event.preventDefault();
-    if (working || !question.trim()) return;
+    if (working || isIntakeLocked || !question.trim()) return;
 
     const submittedQuestion = question.trim();
 
@@ -326,15 +383,12 @@ export default function CaseWorkspace({ initialCase }) {
     setPendingSpeaker(getPlayerPartyName(caseSession));
 
     try {
-      const { caseSession: nextCase } = await apiClient.post(
-        `/cases/${getCaseRouteRef(caseSession)}/interview`,
+      const response = await apiClient.post(
+        `${getApiBasePath(caseSession)}/interview`,
         { question: submittedQuestion }
       );
 
-      setCaseSession({
-        ...nextCase,
-        factSheet: sanitizeFactSheet(nextCase.factSheet || {}),
-      });
+      updateCaseFromResponse(response);
     } catch (error) {
       setQuestion(submittedQuestion);
       console.error(error);
@@ -347,22 +401,35 @@ export default function CaseWorkspace({ initialCase }) {
   };
 
   const handleFinalize = async () => {
+    if (working || isIntakeLocked) {
+      return;
+    }
+
+    setFinalizeFeedback(null);
     setWorking(true);
     setPendingAction("finalize");
 
     try {
-      const { caseSession: nextCase } = await apiClient.post(
-        `/cases/${getCaseRouteRef(caseSession)}/finalize`,
+      const response = await apiClient.post(
+        `${getApiBasePath(caseSession)}/${apiConfig.finalizePath || "finalize"}`,
         {
           factSheet: buildFactSheetPayload(),
         }
       );
 
-      setCaseSession({
-        ...nextCase,
-        factSheet: sanitizeFactSheet(nextCase.factSheet || {}),
-      });
+      const nextCase = updateCaseFromResponse(response);
+      const successMessage =
+        apiConfig.finalizeSuccessMessage ||
+        (nextCase?.status === "courtroom"
+          ? "Fact sheet finalized. Court is open."
+          : "Fact sheet finalized.");
+      setFinalizeFeedback({ tone: "success", text: successMessage });
+      toast.success(successMessage);
     } catch (error) {
+      setFinalizeFeedback({
+        tone: "error",
+        text: error?.message || "Could not finalize the fact sheet.",
+      });
       console.error(error);
     } finally {
       setPendingAction("");
@@ -391,15 +458,12 @@ export default function CaseWorkspace({ initialCase }) {
     setPendingSpeaker(getOpponentPartyName(caseSession));
 
     try {
-      const { caseSession: nextCase } = await apiClient.post(
-        `/cases/${getCaseRouteRef(caseSession)}/courtroom`,
+      const response = await apiClient.post(
+        `${getApiBasePath(caseSession)}/courtroom`,
         { argument: submittedArgument }
       );
 
-      setCaseSession({
-        ...nextCase,
-        factSheet: sanitizeFactSheet(nextCase.factSheet || {}),
-      });
+      updateCaseFromResponse(response);
     } catch (error) {
       setArgument(submittedArgument);
       console.error(error);
@@ -413,7 +477,8 @@ export default function CaseWorkspace({ initialCase }) {
 
   const handleExitCase = async () => {
     const confirmed = window.confirm(
-      "Exit this case? You will not be able to start the same case again for 24 hours."
+      apiConfig.exitConfirm ||
+        "Exit this case? You will not be able to start the same case again for 24 hours."
     );
 
     if (!confirmed) {
@@ -424,10 +489,17 @@ export default function CaseWorkspace({ initialCase }) {
     setPendingAction("exit");
 
     try {
-      await apiClient.post(`/cases/${getCaseRouteRef(caseSession)}/exit`);
-      startNavigationLoading("Returning to the docket");
-      router.push("/dashboard");
-      router.refresh();
+      const response = await apiClient.post(
+        `${getApiBasePath(caseSession)}/${apiConfig.exitPath || "exit"}`
+      );
+
+      if (apiConfig.exitStaysInWorkspace) {
+        updateCaseFromResponse(response);
+      } else {
+        startNavigationLoading(apiConfig.exitLoadingLabel || "Returning to the docket");
+        router.push(apiConfig.exitRedirect || "/dashboard");
+        router.refresh();
+      }
     } catch (error) {
       console.error(error);
     } finally {
@@ -521,8 +593,10 @@ export default function CaseWorkspace({ initialCase }) {
       "Document a key risk or dispute") ||
     (!cleanDraftList(factSheetDraft.desiredRelief).length && "Add requested relief") ||
     "Review and finalize fact sheet";
+  const canEditFactSheet = isInterview && !isIntakeLocked;
   const isCourtroom = !isInterview && !isExited && !isVerdict;
   const courtroomRoundLabel = `Courtroom Round ${caseSession.score.roundsCompleted + 1}`;
+  const viewerSubmittedCurrentRound = Boolean(caseSession.score.viewerSubmittedCurrentRound);
   const assessment = caseSession.caseAssessment || {};
   const displayedSuccessChance = isInterview
     ? assessment.currentSuccessChance
@@ -918,10 +992,10 @@ export default function CaseWorkspace({ initialCase }) {
                   className="flex flex-col gap-3 sm:flex-row sm:items-start"
                 >
                   <span className="hidden h-1.5 w-1.5 shrink-0 rounded-full bg-amber-300/80 sm:mt-3 sm:block" />
-                  {isInterview ? (
+                  {canEditFactSheet ? (
                     <>
-                      <textarea
-                        className="textarea textarea-bordered arena-textarea arena-field min-h-12 flex-1 resize-none text-sm leading-6 text-slate-100"
+                      <AutoResizeTextarea
+                        className="textarea textarea-bordered arena-textarea arena-field min-h-12 flex-1 resize-y text-sm leading-6 text-slate-100"
                         value={item}
                         onChange={(event) =>
                           updateFactSheetBullet(section.key, itemIndex, event.target.value)
@@ -949,7 +1023,7 @@ export default function CaseWorkspace({ initialCase }) {
             </div>
           )}
 
-          {isInterview ? (
+          {canEditFactSheet ? (
             <button
               type="button"
               className="arena-btn-dark mt-3 min-h-0 px-3 py-2 text-xs"
@@ -1222,7 +1296,9 @@ export default function CaseWorkspace({ initialCase }) {
                         disabled={working || recordingQuestion || transcribingQuestion}
                         onClick={handleExitCase}
                       >
-                        {pendingAction === "exit" ? "Exiting..." : "Exit Case"}
+                        {pendingAction === "exit"
+                          ? apiConfig.exitPendingLabel || "Exiting..."
+                          : apiConfig.exitLabel || "Exit Case"}
                       </button>
                     </div>
                   </form>
@@ -1401,7 +1477,7 @@ export default function CaseWorkspace({ initialCase }) {
                     )}
                   </div>
 
-                  {!isVerdict && (
+                  {!isVerdict && !viewerSubmittedCurrentRound && (
                     <form className="mt-6 min-w-0 space-y-4" onSubmit={handleCourtroomSubmit}>
                       <div>
                         <p className="arena-kicker">Your Argument</p>
@@ -1513,6 +1589,12 @@ export default function CaseWorkspace({ initialCase }) {
                       </div>
                     </form>
                   )}
+                  {!isVerdict && viewerSubmittedCurrentRound ? (
+                    <div className="arena-surface-soft mt-6 p-4 text-sm leading-6 text-white/68">
+                      Your argument is filed. Waiting for the other player before the bench
+                      scores this round.
+                    </div>
+                  ) : null}
                 </div>
               </div>
             )}
@@ -1575,6 +1657,7 @@ export default function CaseWorkspace({ initialCase }) {
           </section>
 
           <aside className="min-w-0 space-y-6">
+            {workspaceNotice}
             <div className="arena-surface">
               <div className="p-4 sm:p-6">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -1609,17 +1692,37 @@ export default function CaseWorkspace({ initialCase }) {
 
                   {isInterview && (
                     <div className="space-y-3">
+                      {isIntakeLocked ? (
+                        <div className="arena-surface-soft p-4 text-sm leading-6 text-white/68">
+                          {apiConfig.intakeLockedMessage ||
+                            "Your fact sheet is finalized. Waiting for the other side."}
+                        </div>
+                      ) : null}
                       <button
+                        type="button"
                         className="arena-btn-light w-full px-5 py-3"
                         onClick={handleFinalize}
-                        disabled={working}
+                        disabled={working || isIntakeLocked}
                       >
-                        {pendingAction === "finalize"
+                        {isIntakeLocked
+                          ? "Waiting for Opponent"
+                          : pendingAction === "finalize"
                           ? "Finalizing Fact Sheet..."
                           : "Finalize Fact Sheet"}
                       </button>
                       {pendingAction === "finalize" ? (
                         <LoadingBar label="Finalizing fact sheet" />
+                      ) : null}
+                      {finalizeFeedback?.text ? (
+                        <p
+                          className={`text-sm leading-6 ${
+                            finalizeFeedback.tone === "error"
+                              ? "text-rose-200"
+                              : "text-emerald-200"
+                          }`}
+                        >
+                          {finalizeFeedback.text}
+                        </p>
                       ) : null}
                     </div>
                   )}

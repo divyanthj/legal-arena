@@ -8,13 +8,14 @@ const links = [
   { href: "#getting-started", label: "Getting Started" },
   { href: "#building-your-file", label: "Building Your File" },
   { href: "#courtroom-playbook", label: "Courtroom Playbook" },
+  { href: "#asynchronous-pvp-cases", label: "Async PVP Cases" },
 ];
 
 export async function generateMetadata() {
   return getSEOTags({
     title: `Help Center & Tutorials | ${config.appName}`,
     description:
-      "Detailed tutorials for the Legal Arena lawyer game. Learn how to choose a dispute, build a fact sheet, argue in court, and improve your courtroom results.",
+      "Detailed tutorials for the Legal Arena lawyer game. Learn how to choose a dispute, build a fact sheet, argue in court, challenge other players, and improve your courtroom results.",
     keywords: [
       "Legal Arena help",
       "Legal Arena tutorials",
@@ -22,13 +23,14 @@ export async function generateMetadata() {
       "courtroom game guide",
       "fact sheet tutorial",
       "lawbook guide",
+      "PVP case guide",
       "leaderboard guide",
     ],
     canonicalUrlRelative: "/help",
     openGraph: {
       title: `Help Center & Tutorials | ${config.appName}`,
       description:
-        "Detailed tutorials for Legal Arena covering case selection, intake, fact sheets, courtroom rounds, verdicts, and progression.",
+        "Detailed tutorials for Legal Arena covering case selection, intake, fact sheets, courtroom rounds, PVP challenges, verdicts, and progression.",
     },
   });
 }

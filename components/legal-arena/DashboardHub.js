@@ -27,6 +27,27 @@ const severityClass = {
   favorable: "arena-status-favorable",
 };
 
+const challengeStatusLabel = {
+  pending: "Pending",
+  active: "Intake",
+  courtroom: "Courtroom",
+  verdict: "Verdict",
+  declined: "Declined",
+  expired: "Expired",
+};
+
+const getChallengeViewerStatus = (challenge = {}) => {
+  if (
+    challenge.status === "courtroom" &&
+    challenge.viewer?.status !== "ready" &&
+    challenge.status !== "verdict"
+  ) {
+    return "active";
+  }
+
+  return challenge.status;
+};
+
 const formatDate = (value) =>
   new Intl.DateTimeFormat("en", {
     month: "short",
@@ -385,6 +406,7 @@ export default function DashboardHub({
   categories,
   onboarding = {},
   progression,
+  challenges = [],
   overallLeaderboard,
   categoryLeaderboards,
   isAdmin = false,
@@ -550,11 +572,18 @@ export default function DashboardHub({
                 <span className="text-white/35">03</span>
               </a>
               <a
+                href="#pvp-challenges"
+                className="arena-surface-soft flex items-center justify-between px-4 py-3 text-sm text-white/72 transition hover:border-white/20 hover:text-white"
+              >
+                <span>PVP Challenges</span>
+                <span className="text-white/35">04</span>
+              </a>
+              <a
                 href="#specialty-board"
                 className="arena-surface-soft flex items-center justify-between px-4 py-3 text-sm text-white/72 transition hover:border-white/20 hover:text-white"
               >
                 <span>Specialty Board</span>
-                <span className="text-white/35">04</span>
+                <span className="text-white/35">05</span>
               </a>
               {isAdmin ? (
                 <Link
@@ -562,7 +591,7 @@ export default function DashboardHub({
                   className="arena-surface-soft flex items-center justify-between px-4 py-3 text-sm text-white/72 transition hover:border-white/20 hover:text-white"
                 >
                   <span>Admin Lab</span>
-                  <span className="text-white/35">05</span>
+                  <span className="text-white/35">06</span>
                 </Link>
               ) : null}
               <Link
@@ -570,7 +599,7 @@ export default function DashboardHub({
                 className="arena-surface-soft flex items-center justify-between px-4 py-3 text-sm text-white/72 transition hover:border-white/20 hover:text-white"
               >
                 <span>Public Home</span>
-                <span className="text-white/35">{isAdmin ? "06" : "05"}</span>
+                <span className="text-white/35">{isAdmin ? "07" : "06"}</span>
               </Link>
             </nav>
 
@@ -916,6 +945,71 @@ export default function DashboardHub({
                                 {item.defendantName || item.premise?.opponentName}
                               </p>
                             </div>
+                          </div>
+                        </Link>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </section>
+
+            <section id="pvp-challenges" className="arena-surface">
+              <div className="p-5 md:p-6">
+                <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+                  <div>
+                    <p className="arena-kicker">PVP Challenges</p>
+                    <h2 className="arena-headline mt-2 text-2xl">Player matches</h2>
+                  </div>
+                  <span className="text-xs uppercase tracking-[0.16em] text-white/42">
+                    {challenges.length} tracked challenges
+                  </span>
+                </div>
+
+                <div className="mt-5 space-y-3">
+                  {challenges.length === 0 ? (
+                    <div className="arena-surface-soft border-dashed p-8 text-center">
+                      <p className="text-lg font-semibold text-white">No PVP docket yet</p>
+                      <p className="mt-2 text-sm text-white/62">
+                        Challenge a player from their dossier or a leaderboard row.
+                      </p>
+                    </div>
+                  ) : (
+                    challenges.slice(0, 6).map((challenge) => {
+                      const visibleStatus = getChallengeViewerStatus(challenge);
+                      const opponentIsInCourt =
+                        challenge.status === "courtroom" && visibleStatus === "active";
+
+                      return (
+                        <Link
+                          key={challenge.id}
+                          href={`/dashboard/challenges/${challenge.slug || challenge.id}`}
+                          className="arena-surface-soft block p-4 transition hover:-translate-y-0.5 hover:border-white/20"
+                        >
+                          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <h3 className="text-base font-semibold text-white">
+                                  {challenge.title}
+                                </h3>
+                                <span className="badge border arena-status arena-status-neutral">
+                                  {challengeStatusLabel[visibleStatus] || visibleStatus}
+                                </span>
+                              </div>
+                              <p className="mt-2 text-sm text-white/52">
+                                vs. {challenge.opponent?.name || "Opposing counsel"} |{" "}
+                                {challenge.primaryCategory} | Updated{" "}
+                                {formatDate(challenge.updatedAt)}
+                              </p>
+                              {opponentIsInCourt ? (
+                                <p className="mt-2 text-sm font-semibold text-amber-200/80">
+                                  Opponent is already in court.
+                                </p>
+                              ) : null}
+                            </div>
+                            <p className="text-sm font-semibold text-white/78">
+                              {challenge.viewer?.score || 0}-{challenge.opponent?.score || 0}
+                            </p>
                           </div>
                         </Link>
                       );
