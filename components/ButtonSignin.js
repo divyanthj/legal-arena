@@ -5,6 +5,7 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import config from "@/config";
+import { useNavigationLoading } from "@/components/NavigationLoadingProvider";
 
 const loginHref = `${config.auth.loginUrl}?callbackUrl=${encodeURIComponent(
   config.auth.callbackUrl
@@ -16,8 +17,11 @@ const loginHref = `${config.auth.loginUrl}?callbackUrl=${encodeURIComponent(
 const ButtonSignin = ({ text = "Get started", extraStyle }) => {
   const router = useRouter();
   const { data: session, status } = useSession();
+  const { startNavigationLoading } = useNavigationLoading();
 
   const handleClick = () => {
+    startNavigationLoading("Opening your case desk");
+
     if (status === "authenticated") {
       router.push(config.auth.callbackUrl);
     } else {

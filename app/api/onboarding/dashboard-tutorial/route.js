@@ -11,7 +11,10 @@ export async function POST() {
   }
 
   try {
-    const onboarding = await completeDashboardTutorialForUser(session.user.id);
+    const onboarding = await completeDashboardTutorialForUser({
+      userId: session.user.id,
+      email: session.user.email,
+    });
 
     if (!onboarding) {
       return NextResponse.json({ error: "Player profile not found." }, { status: 404 });

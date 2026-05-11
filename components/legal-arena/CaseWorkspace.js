@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Tooltip } from "react-tooltip";
 import * as HeroIcons from "@heroicons/react/24/outline";
 import ButtonAccount from "@/components/ButtonAccount";
+import { useNavigationLoading } from "@/components/NavigationLoadingProvider";
 import apiClient from "@/libs/api";
 import {
   LAWBOOK_ALL_CATEGORIES,
@@ -189,6 +190,7 @@ const IntakeProgressRing = ({ value }) => {
 
 export default function CaseWorkspace({ initialCase }) {
   const router = useRouter();
+  const { startNavigationLoading } = useNavigationLoading();
   const initialFactSheet = sanitizeFactSheet(initialCase.factSheet || {});
   const [caseSession, setCaseSession] = useState(() => ({
     ...initialCase,
@@ -423,6 +425,7 @@ export default function CaseWorkspace({ initialCase }) {
 
     try {
       await apiClient.post(`/cases/${getCaseRouteRef(caseSession)}/exit`);
+      startNavigationLoading("Returning to the docket");
       router.push("/dashboard");
       router.refresh();
     } catch (error) {

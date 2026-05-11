@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import ButtonAccount from "@/components/ButtonAccount";
+import { useNavigationLoading } from "@/components/NavigationLoadingProvider";
 import apiClient from "@/libs/api";
 import { DevelopmentAccessPanel } from "@/components/legal-arena/DevelopmentAccessGate";
 
@@ -157,10 +158,10 @@ const DashboardOnboardingOverlay = ({ isOpen, onComplete }) => {
 
   const completeTutorial = useCallback(async () => {
     setCompleting(true);
-    onComplete();
 
     try {
       await apiClient.post("/onboarding/dashboard-tutorial");
+      onComplete();
     } catch (error) {
       console.error(error);
     } finally {
@@ -393,6 +394,7 @@ export default function DashboardHub({
   hasArenaAccess = false,
 }) {
   const router = useRouter();
+  const { startNavigationLoading } = useNavigationLoading();
   const [browserTimeZone, setBrowserTimeZone] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState(categories[0]?.slug || "");
   const [activeTemplateIndex, setActiveTemplateIndex] = useState(0);
@@ -468,6 +470,7 @@ export default function DashboardHub({
         caseTemplateId,
       });
 
+      startNavigationLoading("Opening the matter");
       router.push(`/dashboard/cases/${caseSession.slug || caseSession.id}`);
     } catch (error) {
       console.error(error);

@@ -585,12 +585,33 @@ progress::-webkit-progress-value {
   }
 }
 
+@keyframes arena-orbit {
+  0% {
+    transform: rotate(0deg) translateX(2.7rem) rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg) translateX(2.7rem) rotate(-360deg);
+  }
+}
+
+@keyframes arena-icon-drift {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-2deg) scale(1);
+  }
+  50% {
+    transform: translateY(-4px) rotate(3deg) scale(1.04);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .arena-reveal,
   .arena-pulse,
   .arena-round-transition,
   .arena-loading-bar,
-  .arena-typing-dot {
+  .arena-typing-dot,
+  .motion-safe\:animate-\[arena-orbit_2\.8s_linear_infinite\],
+  .motion-safe\:animate-\[arena-icon-drift_2\.4s_ease-in-out_infinite\] {
     animation: none !important;
   }
 

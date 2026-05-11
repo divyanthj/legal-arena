@@ -19,16 +19,51 @@ export const normalizeOnboarding = (rawOnboarding) => {
   };
 };
 
-export const completeDashboardTutorialForUser = async (userId) => {
+export const completeDashboardTutorialForUser = async ({ userId, email = "" }) => {
   await connectMongo();
 
   const completedAt = new Date();
-  const user = await User.findByIdAndUpdate(
-    userId,
+  const update = {
+    $set: {
+      "onboarding.dashboardTutorialCompleted": true,
+      "onboarding.dashboardTutorialCompletedAt": completedAt,
+    },
+  };
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  let user = userId
+    ? await User.findByIdAndUpdate(userId, update, { new: true })
+    : null;
+
+  if (!user && normalizedEmail) {
+    user = await User.findOneAndUpdate(
+      { email: normalizedEmail },
+      update,
+      { new: true }
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
+
+  return normalizeOnboarding(user.onboarding);
+};
+
+export const resetDashboardTutorialForEmail = async (email) => {
+  await connectMongo();
+
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+
+  if (!normalizedEmail) {
+    return null;
+  }
+
+  const user = await User.findOneAndUpdate(
+    { email: normalizedEmail },
     {
       $set: {
-        "onboarding.dashboardTutorialCompleted": true,
-        "onboarding.dashboardTutorialCompletedAt": completedAt,
+        "onboarding.dashboardTutorialCompleted": false,
+        "onboarding.dashboardTutorialCompletedAt": null,
       },
     },
     { new: true }
