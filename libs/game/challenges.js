@@ -6,7 +6,10 @@ import Challenge from "@/models/Challenge";
 import CaseTemplate from "@/models/CaseTemplate";
 import User from "@/models/User";
 import { LAWBOOK_VERSION, getLawbookRules } from "@/data/legalArenaLawbook";
-import { sendChallengeInviteEmail } from "@/libs/emailSender";
+import {
+  sendChallengeAcceptedEmail,
+  sendChallengeInviteEmail,
+} from "@/libs/emailSender";
 import {
   assessCaseSuccessChance,
   buildConversationFactSheetFallback,
@@ -751,6 +754,21 @@ export const acceptChallengeForUser = async ({ userId, challengeId }) => {
   challenge.status = "active";
   challenge.acceptedAt = new Date();
   await challenge.save();
+
+  try {
+    const [challengeSender, acceptedByUser] = await Promise.all([
+      User.findById(challenge.initiatorId).select("name email"),
+      User.findById(userId).select("name email"),
+    ]);
+
+    await sendChallengeAcceptedEmail({
+      toUser: challengeSender,
+      acceptedByUser,
+      challenge,
+    });
+  } catch (error) {
+    console.error("challenge accepted email failed", error);
+  }
 
   return buildChallengePayload({ challenge, viewerUserId: userId });
 };

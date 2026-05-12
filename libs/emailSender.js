@@ -338,6 +338,59 @@ export async function sendChallengeInviteEmail({
   });
 }
 
+export async function sendChallengeAcceptedEmail({
+  toUser,
+  acceptedByUser,
+  challenge,
+} = {}) {
+  if (!toUser?.email) {
+    throw new Error("Challenge sender email is required.");
+  }
+
+  const recipientName =
+    toUser.name?.trim?.() || toUser.email.split("@")[0] || "Counsel";
+  const acceptedByName =
+    acceptedByUser?.name?.trim?.() ||
+    acceptedByUser?.email?.split("@")[0] ||
+    "Your opponent";
+  const challengeRef = challenge.slug || challenge.id;
+  const challengePath = `/dashboard/challenges/${challengeRef}`;
+  const magicLoginUrl = await createMagicLoginLink({
+    email: toUser.email,
+    callbackUrl: challengePath,
+  });
+  const subject = `${acceptedByName} accepted your ${config.appName} challenge`;
+  const content =
+    `Hi ${recipientName},\n\n` +
+    `${acceptedByName} accepted your Legal Arena PVP challenge: ${challenge.title}.\n\n` +
+    "The match is now active. You can open the challenge, continue private intake, and prepare for court.";
+
+  return sendEmail({
+    to: toUser.email,
+    subject,
+    text:
+      `${content}\n\nOpen the challenge: ${magicLoginUrl}\n\n` +
+      "This sign-in link expires in 24 hours.",
+    html: emailTemplate({
+      title: "Challenge accepted",
+      subtitle: `${acceptedByName} is ready to face you in ${config.appName}.`,
+      content,
+      contentHtml: `
+        <p style="margin:0 0 18px;">Hi ${escapeHtml(recipientName)},</p>
+        <p style="margin:0 0 18px;"><strong>${escapeHtml(
+          acceptedByName
+        )}</strong> accepted your Legal Arena PVP challenge.</p>
+        <p style="margin:0 0 18px;"><strong>${escapeHtml(challenge.title)}</strong></p>
+        <p style="margin:0;">The match is now active. Open the challenge, continue private intake, and prepare for court.</p>
+      `,
+      ctaLabel: "Open challenge",
+      ctaUrl: magicLoginUrl,
+      footer: "This secure sign-in link expires in 24 hours.",
+    }),
+    from: config.email.fromSupport,
+  });
+}
+
 export async function sendLeadWelcomeEmail(email) {
   const subject = `Welcome to ${config.appName}`;
   const text =

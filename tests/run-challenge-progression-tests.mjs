@@ -17,6 +17,10 @@ const challengeStoreSource = await readFile(
   new URL("../libs/game/challenges.js", import.meta.url),
   "utf8"
 );
+const emailSenderSource = await readFile(
+  new URL("../libs/emailSender.js", import.meta.url),
+  "utf8"
+);
 const challengeWorkspaceSource = await readFile(
   new URL("../components/legal-arena/ChallengeWorkspace.js", import.meta.url),
   "utf8"
@@ -38,6 +42,14 @@ assert.match(challengeModelSource, /quitByUserId/);
 assert.match(challengeModelSource, /stayBonus/);
 assert.match(challengeStoreSource, /export const quitChallengeForUser/);
 assert.match(challengeStoreSource, /staying bonus/);
+assert.match(challengeStoreSource, /sendChallengeAcceptedEmail/);
+assert.match(challengeStoreSource, /challenge accepted email failed/);
+assert.match(challengeStoreSource, /User\.findById\(challenge\.initiatorId\)\.select\("name email"\)/);
+assert.match(challengeStoreSource, /acceptedByUser/);
+assert.match(emailSenderSource, /export async function sendChallengeAcceptedEmail/);
+assert.match(emailSenderSource, /Challenge accepted/);
+assert.match(emailSenderSource, /accepted your Legal Arena PVP challenge/);
+assert.match(emailSenderSource, /callbackUrl: challengePath/);
 assert.match(challengeStoreSource, /seedParticipantFactSheetIfEmpty/);
 assert.match(challengeStoreSource, /seedChallengeFactSheetsIfNeeded/);
 assert.match(challengeStoreSource, /const setParticipantFactSheet = /);
