@@ -34,6 +34,34 @@ const uniqueTextList = (items = []) => {
     });
 };
 
+const escapeRegExp = (value = "") =>
+  String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const replaceOwnSideSubject = (text = "", ownSubjects = []) => {
+  let nextText = String(text || "").trim();
+
+  ownSubjects.filter(Boolean).forEach((subject) => {
+    const pattern = new RegExp(`(^|[-–—]\\s*)${escapeRegExp(subject)}\\b`, "i");
+    nextText = nextText.replace(pattern, (match, prefix = "") => `${prefix}You`);
+  });
+
+  return nextText.replace(/^You\s+(kept|clearly|relied|correctly|tied|focused|continued|argued|anchored|engaged|identified|addressed|pressed|showed|used)\b/i, (match, verb) => `You ${verb}`);
+};
+
+const normalizeFeedbackForViewer = ({ items = [], viewer = {} }) => {
+  const ownSideLabel = viewer.side === "opponent" ? "Defendant" : "Plaintiff";
+  const ownSubjects = [
+    ownSideLabel,
+    "The player",
+    viewer.partyName,
+    viewer.name,
+    viewer.partyName ? `Counsel for ${viewer.partyName}` : "",
+    viewer.name ? `Counsel for ${viewer.name}` : "",
+  ];
+
+  return uniqueTextList(items.map((item) => replaceOwnSideSubject(item, ownSubjects)));
+};
+
 const getViewerStage = (challenge = {}) => {
   if (challenge.status === "verdict") {
     return "verdict";
@@ -77,12 +105,16 @@ const challengeToCaseSession = (challenge = {}) => {
   const opponentJudgedSubmissions = judgedRounds
     .flatMap((round) => round.submissions || [])
     .filter((submission) => !submission.isViewer);
-  const viewerStrengths = uniqueTextList(
+  const viewerStrengths = normalizeFeedbackForViewer({
+    viewer,
+    items:
     viewerJudgedSubmissions.flatMap((submission) => submission.judgeNotes?.strengths || [])
-  ).slice(0, 5);
-  const viewerWeaknesses = uniqueTextList(
+  }).slice(0, 5);
+  const viewerWeaknesses = normalizeFeedbackForViewer({
+    viewer,
+    items:
     viewerJudgedSubmissions.flatMap((submission) => submission.judgeNotes?.weaknesses || [])
-  ).slice(0, 5);
+  }).slice(0, 5);
   const opponentStrengths = uniqueTextList(
     opponentJudgedSubmissions.flatMap((submission) => submission.judgeNotes?.strengths || [])
   ).slice(0, 5);

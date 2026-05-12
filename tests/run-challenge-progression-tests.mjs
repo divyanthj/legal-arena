@@ -95,10 +95,14 @@ assert.match(
 );
 assert.match(challengeWorkspaceSource, /const viewerReady = viewer\.status === "ready"/);
 assert.match(challengeWorkspaceSource, /const uniqueTextList = /);
+assert.match(challengeWorkspaceSource, /const replaceOwnSideSubject = /);
+assert.match(challengeWorkspaceSource, /const normalizeFeedbackForViewer = /);
+assert.match(challengeWorkspaceSource, /ownSideLabel = viewer\.side === "opponent" \? "Defendant" : "Plaintiff"/);
+assert.match(challengeWorkspaceSource, /viewer\.partyName \? `Counsel for \$\{viewer\.partyName\}` : ""/);
 assert.match(challengeWorkspaceSource, /const viewerJudgedSubmissions = judgedRounds/);
 assert.match(challengeWorkspaceSource, /const opponentJudgedSubmissions = judgedRounds/);
-assert.match(challengeWorkspaceSource, /const viewerStrengths = uniqueTextList/);
-assert.match(challengeWorkspaceSource, /const viewerWeaknesses = uniqueTextList/);
+assert.match(challengeWorkspaceSource, /const viewerStrengths = normalizeFeedbackForViewer/);
+assert.match(challengeWorkspaceSource, /const viewerWeaknesses = normalizeFeedbackForViewer/);
 assert.match(challengeWorkspaceSource, /const opponentStrengths = uniqueTextList/);
 assert.match(challengeWorkspaceSource, /const opponentWeaknesses = uniqueTextList/);
 assert.match(challengeWorkspaceSource, /highlights:\s*viewerStrengths/);
