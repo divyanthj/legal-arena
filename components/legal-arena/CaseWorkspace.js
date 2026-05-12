@@ -1657,10 +1657,21 @@ export default function CaseWorkspace({
                     </form>
                   )}
                   {!isVerdict && viewerSubmittedCurrentRound ? (
-                    <div className="arena-surface-soft mt-6 p-4 text-sm leading-6 text-white/68">
-                      Your argument is filed. Waiting for the other player before the bench
-                      scores this round.
-                    </div>
+                    <article className="arena-transcript-opponent mt-6 rounded-xl p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="font-semibold text-white">{opponentPartyName}</p>
+                        <p className="text-xs uppercase tracking-[0.14em] text-amber-100/46">
+                          Preparing
+                        </p>
+                      </div>
+                      <p className="mt-2 leading-7 text-white">
+                        Your argument is filed. {opponentPartyName} is preparing a response.
+                      </p>
+                      <TypingIndicator speaker={opponentPartyName} />
+                      <div className="mt-4">
+                        <LoadingBar label={`${opponentPartyName} is preparing a response`} />
+                      </div>
+                    </article>
                   ) : null}
                 </div>
               </div>

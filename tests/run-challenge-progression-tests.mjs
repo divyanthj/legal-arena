@@ -104,6 +104,9 @@ assert.match(caseWorkspaceSource, /const waitingForPlaintiffOpening = Boolean/);
 assert.match(caseWorkspaceSource, /apiConfig\.requirePlaintiffOpening/);
 assert.match(caseWorkspaceSource, /caseSession\.playerSide === "opponent"/);
 assert.match(caseWorkspaceSource, /You are waiting for the plaintiff&apos;s opening statement/);
+assert.match(caseWorkspaceSource, /Your argument is filed\. \{opponentPartyName\} is preparing a response\./);
+assert.match(caseWorkspaceSource, /TypingIndicator speaker=\{opponentPartyName\}/);
+assert.match(caseWorkspaceSource, /LoadingBar label=\{`\$\{opponentPartyName\} is preparing a response`\}/);
 assert.match(
   caseWorkspaceSource,
   /setPendingSpeaker\(apiConfig\.courtroomSubmitOnly \? "" : getOpponentPartyName\(caseSession\)\)/
