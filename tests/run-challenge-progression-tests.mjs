@@ -21,6 +21,10 @@ const challengeWorkspaceSource = await readFile(
   new URL("../components/legal-arena/ChallengeWorkspace.js", import.meta.url),
   "utf8"
 );
+const caseWorkspaceSource = await readFile(
+  new URL("../components/legal-arena/CaseWorkspace.js", import.meta.url),
+  "utf8"
+);
 
 assert.match(userModelSource, /const pvpProgressSchema = mongoose\.Schema/);
 assert.match(userModelSource, /completedChallenges/);
@@ -67,10 +71,20 @@ assert.match(challengeStoreSource, /submission\.judgeNotes\?\.benchSignal/);
 assert.match(challengeStoreSource, /!\["active", "courtroom"\]\.includes\(challenge\.status\)/);
 assert.match(challengeStoreSource, /participant\.status !== "ready"/);
 assert.match(challengeStoreSource, /Finalize your fact sheet before filing in court/);
+assert.match(challengeStoreSource, /const plaintiffHasFiledOpening = /);
+assert.match(
+  challengeStoreSource,
+  /participant\.side === "opponent" && round\.round === 1 && !plaintiffHasFiledOpening/
+);
+assert.match(challengeStoreSource, /Wait for the plaintiff's opening statement/);
 assert.match(challengeStoreSource, /await scoreChallengeSubmission\(/);
 assert.match(challengeStoreSource, /await closeRoundIfReady\(/);
 assert.doesNotMatch(challengeStoreSource, /judgeRoundIfReady/);
 assert.match(challengeStoreSource, /benchSummary: round\.benchSummary \|\| ""/);
+assert.match(
+  challengeStoreSource,
+  /round\.benchSummary = round\.benchSummary \|\| summarizeScoredRound\(round\)/
+);
 assert.match(challengeWorkspaceSource, /const viewerReady = viewer\.status === "ready"/);
 assert.match(
   challengeWorkspaceSource,
@@ -80,5 +94,25 @@ assert.match(
   challengeWorkspaceSource,
   /\["active", "courtroom"\]\.includes\(challenge\.status\)\s*\?\s*"interview"/
 );
+assert.match(challengeWorkspaceSource, /realtimeRefresh:\s*true/);
+assert.match(challengeWorkspaceSource, /realtimeRefreshPath:\s*`\/challenges\/\$\{challengeRef\}`/);
+assert.match(challengeWorkspaceSource, /courtroomSubmitOnly:\s*true/);
+assert.match(challengeWorkspaceSource, /requirePlaintiffOpening:\s*true/);
+assert.match(caseWorkspaceSource, /apiClient\.get\(realtimeRefreshPath\)/);
+assert.match(caseWorkspaceSource, /window\.setInterval\(refreshCase, realtimeRefreshIntervalMs\)/);
+assert.match(caseWorkspaceSource, /const waitingForPlaintiffOpening = Boolean/);
+assert.match(caseWorkspaceSource, /apiConfig\.requirePlaintiffOpening/);
+assert.match(caseWorkspaceSource, /caseSession\.playerSide === "opponent"/);
+assert.match(caseWorkspaceSource, /You are waiting for the plaintiff&apos;s opening statement/);
+assert.match(
+  caseWorkspaceSource,
+  /setPendingSpeaker\(apiConfig\.courtroomSubmitOnly \? "" : getOpponentPartyName\(caseSession\)\)/
+);
+assert.match(caseWorkspaceSource, /Submitting\.\.\./);
+assert.match(
+  caseWorkspaceSource,
+  /form\.dispatchEvent\(new Event\("submit", \{ bubbles: true, cancelable: true \}\)\)/
+);
+assert.doesNotMatch(caseWorkspaceSource, /requestSubmit/);
 
 console.log("Challenge progression tests passed");

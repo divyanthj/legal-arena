@@ -1101,7 +1101,7 @@ const closeRoundIfReady = async ({ challenge, round }) => {
 
   round.status = "judged";
   round.judgedAt = new Date();
-  round.benchSummary = summarizeScoredRound(round);
+  round.benchSummary = round.benchSummary || summarizeScoredRound(round);
   markCourtroomRoundsModified(challenge);
   await finalizeChallengeIfComplete(challenge);
   appendOpenRoundIfNeeded(challenge);
@@ -1170,6 +1170,12 @@ export const submitChallengeCourtroomArgument = async ({
   }
   if (getSubmissionForParticipant(round, participant)) {
     throw new Error("You already submitted for this round.");
+  }
+  const plaintiffHasFiledOpening = (round.submissions || []).some(
+    (submission) => submission.side === "client"
+  );
+  if (participant.side === "opponent" && round.round === 1 && !plaintiffHasFiledOpening) {
+    throw new Error("Wait for the plaintiff's opening statement before responding.");
   }
 
   const submission = {

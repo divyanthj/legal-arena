@@ -274,6 +274,11 @@ export default function ChallengeWorkspace({ initialChallenge }) {
         exitConfirm:
           "Quit this PVP challenge? The court will consider revealed rounds so far, and the player who stays receives a staying bonus.",
         exitStaysInWorkspace: true,
+        realtimeRefresh: true,
+        realtimeRefreshPath: `/challenges/${challengeRef}`,
+        realtimeRefreshIntervalMs: 4000,
+        courtroomSubmitOnly: true,
+        requirePlaintiffOpening: true,
         responseToCase: (response) => {
           if (response?.challenge) {
             setChallenge(response.challenge);

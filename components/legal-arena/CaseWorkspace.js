@@ -246,6 +246,8 @@ export default function CaseWorkspace({
   const [lawbookSearch, setLawbookSearch] = useState("");
   const interviewTranscriptRef = useRef(null);
   const courtroomTranscriptRef = useRef(null);
+  const workingRef = useRef(false);
+  const updateCaseFromResponseRef = useRef(null);
   const {
     recordingQuestion,
     transcribingQuestion,
@@ -269,6 +271,8 @@ export default function CaseWorkspace({
   });
   const getApiBasePath = (session = caseSession) =>
     apiConfig.basePath || `/cases/${getCaseRouteRef(session)}`;
+  const realtimeRefreshPath = apiConfig.realtimeRefreshPath || getApiBasePath(caseSession);
+  const realtimeRefreshIntervalMs = apiConfig.realtimeRefreshIntervalMs || 4000;
   const getResponseCase = (response) =>
     apiConfig.responseToCase ? apiConfig.responseToCase(response) : response?.caseSession;
   const updateCaseFromResponse = (response) => {
@@ -285,6 +289,14 @@ export default function CaseWorkspace({
 
     return nextCase;
   };
+
+  useEffect(() => {
+    workingRef.current = working;
+  }, [working]);
+
+  useEffect(() => {
+    updateCaseFromResponseRef.current = updateCaseFromResponse;
+  });
 
   useEffect(() => {
     const sanitizedFactSheet = sanitizeFactSheet(caseSession.factSheet || {});
@@ -328,6 +340,14 @@ export default function CaseWorkspace({
   const isVerdict = caseSession.status === "verdict";
   const isExited = caseSession.status === "exited";
   const isIntakeLocked = Boolean(apiConfig.intakeLocked);
+  const viewerSubmittedCurrentRound = Boolean(caseSession.score.viewerSubmittedCurrentRound);
+  const waitingForPlaintiffOpening = Boolean(
+    apiConfig.requirePlaintiffOpening &&
+      caseSession.playerSide === "opponent" &&
+      caseSession.score.roundsCompleted === 0 &&
+      normalizedCourtroomTranscript.length === 0 &&
+      !viewerSubmittedCurrentRound
+  );
 
   useEffect(() => {
     if (!isInterview || !interviewTranscriptRef.current) {
@@ -351,6 +371,42 @@ export default function CaseWorkspace({
     });
   }, [isInterview, normalizedCourtroomTranscript.length, working, pendingSpeaker]);
 
+  useEffect(() => {
+    if (!apiConfig.realtimeRefresh || isVerdict || isExited || !realtimeRefreshPath) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const refreshCase = async () => {
+      if (cancelled || workingRef.current || document.hidden) {
+        return;
+      }
+
+      try {
+        const response = await apiClient.get(realtimeRefreshPath);
+        if (!cancelled) {
+          updateCaseFromResponseRef.current?.(response);
+        }
+      } catch (error) {
+        console.error(error);
+      }
+    };
+
+    const intervalId = window.setInterval(refreshCase, realtimeRefreshIntervalMs);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [
+    apiConfig.realtimeRefresh,
+    isVerdict,
+    isExited,
+    realtimeRefreshIntervalMs,
+    realtimeRefreshPath,
+  ]);
+
   const handleChatTextareaKeyDown = (event) => {
     if (event.key !== "Enter" || event.shiftKey || event.nativeEvent?.isComposing) {
       return;
@@ -362,7 +418,12 @@ export default function CaseWorkspace({
       return;
     }
 
-    event.currentTarget.form?.requestSubmit();
+    const form = event.currentTarget.form;
+    if (!form) {
+      return;
+    }
+
+    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
   };
 
   const handleInterviewSubmit = async (event) => {
@@ -439,7 +500,7 @@ export default function CaseWorkspace({
 
   const handleCourtroomSubmit = async (event) => {
     event.preventDefault();
-    if (working || !argument.trim()) return;
+    if (working || waitingForPlaintiffOpening || !argument.trim()) return;
 
     const submittedArgument = argument.trim();
 
@@ -455,7 +516,7 @@ export default function CaseWorkspace({
     setArgument("");
     setWorking(true);
     setPendingAction("courtroom");
-    setPendingSpeaker(getOpponentPartyName(caseSession));
+    setPendingSpeaker(apiConfig.courtroomSubmitOnly ? "" : getOpponentPartyName(caseSession));
 
     try {
       const response = await apiClient.post(
@@ -596,7 +657,6 @@ export default function CaseWorkspace({
   const canEditFactSheet = isInterview && !isIntakeLocked;
   const isCourtroom = !isInterview && !isExited && !isVerdict;
   const courtroomRoundLabel = `Courtroom Round ${caseSession.score.roundsCompleted + 1}`;
-  const viewerSubmittedCurrentRound = Boolean(caseSession.score.viewerSubmittedCurrentRound);
   const assessment = caseSession.caseAssessment || {};
   const displayedSuccessChance = isInterview
     ? assessment.currentSuccessChance
@@ -1477,7 +1537,14 @@ export default function CaseWorkspace({
                     )}
                   </div>
 
-                  {!isVerdict && !viewerSubmittedCurrentRound && (
+                  {!isVerdict && waitingForPlaintiffOpening ? (
+                    <div className="arena-surface-soft mt-6 p-4 text-sm leading-6 text-white/68">
+                      You are waiting for the plaintiff&apos;s opening statement. Once it is
+                      filed, you can respond for the defense.
+                    </div>
+                  ) : null}
+
+                  {!isVerdict && !viewerSubmittedCurrentRound && !waitingForPlaintiffOpening && (
                     <form className="mt-6 min-w-0 space-y-4" onSubmit={handleCourtroomSubmit}>
                       <div>
                         <p className="arena-kicker">Your Argument</p>
@@ -1579,7 +1646,7 @@ export default function CaseWorkspace({
                           disabled={working || recordingArgument || transcribingArgument}
                         >
                           {pendingAction === "courtroom"
-                            ? "Submitting Argument..."
+                            ? "Submitting..."
                             : "Submit Argument"}
                         </button>
                       </div>
