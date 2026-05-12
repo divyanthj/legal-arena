@@ -345,7 +345,6 @@ export default function CaseWorkspace({
     apiConfig.requirePlaintiffOpening &&
       caseSession.playerSide === "opponent" &&
       caseSession.score.roundsCompleted === 0 &&
-      normalizedCourtroomTranscript.length === 0 &&
       !viewerSubmittedCurrentRound
   );
 
@@ -1538,10 +1537,21 @@ export default function CaseWorkspace({
                   </div>
 
                   {!isVerdict && waitingForPlaintiffOpening ? (
-                    <div className="arena-surface-soft mt-6 p-4 text-sm leading-6 text-white/68">
-                      You are waiting for the plaintiff&apos;s opening statement. Once it is
-                      filed, you can respond for the defense.
-                    </div>
+                    <article className="arena-transcript-opponent mt-6 rounded-xl p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="font-semibold text-white">{opponentPartyName}</p>
+                        <p className="text-xs uppercase tracking-[0.14em] text-amber-100/46">
+                          Preparing
+                        </p>
+                      </div>
+                      <p className="mt-2 leading-7 text-white">
+                        {opponentPartyName} is preparing a response...
+                      </p>
+                      <TypingIndicator speaker={opponentPartyName} />
+                      <div className="mt-4">
+                        <LoadingBar label={`${opponentPartyName} is preparing a response`} />
+                      </div>
+                    </article>
                   ) : null}
 
                   {!isVerdict && !viewerSubmittedCurrentRound && !waitingForPlaintiffOpening && (
@@ -1665,7 +1675,7 @@ export default function CaseWorkspace({
                         </p>
                       </div>
                       <p className="mt-2 leading-7 text-white">
-                        Your argument is filed. {opponentPartyName} is preparing a response.
+                        {opponentPartyName} is preparing a response...
                       </p>
                       <TypingIndicator speaker={opponentPartyName} />
                       <div className="mt-4">
