@@ -27,7 +27,7 @@ const arenaInputClass = "input arena-field min-h-12 w-full text-slate-100";
 const arenaTextareaClass = "textarea arena-textarea arena-field w-full text-slate-100";
 const arenaSelectClass = "arena-select select min-h-12 w-full text-slate-100";
 const arenaToggleClass =
-  "toggle toggle-md border-white/20 bg-white/10 text-amber-300 [--tglbg:theme(colors.amber.300)] checked:border-amber-300/60 checked:bg-amber-300/20";
+  "checkbox checkbox-warning checkbox-md";
 const retentionNudgeLabels = {
   resume_interview: "Resume intake reminders",
   resume_courtroom: "Resume courtroom reminders",
