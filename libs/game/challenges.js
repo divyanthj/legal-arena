@@ -882,6 +882,18 @@ const getSubmissionForParticipant = (round, participant) =>
     isSameId(submission.userId, participant.userId)
   ) || null;
 
+const getLastCourtroomSubmission = (challenge) =>
+  (challenge.courtroomRounds || [])
+    .flatMap((round) =>
+      (round.submissions || []).map((submission) => ({
+        ...submission,
+        round: round.round,
+        submittedAt: submission.submittedAt || round.judgedAt || challenge.updatedAt,
+      }))
+    )
+    .sort((left, right) => new Date(left.submittedAt) - new Date(right.submittedAt))
+    .at(-1) || null;
+
 const summarizeScoredRound = (round) => {
   const scores = (round.submissions || [])
     .filter((submission) => submission.judgeNotes?.benchSignal)
@@ -1170,6 +1182,10 @@ export const submitChallengeCourtroomArgument = async ({
   }
   if (getSubmissionForParticipant(round, participant)) {
     throw new Error("You already submitted for this round.");
+  }
+  const lastSubmission = getLastCourtroomSubmission(challenge);
+  if (lastSubmission && isSameId(lastSubmission.userId, participant.userId)) {
+    throw new Error("Wait for the other player's response before filing again.");
   }
   const plaintiffHasFiledOpening = (round.submissions || []).some(
     (submission) => submission.side === "client"

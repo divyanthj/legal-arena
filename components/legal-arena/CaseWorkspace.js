@@ -341,12 +341,6 @@ export default function CaseWorkspace({
   const isExited = caseSession.status === "exited";
   const isIntakeLocked = Boolean(apiConfig.intakeLocked);
   const viewerSubmittedCurrentRound = Boolean(caseSession.score.viewerSubmittedCurrentRound);
-  const waitingForPlaintiffOpening = Boolean(
-    apiConfig.requirePlaintiffOpening &&
-      caseSession.playerSide === "opponent" &&
-      caseSession.score.roundsCompleted === 0 &&
-      !viewerSubmittedCurrentRound
-  );
 
   useEffect(() => {
     if (!isInterview || !interviewTranscriptRef.current) {
@@ -499,7 +493,7 @@ export default function CaseWorkspace({
 
   const handleCourtroomSubmit = async (event) => {
     event.preventDefault();
-    if (working || waitingForPlaintiffOpening || !argument.trim()) return;
+    if (working || showCourtroomWaitingCard || !argument.trim()) return;
 
     const submittedArgument = argument.trim();
 
@@ -572,6 +566,26 @@ export default function CaseWorkspace({
   const opponentPartyName = getOpponentPartyName(caseSession);
   const plaintiffName = getPlaintiffName(caseSession);
   const defendantName = getDefendantName(caseSession);
+  const isDefendantSide =
+    caseSession.playerSide === "opponent" ||
+    playerPartyName.trim().toLowerCase() === defendantName.trim().toLowerCase();
+  const waitingForPlaintiffOpening = Boolean(
+    apiConfig.requirePlaintiffOpening &&
+      isDefendantSide &&
+      caseSession.score.roundsCompleted === 0 &&
+      !viewerSubmittedCurrentRound
+  );
+  const lastCourtroomEntry =
+    normalizedCourtroomTranscript[normalizedCourtroomTranscript.length - 1] || null;
+  const waitingForOpponentResponse = Boolean(
+    apiConfig.turnBasedCourtroom && lastCourtroomEntry?.speaker === "player"
+  );
+  const showCourtroomWaitingCard = Boolean(
+    !isVerdict &&
+      (waitingForPlaintiffOpening ||
+        viewerSubmittedCurrentRound ||
+        waitingForOpponentResponse)
+  );
   const sideBadgeLabel =
     caseSession.playerSide === "opponent" ? "Defendant Side" : "Plaintiff Side";
   const verdictStyle =
@@ -1536,7 +1550,7 @@ export default function CaseWorkspace({
                     )}
                   </div>
 
-                  {!isVerdict && waitingForPlaintiffOpening ? (
+                  {showCourtroomWaitingCard ? (
                     <article className="arena-transcript-opponent mt-6 rounded-xl p-4">
                       <div className="flex items-center justify-between gap-3">
                         <p className="font-semibold text-white">{opponentPartyName}</p>
@@ -1554,7 +1568,7 @@ export default function CaseWorkspace({
                     </article>
                   ) : null}
 
-                  {!isVerdict && !viewerSubmittedCurrentRound && !waitingForPlaintiffOpening && (
+                  {!isVerdict && !showCourtroomWaitingCard && (
                     <form className="mt-6 min-w-0 space-y-4" onSubmit={handleCourtroomSubmit}>
                       <div>
                         <p className="arena-kicker">Your Argument</p>
@@ -1666,23 +1680,6 @@ export default function CaseWorkspace({
                       </div>
                     </form>
                   )}
-                  {!isVerdict && viewerSubmittedCurrentRound ? (
-                    <article className="arena-transcript-opponent mt-6 rounded-xl p-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="font-semibold text-white">{opponentPartyName}</p>
-                        <p className="text-xs uppercase tracking-[0.14em] text-amber-100/46">
-                          Preparing
-                        </p>
-                      </div>
-                      <p className="mt-2 leading-7 text-white">
-                        {opponentPartyName} is preparing a response...
-                      </p>
-                      <TypingIndicator speaker={opponentPartyName} />
-                      <div className="mt-4">
-                        <LoadingBar label={`${opponentPartyName} is preparing a response`} />
-                      </div>
-                    </article>
-                  ) : null}
                 </div>
               </div>
             )}

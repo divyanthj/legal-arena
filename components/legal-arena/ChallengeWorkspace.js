@@ -279,6 +279,7 @@ export default function ChallengeWorkspace({ initialChallenge }) {
         realtimeRefreshIntervalMs: 4000,
         courtroomSubmitOnly: true,
         requirePlaintiffOpening: true,
+        turnBasedCourtroom: true,
         responseToCase: (response) => {
           if (response?.challenge) {
             setChallenge(response.challenge);

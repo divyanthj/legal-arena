@@ -71,6 +71,9 @@ assert.match(challengeStoreSource, /submission\.judgeNotes\?\.benchSignal/);
 assert.match(challengeStoreSource, /!\["active", "courtroom"\]\.includes\(challenge\.status\)/);
 assert.match(challengeStoreSource, /participant\.status !== "ready"/);
 assert.match(challengeStoreSource, /Finalize your fact sheet before filing in court/);
+assert.match(challengeStoreSource, /const getLastCourtroomSubmission = /);
+assert.match(challengeStoreSource, /const lastSubmission = getLastCourtroomSubmission\(challenge\)/);
+assert.match(challengeStoreSource, /Wait for the other player's response before filing again/);
 assert.match(challengeStoreSource, /const plaintiffHasFiledOpening = /);
 assert.match(
   challengeStoreSource,
@@ -98,11 +101,16 @@ assert.match(challengeWorkspaceSource, /realtimeRefresh:\s*true/);
 assert.match(challengeWorkspaceSource, /realtimeRefreshPath:\s*`\/challenges\/\$\{challengeRef\}`/);
 assert.match(challengeWorkspaceSource, /courtroomSubmitOnly:\s*true/);
 assert.match(challengeWorkspaceSource, /requirePlaintiffOpening:\s*true/);
+assert.match(challengeWorkspaceSource, /turnBasedCourtroom:\s*true/);
 assert.match(caseWorkspaceSource, /apiClient\.get\(realtimeRefreshPath\)/);
 assert.match(caseWorkspaceSource, /window\.setInterval\(refreshCase, realtimeRefreshIntervalMs\)/);
 assert.match(caseWorkspaceSource, /const waitingForPlaintiffOpening = Boolean/);
+assert.match(caseWorkspaceSource, /const waitingForOpponentResponse = Boolean/);
+assert.match(caseWorkspaceSource, /const showCourtroomWaitingCard = Boolean/);
 assert.match(caseWorkspaceSource, /apiConfig\.requirePlaintiffOpening/);
+assert.match(caseWorkspaceSource, /apiConfig\.turnBasedCourtroom/);
 assert.match(caseWorkspaceSource, /caseSession\.playerSide === "opponent"/);
+assert.match(caseWorkspaceSource, /lastCourtroomEntry\?\.speaker === "player"/);
 assert.match(caseWorkspaceSource, /\{opponentPartyName\} is preparing a response\.\.\./);
 assert.match(caseWorkspaceSource, /TypingIndicator speaker=\{opponentPartyName\}/);
 assert.match(caseWorkspaceSource, /LoadingBar label=\{`\$\{opponentPartyName\} is preparing a response`\}/);
