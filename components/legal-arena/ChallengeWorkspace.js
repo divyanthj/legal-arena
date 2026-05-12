@@ -101,6 +101,8 @@ const challengeToCaseSession = (challenge = {}) => {
     },
     playerPartyName: viewer.partyName,
     opponentPartyName: opponent.partyName,
+    playerCounselName: viewer.name,
+    opponentCounselName: opponent.name,
     plaintiffName: challenge.premise?.clientName,
     defendantName: challenge.premise?.opponentName,
     interviewTranscript: viewer.interviewTranscript || [],
@@ -280,6 +282,7 @@ export default function ChallengeWorkspace({ initialChallenge }) {
         courtroomSubmitOnly: true,
         requirePlaintiffOpening: true,
         turnBasedCourtroom: true,
+        counselLabels: true,
         responseToCase: (response) => {
           if (response?.challenge) {
             setChallenge(response.challenge);

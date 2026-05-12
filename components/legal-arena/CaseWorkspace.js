@@ -80,6 +80,17 @@ const TypingIndicator = ({ speaker }) => (
   </div>
 );
 
+const CounselIdentity = ({ title, representedBy, metaClassName = "text-white/55" }) => (
+  <div className="min-w-0">
+    <p className="font-semibold text-white">{title}</p>
+    {representedBy ? (
+      <p className={`mt-0.5 text-xs uppercase tracking-[0.14em] ${metaClassName}`}>
+        Represented by {representedBy}
+      </p>
+    ) : null}
+  </div>
+);
+
 const VoiceWaveform = ({ level = 0 }) => {
   const normalizedLevel = Math.min(1, Math.max(0, Number(level) || 0));
   const bars = [0.35, 0.65, 1, 0.8, 0.45];
@@ -564,6 +575,19 @@ export default function CaseWorkspace({
 
   const playerPartyName = getPlayerPartyName(caseSession);
   const opponentPartyName = getOpponentPartyName(caseSession);
+  const useCounselLabels = Boolean(apiConfig.counselLabels);
+  const playerCounselTitle = useCounselLabels
+    ? `Counsel for ${playerPartyName}`
+    : "You";
+  const opponentCounselTitle = useCounselLabels
+    ? `Counsel for ${opponentPartyName}`
+    : opponentPartyName;
+  const playerRepresentedBy = useCounselLabels
+    ? caseSession.playerCounselName || "You"
+    : "";
+  const opponentRepresentedBy = useCounselLabels
+    ? caseSession.opponentCounselName || ""
+    : "";
   const plaintiffName = getPlaintiffName(caseSession);
   const defendantName = getDefendantName(caseSession);
   const isDefendantSide =
@@ -1196,8 +1220,15 @@ export default function CaseWorkspace({
                       </div>
                       <div>
                         <p className="arena-kicker">You Represent</p>
-                        <p className="mt-1 font-semibold text-white">{playerPartyName}</p>
+                        <p className="mt-1 font-semibold text-white">
+                          {useCounselLabels ? playerCounselTitle : playerPartyName}
+                        </p>
                         <p className="text-sm text-white/55">{sideBadgeLabel.replace(" Side", "")}</p>
+                        {useCounselLabels && playerRepresentedBy ? (
+                          <p className="mt-1 text-xs uppercase tracking-[0.14em] text-white/45">
+                            Represented by {playerRepresentedBy}
+                          </p>
+                        ) : null}
                       </div>
                     </div>
                   ) : (
@@ -1488,9 +1519,18 @@ export default function CaseWorkspace({
                           }`}
                         >
                           <div className="flex items-center justify-between gap-3">
-                            <p className="font-semibold text-white">
-                              {entry.speaker === "player" ? "You" : opponentPartyName}
-                            </p>
+                            <CounselIdentity
+                              title={
+                                entry.speaker === "player"
+                                  ? playerCounselTitle
+                                  : opponentCounselTitle
+                              }
+                              representedBy={
+                                entry.speaker === "player"
+                                  ? playerRepresentedBy
+                                  : opponentRepresentedBy
+                              }
+                            />
                             <p className="text-xs text-white/40">Round {entry.round}</p>
                           </div>
                           <p className="mt-2 whitespace-pre-wrap break-words leading-7 text-white">
@@ -1535,7 +1575,10 @@ export default function CaseWorkspace({
                     {working && pendingSpeaker === opponentPartyName && (
                       <article className="arena-transcript-opponent rounded-xl p-4">
                         <div className="flex items-center justify-between gap-3">
-                          <p className="font-semibold text-white">{opponentPartyName}</p>
+                          <CounselIdentity
+                            title={opponentCounselTitle}
+                            representedBy={opponentRepresentedBy}
+                          />
                           <p className="text-xs uppercase tracking-[0.14em] text-amber-100/46">
                             Preparing
                           </p>
@@ -1553,7 +1596,10 @@ export default function CaseWorkspace({
                   {showCourtroomWaitingCard ? (
                     <article className="arena-transcript-opponent mt-6 rounded-xl p-4">
                       <div className="flex items-center justify-between gap-3">
-                        <p className="font-semibold text-white">{opponentPartyName}</p>
+                        <CounselIdentity
+                          title={opponentCounselTitle}
+                          representedBy={opponentRepresentedBy}
+                        />
                         <p className="text-xs uppercase tracking-[0.14em] text-amber-100/46">
                           Preparing
                         </p>

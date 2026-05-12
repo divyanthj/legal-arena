@@ -102,8 +102,15 @@ assert.match(challengeWorkspaceSource, /realtimeRefreshPath:\s*`\/challenges\/\$
 assert.match(challengeWorkspaceSource, /courtroomSubmitOnly:\s*true/);
 assert.match(challengeWorkspaceSource, /requirePlaintiffOpening:\s*true/);
 assert.match(challengeWorkspaceSource, /turnBasedCourtroom:\s*true/);
+assert.match(challengeWorkspaceSource, /counselLabels:\s*true/);
+assert.match(challengeWorkspaceSource, /playerCounselName:\s*viewer\.name/);
+assert.match(challengeWorkspaceSource, /opponentCounselName:\s*opponent\.name/);
 assert.match(caseWorkspaceSource, /apiClient\.get\(realtimeRefreshPath\)/);
 assert.match(caseWorkspaceSource, /window\.setInterval\(refreshCase, realtimeRefreshIntervalMs\)/);
+assert.match(caseWorkspaceSource, /const CounselIdentity = /);
+assert.match(caseWorkspaceSource, /const useCounselLabels = Boolean\(apiConfig\.counselLabels\)/);
+assert.match(caseWorkspaceSource, /`Counsel for \$\{opponentPartyName\}`/);
+assert.match(caseWorkspaceSource, /Represented by \{representedBy\}/);
 assert.match(caseWorkspaceSource, /const waitingForPlaintiffOpening = Boolean/);
 assert.match(caseWorkspaceSource, /const waitingForOpponentResponse = Boolean/);
 assert.match(caseWorkspaceSource, /const showCourtroomWaitingCard = Boolean/);
