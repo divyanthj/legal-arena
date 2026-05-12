@@ -66,7 +66,12 @@ assert.match(
 assert.doesNotMatch(challengeStoreSource, /const confirmedProofCuePattern =/);
 assert.match(challengeStoreSource, /const scoreChallengeSubmission = async/);
 assert.match(challengeStoreSource, /const backfillChallengeCourtroomScores = async/);
+assert.match(challengeStoreSource, /const buildSubmissionFeedbackBackfill = /);
+assert.match(challengeStoreSource, /const backfillChallengeCourtroomFeedback = /);
 assert.match(challengeStoreSource, /await backfillChallengeCourtroomScores\(challenge\)/);
+assert.match(challengeStoreSource, /backfillChallengeCourtroomFeedback\(challenge\)/);
+assert.match(challengeStoreSource, /submission\.judgeNotes\.strengths = feedback\.strengths/);
+assert.match(challengeStoreSource, /submission\.judgeNotes\.weaknesses = feedback\.weaknesses/);
 assert.match(challengeStoreSource, /submission\.judgeNotes\?\.benchSignal/);
 assert.match(challengeStoreSource, /!\["active", "courtroom"\]\.includes\(challenge\.status\)/);
 assert.match(challengeStoreSource, /participant\.status !== "ready"/);
@@ -89,6 +94,17 @@ assert.match(
   /round\.benchSummary = round\.benchSummary \|\| summarizeScoredRound\(round\)/
 );
 assert.match(challengeWorkspaceSource, /const viewerReady = viewer\.status === "ready"/);
+assert.match(challengeWorkspaceSource, /const uniqueTextList = /);
+assert.match(challengeWorkspaceSource, /const viewerJudgedSubmissions = judgedRounds/);
+assert.match(challengeWorkspaceSource, /const opponentJudgedSubmissions = judgedRounds/);
+assert.match(challengeWorkspaceSource, /const viewerStrengths = uniqueTextList/);
+assert.match(challengeWorkspaceSource, /const viewerWeaknesses = uniqueTextList/);
+assert.match(challengeWorkspaceSource, /const opponentStrengths = uniqueTextList/);
+assert.match(challengeWorkspaceSource, /const opponentWeaknesses = uniqueTextList/);
+assert.match(challengeWorkspaceSource, /highlights:\s*viewerStrengths/);
+assert.match(challengeWorkspaceSource, /weaknesses:\s*viewerWeaknesses/);
+assert.match(challengeWorkspaceSource, /viewer\.verdict === "loss" && opponentWeaknesses\.length/);
+assert.match(challengeWorkspaceSource, /viewer\.verdict === "win" && opponentStrengths\.length/);
 assert.match(
   challengeWorkspaceSource,
   /challenge\.status === "courtroom" && viewerReady/

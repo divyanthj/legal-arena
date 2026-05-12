@@ -678,7 +678,9 @@ export const listChallengesForUser = async (userId) => {
   });
 
   const dirtyChallenges = challenges.filter((challenge) => {
-    return normalizeChallengeForRead(challenge);
+    let changed = normalizeChallengeForRead(challenge);
+    changed = backfillChallengeCourtroomFeedback(challenge) || changed;
+    return changed;
   });
 
   if (dirtyChallenges.length) {
@@ -702,6 +704,7 @@ export const getChallengeForUser = async ({ userId, challengeId }) => {
 
   let changed = normalizeChallengeForRead(challenge);
   changed = (await backfillChallengeCourtroomScores(challenge)) || changed;
+  changed = backfillChallengeCourtroomFeedback(challenge) || changed;
   changed = appendOpenRoundIfNeeded(challenge) || changed;
   if (changed) {
     await challenge.save();
@@ -722,6 +725,7 @@ export const getChallengeDocumentForUser = async ({ userId, challengeId }) => {
 
   let changed = normalizeChallengeForRead(challenge);
   changed = (await backfillChallengeCourtroomScores(challenge)) || changed;
+  changed = backfillChallengeCourtroomFeedback(challenge) || changed;
   changed = appendOpenRoundIfNeeded(challenge) || changed;
   if (changed) {
     await challenge.save();
@@ -900,6 +904,79 @@ const summarizeScoredRound = (round) => {
     .map((submission) => `${submission.side}: +${submission.judgeNotes?.playerDelta || 0}`)
     .join(", ");
   return scores ? `Round ${round.round} scored ${scores}.` : `Round ${round.round} scored.`;
+};
+
+const buildSubmissionFeedbackBackfill = (submission = {}) => {
+  const notes = submission.judgeNotes || {};
+  const playerDelta = Number(notes.playerDelta || 0);
+  const opponentDelta = Number(notes.opponentDelta || 0);
+  const benchSignal = String(notes.benchSignal || "").trim();
+  const citedRules = uniqueTextList(submission.citedRules || []);
+  const strengths = uniqueTextList(notes.strengths || []);
+  const weaknesses = uniqueTextList(notes.weaknesses || []);
+
+  if (!strengths.length) {
+    if (playerDelta >= opponentDelta && benchSignal) {
+      strengths.push(benchSignal);
+    } else if (citedRules.length) {
+      strengths.push(`Your argument engaged ${citedRules.slice(0, 2).join(", ")}.`);
+    } else if (playerDelta > 0) {
+      strengths.push("Your argument added pressure for your side in this round.");
+    }
+  }
+
+  if (!weaknesses.length) {
+    if (playerDelta < opponentDelta && benchSignal) {
+      weaknesses.push(benchSignal);
+    } else if (opponentDelta > playerDelta) {
+      weaknesses.push("The opposing side gained more pressure from this exchange.");
+    } else if (!citedRules.length) {
+      weaknesses.push("The argument needed a clearer lawbook anchor.");
+    }
+  }
+
+  return {
+    strengths: strengths.slice(0, 3),
+    weaknesses: weaknesses.slice(0, 3),
+  };
+};
+
+const backfillChallengeCourtroomFeedback = (challenge) => {
+  if (!challenge || !["courtroom", "verdict"].includes(challenge.status)) {
+    return false;
+  }
+
+  let changed = false;
+
+  for (const round of challenge.courtroomRounds || []) {
+    for (const submission of round.submissions || []) {
+      if (!submission.judgeNotes?.benchSignal) {
+        continue;
+      }
+
+      const strengths = submission.judgeNotes.strengths || [];
+      const weaknesses = submission.judgeNotes.weaknesses || [];
+      if (strengths.length && weaknesses.length) {
+        continue;
+      }
+
+      const feedback = buildSubmissionFeedbackBackfill(submission);
+      if (!strengths.length && feedback.strengths.length) {
+        submission.judgeNotes.strengths = feedback.strengths;
+        changed = true;
+      }
+      if (!weaknesses.length && feedback.weaknesses.length) {
+        submission.judgeNotes.weaknesses = feedback.weaknesses;
+        changed = true;
+      }
+    }
+  }
+
+  if (changed) {
+    markCourtroomRoundsModified(challenge);
+  }
+
+  return changed;
 };
 
 const finalizeChallengeIfComplete = async (challenge) => {

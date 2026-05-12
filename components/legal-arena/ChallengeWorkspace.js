@@ -18,6 +18,22 @@ const statusLabel = {
 
 const getChallengeRef = (challenge) => challenge.slug || challenge.id;
 
+const uniqueTextList = (items = []) => {
+  const seen = new Set();
+
+  return items
+    .map((item) => String(item || "").trim())
+    .filter(Boolean)
+    .filter((item) => {
+      const key = item.toLowerCase();
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+};
+
 const getViewerStage = (challenge = {}) => {
   if (challenge.status === "verdict") {
     return "verdict";
@@ -55,6 +71,24 @@ const challengeToCaseSession = (challenge = {}) => {
       createdAt: submission.submittedAt || round.judgedAt || challenge.updatedAt,
     }))
   );
+  const viewerJudgedSubmissions = judgedRounds
+    .flatMap((round) => round.submissions || [])
+    .filter((submission) => submission.isViewer);
+  const opponentJudgedSubmissions = judgedRounds
+    .flatMap((round) => round.submissions || [])
+    .filter((submission) => !submission.isViewer);
+  const viewerStrengths = uniqueTextList(
+    viewerJudgedSubmissions.flatMap((submission) => submission.judgeNotes?.strengths || [])
+  ).slice(0, 5);
+  const viewerWeaknesses = uniqueTextList(
+    viewerJudgedSubmissions.flatMap((submission) => submission.judgeNotes?.weaknesses || [])
+  ).slice(0, 5);
+  const opponentStrengths = uniqueTextList(
+    opponentJudgedSubmissions.flatMap((submission) => submission.judgeNotes?.strengths || [])
+  ).slice(0, 5);
+  const opponentWeaknesses = uniqueTextList(
+    opponentJudgedSubmissions.flatMap((submission) => submission.judgeNotes?.weaknesses || [])
+  ).slice(0, 5);
   const verdictWinner =
     viewer.verdict === "win"
       ? "player"
@@ -117,17 +151,21 @@ const challengeToCaseSession = (challenge = {}) => {
       lastBenchSignal:
         judgedRounds[judgedRounds.length - 1]?.benchSummary ||
         openRound?.benchSummary ||
-        (openRound?.viewerSubmitted
-          ? "Your argument is filed. Waiting for the other player."
-          : ""),
-      highlights: [],
-      weaknesses: [],
+        "",
+      highlights: viewerStrengths,
+      weaknesses: viewerWeaknesses,
     },
     verdict: {
       winner: verdictWinner,
       summary: challenge.verdict?.summary || "",
-      highlights: [],
-      concerns: [],
+      highlights:
+        viewer.verdict === "loss" && opponentWeaknesses.length
+          ? opponentWeaknesses
+          : viewerStrengths,
+      concerns:
+        viewer.verdict === "win" && opponentStrengths.length
+          ? opponentStrengths
+          : viewerWeaknesses,
       finalScore: {
         player: viewer.score || 0,
         opponent: opponent.score || 0,
