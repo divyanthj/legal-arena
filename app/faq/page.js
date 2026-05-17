@@ -2,14 +2,14 @@ import FAQ from "@/components/FAQ";
 import { getSEOTags } from "@/libs/seo";
 
 export const metadata = getSEOTags({
-  title: "Legal Arena FAQ | Lawyer Game & AI Courtroom Simulator",
+  title: "Legal Arena FAQ | AI Lawyer Game",
   description:
-    "Answers to common questions about Legal Arena, the online lawyer game where players interview clients, build fact sheets, and argue cases against AI.",
+    "Answers to common questions about Legal Arena, the first-of-its-kind AI lawyer game where players interview AI clients, challenge other players, and argue before an AI judge.",
   keywords: [
     "Legal Arena FAQ",
     "lawyer game FAQ",
+    "AI lawyer game",
     "AI courtroom game",
-    "courtroom simulator questions",
   ],
   canonicalUrlRelative: "/faq",
 });
@@ -23,7 +23,15 @@ const faqSchema = {
       name: "Is Legal Arena a lawyer game?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Yes. Legal Arena is an online lawyer game where you interview a client, build a fact sheet, argue against AI opposing counsel, and receive a ruling from the judge.",
+        text: "Yes. Legal Arena is an AI-powered lawyer game where you interview AI clients, build a case, argue in court, and receive a ruling from the judge.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "Can I play against another player?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Yes. You can challenge another player to a PVP case. Each side independently interviews their own AI client, then both players argue in court before an AI judge.",
       },
     },
     {
@@ -39,7 +47,7 @@ const faqSchema = {
       name: "Is Legal Arena legal advice?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "No. Legal Arena is a game and training simulator. It is not a lawyer, law firm, legal advice service, or substitute for hiring an attorney.",
+        text: "No. Legal Arena is a game. It is not a lawyer, law firm, legal advice service, or substitute for hiring an attorney.",
       },
     },
   ],
@@ -61,8 +69,8 @@ export default function FAQPage() {
             Questions players ask before stepping into court.
           </h1>
           <p className="mt-5 max-w-3xl text-lg leading-8 text-base-content/75">
-            A quick guide to how the Legal Arena lawyer game works, how access is
-            handled, and what to expect when you open a case.
+            A quick guide to the AI lawyer game: how client interviews work, how
+            court arguments work, and what to expect when you open a case.
           </p>
         </div>
       </section>
@@ -70,7 +78,7 @@ export default function FAQPage() {
       <FAQ
         eyebrow="Support"
         title="Frequently Asked Questions"
-        intro="If you are wondering how side assignment, case access, progression, or replays work, the answers are here."
+        intro="If you are wondering how AI client interviews, case access, court arguments, or replays work, the answers are here."
       />
     </main>
   );

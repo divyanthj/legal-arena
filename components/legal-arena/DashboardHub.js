@@ -1140,7 +1140,7 @@ export default function DashboardHub({
                               {entry.name}
                             </p>
                             <p className="mt-1 text-sm text-white/50">
-                              {entry.completedCases} matters | {entry.wins} wins
+                              {entry.completedCases} matches | {entry.wins} wins
                             </p>
                           </div>
                         </div>

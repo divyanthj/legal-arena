@@ -9,9 +9,9 @@ export const faqList = [
     answer: (
       <div className="space-y-2 leading-relaxed">
         <p>
-          Yes. Legal Arena is an online lawyer game where you interview a client,
-          build a fact sheet, argue against AI opposing counsel, and receive a
-          ruling from the judge.
+          Yes. Legal Arena is an AI-powered lawyer game where you interview AI
+          clients, build a case from what they tell you, argue in court, and get
+          a ruling from the judge.
         </p>
         <p>
           If you want the game-focused overview, start with the{" "}
@@ -32,8 +32,9 @@ export const faqList = [
           legal shows, debate, and strategic argument.
         </p>
         <p>
-          Law students and lawyers can use it for practice, but curious players
-          can still play by reading the case file and lawbook for each matter.
+          Law students and lawyers may enjoy it, but the game starts with the
+          basics: ask the client good questions, find useful facts, and make the
+          clearest argument you can.
         </p>
       </div>
     ),
@@ -43,8 +44,8 @@ export const faqList = [
     answer: (
       <div className="space-y-2 leading-relaxed">
         <p>
-          No. Legal Arena is a game and training simulator. It is not a lawyer,
-          law firm, legal advice service, or substitute for hiring an attorney.
+          No. Legal Arena is a game. It is not a lawyer, law firm, legal advice
+          service, or substitute for hiring an attorney.
         </p>
       </div>
     ),
@@ -54,13 +55,27 @@ export const faqList = [
     answer: (
       <div className="space-y-2 leading-relaxed">
         <p>
-          You start by interviewing one side of a case, build a fact sheet from
-          what you learn, then argue the matter in court against AI-powered opposing
-          counsel.
+          You start by interviewing your AI client. You decide what to ask, turn
+          the answers into a case file, then argue the case in court.
         </p>
         <p>
-          The judge tracks how well you use corroborated facts, answer live disputes,
-          and tie your theory to the lawbook.
+          The other side pushes back, and the judge decides whether your facts
+          and argument were strong enough.
+        </p>
+      </div>
+    ),
+  },
+  {
+    question: "Can I play against another player?",
+    answer: (
+      <div className="space-y-2 leading-relaxed">
+        <p>
+          Yes. Legal Arena includes PVP case challenges. You challenge another
+          player, each side independently interviews their own AI client, and
+          then both players fight it out in court.
+        </p>
+        <p>
+          An AI judge evaluates the arguments and gives the ruling.
         </p>
       </div>
     ),

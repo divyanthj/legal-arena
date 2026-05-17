@@ -3,7 +3,7 @@ import themes from "daisyui/src/theming/themes.js";
 const config = {
   appName: "Legal Arena",
   appDescription:
-    "An online lawyer game where players interview clients, build fact sheets, argue courtroom cases against AI, and climb specialty leaderboards.",
+    "A first-of-its-kind AI lawyer game where players interview AI clients, build cases, challenge other players, and fight it out in court before an AI judge.",
   domainName: "legalarena.app",
   crisp: {
     // Crisp website ID. If you don't use Crisp, keep supportEmail below so users can still reach you.
@@ -18,13 +18,14 @@ const config = {
             ? "price_1Niyy5AxyNprDp7iZIqEyD2h"
             : "price_456",
         name: "Starter",
-        description: "Start practicing courtroom cases in Legal Arena.",
+        description: "Start playing AI-powered lawyer cases in Legal Arena.",
         price: 79,
         priceAnchor: 99,
         features: [
-          { name: "AI courtroom case simulations" },
-          { name: "Client intake and fact sheet practice" },
-          { name: "Verdicts, scoring, and progression" },
+          { name: "Interview AI clients" },
+          { name: "Build cases from the facts you uncover" },
+          { name: "Argue in court and get verdicts" },
+          { name: "Challenge other players in PVP cases" },
         ],
       },
       {
@@ -34,12 +35,12 @@ const config = {
             ? "price_1O5KtcAxyNprDp7iftKnrrpw"
             : "price_456",
         name: "Advanced",
-        description: "Deeper access for frequent Legal Arena players.",
+        description: "More access for frequent Legal Arena players.",
         price: 99,
         priceAnchor: 149,
         features: [
           { name: "Expanded case library access" },
-          { name: "Advanced courtroom practice modes" },
+          { name: "Expanded courtroom game modes" },
           { name: "Progression and leaderboard tracking" },
           { name: "Future Legal Arena updates" },
         ],
@@ -59,7 +60,7 @@ const config = {
         priceAnchor: 29.99,
         features: [
           { name: "Immediate access to the full Legal Arena build" },
-          { name: "Challenge other players to async PVP cases" },
+          { name: "Challenge other players to PVP cases with an AI judge" },
           { name: "All future early-access updates included" },
           { name: "One-time payment, no subscription" },
         ],

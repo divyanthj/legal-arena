@@ -25,6 +25,10 @@ const challengeWorkspaceSource = await readFile(
   new URL("../components/legal-arena/ChallengeWorkspace.js", import.meta.url),
   "utf8"
 );
+const dashboardHubSource = await readFile(
+  new URL("../components/legal-arena/DashboardHub.js", import.meta.url),
+  "utf8"
+);
 const caseWorkspaceSource = await readFile(
   new URL("../components/legal-arena/CaseWorkspace.js", import.meta.url),
   "utf8"
@@ -37,7 +41,14 @@ assert.match(userModelSource, /pvp:\s*{\s*type:\s*pvpProgressSchema/);
 assert.match(progressionSource, /export const normalizePvpProgression/);
 assert.match(progressionSource, /applyChallengeVerdictToPvpProgression/);
 assert.match(progressionSource, /pvp:\s*normalizePvpProgression\(source\.pvp\)/);
-assert.match(progressionSource, /pvp:\s*progression\.pvp/);
+assert.match(progressionSource, /pvp,\s*\n\s*}/);
+assert.match(progressionSource, /const pvp = normalizePvpProgression\(progression\.pvp\)/);
+assert.match(progressionSource, /combinedWins = \(progression\.wins \|\| 0\) \+ \(pvp\.wins \|\| 0\)/);
+assert.match(progressionSource, /combinedLosses = \(progression\.losses \|\| 0\) \+ \(pvp\.losses \|\| 0\)/);
+assert.match(progressionSource, /combinedDraws = \(progression\.draws \|\| 0\) \+ \(pvp\.draws \|\| 0\)/);
+assert.match(progressionSource, /pvpCategoryStat\?\.wins \|\| 0/);
+assert.match(progressionSource, /right\.completedCases/);
+assert.match(dashboardHubSource, /\{entry\.completedCases\} matches \| \{entry\.wins\} wins/);
 assert.match(challengeModelSource, /quitByUserId/);
 assert.match(challengeModelSource, /stayBonus/);
 assert.match(challengeStoreSource, /export const quitChallengeForUser/);

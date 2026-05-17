@@ -9,9 +9,9 @@ import config from "@/config";
 export const dynamic = "force-dynamic";
 
 export const metadata = getSEOTags({
-  title: "Legal Arena | Online Lawyer Game & AI Courtroom Simulator",
+  title: "Legal Arena | AI Lawyer Game",
   description:
-    "Play an online lawyer game where you interview clients, build fact sheets, argue courtroom cases against AI, and get a ruling.",
+    "Play a first-of-its-kind AI lawyer game where you interview AI clients, build your case, and fight it out in court.",
   keywords: [
     "lawyer game",
     "online lawyer game",
@@ -22,9 +22,9 @@ export const metadata = getSEOTags({
   ],
   canonicalUrlRelative: "/",
   openGraph: {
-    title: "Legal Arena | Online Lawyer Game & AI Courtroom Simulator",
+    title: "Legal Arena | AI Lawyer Game",
     description:
-      "Play courtroom cases against AI: interview your client, build the facts, argue your case, and see how the judge rules.",
+      "Interview AI clients, build your case, argue in court, and see whether your legal strategy wins.",
   },
 });
 
@@ -38,63 +38,77 @@ const navItems = [
 
 const featureHighlights = [
   {
-    title: "AI Opposing Counsel",
-    description: "Argue against counsel responses grounded in the case file and lawbook.",
+    title: "AI Clients",
+    description: "Question characters who answer like people with messy memories, motives, and missing details.",
   },
   {
-    title: "Bench Signals",
-    description: "Get round-by-round scoring signals, strengths, and weaknesses.",
+    title: "Real Arguments",
+    description: "Write your own questions and courtroom arguments instead of choosing from canned options.",
   },
   {
-    title: "Progression",
-    description: "Earn XP, ratings, category tiers, and leaderboard standing from verdicts.",
+    title: "AI Courtroom",
+    description: "Face pushback from the other side, adapt your theory, and try to persuade the judge.",
   },
   {
-    title: "Structured Matters",
-    description: "Practice on authored disputes with parties, claims, evidence, and rules.",
+    title: "Verdicts",
+    description: "Every case ends with a ruling that explains what helped you and what weakened your side.",
+  },
+  {
+    title: "PVP Cases",
+    description: "Challenge another player, prepare separately, and argue both sides before an AI judge.",
   },
 ];
 
 const steps = [
   {
     number: "1",
-    title: "Pick a Case",
-    description: "Choose an unlocked matter from the dashboard and review the dispute, parties, court, and category.",
+    title: "Meet Your Client",
+    description: "Open a case and find out who you represent, what happened, and what your client wants from the court.",
   },
   {
     number: "2",
-    title: "Interview Your Party",
-    description: "Ask intake questions, capture risks and proof gaps, and turn the conversation into a working fact sheet.",
+    title: "Interview the AI",
+    description: "Ask your client questions in your own words. Push for facts, dates, proof, risks, and the story behind the dispute.",
   },
   {
     number: "3",
-    title: "Argue in Court",
-    description: "Submit courtroom arguments, face opposing counsel, and receive a final ruling after the scheduled rounds.",
+    title: "Fight It Out in Court",
+    description: "Turn what you learned into arguments, answer the other side, and try to win the judge over.",
+  },
+  {
+    number: "4",
+    title: "Challenge Players",
+    description: "In PVP, each player independently interviews their own AI client, then both sides meet in court before an AI judge.",
   },
 ];
 
 const skillPoints = [
-  "Practice intake questions and fact development",
-  "Build a court-ready fact sheet before arguing",
-  "Use lawbook rules and case facts in courtroom rounds",
-  "Track ratings, XP, records, and category tiers",
+  "Talk to AI clients like a lawyer would",
+  "Separate useful facts from noise and contradictions",
+  "Build a case theory before you walk into court",
+  "Argue in your own words and learn from the verdict",
 ];
 
 const practiceCards = [
   {
-    title: "Intake",
+    title: "Client Interview",
     detail:
-      "Ask your represented party questions and watch the private case file fill with summaries, timeline points, risks, proof gaps, and requested relief.",
+      "Your client is powered by AI. Ask follow-up questions, dig into weak spots, and decide what story you can actually prove.",
   },
   {
-    title: "Courtroom",
+    title: "Case Prep",
     detail:
-      "Draft arguments from your fact sheet, cite the lawbook, confront the weak points, and answer pressure from the other side.",
+      "Turn a messy interview into a working file: the timeline, strongest facts, disputed points, risks, and what your side is asking for.",
   },
   {
-    title: "Verdict",
+    title: "Court Fight",
     detail:
-      "Each completed matter closes with a ruling, highlights, concerns, final score, XP, rating movement, and leaderboard impact.",
+      "Argue against AI opposition, respond to attacks, and get a ruling that tells you whether your strategy held up.",
+  },
+  {
+    title: "PVP Gameplay",
+    detail:
+      "Challenge another player to the same dispute. You each prepare privately with your own AI client, then fight it out in court with an AI judge.",
   },
 ];
 
@@ -105,13 +119,6 @@ const categoryFallbacks = [
   { title: "Constitutional Law", cases: "Case Track" },
   { title: "Family Law", cases: "Case Track" },
   { title: "And More", cases: "Growing Library" },
-];
-
-const verdictReasons = [
-  "Fact sheet",
-  "Lawbook use",
-  "Proof gaps",
-  "Bench scoring",
 ];
 
 const loadFeaturedCases = async () => {
@@ -135,20 +142,6 @@ const loadFeaturedCases = async () => {
     };
   }
 };
-
-const getPlaintiffClaim = (template) =>
-  template.canonicalFacts
-    ?.flatMap((fact) =>
-      (fact.claims || []).filter((claim) => claim.party === "plaintiff")
-    )
-    .find((claim) => claim.claimedDetail?.trim())?.claimedDetail || "";
-
-const getDefendantClaim = (template) =>
-  template.canonicalFacts
-    ?.flatMap((fact) =>
-      (fact.claims || []).filter((claim) => claim.party === "defendant")
-    )
-    .find((claim) => claim.claimedDetail?.trim())?.claimedDetail || "";
 
 const trimStatement = (value, fallback) => {
   const text = (value || fallback || "").trim();
@@ -261,7 +254,6 @@ const Icon = ({ kind, className = "h-5 w-5" }) => {
 
 export default async function Page() {
   const { featuredCases, totalActiveCases } = await loadFeaturedCases();
-  const heroCase = featuredCases[0] || null;
   const displayCases =
     featuredCases.length > 0
       ? featuredCases.slice(0, 6).map((template) => ({
@@ -270,14 +262,6 @@ export default async function Page() {
         }))
       : categoryFallbacks;
 
-  const plaintiffStatement = trimStatement(
-    heroCase ? getPlaintiffClaim(heroCase) || heroCase.openingStatement : "",
-    "The defendant breached the duty of care by failing to maintain a safe environment."
-  );
-  const defendantStatement = trimStatement(
-    heroCase ? getDefendantClaim(heroCase) : "",
-    "The plaintiff has not established causation and the record leaves material gaps."
-  );
   const totalCasesLabel =
     totalActiveCases > 0 ? totalActiveCases.toLocaleString("en-US") : "Growing";
   const homepageSchema = {
@@ -286,9 +270,9 @@ export default async function Page() {
     name: config.appName,
     url: `https://${config.domainName}/`,
     description:
-      "Legal Arena is an online lawyer game and AI courtroom simulator where players interview clients, build fact sheets, argue cases, and receive rulings.",
+      "Legal Arena is a first-of-its-kind AI lawyer game where players interview AI clients, build cases, argue in court, and receive rulings.",
     gamePlatform: "Web browser",
-    genre: ["Courtroom game", "Legal simulation game", "Educational game"],
+    genre: ["AI lawyer game", "Courtroom game", "Legal strategy game"],
     applicationCategory: "GameApplication",
     audience: {
       "@type": "Audience",
@@ -347,40 +331,39 @@ export default async function Page() {
 
       <section className="arena-column-bg relative">
         <div className="mx-auto max-w-7xl px-5 pb-12 pt-10 md:px-8 md:pb-16 md:pt-16">
-          <div className="grid items-start gap-12 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-            <div className="max-w-2xl">
-              <p className="arena-kicker">Online lawyer game with AI courtroom cases</p>
+          <div className="mx-auto max-w-6xl">
+            <div className="mx-auto max-w-4xl text-center">
+              <p className="arena-kicker">A first-of-its-kind AI lawyer game</p>
               <h1 className="arena-headline mt-6 text-6xl uppercase leading-[0.9] md:text-7xl xl:text-[6.4rem]">
-                Play.
-                <br />
-                Argue.
-                <br />
-                Win.
+                Be the lawyer.
               </h1>
-              <p className="mt-6 max-w-xl text-lg leading-8 text-white/72 md:text-2xl md:leading-10">
-                Step into a lawyer game where you interview your client, build the fact sheet, argue against AI opposing counsel, and see how the judge rules.
+              <p className="mx-auto mt-6 max-w-3xl text-lg leading-8 text-white/72 md:text-2xl md:leading-10">
+                Legal Arena is an AI-powered lawyer game. You interview AI clients, build your case from what they tell you, then fight it out in court. You can also challenge other players: both sides prepare separately, then argue before an AI judge.
               </p>
 
-              <div className="mt-8 flex flex-wrap items-center gap-4">
+              <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
                 <Link
                   href="/dashboard"
                   className="rounded-2xl bg-white px-6 py-4 text-sm font-semibold text-black transition hover:bg-white/90"
                 >
-                  Play Your First Case
+                  Try a Case
                 </Link>
                 <a
                   href="#how-it-works"
                   className="rounded-2xl border border-white/15 bg-white/5 px-6 py-4 text-sm font-semibold text-white transition hover:bg-white/10"
                 >
-                  See How It Works
+                  How the Game Works
                 </a>
               </div>
 
-              <div className="mt-10 grid gap-4 border-t border-white/10 pt-8 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="mt-10 grid gap-6 border-t border-white/10 pt-8 sm:grid-cols-2 xl:grid-cols-5">
                 {featureHighlights.map((item, index) => {
                   const iconKinds = ["spark", "bolt", "trophy", "brief"];
                   return (
-                    <div key={item.title} className="space-y-3">
+                    <div
+                      key={item.title}
+                      className="mx-auto flex h-full max-w-xs flex-col items-center space-y-3 text-center xl:max-w-none"
+                    >
                       <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/12 bg-white/5 text-white/75">
                         <Icon kind={iconKinds[index]} />
                       </div>
@@ -393,76 +376,6 @@ export default async function Page() {
                 })}
               </div>
             </div>
-
-            <div className="relative xl:pt-4">
-              <div className="arena-glass rounded-[2rem] p-4 md:p-6">
-                <div className="grid gap-0 overflow-hidden rounded-[1.5rem] border border-white/10 bg-white/[0.02] lg:grid-cols-[minmax(0,1fr)_120px_minmax(0,1fr)]">
-                  <div className="p-6 md:p-8">
-                    <p className="text-xs font-semibold uppercase tracking-[0.28em] text-white/45">
-                      You
-                    </p>
-                    <p className="mt-5 text-xl font-semibold text-white">Your Argument</p>
-                    <p className="mt-4 text-base leading-8 text-white/72">{plaintiffStatement}</p>
-                    <div className="mt-8 flex items-center justify-between rounded-2xl border border-white/10 bg-black/30 px-4 py-3">
-                      <div>
-                        <p className="text-xs uppercase tracking-[0.24em] text-white/40">
-                          Case File
-                        </p>
-                        <p className="mt-2 text-2xl font-semibold text-white">Draft</p>
-                      </div>
-                      <div className="rounded-xl border border-white/10 p-3 text-white/55">
-                        <Icon kind="brief" />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-center border-y border-white/10 py-8 text-center lg:border-x lg:border-y-0">
-                    <span className="text-5xl font-semibold tracking-tight text-white/88">VS</span>
-                  </div>
-
-                  <div className="p-6 md:p-8">
-                    <p className="text-xs font-semibold uppercase tracking-[0.28em] text-white/45">
-                      AI Opponent
-                    </p>
-                    <p className="mt-5 text-xl font-semibold text-white">Counter Argument</p>
-                    <p className="mt-4 text-base leading-8 text-white/72">{defendantStatement}</p>
-                    <div className="mt-8 flex items-center justify-between rounded-2xl border border-white/10 bg-black/30 px-4 py-3">
-                      <div>
-                        <p className="text-xs uppercase tracking-[0.24em] text-white/40">
-                          Response
-                        </p>
-                        <p className="mt-2 text-2xl font-semibold text-white">Round</p>
-                      </div>
-                      <div className="rounded-xl border border-white/10 p-3 text-white/55">
-                        <Icon kind="scale" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="arena-glass relative -mt-3 ml-auto max-w-[88%] rounded-[1.75rem] p-5 md:-mt-6 md:p-6">
-                <p className="text-center text-sm uppercase tracking-[0.26em] text-white/45">
-                  Judge&apos;s Verdict
-                </p>
-                <p className="mt-3 text-center text-3xl font-semibold uppercase tracking-tight text-white">
-                  Final Ruling
-                </p>
-                <p className="mt-3 text-center text-sm leading-6 text-white/62">
-                  The bench weighs your fact sheet, courtroom argument, proof gaps, lawbook fit, and opposing counsel response.
-                </p>
-                <div className="mt-6 flex flex-wrap justify-center gap-2">
-                  {verdictReasons.map((reason) => (
-                    <span
-                      key={reason}
-                      className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.18em] text-white/55"
-                    >
-                      {reason}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       </section>
@@ -472,7 +385,7 @@ export default async function Page() {
           <p className="text-center text-sm font-semibold uppercase tracking-[0.34em] text-white/45">
             How It Works
           </p>
-          <div className="mt-12 grid gap-8 lg:grid-cols-3">
+          <div className="mt-12 grid gap-8 lg:grid-cols-4">
             {steps.map((step, index) => {
               const iconKinds = ["folder", "pen", "gavel"];
               return (
@@ -502,13 +415,13 @@ export default async function Page() {
         <div className="grid gap-10 xl:grid-cols-[minmax(0,0.86fr)_minmax(0,1.14fr)] xl:items-start">
           <div className="xl:pr-6">
             <p className="text-sm font-semibold uppercase tracking-[0.3em] text-white/45">
-              A lawyer game that builds real skills
+              Why it feels different
             </p>
             <h2 className="arena-headline mt-5 max-w-lg text-4xl uppercase leading-[0.92] md:text-[4.25rem]">
-              Play like court is tomorrow.
+              The client talks back.
             </h2>
             <p className="mt-6 max-w-lg text-lg leading-8 text-white/66">
-              Legal Arena turns courtroom drama into an active browser game: analyze the record, build your case, argue under pressure, then run it back stronger.
+              Most legal games give you a fixed puzzle. Legal Arena gives you an AI client. You decide what to ask, what matters, what to ignore, and how to argue it when the court pushes back. In PVP, another player does the same on the other side.
             </p>
             <div className="mt-8 max-w-md space-y-4">
               {skillPoints.map((point) => (
@@ -528,74 +441,18 @@ export default async function Page() {
             </Link>
           </div>
 
-          <div className="arena-glass overflow-hidden rounded-[2rem] p-5 md:p-7" id="leaderboard">
-            <p className="text-sm font-semibold uppercase tracking-[0.28em] text-white/45">
-              Dashboard Systems
-            </p>
-            <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)_minmax(0,0.8fr)]">
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
-                <div className="rounded-[1.4rem] border border-white/10 bg-black/30 p-5">
-                  <p className="text-sm text-white/50">Overall Rating</p>
-                  <p className="mt-3 max-w-[8ch] text-[2.15rem] font-semibold leading-[1.05] text-white">
-                    1000+
-                  </p>
-                  <div className="mt-5 h-2 rounded-full bg-white/10">
-                    <div className="h-2 w-[52%] rounded-full bg-white" />
-                  </div>
-                  <p className="mt-3 text-sm text-white/45">XP updates after verdicts</p>
-                </div>
-                <div className="rounded-[1.4rem] border border-white/10 bg-black/30 p-5">
-                  <p className="text-sm text-white/50">Record</p>
-                  <div className="mt-4">
-                    <p className="text-4xl font-semibold tracking-tight text-white">W-L-D</p>
-                    <p className="mt-3 text-sm uppercase tracking-[0.18em] text-white/42">
-                      Tracked by matter
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="min-w-0 rounded-[1.4rem] border border-white/10 bg-black/30 p-5">
-                <p className="text-sm text-white/50">Specializations</p>
-                <div className="mt-5 space-y-5">
-                  {[
-                    { name: "Criminal Law", level: "Category tier", width: "78%" },
-                    { name: "Corporate Law", level: "Rating track", width: "54%" },
-                    { name: "Constitutional Law", level: "Unlock progress", width: "41%" },
-                  ].map((item) => (
-                    <div key={item.name}>
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="font-medium leading-snug text-white">{item.name}</p>
-                          <p className="text-sm text-white/45">{item.level}</p>
-                        </div>
-                        <div className="rounded-xl border border-white/10 p-2 text-white/40">
-                          <Icon kind="brief" className="h-4 w-4" />
-                        </div>
-                      </div>
-                      <div className="mt-3 h-2 rounded-full bg-white/10">
-                        <div className="h-2 rounded-full bg-white" style={{ width: item.width }} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="min-w-0 rounded-[1.4rem] border border-white/10 bg-black/30 p-5 text-center">
-                <p className="text-sm text-white/50">Leaderboard</p>
-                <p className="mt-4 text-5xl font-semibold tracking-tight text-white md:text-6xl">Rank</p>
-                <p className="mt-2 text-sm uppercase tracking-[0.2em] text-white/45">Overall + category</p>
-                <div className="mt-7 flex justify-center text-white/45">
-                  <Icon kind="trophy" className="h-14 w-14" />
-                </div>
-                <Link
-                  href="/dashboard"
-                  className="mt-7 inline-flex rounded-2xl border border-white/15 bg-white px-4 py-3 text-sm font-semibold text-black transition hover:bg-white/90"
-                >
-                  View Leaderboard
-                </Link>
-              </div>
-            </div>
+          <div className="arena-glass overflow-hidden rounded-[2rem] p-3 md:p-4" id="leaderboard">
+            <video
+              className="aspect-video w-full rounded-[1.45rem] border border-white/10 bg-black object-cover shadow-2xl"
+              src="/media/gameplay-showcase.mp4"
+              poster="/media/gameplay-showcase-poster.jpg"
+              autoPlay
+              muted
+              loop
+              playsInline
+              preload="metadata"
+              aria-label="Legal Arena gameplay showing AI client interviews, case building, court arguments, and a verdict."
+            />
           </div>
         </div>
       </section>
@@ -603,10 +460,10 @@ export default async function Page() {
       <section id="case-library" className="border-y border-white/10 bg-black/60">
         <div className="mx-auto max-w-7xl px-5 py-16 md:px-8 md:py-20">
           <p className="text-center text-sm font-semibold uppercase tracking-[0.28em] text-white/45">
-            Diverse Case Tracks
+            Cases You Can Play
           </p>
           <p className="mx-auto mt-4 max-w-2xl text-center text-lg leading-8 text-white/62">
-            Practice across multiple areas of law with available matters, complexity tiers, and replayable courtroom runs.
+            Each case gives you a client, a dispute, an opponent, and a courtroom fight. The AI turns the same structure into an open-ended legal battle.
           </p>
           <div className="mt-12 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
             {displayCases.map((category) => (
@@ -641,7 +498,7 @@ export default async function Page() {
                 </p>
                 <div className="mt-6 flex items-center justify-between text-sm text-white/45">
                   <span>{template.practiceArea || "Live matter"}</span>
-                  <span>Complexity {template.complexity || 3}</span>
+              <span>Playable case</span>
                 </div>
               </div>
             ))}
@@ -651,9 +508,9 @@ export default async function Page() {
 
       <section className="mx-auto max-w-7xl px-5 py-16 md:px-8 md:py-20">
           <p className="text-center text-sm font-semibold uppercase tracking-[0.28em] text-white/45">
-          What You Actually Play
+            What You Actually Do
         </p>
-        <div className="mt-12 grid gap-5 lg:grid-cols-3">
+          <div className="mt-12 grid gap-5 lg:grid-cols-4">
           {practiceCards.map((item, index) => {
             const iconKinds = ["users", "gavel", "star"];
 
@@ -676,10 +533,10 @@ export default async function Page() {
 
         <div className="mt-12 grid gap-6 border-t border-white/10 pt-8 text-center sm:grid-cols-2 xl:grid-cols-4">
           {[
-            { icon: "brief", value: totalCasesLabel, label: "Active Cases" },
-            { icon: "users", value: "Intake", label: "Party Interview" },
-            { icon: "gavel", value: "Rounds", label: "Courtroom Argument" },
-            { icon: "star", value: "XP", label: "Progression" },
+            { icon: "brief", value: totalCasesLabel, label: "Playable Cases" },
+            { icon: "users", value: "AI", label: "Client Interviews" },
+            { icon: "gavel", value: "Court", label: "Argument Battles" },
+            { icon: "star", value: "PVP", label: "Player Challenges" },
           ].map((stat) => (
             <div key={stat.label} className="flex items-center justify-center gap-4">
               <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-white/55">
@@ -700,10 +557,10 @@ export default async function Page() {
             Ready to step into the arena?
           </p>
           <h2 className="arena-headline mx-auto mt-5 max-w-4xl text-4xl uppercase md:text-6xl">
-            Play your first case today.
+            Interview the client. Build the case. Challenge players. Win the argument.
           </h2>
           <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-white/62">
-            Build your argument, face the AI, and see whether your reasoning actually holds when someone pushes back.
+            This is not a quiz about law. It is a playable legal battle where your questions, facts, and arguments decide the outcome against AI opponents or another player in PVP.
           </p>
           <Link
             href="/dashboard"

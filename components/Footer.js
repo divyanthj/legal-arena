@@ -28,7 +28,7 @@ const Footer = () => {
             </Link>
 
             <p className="mt-3 text-sm text-white/70">
-              Play an online lawyer game where cases turn on facts, law, and strategy.
+              Play an AI lawyer game where you interview clients, challenge players, and argue before an AI judge.
             </p>
             <p className="mt-3 text-sm text-white/40">
               Copyright © {new Date().getFullYear()} {config.appName}. All rights reserved.

@@ -3,9 +3,9 @@ import { getSEOTags } from "@/libs/seo";
 import config from "@/config";
 
 export const metadata = getSEOTags({
-  title: "Lawyer Game: Play Courtroom Cases Against AI | Legal Arena",
+  title: "AI Lawyer Game: Interview Clients, Argue in Court | Legal Arena",
   description:
-    "Play a lawyer game online: interview clients, organize facts, argue courtroom cases against AI, and get a judge's ruling.",
+    "Legal Arena is a first-of-its-kind AI lawyer game where you interview AI clients, build a case, argue in court, and get a judge's ruling.",
   keywords: [
     "lawyer game",
     "online lawyer game",
@@ -17,49 +17,59 @@ export const metadata = getSEOTags({
   ],
   canonicalUrlRelative: "/lawyer-game",
   openGraph: {
-    title: "Lawyer Game: Play Courtroom Cases Against AI",
+    title: "AI Lawyer Game: Interview Clients, Argue in Court",
     description:
-      "Legal Arena is a playable AI courtroom game for people who love law, courtroom drama, debate, and strategic argument.",
+      "A first-of-its-kind AI lawyer game where you talk to clients, prepare the facts, and fight it out in court.",
     url: `https://${config.domainName}/lawyer-game`,
   },
 });
 
 const steps = [
   {
-    title: "Choose a case",
-    text: "Open a playable dispute with parties, facts, claims, risks, evidence, and a lawbook built for the matter.",
+    title: "Open a case",
+    text: "You are assigned a client with a legal problem. They have a story, a goal, and details you still need to uncover.",
   },
   {
-    title: "Interview your client",
-    text: "Ask questions, uncover pressure points, and turn a messy story into a fact sheet you can argue from.",
+    title: "Interview the AI client",
+    text: "Ask questions in your own words. The client answers dynamically, so you have to listen, follow up, and spot what matters.",
   },
   {
-    title: "Argue in court",
-    text: "Face AI opposing counsel, answer counterarguments, use the record, and push your theory across the line.",
+    title: "Build your case",
+    text: "Turn the interview into a fact sheet: what happened, what helps you, what hurts you, and what you need the judge to do.",
   },
   {
-    title: "Get the ruling",
-    text: "The judge scores your fact use, legal reasoning, weak spots, and response to the other side.",
+    title: "Fight it out in court",
+    text: "Use your facts to argue against AI opposition. The judge decides whether your case holds up.",
+  },
+  {
+    title: "Challenge another player",
+    text: "In PVP, each side independently interviews their own AI client, then both players argue the case before an AI judge.",
   },
 ];
 
 const audiences = [
-  "People who watch legal dramas and want to try the courtroom pressure themselves",
-  "Players looking for a lawyer game with more strategy than tapping the obvious answer",
-  "Debaters and writers who enjoy argument, persuasion, and structured thinking",
-  "Law students or law-curious players who want realistic practice without pretending it is legal advice",
+  "People who have watched courtroom scenes and wanted to be the one making the argument",
+  "Players who want a legal game built around open questions and original arguments",
+  "Competitive players who want PVP cases where preparation matters before the courtroom fight",
+  "Debaters, writers, and strategy players who enjoy persuasion under pressure",
+  "Law-curious players who want to think like a lawyer without needing a law degree",
 ];
 
 const faqs = [
   {
     question: "Is Legal Arena a lawyer game?",
     answer:
-      "Yes. Legal Arena is an online lawyer game where you play through courtroom-style cases by interviewing a client, building a fact sheet, arguing against AI opposing counsel, and receiving a ruling.",
+      "Yes. Legal Arena is an AI-powered lawyer game. You interview AI clients, build a case from their answers, argue in court, and receive a judge's ruling.",
+  },
+  {
+    question: "Does Legal Arena have PVP?",
+    answer:
+      "Yes. You can challenge another player to a case. Each player privately interviews their own AI client, builds their side of the case, then both players fight it out in court with an AI judge.",
   },
   {
     question: "Do I need legal experience to play?",
     answer:
-      "No. Legal Arena is built for people interested in law, legal shows, debate, and courtroom strategy. Legal knowledge helps, but the game explains the case record and lawbook for each matter.",
+      "No. Legal Arena starts from the basics: talk to your client, figure out what happened, choose the strongest facts, and argue clearly.",
   },
   {
     question: "Is Legal Arena legal advice?",
@@ -77,9 +87,9 @@ const pageSchema = {
       alternateName: "Legal Arena lawyer game",
       url: `https://${config.domainName}/lawyer-game`,
       description:
-        "Legal Arena is an online lawyer game and AI courtroom simulator where players interview clients, build fact sheets, argue cases, and receive rulings.",
+        "Legal Arena is a first-of-its-kind AI lawyer game where players interview AI clients, build cases, argue in court, and receive rulings.",
       gamePlatform: "Web browser",
-      genre: ["Courtroom game", "Lawyer game", "Legal simulation game"],
+      genre: ["AI lawyer game", "Courtroom game", "Legal strategy game"],
       applicationCategory: "GameApplication",
       isAccessibleForFree: true,
       publisher: {
@@ -118,14 +128,15 @@ export default function LawyerGamePage() {
       <section className="arena-column-bg border-b border-white/10">
         <div className="mx-auto grid max-w-7xl gap-12 px-5 py-16 md:px-8 md:py-24 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] xl:items-center">
           <div>
-            <p className="arena-kicker">Online lawyer game</p>
+            <p className="arena-kicker">A first-of-its-kind AI lawyer game</p>
             <h1 className="arena-headline mt-5 max-w-4xl text-5xl uppercase leading-[0.92] md:text-7xl">
-              Lawyer Game: Play Courtroom Cases Against AI
+              Interview AI clients. Fight in court.
             </h1>
             <p className="mt-6 max-w-2xl text-lg leading-8 text-white/72 md:text-2xl md:leading-10">
-              Pick a case, interview your client, build the facts, argue against
-              AI opposing counsel, and find out whether your case survives the
-              judge.
+              Legal Arena is a lawyer game built around AI conversation. You talk
+              to your client, prepare the case, argue against the other side, and
+              find out whether the judge believes you. In PVP, you challenge
+              another player and both sides prepare their own clients before court.
             </p>
             <div className="mt-8 flex flex-wrap gap-4">
               <Link
@@ -145,14 +156,14 @@ export default function LawyerGamePage() {
 
           <div className="arena-glass rounded-[2rem] p-5 md:p-7">
             <p className="text-sm font-semibold uppercase tracking-[0.28em] text-white/45">
-              What makes it different
+              The core idea
             </p>
             <div className="mt-6 grid gap-4 sm:grid-cols-2">
               {[
-                "Open-text arguments",
-                "AI opposing counsel",
-                "Client intake questions",
-                "Fact sheets and rulings",
+                "AI clients you can question",
+                "Your own words, not fixed choices",
+                "Court arguments that push back",
+                "PVP cases with an AI judge",
               ].map((item) => (
                 <div
                   key={item}
@@ -163,8 +174,8 @@ export default function LawyerGamePage() {
               ))}
             </div>
             <p className="mt-6 text-sm leading-7 text-white/60">
-              Legal Arena is designed for play and practice. It is not legal
-              advice, and it does not replace a lawyer for a real dispute.
+              The fantasy is simple: be the lawyer. Ask better questions, find
+              better facts, and make the argument that wins.
             </p>
           </div>
         </div>
@@ -174,19 +185,23 @@ export default function LawyerGamePage() {
         <p className="arena-kicker">What is Legal Arena?</p>
         <div className="mt-5 grid gap-10 xl:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
           <h2 className="arena-headline text-4xl uppercase leading-[0.95] md:text-6xl">
-            A browser-based courtroom game for legal strategy.
+            A new kind of game where the client talks back.
           </h2>
           <div className="space-y-5 text-base leading-8 text-white/70 md:text-lg">
             <p>
-              Legal Arena is a lawyer game built around playable courtroom
-              cases. Instead of clicking through a fixed script, you question a
-              client, organize the facts, and write arguments in your own words.
+              Legal Arena is an AI-powered lawyer game. You are not picking from
+              a list of dialogue options. You interview an AI client, decide what
+              to ask next, and build your case from the answers.
             </p>
             <p>
-              The game is made for people who enjoy law, legal shows, courtroom
-              drama, debate, negotiation, and strategic reasoning. Each run
-              gives you a case file, an opponent, a judge, and a chance to test
-              whether your argument actually holds up.
+              Then you take that case to court. You argue, the other side pushes
+              back, and the judge explains what worked. It is part legal drama,
+              part strategy game, and part improvisational AI conversation.
+            </p>
+            <p>
+              You can also challenge another player. Each of you interviews your
+              own AI client independently, prepares your own case file, and then
+              fights it out in court while an AI judge evaluates the arguments.
             </p>
           </div>
         </div>
@@ -195,9 +210,9 @@ export default function LawyerGamePage() {
       <section className="border-y border-white/10 bg-black/60">
         <div className="mx-auto max-w-7xl px-5 py-16 md:px-8 md:py-20">
           <p className="text-center text-sm font-semibold uppercase tracking-[0.28em] text-white/45">
-            How the lawyer game works
+            How the AI lawyer game works
           </p>
-          <div className="mt-12 grid gap-5 lg:grid-cols-4">
+          <div className="mt-12 grid gap-5 lg:grid-cols-5">
             {steps.map((step, index) => (
               <article
                 key={step.title}
@@ -221,7 +236,7 @@ export default function LawyerGamePage() {
           <div>
             <p className="arena-kicker">Who it is for</p>
             <h2 className="arena-headline mt-4 text-4xl uppercase leading-[0.95] md:text-6xl">
-              Built for people who want to step into the argument.
+              Built for people who want to be the lawyer.
             </h2>
           </div>
           <ul className="space-y-4">

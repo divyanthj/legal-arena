@@ -13,6 +13,8 @@
   },
   "dependencies": {
     "@auth/mongodb-adapter": "^3.11.1",
+    "@ffmpeg-installer/ffmpeg": "^1.1.0",
+    "@ffprobe-installer/ffprobe": "^2.1.2",
     "@headlessui/react": "^1.7.18",
     "@heroicons/react": "^2.2.0",
     "@lemonsqueezy/lemonsqueezy.js": "^4.0.0",

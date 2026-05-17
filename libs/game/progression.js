@@ -307,9 +307,18 @@ export const applyVerdictToProgression = async ({
 
 export const buildPublicLeaderboardEntry = (user, categorySlug) => {
   const progression = normalizeProgression(user.progression);
+  const pvp = normalizePvpProgression(progression.pvp);
   const categoryStat = categorySlug
     ? progression.categoryStats.find((item) => item.categorySlug === categorySlug)
     : null;
+  const pvpCategoryStat = categorySlug
+    ? pvp.categoryStats.find((item) => item.categorySlug === categorySlug)
+    : null;
+  const combinedCompletedCases =
+    (progression.completedCases || 0) + (pvp.completedChallenges || 0);
+  const combinedWins = (progression.wins || 0) + (pvp.wins || 0);
+  const combinedLosses = (progression.losses || 0) + (pvp.losses || 0);
+  const combinedDraws = (progression.draws || 0) + (pvp.draws || 0);
 
   return {
     id: user.id,
@@ -317,23 +326,25 @@ export const buildPublicLeaderboardEntry = (user, categorySlug) => {
     image: user.image || "",
     overallRating: progression.overallRating,
     overallXp: progression.overallXp,
-    completedCases: progression.completedCases,
-    wins: progression.wins,
-    losses: progression.losses,
-    draws: progression.draws,
+    completedCases: combinedCompletedCases,
+    wins: combinedWins,
+    losses: combinedLosses,
+    draws: combinedDraws,
     category: categoryStat
       ? {
           slug: categoryStat.categorySlug,
           rating: categoryStat.rating,
           xp: categoryStat.xp,
-          completedCases: categoryStat.completedCases,
+          completedCases:
+            (categoryStat.completedCases || 0) +
+            (pvpCategoryStat?.completedChallenges || 0),
           unlockedComplexity: categoryStat.unlockedComplexity,
-          wins: categoryStat.wins,
-          losses: categoryStat.losses,
-          draws: categoryStat.draws,
+          wins: (categoryStat.wins || 0) + (pvpCategoryStat?.wins || 0),
+          losses: (categoryStat.losses || 0) + (pvpCategoryStat?.losses || 0),
+          draws: (categoryStat.draws || 0) + (pvpCategoryStat?.draws || 0),
       }
       : null,
-    pvp: progression.pvp,
+    pvp,
   };
 };
 
@@ -379,10 +390,21 @@ export const listOverallLeaderboard = async ({ search = "", limit = null } = {})
     updatedAt: -1,
   });
 
-  const rankedEntries = refreshedUsers.map((user, index) => ({
-    rank: index + 1,
-    ...buildPublicLeaderboardEntry(user),
-  }));
+  const rankedEntries = refreshedUsers
+    .map((user) => buildPublicLeaderboardEntry(user))
+    .sort((left, right) => {
+      if ((right.overallRating || 0) !== (left.overallRating || 0)) {
+        return (right.overallRating || 0) - (left.overallRating || 0);
+      }
+      if ((right.completedCases || 0) !== (left.completedCases || 0)) {
+        return (right.completedCases || 0) - (left.completedCases || 0);
+      }
+      return (right.overallXp || 0) - (left.overallXp || 0);
+    })
+    .map((entry, index) => ({
+      rank: index + 1,
+      ...entry,
+    }));
   const searchedEntries = search
     ? rankedEntries.filter((entry) => fuzzyLeaderboardNameMatch(entry.name, search))
     : rankedEntries;
