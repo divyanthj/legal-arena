@@ -13,15 +13,15 @@ const CardArticle = ({
   const TitleTag = tag;
 
   return (
-    <article className="card bg-base-200 rounded-box overflow-hidden">
+    <article className="group overflow-hidden rounded-[1.75rem] border border-white/10 bg-white/[0.03] text-white transition hover:border-white/22 hover:bg-white/[0.055]">
       {article.image?.src && (
         <Link
           href={`/blog/${article.slug}`}
-          className="link link-hover hover:link-primary"
+          className="block"
           title={article.title}
           rel="bookmark"
         >
-          <figure>
+          <figure className="overflow-hidden border-b border-white/10 bg-black">
             <Image
               src={article.image.src}
               alt={article.image.alt}
@@ -29,15 +29,15 @@ const CardArticle = ({
               height={338}
               priority={isImagePriority}
               placeholder="blur"
-              className="aspect-video object-center object-cover hover:scale-[1.03] duration-200 ease-in-out"
+              className="aspect-video w-full object-cover object-center opacity-80 transition duration-300 group-hover:scale-[1.03] group-hover:opacity-100"
             />
           </figure>
         </Link>
       )}
-      <div className="card-body">
+      <div className="p-6 md:p-7">
         {/* CATEGORIES */}
         {showCategory && (
-          <div className="flex flex-wrap gap-2">
+          <div className="mb-5 flex flex-wrap gap-2">
             {article.categories.map((category) => (
               <BadgeCategory category={category} key={category.slug} />
             ))}
@@ -45,10 +45,10 @@ const CardArticle = ({
         )}
 
         {/* TITLE WITH RIGHT TAG */}
-        <TitleTag className="mb-1 text-xl md:text-2xl font-bold">
+        <TitleTag className="text-2xl font-semibold tracking-tight text-white md:text-3xl">
           <Link
             href={`/blog/${article.slug}`}
-            className="link link-hover hover:link-primary"
+            className="transition hover:text-white/78"
             title={article.title}
             rel="bookmark"
           >
@@ -56,15 +56,15 @@ const CardArticle = ({
           </Link>
         </TitleTag>
 
-        <div className=" text-base-content/80 space-y-4">
+        <div className="mt-4 space-y-6 text-white/62">
           {/* DESCRIPTION */}
-          <p className="">{article.description}</p>
+          <p className="text-base leading-7">{article.description}</p>
 
           {/* AUTHOR & DATE */}
-          <div className="flex items-center gap-4 text-sm">
+          <div className="flex flex-wrap items-center gap-4 border-t border-white/10 pt-5 text-sm">
             <Avatar article={article} />
 
-            <span itemProp="datePublished">
+            <span className="text-white/42" itemProp="datePublished">
               {new Date(article.publishedAt).toLocaleDateString("en-US", {
                 month: "long",
                 day: "numeric",

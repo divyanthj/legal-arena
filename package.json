@@ -8,8 +8,12 @@
     "postbuild": "next-sitemap",
     "start": "next start",
     "lint": "next lint",
+    "blog:check": "node scripts/check-blog-content.mjs",
     "test": "node tests/run-all-tests.mjs",
-    "reset:user-data": "node scripts/reset-user-data.mjs"
+    "reset:user-data": "node scripts/reset-user-data.mjs",
+    "video:studio": "remotion studio remotion/index.jsx",
+    "video:render": "remotion render remotion/index.jsx LegalArenaDashboardTutorial out/legal-arena-dashboard-tutorial.mp4",
+    "video:still": "remotion still remotion/index.jsx LegalArenaDashboardTutorial out/legal-arena-dashboard-tutorial.png --frame=45 --scale=0.5"
   },
   "dependencies": {
     "@auth/mongodb-adapter": "^3.11.1",
@@ -18,6 +22,8 @@
     "@headlessui/react": "^1.7.18",
     "@heroicons/react": "^2.2.0",
     "@lemonsqueezy/lemonsqueezy.js": "^4.0.0",
+    "@remotion/cli": "^4.0.462",
+    "@remotion/google-fonts": "^4.0.462",
     "@vercel/blob": "^2.3.3",
     "axios": "^1.6.8",
     "crisp-sdk-web": "^1.0.22",
@@ -36,10 +42,12 @@
     "react-hot-toast": "^2.4.1",
     "react-syntax-highlighter": "^16.1.1",
     "react-tooltip": "^5.26.3",
+    "remotion": "^4.0.462",
     "resend": "^6.9.3",
     "server-only": "^0.0.1",
     "sharp": "^0.34.5",
-    "stripe": "^13.11.0"
+    "stripe": "^13.11.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "autoprefixer": "^10.4.19",

@@ -1,290 +1,178 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Popover, Transition } from "@headlessui/react";
 import Link from "next/link";
 import Image from "next/image";
-import logo from "@/app/icon.png";
 import config from "@/config";
 import { categories } from "../content";
-import ButtonSignin from "@/components/ButtonSignin";
 
 const links = [
-  {
-    href: "/lawyer-game",
-    label: "Lawyer Game",
-  },
-  {
-    href: "/blog/",
-    label: "All Posts",
-  },
+  { href: "/lawyer-game", label: "Lawyer Game" },
+  { href: "/blog", label: "All Posts" },
 ];
 
-const cta = <ButtonSignin text="Start playing" extraStyle="btn-primary md:btn-sm" />;
-
-const ButtonPopoverCategories = () => {
-  return (
-    <Popover className="relative z-30">
-      {({ open }) => (
-        <>
-          <Popover.Button
-            className="link no-underline flex flex-nowrap items-center gap-1 text-base-content/80 hover:text-base-content active:text-base-content focus:text-base-content duration-100"
-            title="Open Blog categories"
-          >
-            Categories
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 20 20"
-              fill="currentColor"
-              className={`w-5 h-5 duration-200 ${
-                open ? "transform rotate-180 " : ""
-              }`}
-            >
-              <path
-                fillRule="evenodd"
-                d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
-                clipRule="evenodd"
-              />
-            </svg>
-          </Popover.Button>
-          <Transition
-            enter="transition duration-100 ease-out"
-            enterFrom="transform scale-95 opacity-0"
-            enterTo="transform scale-100 opacity-100"
-            leave="transition duration-75 ease-out"
-            leaveFrom="transform scale-100 opacity-100"
-            leaveTo="transform scale-95 opacity-0"
-          >
-            <Popover.Panel className="absolute left-0 z-30 mt-3 w-screen max-w-full sm:max-w-sm transform">
-              {({ close }) => (
-                <div className="overflow-hidden rounded-box shadow-lg ring-1 ring-base-content ring-opacity-5">
-                  <div className="relative grid gap-2 bg-base-100 p-2 overflow-hidden">
-                    {categories.map((category) => (
-                      <div key={category.slug} onClick={() => close()}>
-                        <Link
-                          className="block text-left p-3 -m-1 cursor-pointer hover:bg-base-200 rounded-box duration-200"
-                          href={`/blog/category/${category.slug}`}
-                        >
-                          <div className="">
-                            <p className="font-medium mb-0.5">
-                              {category?.titleShort || category.title}
-                            </p>
-                            <p className="text-sm opacity-80">
-                              {category?.descriptionShort ||
-                                category.description}
-                            </p>
-                          </div>
-                        </Link>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </Popover.Panel>
-          </Transition>
-        </>
-      )}
-    </Popover>
-  );
-};
-
-const ButtonAccordionCategories = () => {
-  const [isOpen, setIsOpen] = useState(false);
-
-  return (
-    <>
-      <button
-        onClick={(e) => {
-          e.preventDefault();
-          setIsOpen(!isOpen);
-        }}
-        aria-expanded={isOpen}
-        type="button"
-        className="link no-underline flex justify-between items-center w-full "
-      >
-        Categories
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 20 20"
-          fill="currentColor"
-          className={`w-5 h-5 duration-200 ${
-            isOpen ? "transform rotate-180 " : ""
-          }`}
-        >
-          <path
-            fillRule="evenodd"
-            d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
-            clipRule="evenodd"
-          />
-        </svg>
-      </button>
-
-      {isOpen && (
-        <ul className="space-y-4">
-          {categories.map((category) => (
-            <li key={category.slug}>
-              <Link
-                href={`/blog/category/${category.slug}`}
-                className="text-base-content/80 hover:text-base-content duration-100 link link-hover"
-              >
-                {category?.titleShort || category.title}
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
-    </>
-  );
-};
-
-// This is the header that appears on all pages in the /blog folder.
-// By default it shows the logo, the links, and the CTA.
-// In the links, there's a popover with the categories.
 const HeaderBlog = () => {
   const searchParams = useSearchParams();
   const [isOpen, setIsOpen] = useState(false);
 
-  // setIsOpen(false) when the route changes (i.e: when the user clicks on a link on mobile)
   useEffect(() => {
     setIsOpen(false);
   }, [searchParams]);
 
   return (
-    <header className="bg-base-200">
-      <nav className="max-w-7xl flex items-center justify-between px-8 py-3 mx-auto">
-        {/* Your logo/name on large screens */}
-        <div className="flex lg:flex-1">
-          <Link
-            className="flex items-center gap-2 shrink-0 "
-            href="/"
-            title={`${config.appName} hompage`}
-          >
-            <Image
-              src={logo}
-              alt={`${config.appName} logo`}
-              className="w-8"
-              priority={true}
-              width={32}
-              height={32}
-            />
-            <span className="font-extrabold text-lg">{config.appName}</span>
-          </Link>
-        </div>
-        {/* Burger button to open menu on mobile */}
-        <div className="flex lg:hidden">
-          <button
-            type="button"
-            className="-m-2.5 inline-flex items-center justify-center rounded-box p-2.5"
-            onClick={() => setIsOpen(true)}
-          >
-            <span className="sr-only">Open main menu</span>
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={1.5}
-              stroke="currentColor"
-              className="w-6 h-6 text-base-content"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"
-              />
-            </svg>
-          </button>
-        </div>
+    <header className="sticky top-0 z-40 border-b border-white/10 bg-black/80 text-white backdrop-blur-xl">
+      <nav className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 md:px-8">
+        <Link
+          className="inline-flex items-center gap-3"
+          href="/"
+          title={`${config.appName} homepage`}
+        >
+          <Image
+            src="/logoAndName.png"
+            alt={`${config.appName} logo`}
+            width={150}
+            height={36}
+            className="h-9 w-auto object-contain"
+            priority
+          />
+          <span className="hidden text-sm font-semibold uppercase tracking-[0.18em] text-white sm:inline">
+            Legal Arena
+          </span>
+        </Link>
 
-        {/* Your links on large screens */}
-        <div className="hidden lg:flex lg:justify-center lg:gap-12 lg:items-center">
+        <div className="hidden items-center gap-8 text-sm text-white/72 lg:flex">
           {links.map((link) => (
             <Link
               href={link.href}
               key={link.href}
-              className="link link-hover text-base-content/80 hover:text-base-content active:text-base-content focus:text-base-content duration-100"
+              className="transition hover:text-white"
               title={link.label}
             >
               {link.label}
             </Link>
           ))}
 
-          <ButtonPopoverCategories />
-        </div>
-
-        {/* CTA on large screens */}
-        <div className="hidden lg:flex lg:justify-end lg:flex-1">{cta}</div>
-      </nav>
-
-      {/* Mobile menu, show/hide based on menu state. */}
-      <div className={`relative z-50 ${isOpen ? "" : "hidden"}`}>
-        <div
-          className={`fixed inset-y-0 right-0 z-10 w-full px-8 py-3 overflow-y-auto bg-base-200 sm:max-w-sm sm:ring-1 sm:ring-neutral/10 transform origin-right transition ease-in-out duration-300`}
-        >
-          {/* Your logo/name on small screens */}
-          <div className="flex items-center justify-between">
-            <Link
-              className="flex items-center gap-2 shrink-0 "
-              title={`${config.appName} hompage`}
-              href="/"
-            >
-              <Image
-                src={logo}
-                alt={`${config.appName} logo`}
-                className="w-8"
-                placeholder="blur"
-                priority={true}
-                width={32}
-                height={32}
-              />
-              <span className="font-extrabold text-lg">{config.appName}</span>
-            </Link>
+          <div className="group relative">
             <button
+              className="inline-flex items-center gap-2 text-sm text-white/72 transition hover:text-white"
               type="button"
-              className="-m-2.5 rounded-box p-2.5"
-              onClick={() => setIsOpen(false)}
             >
-              <span className="sr-only">Close menu</span>
+              Categories
               <svg
                 xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                strokeWidth={1.5}
-                stroke="currentColor"
-                className="w-6 h-6"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                className="h-4 w-4 text-white/45"
+                aria-hidden="true"
               >
                 <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M6 18L18 6M6 6l12 12"
+                  fillRule="evenodd"
+                  d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.17l3.71-3.94a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z"
+                  clipRule="evenodd"
                 />
               </svg>
             </button>
-          </div>
-
-          {/* Your links on small screens */}
-          <div className="flow-root mt-6">
-            <div className="py-4">
-              <div className="flex flex-col gap-y-4 items-start">
-                {links.map((link) => (
+            <div className="invisible absolute left-1/2 top-full w-80 -translate-x-1/2 pt-4 opacity-0 transition group-hover:visible group-hover:opacity-100">
+              <div className="arena-surface overflow-hidden rounded-[1.25rem] p-2">
+                {categories.map((category) => (
                   <Link
-                    href={link.href}
-                    key={link.href}
-                    className="link link-hover"
-                    title={link.label}
+                    key={category.slug}
+                    href={`/blog/category/${category.slug}`}
+                    className="block rounded-2xl px-4 py-3 transition hover:bg-white/[0.08]"
                   >
-                    {link.label}
+                    <p className="text-sm font-semibold text-white">
+                      {category?.titleShort || category.title}
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-white/52">
+                      {category?.descriptionShort || category.description}
+                    </p>
                   </Link>
                 ))}
-                <ButtonAccordionCategories />
               </div>
             </div>
-            <div className="divider"></div>
-            {/* Your CTA on small screens */}
-            <div className="flex flex-col">{cta}</div>
           </div>
         </div>
-      </div>
+
+        <div className="hidden items-center gap-3 lg:flex">
+          <Link
+            href="/dashboard"
+            className="rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-black transition hover:bg-white/90"
+          >
+            Start Playing
+          </Link>
+        </div>
+
+        <button
+          type="button"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/12 bg-white/5 lg:hidden"
+          onClick={() => setIsOpen(true)}
+        >
+          <span className="sr-only">Open main menu</span>
+          <span className="h-px w-5 bg-white before:block before:h-px before:w-5 before:-translate-y-2 before:bg-white before:content-[''] after:block after:h-px after:w-5 after:translate-y-[7px] after:bg-white after:content-['']" />
+        </button>
+      </nav>
+
+      {isOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm lg:hidden">
+          <div className="ml-auto flex h-full w-full max-w-sm flex-col border-l border-white/10 bg-[#050505] px-5 py-4">
+            <div className="flex items-center justify-between">
+              <Link href="/" className="inline-flex items-center gap-3">
+                <Image
+                  src="/logoAndName.png"
+                  alt={`${config.appName} logo`}
+                  width={150}
+                  height={36}
+                  className="h-9 w-auto object-contain"
+                />
+                <span className="text-sm font-semibold uppercase tracking-[0.18em] text-white">
+                  Legal Arena
+                </span>
+              </Link>
+              <button
+                type="button"
+                className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/12 bg-white/5 text-xl text-white"
+                onClick={() => setIsOpen(false)}
+              >
+                <span className="sr-only">Close menu</span>
+                x
+              </button>
+            </div>
+
+            <div className="mt-10 flex flex-col gap-5 text-lg font-semibold text-white">
+              {links.map((link) => (
+                <Link href={link.href} key={link.href}>
+                  {link.label}
+                </Link>
+              ))}
+            </div>
+
+            <div className="mt-8 border-t border-white/10 pt-6">
+              <p className="text-xs uppercase tracking-[0.24em] text-white/40">
+                Categories
+              </p>
+              <div className="mt-4 space-y-3">
+                {categories.map((category) => (
+                  <Link
+                    key={category.slug}
+                    href={`/blog/category/${category.slug}`}
+                    className="block rounded-2xl border border-white/10 bg-white/[0.03] p-4"
+                  >
+                    {category?.titleShort || category.title}
+                  </Link>
+                ))}
+              </div>
+            </div>
+
+            <Link
+              href="/dashboard"
+              className="mt-auto rounded-2xl bg-white px-5 py-4 text-center text-sm font-semibold text-black"
+            >
+              Start Playing
+            </Link>
+          </div>
+        </div>
+      )}
     </header>
   );
 };

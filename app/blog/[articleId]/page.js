@@ -1,13 +1,23 @@
 import Link from "next/link";
 import Script from "next/script";
+import { notFound } from "next/navigation";
 import { articles } from "../_assets/content";
 import BadgeCategory from "../_assets/components/BadgeCategory";
 import Avatar from "../_assets/components/Avatar";
 import { getSEOTags } from "@/libs/seo";
 import config from "@/config";
 
+export function generateStaticParams() {
+  return articles.map((article) => ({
+    articleId: article.slug,
+  }));
+}
+
 export async function generateMetadata({ params }) {
   const article = articles.find((article) => article.slug === params.articleId);
+  if (!article) {
+    return {};
+  }
 
   return getSEOTags({
     title: article.title,
@@ -34,6 +44,10 @@ export async function generateMetadata({ params }) {
 
 export default async function Article({ params }) {
   const article = articles.find((article) => article.slug === params.articleId);
+  if (!article) {
+    notFound();
+  }
+
   const articlesRelated = articles
     .filter(
       (a) =>
@@ -73,41 +87,26 @@ export default async function Article({ params }) {
         }}
       />
 
-      {/* GO BACK LINK */}
-      <div>
+      <article className="mx-auto max-w-7xl px-5 py-12 md:px-8 md:py-16">
         <Link
           href="/blog"
-          className="link !no-underline text-base-content/80 hover:text-base-content inline-flex items-center gap-1"
+          className="inline-flex items-center gap-2 text-sm font-medium text-white/50 transition hover:text-white"
           title="Back to Blog"
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 20 20"
-            fill="currentColor"
-            className="w-5 h-5"
-          >
-            <path
-              fillRule="evenodd"
-              d="M15 10a.75.75 0 01-.75.75H7.612l2.158 1.96a.75.75 0 11-1.04 1.08l-3.5-3.25a.75.75 0 010-1.08l3.5-3.25a.75.75 0 111.04 1.08L7.612 9.25h6.638A.75.75 0 0115 10z"
-              clipRule="evenodd"
-            />
-          </svg>
+          <span aria-hidden="true">&lt;-</span>
           Back to Blog
         </Link>
-      </div>
 
-      <article>
         {/* HEADER WITH CATEGORIES AND DATE AND TITLE */}
-        <section className="my-12 md:my-20 max-w-[800px]">
-          <div className="flex items-center gap-4 mb-6">
+        <section className="mt-12 max-w-4xl md:mt-16">
+          <div className="mb-6 flex flex-wrap items-center gap-3">
             {article.categories.map((category) => (
               <BadgeCategory
                 category={category}
                 key={category.slug}
-                extraStyle="!badge-lg"
               />
             ))}
-            <span className="text-base-content/80" itemProp="datePublished">
+            <span className="text-sm text-white/42" itemProp="datePublished">
               {new Date(article.publishedAt).toLocaleDateString("en-US", {
                 month: "long",
                 day: "numeric",
@@ -116,53 +115,55 @@ export default async function Article({ params }) {
             </span>
           </div>
 
-          <h1 className="text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight mb-6 md:mb-8">
+          <h1 className="arena-headline text-5xl uppercase leading-[0.92] md:text-7xl">
             {article.title}
           </h1>
 
-          <p className="text-base-content/80 md:text-lg max-w-[700px]">
+          <p className="mt-6 max-w-2xl text-lg leading-8 text-white/68 md:text-xl">
             {article.description}
           </p>
         </section>
 
-        <div className="flex flex-col md:flex-row">
+        <div className="mt-12 grid gap-12 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start">
           {/* SIDEBAR WITH AUTHORS AND 3 RELATED ARTICLES */}
-          <section className="max-md:pb-4 md:pl-12 max-md:border-b md:border-l md:order-last md:w-72 shrink-0 border-base-content/10">
-            <p className="text-base-content/80 text-sm mb-2 md:mb-3">
-              Posted by
-            </p>
-            <Avatar article={article} />
+          <aside className="order-last lg:sticky lg:top-28">
+            <div className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-5">
+              <p className="mb-3 text-xs uppercase tracking-[0.24em] text-white/40">
+                Posted by
+              </p>
+              <Avatar article={article} />
 
-            {articlesRelated.length > 0 && (
-              <div className="hidden md:block mt-12">
-                <p className=" text-base-content/80 text-sm  mb-2 md:mb-3">
-                  Related reading
-                </p>
-                <div className="space-y-2 md:space-y-5">
+              {articlesRelated.length > 0 && (
+                <div className="mt-8 border-t border-white/10 pt-6">
+                  <p className="mb-4 text-xs uppercase tracking-[0.24em] text-white/40">
+                    Related reading
+                  </p>
+                  <div className="space-y-5">
                   {articlesRelated.map((article) => (
-                    <div className="" key={article.slug}>
-                      <p className="mb-0.5">
+                    <div key={article.slug}>
+                      <p>
                         <Link
                           href={`/blog/${article.slug}`}
-                          className="link link-hover hover:link-primary font-medium"
+                          className="font-medium leading-6 text-white transition hover:text-white/72"
                           title={article.title}
                           rel="bookmark"
                         >
                           {article.title}
                         </Link>
                       </p>
-                      <p className="text-base-content/80 max-w-full text-sm">
+                      <p className="mt-2 text-sm leading-6 text-white/50">
                         {article.description}
                       </p>
                     </div>
                   ))}
+                  </div>
                 </div>
-              </div>
-            )}
-          </section>
+              )}
+            </div>
+          </aside>
 
           {/* ARTICLE CONTENT */}
-          <section className="w-full max-md:pt-4 md:pr-20 space-y-12 md:space-y-20">
+          <section className="max-w-3xl space-y-12 md:space-y-16">
             {article.content}
           </section>
         </div>

@@ -1,11 +1,21 @@
 import Image from "next/image";
 import { authors, articles } from "../../_assets/content";
 import CardArticle from "../../_assets/components/CardArticle";
+import { notFound } from "next/navigation";
 import { getSEOTags } from "@/libs/seo";
 import config from "@/config";
 
+export function generateStaticParams() {
+  return authors.map((author) => ({
+    authorId: author.slug,
+  }));
+}
+
 export async function generateMetadata({ params }) {
   const author = authors.find((author) => author.slug === params.authorId);
+  if (!author) {
+    return {};
+  }
 
   return getSEOTags({
     title: `${author.name}, Author at ${config.appName}'s Blog`,
@@ -16,61 +26,64 @@ export async function generateMetadata({ params }) {
 
 export default async function Author({ params }) {
   const author = authors.find((author) => author.slug === params.authorId);
+  if (!author) {
+    notFound();
+  }
+
   const articlesByAuthor = articles
     .filter((article) => article.author.slug === author.slug)
     .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
 
   return (
     <>
-      <section className="max-w-3xl mx-auto flex flex-col md:flex-row gap-8 mt-12 mb-24 md:mb-32">
-        <div>
-          <p className="text-xs uppercase tracking-wide text-base-content/80 mb-2">
-            Authors
+      <section className="border-b border-white/10">
+        <div className="mx-auto grid max-w-5xl gap-8 px-5 py-16 md:grid-cols-[1fr_auto] md:px-8 md:py-24 md:items-center">
+          <div>
+            <p className="arena-kicker">Author</p>
+            <h1 className="arena-headline mt-4 text-5xl uppercase leading-[0.92] md:text-7xl">
+              {author.name}
+            </h1>
+            <p className="mt-4 text-lg font-medium text-white/78">{author.job}</p>
+            <p className="mt-5 max-w-2xl text-lg leading-8 text-white/62">
+              {author.description}
           </p>
-          <h1 className="font-extrabold text-3xl lg:text-5xl tracking-tight mb-2">
-            {author.name}
-          </h1>
-          <p className="md:text-lg mb-6 md:mb-10 font-medium">{author.job}</p>
-          <p className="md:text-lg text-base-content/80">
-            {author.description}
-          </p>
-        </div>
+          </div>
 
-        <div className="max-md:order-first flex md:flex-col gap-4 shrink-0">
-          <Image
-            src={author.avatar}
-            width={256}
-            height={256}
-            alt={author.name}
-            priority={true}
-            className="rounded-box w-[12rem] md:w-[16rem] "
-          />
+          <div className="flex gap-4 md:flex-col">
+            <Image
+              src={author.avatar}
+              width={256}
+              height={256}
+              alt={author.name}
+              priority={true}
+              className="w-36 rounded-[1.75rem] border border-white/10 object-cover md:w-56"
+            />
 
-          {author.socials?.length > 0 && (
-            <div className="flex flex-col md:flex-row gap-4">
+            {author.socials?.length > 0 && (
+              <div className="flex gap-3">
               {author.socials.map((social) => (
                 <a
                   key={social.name}
                   href={social.url}
-                  className="btn btn-square"
-                  // Using a dark theme? -> className="btn btn-square btn-neutral"
+                    className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-white/70 transition hover:bg-white/10 hover:text-white"
                   title={`Go to ${author.name} profile on ${social.name}`}
                   target="_blank"
                 >
                   {social.icon}
                 </a>
               ))}
-            </div>
-          )}
+              </div>
+            )}
+          </div>
         </div>
       </section>
 
-      <section>
-        <h2 className="font-bold text-2xl lg:text-4xl tracking-tight text-center mb-8 md:mb-12">
-          Most recent articles by {author.name}
-        </h2>
+      <section className="mx-auto max-w-7xl px-5 py-14 md:px-8 md:py-20">
+        <p className="text-center text-sm font-semibold uppercase tracking-[0.28em] text-white/40">
+          Most recent articles
+        </p>
 
-        <div className="grid lg:grid-cols-2 gap-8">
+        <div className="mt-10 grid gap-6 lg:grid-cols-2">
           {articlesByAuthor.map((article) => (
             <CardArticle key={article.slug} article={article} />
           ))}

@@ -45,6 +45,9 @@ const Footer = () => {
                 <Link href="/lawyer-game" className="text-white/72 transition hover:text-white">
                   Lawyer Game
                 </Link>
+                <Link href="/blog" className="text-white/72 transition hover:text-white">
+                  Blog
+                </Link>
                 <Link href="/faq" className="text-white/72 transition hover:text-white">
                   FAQ
                 </Link>
