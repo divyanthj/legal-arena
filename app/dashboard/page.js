@@ -14,6 +14,31 @@ import { toClientJSON } from "@/libs/serialize";
 
 export const dynamic = "force-dynamic";
 
+const DASHBOARD_OPTIONAL_TIMEOUT_MS = 3500;
+
+const withOptionalTimeout = async (promise, fallback, label) => {
+  let timeoutId;
+
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((resolve) => {
+        timeoutId = setTimeout(() => {
+          console.warn(`dashboard optional data timed out: ${label}`);
+          resolve(fallback);
+        }, DASHBOARD_OPTIONAL_TIMEOUT_MS);
+      }),
+    ]);
+  } catch (error) {
+    console.error(`dashboard optional data failed: ${label}`, error);
+    return fallback;
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
+};
+
 export default async function Dashboard() {
   const session = await getServerSession(authOptions);
 
@@ -25,13 +50,17 @@ export default async function Dashboard() {
 
   const [dashboardData, challenges, overallLeaderboard, categoryLeaderboards] = await Promise.all([
     listDashboardDataForUser(session.user.id, session.user),
-    listChallengesForUser(session.user.id),
-    listOverallLeaderboard(),
-    Promise.all(
-      LEGAL_CASE_CATEGORIES.map(async (category) => [
-        category.slug,
-        await listCategoryLeaderboard(category.slug),
-      ])
+    withOptionalTimeout(listChallengesForUser(session.user.id), [], "challenges"),
+    withOptionalTimeout(listOverallLeaderboard({ limit: 8 }), [], "overall leaderboard"),
+    withOptionalTimeout(
+      Promise.all(
+        LEGAL_CASE_CATEGORIES.map(async (category) => [
+          category.slug,
+          await listCategoryLeaderboard(category.slug),
+        ])
+      ),
+      [],
+      "category leaderboards"
     ),
   ]);
 
@@ -48,6 +77,7 @@ export default async function Dashboard() {
       isAdmin={isAdminEmail(session.user?.email)}
       userId={session.user?.id || ""}
       userName={session.user?.name || session.user?.email}
+      userImage={session.user?.image || ""}
       userEmail={session.user?.email || ""}
       hasArenaAccess={hasArenaAccess}
     />

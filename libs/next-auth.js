@@ -1,11 +1,30 @@
 import GoogleProvider from "next-auth/providers/google";
 import EmailProvider from "next-auth/providers/email";
 import { MongoDBAdapter } from "@auth/mongodb-adapter";
+import mongoose from "mongoose";
 import config from "@/config";
 import connectMongo from "./mongo";
 import connectMongoose from "@/libs/mongoose";
 import { sendMagicLinkEmail } from "@/libs/emailSender";
 import User from "@/models/User";
+
+const findUserForSessionToken = async (token = {}) => {
+  const selectors = [];
+
+  if (token?.sub && mongoose.Types.ObjectId.isValid(token.sub)) {
+    selectors.push({ _id: token.sub });
+  }
+
+  if (token?.email) {
+    selectors.push({ email: String(token.email).trim().toLowerCase() });
+  }
+
+  if (!selectors.length) {
+    return null;
+  }
+
+  return User.findOne({ $or: selectors }).select("_id");
+};
 
 export const authOptions = {
   // Set any random key in .env.local
@@ -56,10 +75,13 @@ export const authOptions = {
 
       try {
         await connectMongoose();
-        const user = await User.findById(token.sub).select("_id");
+        const user = await findUserForSessionToken(token);
 
         if (!user) {
-          return {};
+          console.warn("next-auth jwt lookup did not find a matching user", {
+            sub: token.sub,
+            email: token.email,
+          });
         }
       } catch (error) {
         console.error("next-auth jwt lookup failed", error);

@@ -16,8 +16,10 @@ import {
   countSharedTokens,
   hashString,
   humanizeClaimText,
+  hasThirdPersonSelfReference,
   stripClaimScaffolding,
   isMetaResponse,
+  normalizePartySpeechToFirstPerson,
   toSpokenSentence,
   getTemplate,
   ensureTemplate,
@@ -72,6 +74,27 @@ import {
   questionRequestsProductionOrLookup,
   shouldUseKnownSpecificFallback,
 } from "./interview/questions";
+
+const normalizeInterviewPartyResponse = ({
+  text = "",
+  template,
+  playerSide,
+} = {}) =>
+  normalizePartySpeechToFirstPerson({
+    text,
+    partyName: getPartyName(template, playerSide),
+    playerSide,
+  });
+
+const hasInterviewSelfReferenceLeak = ({ text = "", template, playerSide } = {}) =>
+  hasThirdPersonSelfReference({
+    text,
+    partyName: getPartyName(template, playerSide),
+    playerSide,
+  });
+
+const lowerForEmbeddedSentence = (value = "") =>
+  /^I\b/.test(String(value || "").trim()) ? String(value || "").trim() : lowerFirst(value);
 
 const buildStoryGroundedFallback = ({ template, playerSide, question }) => {
   const storyContext = buildStoryContextForSide(
@@ -229,6 +252,13 @@ export const buildInterviewFallback = ({ caseSession, template, question, factSh
 
   const primaryClaim = partyClaims[0] || null;
   const secondaryClaim = partyClaims[1] || null;
+  const secondaryClaimText = secondaryClaim
+    ? normalizeInterviewPartyResponse({
+        text: toSpokenSentence(secondaryClaim.playerClaim.claimedDetail),
+        template: safeTemplate,
+        playerSide,
+      })
+    : "";
 
   let partyResponse =
     primaryClaim
@@ -244,9 +274,7 @@ export const buildInterviewFallback = ({ caseSession, template, question, factSh
             primaryClaim.playerClaim.claimedDetail,
             secondaryClaim.playerClaim.claimedDetail
           ) > 1
-            ? `I also remember that ${toSpokenSentence(
-                secondaryClaim.playerClaim.claimedDetail
-              )}`
+            ? `I also remember that ${lowerForEmbeddedSentence(secondaryClaimText)}`
             : "",
           evidenceResponse,
         ]
@@ -304,6 +332,12 @@ export const buildInterviewFallback = ({ caseSession, template, question, factSh
   } else if (repeatedFallbackReply) {
     partyResponse = "I do not know anything more specific about that right now.";
   }
+
+  partyResponse = normalizeInterviewPartyResponse({
+    text: partyResponse,
+    template: safeTemplate,
+    playerSide,
+  });
 
   const patch = {
     summary: factSheet.summary || "",
@@ -435,11 +469,25 @@ export const normalizeInterviewResult = ({
     discoveredEvidenceIds: revealedEvidenceIds,
   });
   const questionHistory = getInterviewQuestionHistory(caseSession, question);
-  const normalizedAiPartyResponse = humanizeClaimText(aiResult.partyResponse || "");
+  const normalizedFallbackPartyResponse = normalizeInterviewPartyResponse({
+    text: fallback.partyResponse,
+    template: safeTemplate,
+    playerSide,
+  });
+  const normalizedAiPartyResponse = normalizeInterviewPartyResponse({
+    text: humanizeClaimText(aiResult.partyResponse || ""),
+    template: safeTemplate,
+    playerSide,
+  });
+  const aiStillLeaksSelfReference = hasInterviewSelfReferenceLeak({
+    text: normalizedAiPartyResponse,
+    template: safeTemplate,
+    playerSide,
+  });
   const useKnownSpecificFallback = shouldUseKnownSpecificFallback(
     question,
     normalizedAiPartyResponse,
-    fallback.partyResponse
+    normalizedFallbackPartyResponse
   );
   const repeatedProductionLoop =
     questionRequestsProductionOrLookup(lowerQuestion) &&
@@ -448,8 +496,8 @@ export const normalizeInterviewResult = ({
   const productionAnswerShouldUseFallback =
     questionRequestsProductionOrLookup(lowerQuestion) &&
     questionAsksForProofLikeEvidence(lowerQuestion) &&
-    fallback.partyResponse &&
-    !hasRecordSearchPromise(fallback.partyResponse) &&
+    normalizedFallbackPartyResponse &&
+    !hasRecordSearchPromise(normalizedFallbackPartyResponse) &&
     (hasRecordSearchPromise(normalizedAiPartyResponse) ||
       /without checking|need to check|would need to confirm|cannot say for sure/i.test(
         normalizedAiPartyResponse
@@ -520,14 +568,16 @@ export const normalizeInterviewResult = ({
       repeatedProductionLoop
         ? buildStalledProductionReply(lowerQuestion)
         : productionAnswerShouldUseFallback
-        ? fallback.partyResponse
+        ? normalizedFallbackPartyResponse
         : useKnownSpecificFallback
-        ? fallback.partyResponse
+        ? normalizedFallbackPartyResponse
+        : aiStillLeaksSelfReference
+        ? normalizedFallbackPartyResponse
         : aiResult.partyResponse &&
           !isMetaResponse(aiResult.partyResponse) &&
           isResponsiveInterviewAnswer(question, aiResult.partyResponse)
         ? normalizedAiPartyResponse
-        : fallback.partyResponse,
+        : normalizedFallbackPartyResponse,
     patch: mergedPatch,
     nextFactSheet: mergeFactSheet(factSheet, mergedPatch, safeTemplate, {
       playerSide,

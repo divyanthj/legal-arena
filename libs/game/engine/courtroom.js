@@ -42,11 +42,6 @@ import {
   sanitizeIdList,
   hasOpponentPraise,
   normalizeOpponentResponse,
-  buildEvidencePromptPacket,
-  buildClaimPromptPacket,
-  buildRoleFactPacket,
-  buildCanonicalWorldPacket,
-  buildInterviewAgentContext,
 } from "./shared.js";
 import {
   getCourtroomDifficultyProfile,
@@ -127,6 +122,178 @@ const extractWeakCategories = (factSheet = {}) =>
     ].filter((item) => SUBJECTIVE_CHARGE_PATTERN.test(item) || WEAK_PROOF_PATTERN.test(item))
   ).slice(0, 4);
 
+const OPPONENT_FACT_LIMITS = {
+  1: 2,
+  2: 3,
+  3: 4,
+  4: 6,
+  5: 8,
+};
+
+const OPPONENT_EVIDENCE_LIMITS = {
+  1: 1,
+  2: 2,
+  3: 3,
+  4: 5,
+  5: 7,
+};
+
+const normalizeEvidenceHolder = (value = "") =>
+  String(value || "").trim().toLowerCase();
+
+const normalizeEvidenceStatus = (value = "") =>
+  String(value || "").trim().toLowerCase();
+
+const evidenceIsProofForSide = (item = {}, templateSide = "plaintiff", complexity = 3) => {
+  const holderSide = normalizeEvidenceHolder(item.holderSide);
+  const status = normalizeEvidenceStatus(item.availabilityStatus);
+
+  if (["missing", "unknown"].includes(status) || holderSide === "third-party") {
+    return false;
+  }
+
+  if (holderSide === templateSide || holderSide === "shared") {
+    return status !== "contested" || complexity >= 3;
+  }
+
+  return status === "confirmed" && holderSide === "";
+};
+
+const evidenceIsLeadForSide = (item = {}, templateSide = "plaintiff", complexity = 3) => {
+  const holderSide = normalizeEvidenceHolder(item.holderSide);
+  const status = normalizeEvidenceStatus(item.availabilityStatus);
+
+  if (complexity < 4) {
+    return false;
+  }
+
+  if (holderSide === templateSide || holderSide === "shared") {
+    return ["mentioned", "unknown", "missing", "contested"].includes(status);
+  }
+
+  return holderSide === "third-party" && ["mentioned", "unknown", "contested"].includes(status);
+};
+
+const buildPortfolioEvidencePacket = (item = {}) => ({
+  id: item.id,
+  label: item.label,
+  detail: item.detail,
+  type: item.type,
+  availabilityStatus: item.availabilityStatus,
+  holderSide: item.holderSide,
+  linkedFactIds: item.linkedFactIds || [],
+});
+
+const sortFactsForOpponentPortfolio = (template, opponentSide) =>
+  (template.canonicalFacts || [])
+    .map((fact) => {
+      const claim = getClaimForParty(fact, opponentSide);
+      const linkedEvidence = (template.evidenceItems || []).filter((item) =>
+        (item.linkedFactIds || []).includes(fact.factId)
+      );
+
+      return {
+        fact,
+        claim,
+        linkedEvidence,
+        score:
+          (fact.discoverability?.priority || 0) * 3 +
+          (claim?.confidence || 0) * 2 +
+          (fact.kind === "dispute" ? 1.5 : 0) +
+          (fact.kind === "risk" ? 1 : 0) +
+          linkedEvidence.length * 0.5,
+      };
+    })
+    .filter((item) => item.claim?.claimedDetail)
+    .sort((left, right) => right.score - left.score);
+
+export const buildOpponentCourtroomPortfolio = ({
+  template,
+  opponentSide = DEFAULT_PLAYER_SIDE,
+  complexity = 3,
+} = {}) => {
+  const safeTemplate = ensureTemplate(template);
+  const profile = getCourtroomDifficultyProfile(complexity);
+  const normalizedComplexity = profile.complexity;
+  const templateSide = getTemplatePartyForSessionSide(opponentSide);
+  const factLimit = OPPONENT_FACT_LIMITS[normalizedComplexity] || OPPONENT_FACT_LIMITS[3];
+  const evidenceLimit =
+    OPPONENT_EVIDENCE_LIMITS[normalizedComplexity] || OPPONENT_EVIDENCE_LIMITS[3];
+  const rankedFacts = sortFactsForOpponentPortfolio(safeTemplate, opponentSide);
+  const selectedFactPackets = rankedFacts.slice(0, factLimit);
+  const selectedFactIds = selectedFactPackets.map((item) => item.fact.factId);
+  const linkedEvidence = (safeTemplate.evidenceItems || []).filter((item) =>
+    (item.linkedFactIds || []).some((factId) => selectedFactIds.includes(factId))
+  );
+  const proofEvidence = linkedEvidence
+    .filter((item) => evidenceIsProofForSide(item, templateSide, normalizedComplexity))
+    .slice()
+    .sort((left, right) => {
+      const leftConfirmed = normalizeEvidenceStatus(left.availabilityStatus) === "confirmed" ? 1 : 0;
+      const rightConfirmed = normalizeEvidenceStatus(right.availabilityStatus) === "confirmed" ? 1 : 0;
+      return rightConfirmed - leftConfirmed;
+    })
+    .slice(0, evidenceLimit);
+  const proofEvidenceIds = proofEvidence.map((item) => item.id);
+  const evidenceLeads = linkedEvidence
+    .filter((item) => !proofEvidenceIds.includes(item.id))
+    .filter((item) => evidenceIsLeadForSide(item, templateSide, normalizedComplexity))
+    .slice(0, Math.max(1, normalizedComplexity - 3));
+  const evidenceByFactId = new Map();
+
+  proofEvidence.forEach((item) => {
+    (item.linkedFactIds || []).forEach((factId) => {
+      if (!evidenceByFactId.has(factId)) {
+        evidenceByFactId.set(factId, []);
+      }
+      evidenceByFactId.get(factId).push(item);
+    });
+  });
+
+  const facts = selectedFactPackets.map(({ fact, claim }) => ({
+    factId: fact.factId,
+    label: fact.label,
+    kind: fact.kind,
+    priority: fact.discoverability?.priority || 3,
+    position: humanizeClaimText(claim.claimedDetail),
+    claimId: getClaimId(fact.factId, opponentSide),
+    linkedEvidenceIds: (evidenceByFactId.get(fact.factId) || []).map((item) => item.id),
+  }));
+  const supportingFacts = facts
+    .filter((fact) => ["timeline", "supporting", "evidence"].includes(fact.kind))
+    .map((fact) => fact.position);
+  const disputedFacts = facts
+    .filter((fact) => fact.kind === "dispute")
+    .map((fact) => fact.position);
+  const risks = facts
+    .filter((fact) => fact.kind === "risk")
+    .map((fact) => fact.position);
+
+  return {
+    side: templateSide,
+    partyName: getPartyName(safeTemplate, opponentSide),
+    preparationLevel: profile.counselPosture,
+    summary: uniqueList([buildOverviewForSide(safeTemplate, opponentSide)]),
+    theory: uniqueList([buildTheoryForSide(safeTemplate, opponentSide)]),
+    desiredRelief: uniqueList([buildDesiredReliefForSide(safeTemplate, opponentSide)]),
+    supportingFacts: uniqueList(supportingFacts),
+    risks: uniqueList(risks),
+    disputedFacts: uniqueList(disputedFacts),
+    knownClaims: uniqueList(facts.map((fact) => fact.position)),
+    corroboratedFacts: uniqueList(proofEvidence.map((item) => item.detail || item.label)),
+    sourceLinks: uniqueList(proofEvidence.map((item) => item.label || item.id)),
+    missingEvidence: uniqueList(
+      evidenceLeads.map((item) => `${item.label || item.id} remains a proof lead, not produced proof.`)
+    ),
+    preparedFactIds: selectedFactIds,
+    preparedClaimIds: facts.map((fact) => fact.claimId),
+    preparedEvidenceIds: proofEvidenceIds,
+    facts,
+    evidence: proofEvidence.map(buildPortfolioEvidencePacket),
+    evidenceLeads: evidenceLeads.map(buildPortfolioEvidencePacket),
+  };
+};
+
 export const buildProofStrategyContext = ({ caseSession }) => {
   const factSheet = caseSession.factSheet || {};
   const fileCorpus = proofTextCorpus(factSheet);
@@ -188,10 +355,20 @@ export const buildCounselContext = ({ caseSession, template, rules }) => {
 export const normalizeCounselAnalysis = ({ aiResult, caseSession, rules }) => {
   const validClaimIds = caseSession.factSheet.discoveredClaimIds || [];
   const validRuleIds = new Set((rules || []).map((rule) => rule.id));
+  const validFactText = new Set(
+    [
+      ...(caseSession.factSheet.supportingFacts || []),
+      ...(caseSession.factSheet.timeline || []),
+      ...(caseSession.factSheet.corroboratedFacts || []),
+      ...(caseSession.factSheet.knownFacts || []),
+    ].map((item) => String(item || "").trim())
+  );
 
   return {
     playerTheory: coerceString(aiResult?.playerTheory),
-    citedFacts: coerceStringList(aiResult?.citedFacts, 4),
+    citedFacts: coerceStringList(aiResult?.citedFacts, 4).filter((item) =>
+      validFactText.has(item)
+    ),
     citedClaimIds: sanitizeIdList(aiResult?.citedClaimIds, validClaimIds, 4),
     citedRules: coerceStringList(aiResult?.citedRules, 4).filter((item) =>
       validRuleIds.has(item)
@@ -213,6 +390,11 @@ export const buildCourtroomAgentContext = ({
   const opponentSide = getOpposingSide(playerSide);
   const proofStrategy = buildProofStrategyContext({ caseSession });
   const difficultyProfile = getCourtroomDifficultyProfile(caseSession.complexity);
+  const opponentPortfolio = buildOpponentCourtroomPortfolio({
+    template: safeTemplate,
+    opponentSide,
+    complexity: caseSession.complexity,
+  });
 
   return {
     shouldReturnVerdict,
@@ -229,28 +411,23 @@ export const buildCourtroomAgentContext = ({
       partyName: getPartyName(safeTemplate, opponentSide),
       objective: buildDesiredReliefForSide(safeTemplate, opponentSide),
       profile: getPartyProfileForSide(safeTemplate, opponentSide),
-      memory: (safeTemplate.canonicalFacts || []).map((fact) =>
-        buildRoleFactPacket({
-          template: safeTemplate,
-          fact,
-          playerSide: opponentSide,
-          discoveredFactIds: caseSession.factSheet.discoveredFactIds || [],
-          discoveredEvidenceIds: caseSession.factSheet.discoveredEvidenceIds || [],
-        })
-      ),
+      preparedCaseFile: opponentPortfolio,
     },
-    canonicalWorld: buildCanonicalWorldPacket(
-      safeTemplate,
-      caseSession.factSheet.discoveredFactIds || [],
-      caseSession.factSheet.discoveredEvidenceIds || []
-    ),
-    canonicalStoryWorld: safeTemplate.canonicalStory,
     bench: {
+      recordBound: true,
+      playerCaseFile: caseSession.factSheet,
+      opponentCaseFile: opponentPortfolio,
       lawbookRules: rules,
       score: caseSession.score,
       judgeProfile: caseSession.judgeProfile || null,
       recentCourtroomTranscript: caseSession.courtroomTranscript.slice(-6),
       proofStrategy,
+      scoringRules: [
+        "Score the player only from the representedCounsel.publicCaseFile, lawbook rules, and courtroom transcript.",
+        "Score the opponent only from opposingCounsel.preparedCaseFile, lawbook rules, and courtroom transcript.",
+        "Do not infer, cite, or credit facts, claims, story details, or evidence outside those visible side files.",
+        "Treat missing or unsurfaced proof as unavailable, even if an argument alludes to it.",
+      ],
       courtroomCalibration: {
         counselPosture: difficultyProfile.counselPosture,
         scoringBounds: {
@@ -309,6 +486,11 @@ export const buildCourtroomFallback = ({ caseSession, argument, rules, template 
   const safeTemplate = ensureTemplate(template);
   const playerSide = getPlayerSide(caseSession);
   const opponentSide = getOpposingSide(playerSide);
+  const opponentPortfolio = buildOpponentCourtroomPortfolio({
+    template: safeTemplate,
+    opponentSide,
+    complexity: caseSession.complexity,
+  });
   const citedFacts = pickFactMentions(argument, caseSession.factSheet);
   const citedRules = pickRuleMentions(argument, rules);
   const citedClaims = pickClaimMentions(argument, caseSession.factSheet);
@@ -397,16 +579,20 @@ export const buildCourtroomFallback = ({ caseSession, argument, rules, template 
     }),
   });
 
-  const templateFacts = safeTemplate.canonicalFacts || [];
-  const pressureFact =
-    templateFacts[caseSession.score.roundsCompleted % templateFacts.length] || null;
-  const opponentClaim = pressureFact ? getClaimForParty(pressureFact, opponentSide) : null;
+  const opponentClaims = opponentPortfolio.knownClaims || [];
+  const opponentClaim =
+    opponentClaims[caseSession.score.roundsCompleted % Math.max(opponentClaims.length, 1)] || "";
+  const opponentProof = opponentPortfolio.corroboratedFacts?.[0] || "";
   const opponentPartyName = getPartyName(safeTemplate, opponentSide);
 
   const opponentResponse = opponentClaim
-    ? `Counsel for ${opponentPartyName} argues that ${opponentClaim.claimedDetail.charAt(0).toLowerCase()}${opponentClaim.claimedDetail.slice(
+    ? `Counsel for ${opponentPartyName} argues that ${opponentClaim.charAt(0).toLowerCase()}${opponentClaim.slice(
         1
-      )}. They say the player's presentation leans too heavily on its own version instead of settled proof.`
+      )}. ${
+        opponentProof
+          ? `They point to their prepared file on ${opponentProof.charAt(0).toLowerCase()}${opponentProof.slice(1)}.`
+          : "They say the player's presentation leans too heavily on its own version instead of record proof."
+      }`
     : `Counsel for ${opponentPartyName} argues that the player's record is too thin and the disputed facts cut against relief.`;
 
   const strengths = uniqueList([
@@ -536,8 +722,23 @@ export const normalizeCourtResult = ({
     rules,
   });
   const difficultyProfile = getCourtroomDifficultyProfile(caseSession.complexity);
-  const aiReturnedPlayerDelta = typeof aiResult.playerDelta === "number";
-  const aiReturnedOpponentDelta = typeof aiResult.opponentDelta === "number";
+  const validFactText = new Set(
+    [
+      ...(caseSession.factSheet.supportingFacts || []),
+      ...(caseSession.factSheet.timeline || []),
+      ...(caseSession.factSheet.corroboratedFacts || []),
+      ...(caseSession.factSheet.knownFacts || []),
+    ].map((item) => String(item || "").trim())
+  );
+  const validClaimIds = caseSession.factSheet.discoveredClaimIds || [];
+  const validRuleIds = new Set((rules || []).map((rule) => rule.id));
+  const sanitizeCourtFacts = (items = []) =>
+    coerceStringList(items, 4).filter((item) => validFactText.has(item));
+  const sanitizeCourtClaims = (items = []) => sanitizeIdList(items, validClaimIds, 4);
+  const sanitizeCourtRules = (items = []) =>
+    coerceStringList(items, 4).filter((item) => validRuleIds.has(item));
+  const aiReturnedPlayerDelta = typeof aiResult?.playerDelta === "number";
+  const aiReturnedOpponentDelta = typeof aiResult?.opponentDelta === "number";
   const hasPartialCredit = aiReturnedPlayerDelta && hasMeaningfulAdvocacyMove({
     citedFacts: fallback.citedFacts,
     citedRules: fallback.citedRules,
@@ -594,17 +795,17 @@ export const normalizeCourtResult = ({
       hasPartialCredit,
     }),
     citedFacts: Array.isArray(aiResult.citedFacts)
-      ? aiResult.citedFacts
+      ? sanitizeCourtFacts(aiResult.citedFacts)
       : normalizedCounsel.citedFacts.length
       ? normalizedCounsel.citedFacts
       : fallback.citedFacts,
     citedRules: Array.isArray(aiResult.citedRules)
-      ? aiResult.citedRules
+      ? sanitizeCourtRules(aiResult.citedRules)
       : normalizedCounsel.citedRules.length
       ? normalizedCounsel.citedRules
       : fallback.citedRules,
     citedClaimIds: Array.isArray(aiResult.citedClaimIds)
-      ? aiResult.citedClaimIds
+      ? sanitizeCourtClaims(aiResult.citedClaimIds)
       : normalizedCounsel.citedClaimIds.length
       ? normalizedCounsel.citedClaimIds
       : fallback.citedClaimIds,

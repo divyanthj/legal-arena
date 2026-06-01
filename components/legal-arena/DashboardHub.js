@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import * as HeroIcons from "@heroicons/react/24/outline";
 import ButtonAccount from "@/components/ButtonAccount";
 import { useNavigationLoading } from "@/components/NavigationLoadingProvider";
 import apiClient from "@/libs/api";
@@ -146,12 +147,17 @@ const isDefaultHeadshot = (value = "") => getArenaHeadshot(value) === "/images/p
 
 const LeaderboardPortrait = ({ image = "", name = "" }) => {
   const headshot = getArenaHeadshot(image);
+  const fallbackHeadshot = getArenaHeadshot("");
 
   return (
     <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full border border-white/15 bg-white/[0.04] shadow-[0_0_0_3px_rgba(255,255,255,0.025)]">
       <img
         src={headshot}
         alt={`${name || "Counsel"} headshot`}
+        onError={(event) => {
+          event.currentTarget.onerror = null;
+          event.currentTarget.src = fallbackHeadshot;
+        }}
         style={{ objectPosition: "center calc(50% + 1px)" }}
         className={`block h-full w-full object-cover object-center ${
           isDefaultHeadshot(image) ? "scale-[1.62]" : "scale-[1.09]"
@@ -160,6 +166,53 @@ const LeaderboardPortrait = ({ image = "", name = "" }) => {
     </div>
   );
 };
+
+const IconTile = ({ icon: Icon, className = "" }) => (
+  <span
+    className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] text-white/74 ${className}`}
+  >
+    <Icon className="h-5 w-5" aria-hidden="true" />
+  </span>
+);
+
+const getCaseProgress = (caseSession = null) => {
+  if (!caseSession) {
+    return { label: "Not started", percent: 0, nextStep: "Begin client interview" };
+  }
+
+  if (caseSession.status === "courtroom") {
+    return { label: "Courtroom", percent: 75, nextStep: "Argue in court" };
+  }
+
+  if (caseSession.status === "verdict") {
+    return { label: "Verdict ready", percent: 100, nextStep: "Review the ruling" };
+  }
+
+  return { label: "Client interview", percent: 42, nextStep: "Build your fact sheet" };
+};
+
+const gameLoopSteps = [
+  {
+    title: "Interview Client",
+    body: "Ask the right questions to uncover useful facts.",
+    icon: HeroIcons.ChatBubbleLeftRightIcon,
+  },
+  {
+    title: "Build Fact Sheet",
+    body: "Organize facts, evidence, risks, and key issues.",
+    icon: HeroIcons.DocumentTextIcon,
+  },
+  {
+    title: "Argue in Court",
+    body: "Present your argument and challenge the other side.",
+    icon: HeroIcons.ScaleIcon,
+  },
+  {
+    title: "Get Verdict + XP",
+    body: "Receive the ruling, earn XP, and improve your standing.",
+    icon: HeroIcons.ShieldCheckIcon,
+  },
+];
 
 const onboardingSteps = [
   {
@@ -206,6 +259,13 @@ const DashboardOnboardingOverlay = ({ isOpen, onComplete }) => {
   const [targetRect, setTargetRect] = useState(null);
   const [completing, setCompleting] = useState(false);
   const step = onboardingSteps[stepIndex] || onboardingSteps[0];
+
+  useEffect(() => {
+    if (isOpen) {
+      setStepIndex(0);
+      setTargetRect(null);
+    }
+  }, [isOpen]);
 
   const completeTutorial = useCallback(async () => {
     setCompleting(true);
@@ -442,6 +502,7 @@ export default function DashboardHub({
   isAdmin = false,
   userId = "",
   userName = "Counsel",
+  userImage = "",
   userEmail = "",
   hasArenaAccess = false,
 }) {
@@ -455,6 +516,7 @@ export default function DashboardHub({
   const [lawyerSearch, setLawyerSearch] = useState("");
   const [searchedLawyers, setSearchedLawyers] = useState(null);
   const [lawyerSearchLoading, setLawyerSearchLoading] = useState(false);
+  const [mobileCommandOpen, setMobileCommandOpen] = useState(false);
   const [dashboardTutorialCompleted, setDashboardTutorialCompleted] = useState(
     Boolean(onboarding?.dashboardTutorialCompleted)
   );
@@ -481,6 +543,12 @@ export default function DashboardHub({
   const selectedCategoryTitle = selectedCategoryMeta?.title || selectedCategory;
   const currentLeaderboardEntry =
     overallLeaderboard.find((entry) => String(entry.id) === String(userId)) || null;
+  const userPortrait =
+    currentLeaderboardEntry?.image ||
+    userImage ||
+    (/^[a-f\d]{24}$/i.test(String(userId || ""))
+      ? `/api/players/avatar/${userId}`
+      : "");
   const searchedOverallEntries = useMemo(() => {
     const query = lawyerSearch.trim();
     const entries = query ? searchedLawyers || [] : overallLeaderboard.slice(0, 5);
@@ -614,6 +682,680 @@ export default function DashboardHub({
       setActiveTemplateIndex(Math.max(visibleTemplates.length - 1, 0));
     }
   }, [activeTemplateIndex, visibleTemplates.length]);
+
+  const isNewUser = (progression.completedCases || 0) === 0;
+  const lastCaseProgress = getCaseProgress(lastActiveCase);
+  const primaryTemplateId = activeTemplate?.id;
+  const primaryCtaLabel = canResumeLastCase
+    ? "Continue Case"
+    : isNewUser
+      ? "Start Your First Case"
+      : "Start New Case";
+  const heroTitle = canResumeLastCase
+    ? "Continue your case."
+    : isNewUser
+      ? "Win the courtroom. Start your first case."
+      : "Choose your next case.";
+  const heroBody = canResumeLastCase
+    ? `${lastCaseProgress.nextStep} in ${lastActiveCase.title}.`
+    : "Interview your client. Build your case. Argue in court. Get the verdict and earn XP.";
+  const firstCaseProgressPercent = Math.min(
+    100,
+    Math.round(((progression.completedCases || 0) / 1) * 100)
+  );
+  const navItems = [
+    { href: "#activation-home", label: "Home", icon: HeroIcons.HomeIcon },
+    { href: "#recent-cases", label: "My Cases", icon: HeroIcons.ClipboardDocumentListIcon },
+    { href: "#case-library", label: "Case Library", icon: HeroIcons.BookOpenIcon },
+    { href: "#progress", label: "My Progress", icon: HeroIcons.ArrowTrendingUpIcon },
+    { href: "#rankings", label: "Rankings", icon: HeroIcons.TrophyIcon },
+    { href: "#specialty-board", label: "Specialty Board", icon: HeroIcons.ChartBarSquareIcon },
+  ];
+  const unlockCards = [
+    {
+      title: "Earn XP",
+      body: "Win your first case and earn 250 XP.",
+      icon: HeroIcons.SparklesIcon,
+    },
+    {
+      title: "Climb the Rankings",
+      body: "Build your win streak and rise on the board.",
+      icon: HeroIcons.ArrowTrendingUpIcon,
+    },
+    {
+      title: "Public Transcript",
+      body: "Your completed case becomes part of your record.",
+      icon: HeroIcons.DocumentDuplicateIcon,
+    },
+  ];
+  const useActivationDashboard = (progression.completedCases || 0) >= 0;
+
+  if (useActivationDashboard) {
+    return (
+      <main className="arena-app-shell min-h-screen max-w-full overflow-x-hidden px-3 py-3 md:px-6 md:py-6">
+        <section className="mx-auto w-full max-w-[1600px] min-w-0 arena-reveal">
+          <div className="grid min-w-0 gap-4 xl:grid-cols-[240px_minmax(0,1fr)]">
+            <aside className="arena-surface arena-column-bg flex h-full min-w-0 flex-col overflow-visible">
+              <div className="border-b border-white/10 px-4 py-4 md:px-5 md:py-6">
+                <div className="flex items-center justify-between gap-3 xl:block">
+                  <div>
+                    <p className="arena-kicker">LEGAL ARENA</p>
+                    <h2 className="arena-headline mt-2 text-xl uppercase leading-none md:mt-3 md:text-2xl">
+                      Command
+                    </h2>
+                  </div>
+                  <button
+                    type="button"
+                    className="arena-btn-dark inline-flex min-h-0 items-center gap-2 px-3 py-2 text-sm xl:hidden"
+                    onClick={() => setMobileCommandOpen((current) => !current)}
+                    aria-expanded={mobileCommandOpen}
+                    aria-controls="mobile-command-panel"
+                  >
+                    <span>{mobileCommandOpen ? "Hide" : "Menu"}</span>
+                    <HeroIcons.ChevronDownIcon
+                      className={`h-4 w-4 transition ${mobileCommandOpen ? "rotate-180" : ""}`}
+                      aria-hidden="true"
+                    />
+                  </button>
+                </div>
+              </div>
+
+              <div
+                id="mobile-command-panel"
+                className={`${mobileCommandOpen ? "block" : "hidden"} xl:flex xl:flex-1 xl:flex-col`}
+              >
+                <nav className="flex-1 space-y-2 px-3 py-4">
+                  {navItems.map((item, index) => {
+                    const Icon = item.icon;
+
+                    return (
+                      <a
+                        key={item.href}
+                        href={item.href}
+                        className={`flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-semibold transition ${
+                          index === 0
+                            ? "border-white/18 bg-white/[0.08] text-white"
+                            : "border-white/8 bg-white/[0.025] text-white/64 hover:border-white/16 hover:text-white"
+                        }`}
+                        onClick={() => setMobileCommandOpen(false)}
+                      >
+                        <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />
+                        <span>{item.label}</span>
+                      </a>
+                    );
+                  })}
+                  {isAdmin ? (
+                    <Link
+                      href="/dashboard/admin"
+                      className="flex items-center gap-3 rounded-2xl border border-white/8 bg-white/[0.025] px-4 py-3 text-sm font-semibold text-white/64 transition hover:border-white/16 hover:text-white"
+                    >
+                      <HeroIcons.WrenchScrewdriverIcon className="h-5 w-5" aria-hidden="true" />
+                      <span>Admin Lab</span>
+                    </Link>
+                  ) : null}
+                </nav>
+
+                <div className="space-y-4 border-t border-white/10 px-4 py-4">
+                <div className="arena-surface-soft p-4">
+                  <div className="flex items-center gap-3">
+                    <LeaderboardPortrait image={userPortrait} name={userName} />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-white">{userName}</p>
+                      <p className="mt-1 text-xs text-white/52">
+                        {currentLeaderboardEntry
+                          ? `Rank #${currentLeaderboardEntry.rank}`
+                          : "Rookie Advocate"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-4">
+                    <div className="flex items-center justify-between text-xs text-white/58">
+                      <span>Lvl. {Math.max(1, Math.floor((progression.overallXp || 0) / 250) + 1)}</span>
+                      <span>{progression.overallXp || 0} XP</span>
+                    </div>
+                    <div className="mt-2 arena-progress-track">
+                      <div
+                        className="arena-progress-fill"
+                        style={{
+                          width: `${Math.max(8, Math.min(100, ((progression.overallXp || 0) % 250) / 2.5))}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-4 [&_.btn]:w-full [&_.btn]:justify-between [&_.btn]:text-sm">
+                    <ButtonAccount />
+                  </div>
+                </div>
+
+                {isNewUser ? (
+                  <div className="arena-surface-soft p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-white">Complete your first case</p>
+                        <p className="mt-1 text-xs text-white/52">Earn 250 XP</p>
+                      </div>
+                      <HeroIcons.RocketLaunchIcon className="h-5 w-5 text-white/64" aria-hidden="true" />
+                    </div>
+                    <div className="mt-4 arena-progress-track">
+                      <div
+                        className="arena-progress-fill"
+                        style={{ width: `${Math.max(8, firstCaseProgressPercent)}%` }}
+                      />
+                    </div>
+                    <p className="mt-2 text-right text-xs text-white/52">
+                      {progression.completedCases || 0} / 1
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+              </div>
+            </aside>
+
+            <div id="activation-home" className="min-w-0 space-y-4">
+              <section className="arena-surface arena-column-bg overflow-hidden">
+                <div className="grid min-h-[22rem] min-w-0 lg:grid-cols-[minmax(0,0.92fr)_minmax(320px,0.78fr)]">
+                  <div className="relative z-10 min-w-0 p-5 md:p-9">
+                    <p className="text-sm text-white/70">Welcome to Legal Arena, {userName}</p>
+                    <h1 className="arena-headline mt-6 max-w-3xl break-words text-3xl leading-[1.02] sm:text-4xl md:mt-7 md:text-6xl md:leading-[0.96]">
+                      {heroTitle}
+                    </h1>
+                    <p className="mt-5 max-w-xl text-base leading-7 text-white/68">
+                      {heroBody}
+                    </p>
+
+                    <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                      {canResumeLastCase ? (
+                        <Link
+                          href={`/dashboard/cases/${lastActiveCase.slug || lastActiveCase.id}`}
+                          data-onboarding-target="quick-start-case"
+                          className="arena-btn-light inline-flex min-w-0 items-center justify-center gap-3 px-4 py-4 sm:px-6"
+                        >
+                          <span>{primaryCtaLabel}</span>
+                          <HeroIcons.ChevronRightIcon className="h-5 w-5" aria-hidden="true" />
+                        </Link>
+                      ) : (
+                        <button
+                          data-onboarding-target="quick-start-case"
+                          className="arena-btn-light inline-flex min-w-0 items-center justify-center gap-3 px-4 py-4 sm:px-6"
+                          onClick={() => handleCreateCase(primaryTemplateId)}
+                          disabled={creating || !activeTemplate?.unlocked}
+                        >
+                          {creating ? <span className="loading loading-spinner loading-xs" /> : null}
+                          <span>{primaryCtaLabel}</span>
+                          <HeroIcons.ChevronRightIcon className="h-5 w-5" aria-hidden="true" />
+                        </button>
+                      )}
+                      <Link
+                        href="#case-library"
+                        className="arena-btn-dark inline-flex min-w-0 items-center justify-center px-4 py-4 sm:px-6"
+                      >
+                        Browse Case Library
+                      </Link>
+                    </div>
+                    <p className="mt-4 flex items-center gap-2 text-sm text-white/52">
+                      <HeroIcons.ShieldCheckIcon className="h-4 w-4" aria-hidden="true" />
+                      No commitment. Just your first step.
+                    </p>
+                  </div>
+
+                  <div className="relative min-h-[12rem] overflow-hidden border-t border-white/10 sm:min-h-[18rem] lg:border-l lg:border-t-0">
+                    <img
+                      src="/images/court.jpg"
+                      alt=""
+                      className="absolute inset-0 h-full w-full object-cover opacity-46"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-r from-black via-black/45 to-black/10 lg:bg-gradient-to-l" />
+                  </div>
+                </div>
+              </section>
+
+              <section className="arena-surface" aria-labelledby="dashboard-how-it-works">
+                <div className="p-4 md:p-6">
+                  <p className="arena-kicker">How it works</p>
+                  <h2 id="dashboard-how-it-works" className="sr-only">
+                    How Legal Arena works
+                  </h2>
+                  <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    {gameLoopSteps.map((step, index) => (
+                      <div key={step.title} className="arena-surface-soft flex min-w-0 gap-3 p-4 sm:gap-4">
+                        <IconTile icon={step.icon} />
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-white">
+                            {index + 1}. {step.title}
+                          </p>
+                          <p className="mt-2 text-sm leading-6 text-white/58">{step.body}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </section>
+
+              <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.55fr)_minmax(300px,0.68fr)]">
+                <section id="case-library" data-onboarding-target="case-library" className="arena-surface min-w-0">
+                  <div className="p-4 md:p-6">
+                    <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+                      <div className="min-w-0">
+                        <p className="arena-kicker">Recommended for you</p>
+                        <h2 className="arena-headline mt-2 break-words text-2xl">Beginner-friendly case</h2>
+                      </div>
+                      <p className="max-w-full break-words text-xs uppercase tracking-[0.12em] text-white/42">
+                        {carouselStatus}
+                      </p>
+                    </div>
+
+                    <div
+                      data-onboarding-target="case-categories"
+                      className="mt-5 flex flex-wrap gap-2"
+                    >
+                      {categories.map((category) => (
+                        <button
+                          key={category.slug}
+                          className={`badge h-auto min-h-8 max-w-full cursor-pointer whitespace-normal border px-2.5 py-2 text-center text-xs leading-tight transition sm:text-sm ${
+                            selectedCategory === category.slug
+                              ? "arena-status arena-status-favorable"
+                              : "arena-pill"
+                          }`}
+                          onClick={() => setSelectedCategory(category.slug)}
+                        >
+                          {category.title}
+                        </button>
+                      ))}
+                    </div>
+
+                    {activeTemplate ? (
+                      <div className="mt-5 overflow-hidden rounded-[1.35rem] border border-white/10 bg-white/[0.025]">
+                        <div className="grid min-w-0 md:grid-cols-[minmax(0,1fr)_220px]">
+                          <div className="min-w-0 p-4 sm:p-5">
+                            <span className="badge badge-outline border-white/15 text-white/80">
+                              {activeTemplate.unlocked ? "Beginner Friendly" : "Locked"}
+                            </span>
+                            <h3 className="mt-4 flex min-h-[4.5rem] items-start break-words text-xl font-semibold leading-tight text-white sm:min-h-[5.5rem] sm:text-2xl">
+                              {activeTemplate.title}
+                            </h3>
+
+                            <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                              <div className="arena-surface-soft p-3">
+                                <p className="text-xs text-white/45">Difficulty</p>
+                                <p className="mt-1 text-sm font-semibold text-emerald-300">
+                                  {activeTemplate.complexity <= 1 ? "Easy" : `Tier ${activeTemplate.complexity}`}
+                                </p>
+                              </div>
+                              <div className="arena-surface-soft p-3">
+                                <p className="text-xs text-white/45">Est. Time</p>
+                                <p className="mt-1 text-sm font-semibold text-white">15-20 min</p>
+                              </div>
+                              <div className="arena-surface-soft p-3">
+                                <p className="text-xs text-white/45">Skills</p>
+                                <p className="mt-1 break-words text-sm font-semibold text-white">
+                                  {activeTemplate.practiceArea}
+                                </p>
+                              </div>
+                            </div>
+
+                            <button
+                              className="arena-btn-light mt-5 inline-flex w-full min-w-0 items-center justify-center gap-3 px-4 py-4 sm:px-5"
+                              onClick={() => handleCreateCase(activeTemplate.id)}
+                              disabled={creating || !activeTemplate.unlocked}
+                            >
+                              {creating ? <span className="loading loading-spinner loading-xs" /> : null}
+                              <span>{isNewUser ? "Begin Client Interview" : "Start This Case"}</span>
+                              <HeroIcons.ChevronRightIcon className="h-5 w-5" aria-hidden="true" />
+                            </button>
+                            <p className="mt-4 text-sm text-white/52">
+                              New here? This case is designed to teach the core loop.
+                            </p>
+                            <div className="mt-4 flex items-center justify-between gap-3 md:hidden">
+                              <button
+                                type="button"
+                                className="arena-btn-dark min-h-0 px-3 py-2"
+                                onClick={goToPreviousTemplate}
+                                disabled={!canNavigateTemplates}
+                                aria-label="Show previous case"
+                              >
+                                &lt;
+                              </button>
+                              <p className="min-w-0 text-center text-xs text-white/52">
+                                {carouselStatus}
+                              </p>
+                              <button
+                                type="button"
+                                className="arena-btn-dark min-h-0 px-3 py-2"
+                                onClick={goToNextTemplate}
+                                disabled={!canNavigateTemplates}
+                                aria-label="Show next case"
+                              >
+                                &gt;
+                              </button>
+                            </div>
+                          </div>
+                          <div
+                            className="relative hidden min-h-[14rem] overflow-hidden border-t border-white/10 md:flex md:flex-col md:justify-center md:border-l md:border-t-0 md:p-5"
+                            style={{
+                              backgroundImage: [
+                                "linear-gradient(180deg, rgba(0,0,0,0.72), rgba(0,0,0,0.88))",
+                                "url('/images/office.jpg')",
+                              ].join(", "),
+                              backgroundPosition: "center, center",
+                              backgroundRepeat: "no-repeat, no-repeat",
+                              backgroundSize: "cover, cover",
+                            }}
+                          >
+                            <div className="relative z-10">
+                              <p className="arena-kicker">Matchup</p>
+                              <div className="mt-5 space-y-5">
+                                <div>
+                                  <p className="text-xs uppercase tracking-[0.16em] text-white/42">
+                                    Plaintiff
+                                  </p>
+                                  <p className="mt-2 break-words text-lg font-semibold leading-tight text-white">
+                                    {activeTemplate.plaintiffName || activeTemplate.clientName || "Plaintiff"}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-3 text-white/35">
+                                  <div className="h-px flex-1 bg-white/10" />
+                                  <span className="text-xs font-semibold uppercase tracking-[0.16em]">
+                                    vs
+                                  </span>
+                                  <div className="h-px flex-1 bg-white/10" />
+                                </div>
+                                <div>
+                                  <p className="text-xs uppercase tracking-[0.16em] text-white/42">
+                                    Defendant
+                                  </p>
+                                  <p className="mt-2 break-words text-lg font-semibold leading-tight text-white">
+                                    {activeTemplate.defendantName || activeTemplate.opponentName || "Defendant"}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="hidden flex-col items-stretch justify-between gap-3 border-t border-white/10 px-4 py-4 sm:flex-row sm:items-center sm:px-5 md:flex">
+                          <button
+                            type="button"
+                            className="arena-btn-dark min-h-0 px-3 py-2"
+                            onClick={goToPreviousTemplate}
+                            disabled={!canNavigateTemplates}
+                            aria-label="Show previous case"
+                          >
+                            &lt;
+                          </button>
+                          <p className="min-w-0 text-center text-sm text-white/58">
+                            {getTemplateUnlockMessage(activeTemplate, browserTimeZone)}
+                          </p>
+                          <button
+                            type="button"
+                            className="arena-btn-dark min-h-0 px-3 py-2"
+                            onClick={goToNextTemplate}
+                            disabled={!canNavigateTemplates}
+                            aria-label="Show next case"
+                          >
+                            &gt;
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="arena-surface-soft mt-5 border-dashed p-8 text-center">
+                        <p className="text-lg font-semibold text-white">No cases available</p>
+                        <p className="mt-2 text-sm text-white/62">
+                          Check back after new disputes are added to the case library.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </section>
+
+                <section id="progress" className="arena-surface min-w-0">
+                  <div className="p-4 md:p-6">
+                    <p className="arena-kicker">What you&apos;ll unlock</p>
+                    <div className="mt-5 space-y-3">
+                      {unlockCards.map((card) => (
+                        <div key={card.title} className="arena-surface-soft flex min-w-0 gap-3 p-4">
+                          <IconTile icon={card.icon} />
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-white">{card.title}</p>
+                            <p className="mt-1 text-sm leading-6 text-white/55">{card.body}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="mt-6 text-sm leading-7 text-white/56">
+                      Every case you win makes you a stronger advocate.
+                    </p>
+                  </div>
+                </section>
+
+                <section className="arena-surface min-w-0">
+                  <div className="p-4 md:p-6">
+                    <p className="arena-kicker">Continue where you left off</p>
+                    {lastActiveCase ? (
+                      <div className="mt-5 arena-surface-soft p-4">
+                        <div className="flex flex-col items-start justify-between gap-4 sm:flex-row">
+                          <div className="min-w-0">
+                            <span className={`badge border arena-status ${severityClass[statusSeverity[lastActiveCase.status] || "neutral"]}`}>
+                              {lastCaseProgress.label}
+                            </span>
+                            <h3 className="mt-4 text-lg font-semibold leading-tight text-white">
+                              {lastActiveCase.title}
+                            </h3>
+                            <p className="mt-2 text-sm text-white/52">
+                              Updated {formatDate(lastActiveCase.updatedAt)}
+                            </p>
+                          </div>
+                          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border border-white/12 bg-white/[0.03] text-sm font-semibold text-white">
+                            {lastCaseProgress.percent}%
+                          </div>
+                        </div>
+                        <div className="mt-5 arena-progress-track">
+                          <div
+                            className="arena-progress-fill"
+                            style={{ width: `${Math.max(8, lastCaseProgress.percent)}%` }}
+                          />
+                        </div>
+                        <Link
+                          href={`/dashboard/cases/${lastActiveCase.slug || lastActiveCase.id}`}
+                          className="arena-btn-dark mt-5 inline-flex w-full items-center justify-center gap-3 px-5 py-3"
+                        >
+                          <span>{canResumeLastCase ? "Continue Case" : "View Case"}</span>
+                          <HeroIcons.ChevronRightIcon className="h-5 w-5" aria-hidden="true" />
+                        </Link>
+                      </div>
+                    ) : (
+                      <div className="mt-5 arena-surface-soft border-dashed p-5 text-sm leading-7 text-white/62">
+                        Your first case will appear here as soon as you begin.
+                      </div>
+                    )}
+
+                    <button
+                      type="button"
+                      className="mt-4 block w-full overflow-hidden rounded-[1.35rem] border border-white/10 bg-white/[0.025] p-4 text-left transition hover:border-white/20"
+                      onClick={() => setDashboardTutorialCompleted(false)}
+                    >
+                      <p className="text-sm font-semibold text-white">New to Legal Arena?</p>
+                      <p className="mt-1 text-sm text-white/58">Take the quick tour.</p>
+                    </button>
+                  </div>
+                </section>
+              </div>
+
+              <section
+                id="recent-cases"
+                data-onboarding-target="recent-matters"
+                className="arena-surface"
+              >
+                <div className="p-4 md:p-6">
+                  <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+                    <div>
+                      <p className="arena-kicker">Your Cases</p>
+                      <h2 className="arena-headline mt-2 text-2xl">Saved transcripts and rulings</h2>
+                    </div>
+                    <span className="text-xs uppercase tracking-[0.16em] text-white/42">
+                      {initialCases.length} tracked cases
+                    </span>
+                  </div>
+
+                  <div className="mt-5 grid gap-3 lg:grid-cols-2">
+                    {initialCases.length === 0 ? (
+                      <div className="arena-surface-soft border-dashed p-8 text-center lg:col-span-2">
+                        <p className="text-lg font-semibold text-white">No cases opened yet</p>
+                        <p className="mt-2 text-sm text-white/62">
+                          Start with the recommended case and the client interview will open.
+                        </p>
+                      </div>
+                    ) : (
+                      initialCases.slice(0, 6).map((item) => {
+                        const caseProgress = getCaseProgress(item);
+                        const caseSeverity = statusSeverity[item.status] || "neutral";
+
+                        return (
+                          <Link
+                            key={item.id}
+                            href={`/dashboard/cases/${item.slug || item.id}`}
+                            className="arena-surface-soft block p-4 transition hover:-translate-y-0.5 hover:border-white/20"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <span className={`badge border arena-status ${severityClass[caseSeverity]}`}>
+                                  {statusLabel[item.status] || "In Progress"}
+                                </span>
+                                <h3 className="mt-3 break-words text-base font-semibold text-white">
+                                  {item.title}
+                                </h3>
+                                <p className="mt-2 text-sm text-white/52">
+                                  {item.primaryCategory} | Complexity {item.complexity}
+                                </p>
+                              </div>
+                              <span className="text-sm font-semibold text-white/70">
+                                {caseProgress.percent}%
+                              </span>
+                            </div>
+                          </Link>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              </section>
+
+              <div id="rankings" data-onboarding-target="leaderboards" className="grid min-w-0 gap-4 xl:grid-cols-2">
+                <section className="arena-surface min-w-0">
+                  <div className="p-4 md:p-6">
+                    <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-end">
+                      <div className="min-w-0">
+                        <p className="arena-kicker">Rankings</p>
+                        <h2 className="arena-headline mt-2 text-2xl">Overall board</h2>
+                      </div>
+                      <p className="text-sm font-semibold text-white/70">
+                        {currentLeaderboardEntry ? `#${currentLeaderboardEntry.rank}` : "Unranked"}
+                      </p>
+                    </div>
+                    <div className="mt-5 space-y-2">
+                      {isNewUser ? (
+                        <div className="arena-surface-soft p-5 text-sm leading-7 text-white/62">
+                          Complete your first case to start building a public ranking.
+                        </div>
+                      ) : searchedOverallEntries.length > 0 ? (
+                        searchedOverallEntries.slice(0, 5).map((entry) => (
+                          <Link
+                            key={entry.id}
+                            href={`/dashboard/players/${entry.id}`}
+                            className="arena-surface-soft flex items-center justify-between gap-3 px-4 py-3 transition hover:-translate-y-0.5 hover:border-white/20"
+                          >
+                            <div className="flex min-w-0 items-center gap-3">
+                              <LeaderboardPortrait image={entry.image} name={entry.name} />
+                              <div className="min-w-0">
+                                <p className="truncate font-semibold text-white">
+                                  <span className="mr-2 text-white/55">#{entry.rank}</span>
+                                  {entry.name}
+                                </p>
+                                <p className="mt-1 text-sm text-white/50">
+                                  {entry.completedCases} cases | {entry.wins} wins
+                                </p>
+                              </div>
+                            </div>
+                            <span className="text-lg font-semibold text-emerald-300">
+                              {entry.overallRating}
+                            </span>
+                          </Link>
+                        ))
+                      ) : (
+                        <div className="arena-surface-soft p-4 text-sm text-white/62">
+                          Rankings will populate after completed cases.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </section>
+
+                <section id="specialty-board" className="arena-surface min-w-0">
+                  <div className="p-4 md:p-6">
+                    <p className="arena-kicker">Specialty Board</p>
+                    <h2 className="arena-headline mt-2 text-2xl">{selectedCategoryTitle}</h2>
+                    <div className="mt-5 space-y-2">
+                      {isNewUser ? (
+                        <div className="arena-surface-soft p-5 text-sm leading-7 text-white/62">
+                          Win a case in this category to unlock stronger specialty progress.
+                        </div>
+                      ) : topCategoryEntries.length > 0 ? (
+                        topCategoryEntries.map((entry) => (
+                          <Link
+                            key={`${selectedCategory}-${entry.id}`}
+                            href={`/dashboard/players/${entry.id}`}
+                            className="arena-surface-soft flex items-center justify-between gap-3 px-4 py-3 transition hover:-translate-y-0.5 hover:border-white/20"
+                          >
+                            <div className="flex min-w-0 items-center gap-3">
+                              <LeaderboardPortrait image={entry.image} name={entry.name} />
+                              <div className="min-w-0">
+                                <p className="truncate font-semibold text-white">
+                                  <span className="mr-2 text-white/55">{entry.rank}</span>
+                                  {entry.name}
+                                </p>
+                                <p className="mt-1 text-sm text-white/50">
+                                  {entry.category?.completedCases || 0} completed
+                                </p>
+                              </div>
+                            </div>
+                            <span className="text-lg font-semibold text-white">
+                              {entry.category?.rating || 1000}
+                            </span>
+                          </Link>
+                        ))
+                      ) : (
+                        <div className="arena-surface-soft p-4 text-sm text-white/62">
+                          Category rankings will populate after more cases land in this track.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </section>
+              </div>
+            </div>
+          </div>
+        </section>
+        <DashboardOnboardingOverlay
+          isOpen={!dashboardTutorialCompleted}
+          onComplete={() => setDashboardTutorialCompleted(true)}
+        />
+        {showPaywallModal ? (
+          <dialog className="modal modal-open">
+            <div className="modal-box max-h-none max-w-3xl overflow-visible bg-transparent p-0 shadow-none">
+              <DevelopmentAccessPanel
+                email={userEmail}
+                onClose={() => setShowPaywallModal(false)}
+              />
+            </div>
+            <form method="dialog" className="modal-backdrop">
+              <button type="button" onClick={() => setShowPaywallModal(false)}>
+                close
+              </button>
+            </form>
+          </dialog>
+        ) : null}
+      </main>
+    );
+  }
 
   return (
     <main className="arena-app-shell min-h-screen overflow-x-hidden px-4 py-4 md:px-6 md:py-6">

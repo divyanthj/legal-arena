@@ -11,6 +11,12 @@ import {
 } from "../templateInterview.js";
 import { buildStoryContextForSide, getCanonicalStoryWorld } from "../storyWorld.js";
 import { sanitizeFactSheet, sanitizeFactSheetList } from "../factSheetSanitizer.js";
+import {
+  hasThirdPersonSelfReference,
+  normalizePartySpeechToFirstPerson,
+} from "./voice.js";
+
+export { hasThirdPersonSelfReference, normalizePartySpeechToFirstPerson };
 
 export const uniqueList = (items = []) =>
   [...new Set(items.filter(Boolean).map((item) => String(item).trim()).filter(Boolean))];

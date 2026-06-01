@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
-import { signOut, useSession } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { Crisp } from "crisp-sdk-web";
 import { SessionProvider } from "next-auth/react";
 import NextTopLoader from "nextjs-toploader";
@@ -65,11 +65,7 @@ const SessionGuard = () => {
         const payload = await response.json();
 
         if (!isCancelled && payload?.authenticated && !payload?.active) {
-          await signOut({
-            callbackUrl: `${config.auth.loginUrl}?callbackUrl=${encodeURIComponent(
-              config.auth.callbackUrl
-            )}`,
-          });
+          console.warn("authenticated session has no matching active user profile");
         }
       } catch (error) {
         console.error("session verification failed", error);

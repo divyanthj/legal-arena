@@ -381,9 +381,6 @@ const fuzzyLeaderboardNameMatch = (name = "", query = "") => {
 export const listOverallLeaderboard = async ({ search = "", limit = null } = {}) => {
   await connectMongo();
 
-  const users = await User.find({});
-  await Promise.all(users.map((user) => ensureUserProfile(user._id)));
-
   const refreshedUsers = await User.find({}).sort({
     "progression.overallRating": -1,
     "progression.completedCases": -1,
@@ -414,9 +411,6 @@ export const listOverallLeaderboard = async ({ search = "", limit = null } = {})
 
 export const listCategoryLeaderboard = async (categorySlug) => {
   await connectMongo();
-
-  const users = await User.find({});
-  await Promise.all(users.map((user) => ensureUserProfile(user._id)));
 
   return (await User.find({}))
     .map((user) => buildPublicLeaderboardEntry(user, categorySlug))
