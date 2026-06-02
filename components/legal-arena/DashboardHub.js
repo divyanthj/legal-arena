@@ -224,6 +224,12 @@ const onboardingSteps = [
     body: "This is the fast lane into your first matter. Click it when you are ready to meet the facts, ask sharp questions, and begin happy lawyering.",
   },
   {
+    target: "player-brief",
+    eyebrow: "Your Profile",
+    title: "Open your lawyer page",
+    body: "This player brief is a shortcut to your lawyer profile page. Click it to review your portrait, record, public matters, and specialty progress.",
+  },
+  {
     target: "case-categories",
     eyebrow: "Choose a Track",
     title: "Filter by specialty",
@@ -929,8 +935,13 @@ export default function DashboardHub({
                     />
                     <div className="absolute inset-0 bg-gradient-to-r from-black via-black/45 to-black/10 lg:bg-gradient-to-l" />
                     <div className="relative z-10 flex h-full min-h-[18rem] items-center p-5 sm:min-h-[20rem] md:p-7">
-                      <div className="w-full rounded-[1.35rem] border border-white/10 bg-black/40 p-4 shadow-[0_24px_70px_rgba(0,0,0,0.46)] backdrop-blur-md sm:p-5">
-                        <div className="flex min-w-0 items-center gap-4">
+                      <Link
+                        href={`/dashboard/players/${userId}`}
+                        data-onboarding-target="player-brief"
+                        className="block w-full rounded-[1.35rem] border border-white/10 bg-black/40 p-4 text-white shadow-[0_24px_70px_rgba(0,0,0,0.46)] backdrop-blur-md transition hover:scale-[1.01] hover:border-white/18 focus:outline-none focus:ring-2 focus:ring-white/35 sm:p-5"
+                        aria-label="Open your lawyer profile page"
+                      >
+                        <div className="flex min-w-0 flex-col items-center gap-3 text-center sm:flex-row sm:justify-center sm:gap-4">
                           <LeaderboardPortrait
                             image={userPortrait}
                             name={userName}
@@ -980,7 +991,7 @@ export default function DashboardHub({
                         <p className="mt-5 rounded-xl border border-emerald-300/10 bg-emerald-300/10 px-4 py-3 text-sm leading-6 text-emerald-50/90">
                           {playerEncouragementNote}
                         </p>
-                      </div>
+                      </Link>
                     </div>
                   </div>
                 </div>
