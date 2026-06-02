@@ -81,6 +81,23 @@ const hasMeaningfulAdvocacyMove = ({
   addressesDispute ||
   String(argument || "").trim().length >= 180;
 
+const cleanCourtroomSpeechFragment = (value = "") =>
+  stripClaimScaffolding(humanizeClaimText(value))
+    .replace(/^the\s+evidence\s+will\s+show\s+that\s+/i, "")
+    .replace(/^(the\s+)?(plaintiff|tenant|claimant|client|defendant|landlord)\s+will\s+(argue|claim|contend)\s+that\s+/i, "")
+    .replace(/^[a-z][a-z\s.'-]*'s\s+(view|position)\s+is\s+that\s+/i, "")
+    .replace(/\bprepared\s+(case\s+)?file\b/gi, "evidence")
+    .replace(/\bplayer'?s\s+presentation\b/gi, "opposing counsel's argument")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+const lowerCourtroomFragment = (value = "") => {
+  const text = cleanCourtroomSpeechFragment(value);
+  if (!text) return "";
+  if (/^[A-Z]\b/.test(text)) return text;
+  return `${text.charAt(0).toLowerCase()}${text.slice(1)}`;
+};
+
 const proofTextCorpus = (factSheet = {}) =>
   [
     ...(factSheet.risks || []),
@@ -587,14 +604,14 @@ export const buildCourtroomFallback = ({ caseSession, argument, rules, template 
   const opponentPartyName = getPartyName(safeTemplate, opponentSide);
 
   const opponentResponse = opponentClaim
-    ? `Counsel for ${opponentPartyName} argues that ${opponentClaim.charAt(0).toLowerCase()}${opponentClaim.slice(
-        1
+    ? `Your Honor, ${opponentPartyName}'s answer is that ${lowerCourtroomFragment(
+        opponentClaim
       )}. ${
         opponentProof
-          ? `They point to their prepared file on ${opponentProof.charAt(0).toLowerCase()}${opponentProof.slice(1)}.`
-          : "They say the player's presentation leans too heavily on its own version instead of record proof."
+          ? `The evidence also supports ${lowerCourtroomFragment(opponentProof)}.`
+          : "The opposing argument asks the Court to accept one side's account without enough reliable proof."
       }`
-    : `Counsel for ${opponentPartyName} argues that the player's record is too thin and the disputed facts cut against relief.`;
+    : `Your Honor, ${opponentPartyName} submits that the proof is too thin and the disputed facts cut against relief.`;
 
   const strengths = uniqueList([
     corroboratedHits > 0

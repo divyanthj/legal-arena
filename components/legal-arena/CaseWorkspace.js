@@ -770,6 +770,13 @@ export default function CaseWorkspace({
     return `${trimmed.charAt(0).toUpperCase()}${trimmed.slice(1)}`;
   };
 
+  const lowerSentenceContinuation = (value = "") => {
+    const trimmed = String(value || "").trim();
+    if (!trimmed) return "";
+    if (/^[A-Z]\b/.test(trimmed)) return trimmed;
+    return `${trimmed.charAt(0).toLowerCase()}${trimmed.slice(1)}`;
+  };
+
   const punctuateSentence = (value = "") => {
     const trimmed = String(value || "").trim();
     if (!trimmed) return "";
@@ -787,9 +794,22 @@ export default function CaseWorkspace({
     return punctuateSentence(
       `For that reason, ${capitalizeSentenceStart(
         sentenceCasePartyName(partyName)
-      )} asks for ${trimmedRelief}`
+      )} asks for ${lowerSentenceContinuation(trimmedRelief).replace(
+        /^return of\b/i,
+        "the return of"
+      )}`
     );
   };
+
+  const courtFactText = (value = "") =>
+    String(value || "")
+      .trim()
+      .replace(/^the\s+evidence\s+will\s+show\s+that\s+/i, "")
+      .replace(/^the\s+fact\s+sheet\s+supports\s+this\s+point:\s*/i, "")
+      .replace(/^(the\s+)?(plaintiff|tenant|claimant|client|defendant|landlord)\s+will\s+(argue|claim|contend)\s+that\s+/i, "")
+      .replace(/^[a-z][a-z\s.'-]*'s\s+view\s+is\s+that\s+/i, "")
+      .replace(/\s{2,}/g, " ")
+      .trim();
 
   const appendArgumentSnippet = (snippet) => {
     const text = String(snippet || "").trim();
@@ -818,10 +838,18 @@ export default function CaseWorkspace({
 
     return [
       `May it please the Court. I represent ${sentenceCasePartyName(playerPartyName)}.`,
-      theory ? `Our position is straightforward: ${theory}` : "",
-      strongestFact ? `The record starts with this point: ${strongestFact}` : "",
-      rule ? `The governing lens is ${rule.title}: ${rule.principle}` : "",
-      liveRisk ? `I also want to address the main weakness directly: ${liveRisk}` : "",
+      theory ? punctuateSentence(courtFactText(theory)) : "",
+      strongestFact
+        ? `The evidence supports that ${lowerSentenceContinuation(
+            courtFactText(strongestFact)
+          )}`
+        : "",
+      rule ? `Under ${rule.title}, ${rule.principle}` : "",
+      liveRisk
+        ? `The other side may point to ${lowerSentenceContinuation(
+            courtFactText(liveRisk)
+          )}, but that does not defeat the relief requested.`
+        : "",
       reliefSnippet({ partyName: playerPartyName, relief }),
     ]
       .filter(Boolean)
@@ -835,7 +863,9 @@ export default function CaseWorkspace({
       factSheetDraft.timeline
     );
 
-    return fact ? `The fact sheet supports this point: ${fact}` : "";
+    return fact
+      ? `The evidence supports that ${lowerSentenceContinuation(courtFactText(fact))}`
+      : "";
   };
 
   const riskResponseSnippet = () => {
@@ -847,15 +877,23 @@ export default function CaseWorkspace({
     }
 
     return support
-      ? `The weakness I need to confront is this: ${risk}\nEven with that pressure, the stronger point for my side is: ${support}`
-      : `The weakness I need to confront is this: ${risk}`;
+      ? `The other side may emphasize ${lowerSentenceContinuation(
+          courtFactText(risk)
+        )}.\nBut the stronger point for my client is that ${lowerSentenceContinuation(
+          courtFactText(support)
+        )}`
+      : `The other side may emphasize ${lowerSentenceContinuation(
+          courtFactText(risk)
+        )}, but that does not carry the day.`;
   };
 
   const proofGapSnippet = () => {
     const gap = firstDraftItem(factSheetDraft.missingEvidence);
 
     return gap
-      ? `The proof gap is real: ${gap}\nSo I am asking the Court to weigh only what the current record actually supports.`
+      ? `The Court need not speculate about ${lowerSentenceContinuation(
+          courtFactText(gap)
+        )}.\nOn the evidence before the Court, the requested relief is still supported.`
       : "";
   };
 

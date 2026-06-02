@@ -939,7 +939,7 @@ const buildSubmissionFeedbackBackfill = (submission = {}) => {
     } else if (citedRules.length) {
       strengths.push(`Your argument engaged ${citedRules.slice(0, 2).join(", ")}.`);
     } else if (playerDelta > 0) {
-      strengths.push("Your argument added pressure for your side in this round.");
+      strengths.push("Your argument helped your side in this round.");
     }
   }
 
@@ -947,7 +947,7 @@ const buildSubmissionFeedbackBackfill = (submission = {}) => {
     if (playerDelta < opponentDelta && benchSignal) {
       weaknesses.push(benchSignal);
     } else if (opponentDelta > playerDelta) {
-      weaknesses.push("The opposing side gained more pressure from this exchange.");
+      weaknesses.push("The opposing side made the stronger showing in this exchange.");
     } else if (!citedRules.length) {
       weaknesses.push("The argument needed a clearer lawbook anchor.");
     }

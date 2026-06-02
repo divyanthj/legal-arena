@@ -235,7 +235,7 @@ export const buildDesiredReliefForSide = (template, side) =>
 export const buildTheoryForSide = (template, side) =>
   side === "client"
     ? template.starterTheory
-    : `${template.opponentName} should prevail because the record leaves enough dispute, credibility pressure, or proof gaps to defeat ${template.clientName}'s request for relief.`;
+    : `${template.opponentName} should prevail because ${template.clientName} has not proven the facts needed for the requested relief.`;
 
 export const buildOverviewForSide = (template, side) => {
   if (side === "client") {
@@ -600,10 +600,27 @@ export const hasOpponentPraise = (value = "") =>
     /\bopposing counsel(?:'s)?\s+(?:argument|point|position)\s+is\s+(?:good|great|strong|solid|fair|valid|compelling|persuasive)\b/i,
   ].some((pattern) => pattern.test(String(value || "")));
 
+export const hasCourtroomMetaLanguage = (value = "") =>
+  [
+    /\bprepared\s+(case\s+)?file\b/i,
+    /\bpublic\s+case\s+file\b/i,
+    /\bfact\s+sheet\b/i,
+    /\bproof\s+gaps?\b/i,
+    /\bplayer'?s?\s+(argument|presentation|side|record)\b/i,
+    /\bgame\b/i,
+    /\bscor(?:e|ing)\b/i,
+    /\bpressure\b/i,
+    /\bstrengths?\b/i,
+    /\bweakness(?:es)?\b/i,
+    /\bhidden\b/i,
+    /\binternal\b/i,
+    /\bmetadata\b/i,
+  ].some((pattern) => pattern.test(String(value || "")));
+
 export const normalizeOpponentResponse = (value, fallback = "") => {
   const response = coerceString(value);
 
-  if (!response || hasOpponentPraise(response)) {
+  if (!response || hasOpponentPraise(response) || hasCourtroomMetaLanguage(response)) {
     return fallback;
   }
 

@@ -709,6 +709,8 @@ export const runCourtroomRound = async ({ caseSession, argument, userId }) => {
       stage: "courtroom",
       opponentResponseRules: [
         "Write the opponentResponse as opposing counsel's courtroom argument only.",
+        "Make opponentResponse sound like counsel speaking aloud to the judge. Use courtroom advocacy, not product, coaching, dossier, or internal case-analysis language.",
+        "Do not mention the fact sheet, prepared case file, public case file, proof gaps, player, game, scoring, pressure, strengths, weaknesses, hidden data, or internal records as labels. Say evidence, testimony, documents, burden, record, counsel, client, or Court instead.",
         "Do not start with praise, compliments, validation, or debate-club etiquette.",
         "Do not say the player's argument is good, strong, compelling, persuasive, fair, valid, or well argued.",
         "Do not coach the player or explain how they could improve.",

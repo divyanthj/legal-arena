@@ -316,7 +316,7 @@ const buildStarterTheoryForSide = (template, side) => {
     return template.starterTheory;
   }
 
-  return `${template.opponentName} should prevail because the record leaves enough dispute, credibility pressure, or proof gaps to defeat ${template.clientName}'s request for relief.`;
+  return `${template.opponentName} should prevail because ${template.clientName} has not proven the facts needed for the requested relief.`;
 };
 
 const buildOpeningStatementForSide = (template, side) => {
@@ -386,6 +386,55 @@ const punctuateSentence = (value = "") => {
   return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
 };
 
+const stripTerminalPunctuation = (value = "") =>
+  String(value || "")
+    .trim()
+    .replace(/[.!?]+$/g, "")
+    .trim();
+
+const normalizeCourtTheory = (value = "") => {
+  const text = stripTerminalPunctuation(value);
+  if (!text) return "";
+
+  if (/\bwill\s+(argue|claim|contend)\b/i.test(text)) {
+    const plaintiffPosition = text
+      .split(/\s*,?\s+while\s+/i)[0]
+      .replace(/^(the\s+)?(plaintiff|tenant|claimant|client)\s+will\s+(argue|claim|contend)\s+that\s+/i, "")
+      .replace(/^(we|our side)\s+will\s+(argue|claim|contend)\s+that\s+/i, "")
+      .trim();
+
+    if (plaintiffPosition) {
+      return punctuateSentence(
+        `This case is about ${lowerSentenceContinuation(plaintiffPosition)}`
+      );
+    }
+  }
+
+  return punctuateSentence(text);
+};
+
+const normalizeOpeningClaim = (value = "") =>
+  stripTerminalPunctuation(value)
+    .replace(/^the\s+evidence\s+will\s+show\s+that\s+/i, "")
+    .replace(/^(the\s+)?(plaintiff|tenant|claimant|client)\s+will\s+(argue|claim|contend)\s+that\s+/i, "")
+    .replace(/^(we|our side)\s+will\s+(argue|claim|contend)\s+that\s+/i, "")
+    .replace(/^[a-z][a-z\s.'-]*'s\s+view\s+is\s+that\s+/i, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+const isReliefLikeClaim = (value = "") =>
+  /\b(asks?|seeks?|requests?|wants?)\b/i.test(value) &&
+  /\b(return|deposit|relief|damages|costs?|fees?|payment|refund|award)\b/i.test(value);
+
+const buildEvidenceSentence = (claim = "") => {
+  const normalizedClaim = normalizeOpeningClaim(claim);
+  if (!normalizedClaim || isReliefLikeClaim(normalizedClaim)) return "";
+
+  return punctuateSentence(
+    `The evidence will show ${lowerSentenceContinuation(normalizedClaim)}`
+  );
+};
+
 const buildReliefSentence = ({ partyName, requestedRelief }) => {
   const relief = String(requestedRelief || "").trim();
   if (!relief) return "";
@@ -394,8 +443,12 @@ const buildReliefSentence = ({ partyName, requestedRelief }) => {
     return punctuateSentence(relief);
   }
 
+  const reliefObject = lowerSentenceContinuation(relief).replace(/^return of\b/i, "the return of");
+
   return punctuateSentence(
-    `${capitalizeSentenceStart(sentenceCasePartyName(partyName))} asks the Court for ${relief}`
+    `${capitalizeSentenceStart(
+      sentenceCasePartyName(partyName)
+    )} asks the Court for ${reliefObject}`
   );
 };
 
@@ -423,13 +476,11 @@ export const buildPlaintiffCourtOpeningStatement = (templateInput = {}) => {
 
   return [
     `May it please the Court. I represent ${sentenceCasePartyName(plaintiffName)}.`,
-    theory ||
+    normalizeCourtTheory(theory) ||
       `${capitalizeSentenceStart(
         sentenceCasePartyName(plaintiffName)
       )} brings this claim against ${defendantName}.`,
-    ...supportingClaims.map(
-      (claim) => `The evidence will show that ${lowerSentenceContinuation(claim)}`
-    ),
+    ...supportingClaims.map(buildEvidenceSentence),
     buildReliefSentence({ partyName: plaintiffName, requestedRelief }),
   ]
     .filter(Boolean)
