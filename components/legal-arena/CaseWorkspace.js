@@ -58,6 +58,27 @@ const cleanDraftList = (value) =>
     .map((item) => item.trim())
     .filter(Boolean);
 
+const missingEvidenceUnavailablePattern =
+  /\b(no|none|never|does not exist|doesn't exist|did not exist|didn't exist|not available|unavailable|cannot get|can't get|unobtainable|destroyed|lost|client never|never took|never received|other side has|opposing side has|landlord has|tenant has|third party has|only the other side|not provided to me)\b/i;
+
+const missingEvidenceUncertainPattern =
+  /\b(any|if one exists|if it exists|may have|might have|should have|could have|likely has|prepared but did not provide|do not know|don't know|not sure|need to ask|need to confirm)\b/i;
+
+const getMissingEvidenceTone = (item = "") => {
+  if (missingEvidenceUnavailablePattern.test(item)) {
+    return "unavailable";
+  }
+
+  if (missingEvidenceUncertainPattern.test(item)) {
+    return "actionable";
+  }
+
+  return "actionable";
+};
+
+const formatMissingEvidenceLabel = (item = "") =>
+  String(item || "").replace(/^unavailable:\s*/i, "");
+
 const LoadingBar = ({ label = "Loading" }) => (
   <div className="space-y-2" role="status" aria-label={label}>
     <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
@@ -109,38 +130,6 @@ const VoiceWaveform = ({ level = 0 }) => {
         />
       ))}
     </span>
-  );
-};
-
-const AutoResizeTextarea = ({ value, onChange, className = "", ...props }) => {
-  const textareaRef = useRef(null);
-
-  const resizeTextarea = () => {
-    const textarea = textareaRef.current;
-    if (!textarea) {
-      return;
-    }
-
-    textarea.style.height = "auto";
-    textarea.style.height = `${textarea.scrollHeight}px`;
-  };
-
-  useEffect(() => {
-    resizeTextarea();
-  }, [value]);
-
-  return (
-    <textarea
-      {...props}
-      ref={textareaRef}
-      value={value}
-      onChange={(event) => {
-        onChange?.(event);
-        requestAnimationFrame(resizeTextarea);
-      }}
-      rows={1}
-      className={`${className} overflow-hidden`}
-    />
   );
 };
 
@@ -325,18 +314,19 @@ export default function CaseWorkspace({
   }, [caseSession]);
 
 
-  const buildFactSheetPayload = () => ({
-    ...caseSession.factSheet,
-    summary: cleanDraftList(factSheetDraft.summary),
-    theory: cleanDraftList(factSheetDraft.theory),
-    desiredRelief: cleanDraftList(factSheetDraft.desiredRelief),
-    timeline: cleanDraftList(factSheetDraft.timeline),
-    supportingFacts: cleanDraftList(factSheetDraft.supportingFacts),
-    risks: cleanDraftList(factSheetDraft.risks),
-    disputedFacts: cleanDraftList(factSheetDraft.disputedFacts),
-    corroboratedFacts: cleanDraftList(factSheetDraft.corroboratedFacts),
-    missingEvidence: cleanDraftList(factSheetDraft.missingEvidence),
-  });
+  const buildFactSheetPayload = () =>
+    sanitizeFactSheet({
+      ...caseSession.factSheet,
+      summary: cleanDraftList(factSheetDraft.summary),
+      theory: cleanDraftList(factSheetDraft.theory),
+      desiredRelief: cleanDraftList(factSheetDraft.desiredRelief),
+      timeline: cleanDraftList(factSheetDraft.timeline),
+      supportingFacts: cleanDraftList(factSheetDraft.supportingFacts),
+      risks: cleanDraftList(factSheetDraft.risks),
+      disputedFacts: cleanDraftList(factSheetDraft.disputedFacts),
+      corroboratedFacts: cleanDraftList(factSheetDraft.corroboratedFacts),
+      missingEvidence: cleanDraftList(factSheetDraft.missingEvidence),
+    });
 
   const visibleInterviewTranscript = optimisticTranscriptEntry
     ? [...caseSession.interviewTranscript, optimisticTranscriptEntry]
@@ -664,7 +654,6 @@ export default function CaseWorkspace({
 
   const suggestedQuestions = (caseSession.factSheet.openQuestions || []).slice(0, 4);
   const factSheetCompletionItems = [
-    factSheetDraft.summary,
     factSheetDraft.theory,
     factSheetDraft.timeline,
     factSheetDraft.supportingFacts,
@@ -682,7 +671,6 @@ export default function CaseWorkspace({
   );
   const roundedFactSheetProgressPercent = Math.round(factSheetProgressPercent);
   const nextFactSheetStep =
-    (!cleanDraftList(factSheetDraft.summary).length && "Add a case summary") ||
     (!cleanDraftList(factSheetDraft.theory).length && "Shape the case theory") ||
     (!cleanDraftList(factSheetDraft.timeline).length && "Add timeline of events") ||
     (!cleanDraftList(factSheetDraft.supportingFacts).length && "Capture supporting facts") ||
@@ -691,7 +679,6 @@ export default function CaseWorkspace({
       "Document a key risk or dispute") ||
     (!cleanDraftList(factSheetDraft.desiredRelief).length && "Add requested relief") ||
     "Review and finalize fact sheet";
-  const canEditFactSheet = isInterview && !isIntakeLocked;
   const isCourtroom = !isInterview && !isExited && !isVerdict;
   const courtroomRoundLabel = `Courtroom Round ${caseSession.score.roundsCompleted + 1}`;
   const assessment = caseSession.caseAssessment || {};
@@ -971,85 +958,62 @@ export default function CaseWorkspace({
 
   const factSheetSections = [
     {
-      key: "summary",
-      title: "Case summary",
-      empty: "No summary notes yet.",
-      placeholder: "Client says...",
-    },
-    {
       key: "theory",
       title: "Theory",
+      description: "Your working argument for why your side should win.",
       empty: "No theory notes yet.",
       placeholder: "My current theory is...",
     },
     {
       key: "timeline",
       title: "Timeline",
+      description: "Key events in order, especially dates, notices, payments, and deadlines.",
       empty: "No timeline points yet.",
-      placeholder: "Client says this happened when...",
+      placeholder: "Event and timing...",
     },
     {
       key: "supportingFacts",
       title: "Supporting facts",
+      description: "Facts that help your side and are worth bringing up in court.",
       empty: "No supporting facts yet.",
-      placeholder: "Client says...",
+      placeholder: "Helpful fact...",
     },
     {
       key: "risks",
       title: "Risks",
+      description: "Weak points the judge or other side may use against you.",
       empty: "No risks captured yet.",
       placeholder: "Risk I need to manage...",
     },
     {
       key: "disputedFacts",
       title: "Disputed facts",
+      description: "Facts your side and the other side are likely to fight about.",
       empty: "No disputed facts yet.",
       placeholder: "The other side may dispute...",
     },
     {
       key: "corroboratedFacts",
       title: "Corroborated facts",
+      description: "Facts backed by photos, messages, receipts, witnesses, or other proof.",
       empty: "No corroborated facts yet.",
       placeholder: "Record or witness support...",
     },
     {
       key: "missingEvidence",
       title: "Missing evidence / proof gaps",
+      description: "Amber means ask about it; red means it appears unavailable or outside your side's control.",
       empty: "No proof gaps listed yet.",
       placeholder: "I still need...",
     },
     {
       key: "desiredRelief",
       title: "Requested relief",
+      description: "What you want the judge to order at the end of the case.",
       empty: "No relief notes yet.",
-      placeholder: "Client wants...",
+      placeholder: "Requested court order...",
     },
   ];
-
-  const updateFactSheetBullet = (sectionKey, index, value) => {
-    setFactSheetDraft((current) => ({
-      ...current,
-      [sectionKey]: ensureDraftList(current[sectionKey]).map((item, itemIndex) =>
-        itemIndex === index ? value : item
-      ),
-    }));
-  };
-
-  const addFactSheetBullet = (sectionKey) => {
-    setFactSheetDraft((current) => ({
-      ...current,
-      [sectionKey]: [...ensureDraftList(current[sectionKey]), ""],
-    }));
-  };
-
-  const removeFactSheetBullet = (sectionKey, index) => {
-    setFactSheetDraft((current) => ({
-      ...current,
-      [sectionKey]: ensureDraftList(current[sectionKey]).filter(
-        (_item, itemIndex) => itemIndex !== index
-      ),
-    }));
-  };
 
   const renderFactSheetSection = (section) => {
     const items = ensureDraftList(factSheetDraft[section.key]);
@@ -1081,54 +1045,43 @@ export default function CaseWorkspace({
           </div>
         </summary>
         <div className="border-t border-white/8 px-4 pb-4 pt-3">
+          {section.description ? (
+            <p className="mb-3 text-sm italic leading-6 text-white/48">
+              {section.description}
+            </p>
+          ) : null}
+
           {hasDraftRows ? (
             <div className="space-y-3">
-              {items.map((item, itemIndex) => (
-                <div
-                  key={`${section.key}-${itemIndex}`}
-                  className="flex flex-col gap-3 sm:flex-row sm:items-start"
-                >
-                  <span className="hidden h-1.5 w-1.5 shrink-0 rounded-full bg-amber-300/80 sm:mt-3 sm:block" />
-                  {canEditFactSheet ? (
-                    <>
-                      <AutoResizeTextarea
-                        className="textarea textarea-bordered arena-textarea arena-field min-h-12 flex-1 resize-y text-sm leading-6 text-slate-100"
-                        value={item}
-                        onChange={(event) =>
-                          updateFactSheetBullet(section.key, itemIndex, event.target.value)
-                        }
-                        placeholder={section.placeholder}
-                      />
-                      <button
-                        type="button"
-                        className="arena-btn-dark min-h-0 shrink-0 px-3 py-2 text-xs sm:self-start"
-                        onClick={() => removeFactSheetBullet(section.key, itemIndex)}
-                        aria-label={`Remove ${section.title} item`}
-                      >
-                        Remove
-                      </button>
-                    </>
-                  ) : (
-                    <p className="flex-1 text-sm leading-7 text-white/78">{item}</p>
-                  )}
-                </div>
-              ))}
+              {items.map((item, itemIndex) => {
+                const unavailableGap =
+                  section.key === "missingEvidence" &&
+                  getMissingEvidenceTone(item) === "unavailable";
+
+                return (
+                  <div
+                    key={`${section.key}-${itemIndex}`}
+                    className="flex gap-3"
+                  >
+                    <span
+                      className={`mt-2.5 h-1.5 w-1.5 shrink-0 rounded-full ${
+                        unavailableGap ? "bg-red-400/85" : "bg-amber-300/80"
+                      }`}
+                    />
+                    <p className="min-w-0 flex-1 text-sm leading-7 text-white/78">
+                      {section.key === "missingEvidence"
+                        ? formatMissingEvidenceLabel(item)
+                        : item}
+                    </p>
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <div className="rounded-lg border border-dashed border-white/10 bg-black/15 p-4 text-sm text-white/42">
               {section.empty}
             </div>
           )}
-
-          {canEditFactSheet ? (
-            <button
-              type="button"
-              className="arena-btn-dark mt-3 min-h-0 px-3 py-2 text-xs"
-              onClick={() => addFactSheetBullet(section.key)}
-            >
-              Add Item
-            </button>
-          ) : null}
         </div>
       </details>
     );

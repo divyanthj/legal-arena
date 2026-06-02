@@ -61,7 +61,7 @@ export const continueInterview = async ({ caseSession, question, userId }) => {
     maxTokens: INTERVIEW_RESPONSE_MAX_TOKENS,
     retryAttempts: 1,
     systemPrompt:
-      "You are simulating a legal-case party speaking to their own lawyer during intake. Treat this as a role actor, not a script expander. The canonical story is the real event history; structured facts and evidence are helper maps, not the only memory you have. Answer first from the represented party's lived perspective, thought process, and accessible story memory. Decide what to reveal, hedge, minimize, or withhold based on the latest question and the party profile. The partyResponse must sound like the represented party speaking in first person; never write dossier language such as 'Maria says,' 'client says,' 'the tenant says,' 'the plaintiff says,' or any third-person self-reference by the represented party. Answer directly when the lawyer asks a yes/no possession question. If the lawyer asks whether you can provide, send, share, or show a record, answer directly about production. If the record is confirmed and held by your side or shared, say yes and identify the record and what it shows. If it is held by the other side or a third party, say who likely has it. If it is missing, say no. If it is only mentioned or unknown, say it has not been confirmed in the file; do not repeatedly promise to check later. For ordinary factual questions, answer from memory as concretely as you honestly can before talking about records. If the lawyer asks a broad question, connect it to the nearest relevant events, mental states, evidence, or ambiguity in the canonical story instead of stonewalling. If the lawyer asks for names, dates, amounts, or other facts already present in the hidden world state or side-specific memory, give the fact instead of saying you need to check records. Use uncertainty only for genuine proof gaps, hearsay, missing records, low-access facts, or exact details the represented party would not know. If you do not remember an exact detail, say that plainly and stop. Do not tell the lawyer how to investigate, what to pin down next, or how to run the case. Speak like a normal person in first person. Never mention internal schemas, canonical truth, or metadata. Keep fact-sheet updates concise, but you may fill summary, theory, and desiredRelief when the case posture is already clear from the intake or the lawyer asks for them. When records are produced or confirmed, add them to corroboratedFacts/sourceLinks; when records cannot be produced, add the specific missing item to missingEvidence. Output valid JSON only.",
+      "You are simulating a legal-case party speaking to their own lawyer during intake. Treat this as a role actor, not a script expander. The canonical story is the real event history; structured facts and evidence are helper maps, not the only memory you have. Answer first from the represented party's lived perspective, thought process, and accessible story memory. Decide what to reveal, hedge, minimize, or withhold based on the latest question and the party profile. The partyResponse must sound like the represented party speaking in first person; never write dossier language such as 'Maria says,' 'client says,' 'the tenant says,' 'the plaintiff says,' or any third-person self-reference by the represented party. The partyResponse must answer only the lawyer's latest question. Do not volunteer extra explanation, legal analysis, investigation advice, next steps, or caveats the lawyer did not ask for. For yes/no questions, start with yes, no, or not sure, then add at most one short plain-language sentence if needed. If the lawyer asks whether you have, can provide, send, share, or show photos, records, documents, or other evidence, answer directly about whether you personally have it. If you have it, say yes and briefly identify it. If you do not have it, say no or not that I know of and stop. If someone else likely has it, add one short sentence naming who. Never say 'confirmed in the file,' 'not confirmed in the file,' 'proof gaps,' 'the record,' or similar dossier language in partyResponse; speak as the client from memory. For ordinary factual questions, answer from memory as concretely as you honestly can before talking about records. If the lawyer asks a broad question, connect it to the nearest relevant events, mental states, evidence, or ambiguity in the canonical story instead of stonewalling. If the lawyer asks for names, dates, amounts, or other facts already present in the hidden world state or side-specific memory, give the fact instead of saying you need to check records. Use uncertainty only for genuine hearsay, missing records, low-access facts, or exact details the represented party would not know. If you do not remember an exact detail, say that plainly and stop. Do not tell the lawyer how to investigate, what to pin down next, or how to run the case. Speak like a normal person in first person. Never mention internal schemas, canonical truth, or metadata. Keep fact-sheet updates concise, but you may fill summary, theory, and desiredRelief when the case posture is already clear from the intake or the lawyer asks for them. When records are produced or confirmed, add them to corroboratedFacts/sourceLinks; when records cannot be produced, add the specific missing item to missingEvidence. Output valid JSON only.",
     userPrompt: JSON.stringify({
       task: `Answer the lawyer's latest question as ${playerPartyName}. You are the represented ${playerSide} side. Use the hidden canonical world and your side-specific memory to choose what this person would naturally say and what they would keep back for now.`,
       stage: "interview",
@@ -113,6 +113,9 @@ export const continueInterview = async ({ caseSession, question, userId }) => {
     recentTranscript: caseSession.interviewTranscript.slice(-8),
     latestQuestion: question,
     latestAnswer: interviewResult.partyResponse,
+    playerSide,
+    playerPartyName,
+    opposingPartyName,
   });
   const combinedPatch = mergeFactSheetPatches(interviewResult.patch, conversationPatch);
   const nextFactSheet = mergeFactSheet(caseSession.factSheet, combinedPatch, template, {
@@ -243,10 +246,16 @@ const buildConversationFactSheetPatch = async ({
   recentTranscript,
   latestQuestion,
   latestAnswer,
+  playerSide,
+  playerPartyName,
+  opposingPartyName,
 }) => {
   const fallbackPatch = buildConversationFactSheetFallback({
     latestQuestion,
     latestAnswer,
+    playerSide,
+    playerPartyName,
+    opposingPartyName,
   });
 
   try {
@@ -256,7 +265,7 @@ const buildConversationFactSheetPatch = async ({
       maxTokens: 900,
       retryAttempts: 1,
       systemPrompt:
-        "You update a lawyer's private working fact sheet from the conversation only. You do not know the hidden case truth, canonical story, template facts, evidence graph, or any source outside the transcript you are given. Write concise bullet notes as the player's own internal thoughts after speaking with the client. If something was not said or clearly implied in the conversation, leave it out. Output valid JSON only.",
+        "You update a lawyer's private working fact sheet from the conversation only. You do not know the hidden case truth, canonical story, template facts, evidence graph, or any source outside the transcript you are given. Write short, useful lawyer notes, not transcript summaries. If something was not said or clearly implied in the conversation, leave it out. Output valid JSON only.",
       userPrompt: JSON.stringify({
         task: "Create a fact-sheet patch from only the visible intake conversation.",
         currentFactSheet,
@@ -265,12 +274,20 @@ const buildConversationFactSheetPatch = async ({
           playerQuestion: latestQuestion,
           clientAnswer: latestAnswer,
         },
+        representedSide: playerSide,
+        representedPartyName: playerPartyName,
+        opposingPartyName,
         styleRules: [
-          "Use bullets, not paragraphs.",
-          "Prefer concise internal notes such as 'Client says...' or 'I still need...'.",
+          "Use concise bullet fragments, not paragraphs.",
+          "Do not copy the client's answer into the fact sheet.",
+          "Each note should usually be 4 to 12 words.",
+          "Add at most one new note per section for this exchange.",
+          "Avoid prefixes like 'Client says,' 'Proof gap,' 'Risk from intake,' or 'Live dispute from intake.'",
           "Do not state anything as proven unless the client actually said it or produced it.",
-          "If the client confirms a photo, record, invoice, receipt, document, witness, or other proof exists, was shown, was produced, or is in hand, put that note in corroboratedFacts.",
-          "If the client says proof does not exist, was not shown, cannot be provided, or still needs to be found, put that note in missingEvidence.",
+          "Only put concrete evidence artifacts in corroboratedFacts, such as a receipt, photo, text message, invoice, letter, inspection report, checklist, or named witness. Never put raw client testimony, denials, or full client answer text in corroboratedFacts.",
+          "If the client confirms a photo, record, invoice, receipt, document, witness, or other proof exists, was shown, was produced, or is in hand, put a short artifact label in corroboratedFacts.",
+          "If the client says proof your side needs does not exist, was not shown, cannot be provided, or still needs to be found, put that note in missingEvidence.",
+          "If the client says the opposing side controls or failed to provide proof for its own position, do not put that in missingEvidence. Put it in supportingFacts or disputedFacts as an opponent proof problem.",
           "Do not mention canonical truth, hidden facts, templates, schemas, or source of truth.",
           "Return only new or revised notes supported by the visible conversation.",
         ],
@@ -312,9 +329,20 @@ const buildConversationFactSheetPatch = async ({
     const proofPatch = buildConversationProofClassificationFallback({
       latestQuestion,
       latestAnswer,
+      playerSide,
+      playerPartyName,
+      opposingPartyName,
     });
     const fallbackProofAndClassificationPatch = normalizeFactSheetPatch({
       ...fallbackPatch,
+      supportingFacts: uniqueList([
+        ...(fallbackPatch.supportingFacts || []),
+        ...(proofPatch.supportingFacts || []),
+      ]),
+      disputedFacts: uniqueList([
+        ...(fallbackPatch.disputedFacts || []),
+        ...(proofPatch.disputedFacts || []),
+      ]),
       corroboratedFacts: uniqueList([
         ...(fallbackPatch.corroboratedFacts || []),
         ...proofPatch.corroboratedFacts,
@@ -376,20 +404,99 @@ const missingProofPattern =
   /(^|\b)(no|nope|not really|never|none|without|do not|don't|does not|doesn't|did not|didn't|cannot|can't|could not|couldn't|missing|need to find|need to confirm|wasn't shown|were not shown|not shown|not provided|not produced|not in hand|do not remember|don't remember|not sure)\b/i;
 const confirmedProofPattern =
   /(^|\b)(yes|yeah|yep|i had|i have|what i had|what i have|showed|shown|provided|produced|sent|shared|gave|received|kept|saved|attached|uploaded|photographed|documented|itemized|itemised|confirmed|in hand|receipt|renewal notice|written notice|city form|paperwork|refund request|copy)\b/i;
+const unavailableProofPattern =
+  /(^|\b)(no|nope|not really|never|none|do not have|don't have|does not exist|doesn't exist|did not|didn't|cannot|can't|could not|couldn't|not available|unavailable|wasn't shown|were not shown|not shown|not provided|not produced|not in hand)\b/i;
 const disputePattern =
   /\b(accused|allege|alleged|alleges|alleging|claim|claims|claimed|dispute|disputed|disagreement|wrong category|miscategorization|misclassification|misclassified|not acknowledg(?:e|ing)|do not acknowledg(?:e|ing)|don't acknowledg(?:e|ing)|not conced(?:e|ing)|deny|denies|denied|should have been|lower-fee|reduction should have applied|refund was due|no refund was due|no confirmed error)\b/i;
 const intakeRiskPattern =
   /\b(risk|risks|argue|against|worry|problem|weak|weakness|unsupported|guessing|prove|cannot prove|records showed|not sure|don't remember|do not remember|cannot confirm|can't confirm|not confirmed|no confirmed|do not have|don't have|not have|cannot point to|can't point to|no documented|no clear written|no confirmed written|no confirmed set|exact category|specific actionable response)\b/i;
 
+const summarizeProofNeed = (question = "", answer = "") => {
+  const text = `${question} ${answer}`.toLowerCase();
+
+  if (
+    /\b(photo|photos|picture|pictures)\b/.test(text) &&
+    /\b(clean|cleaning|move-?out|surrender|turnover|key return|returned the keys)\b/.test(text)
+  ) {
+    return "Move-out photos after cleaning";
+  }
+
+  if (
+    /\b(invoice|invoices|receipt|receipts|work order|work orders|backup document|backup documents)\b/.test(
+      text
+    ) &&
+    /\b(deduction|deductions|charge|charges|repair|repairs|cleaning|performed|covered)\b/.test(
+      text
+    )
+  ) {
+    return "Invoices or receipts supporting each deduction";
+  }
+
+  if (/\b(deduction letter|itemized|itemised|breakdown)\b/.test(text)) {
+    return "Itemized deduction letter";
+  }
+
+  if (/\b(inspection report|move-?out inspection)\b/.test(text)) {
+    return "Move-out inspection report";
+  }
+
+  if (/\b(witness|witnesses)\b/.test(text)) {
+    return "Witness support";
+  }
+
+  if (
+    /\b(email|emails|text|texts|message|messages)\b/.test(text) &&
+    /\b(move-?out|surrender|turnover|returning the keys|key return|instructions)\b/.test(text)
+  ) {
+    return "Text messages with move-out instructions";
+  }
+
+  if (/\b(email|emails|text|texts|message|messages)\b/.test(text)) {
+    return "Relevant messages";
+  }
+
+  return "Proof for this point";
+};
+
+const mentionsPartyName = (text = "", partyName = "") => {
+  const normalizedName = String(partyName || "").trim().toLowerCase();
+
+  if (!normalizedName) {
+    return false;
+  }
+
+  return text.includes(normalizedName);
+};
+
+const answerPointsToOpposingProofControl = ({
+  question = "",
+  answer = "",
+  opposingPartyName = "",
+} = {}) => {
+  const text = `${question} ${answer}`.toLowerCase();
+
+  return (
+    mentionsPartyName(text, opposingPartyName) ||
+    /\b(other side|opposing side|opponent|landlord|property manager|management|northside|oakview|defendant|plaintiff|they would have|they should have|they have|would have those|should have those)\b/i.test(
+      text
+    )
+  ) && /\b(have|has|had|hold|held|controls?|provide|provided|produce|produced|would have|should have)\b/i.test(text);
+};
+
 const buildConversationProofClassificationFallback = ({
   latestQuestion,
   latestAnswer,
+  playerSide,
+  playerPartyName,
+  opposingPartyName,
 }) => {
   const answer = String(latestAnswer || "").trim();
   const question = String(latestQuestion || "").trim();
   const lowerQuestion = question.toLowerCase();
   const lowerAnswer = answer.toLowerCase();
   const patch = {
+    supportingFacts: [],
+    disputedFacts: [],
     corroboratedFacts: [],
     sourceLinks: [],
     missingEvidence: [],
@@ -402,23 +509,44 @@ const buildConversationProofClassificationFallback = ({
   const answerShowsProofPossession =
     /\b(have|has|had|hold|holds|held)\b/i.test(lowerAnswer) &&
     proofTermPattern.test(lowerAnswer);
+  const proofNeed = summarizeProofNeed(question, answer);
+  const opposingSideControlsProof = answerPointsToOpposingProofControl({
+    question,
+    answer,
+    opposingPartyName,
+  });
 
   if (missingProofPattern.test(lowerAnswer)) {
-    patch.missingEvidence.push(`Proof gap: ${answer}`);
-  }
-
-  if (
+    if (opposingSideControlsProof) {
+      patch.supportingFacts = [
+        `${opposingPartyName || "Other side"} has not provided ${proofNeed.toLowerCase()}`,
+      ];
+      patch.disputedFacts = [
+        `Whether ${opposingPartyName || "the other side"} can support this point with ${proofNeed.toLowerCase()}`,
+      ];
+    } else {
+      patch.missingEvidence.push(
+        unavailableProofPattern.test(lowerAnswer) ? `Unavailable: ${proofNeed}` : proofNeed
+      );
+    }
+  } else if (
     confirmedProofPattern.test(lowerAnswer) ||
     answerShowsProofPossession
   ) {
-    patch.corroboratedFacts.push(`Client points me to this proof: ${answer}`);
+    patch.corroboratedFacts.push(proofNeed);
     patch.sourceLinks.push("Client intake answer");
   }
 
   return patch;
 };
 
-export const buildConversationFactSheetFallback = ({ latestQuestion, latestAnswer }) => {
+export const buildConversationFactSheetFallback = ({
+  latestQuestion,
+  latestAnswer,
+  playerSide,
+  playerPartyName,
+  opposingPartyName,
+}) => {
   const answer = String(latestAnswer || "").trim();
   const question = String(latestQuestion || "").trim();
 
@@ -445,21 +573,39 @@ export const buildConversationFactSheetFallback = ({ latestQuestion, latestAnswe
     discoveredClaimIds: [],
     discoveredEvidenceIds: [],
   };
+  const proofRelated = proofTermPattern.test(lower);
 
-  if (/\b(need|want|asking|request|relief|deposit|damages|refund|return)\b/i.test(lower)) {
-    patch.desiredRelief.push(`Client says: ${answer}`);
+  if (
+    !proofRelated &&
+    /\b(need|want|asking|request|relief|deposit|damages|refund|return)\b/i.test(lower)
+  ) {
+    patch.desiredRelief.push(answer);
   }
 
-  if (/\b(when|date|before|after|during|then|timeline|moved|signed|paid|sent|received|contacted|followed up|several weeks|later)\b/i.test(lower)) {
-    patch.timeline.push(`Client says: ${answer}`);
+  if (
+    !proofRelated &&
+    /\b(when|date|before|after|during|then|timeline|moved|signed|paid|sent|received|contacted|followed up|several weeks|later)\b/i.test(
+      lower
+    )
+  ) {
+    patch.timeline.push(answer);
   }
 
-  if (proofTermPattern.test(lower)) {
+  if (proofRelated) {
     const proofPatch = buildConversationProofClassificationFallback({
       latestQuestion,
       latestAnswer,
+      playerSide,
+      playerPartyName,
+      opposingPartyName,
     });
 
+    if (proofPatch.supportingFacts?.length) {
+      patch.supportingFacts.push(...proofPatch.supportingFacts);
+    }
+    if (proofPatch.disputedFacts?.length) {
+      patch.disputedFacts.push(...proofPatch.disputedFacts);
+    }
     if (proofPatch.missingEvidence.length) {
       patch.missingEvidence.push(...proofPatch.missingEvidence);
     }
@@ -469,11 +615,11 @@ export const buildConversationFactSheetFallback = ({ latestQuestion, latestAnswe
     }
   }
 
-  if (disputePattern.test(lower)) {
+  if (!proofRelated && disputePattern.test(lower)) {
     patch.disputedFacts.push(`Live dispute from intake: ${answer}`);
   }
 
-  if (intakeRiskPattern.test(lower)) {
+  if (!proofRelated && intakeRiskPattern.test(lower)) {
     patch.risks.push(`Risk from intake: ${answer}`);
   }
 
@@ -485,7 +631,7 @@ export const buildConversationFactSheetFallback = ({ latestQuestion, latestAnswe
     !patch.corroboratedFacts.length &&
     !patch.missingEvidence.length
   ) {
-    patch.supportingFacts.push(`Client says: ${answer}`);
+    patch.supportingFacts.push(answer);
   }
 
   return normalizeFactSheetPatch(patch);
@@ -637,9 +783,6 @@ export const finalizeFactSheetInput = ({ factSheet, caseTemplate }) => {
 
   const missing = [];
 
-  if (!normalized.summary.length) {
-    missing.push("summary");
-  }
   if (!normalized.theory.length) {
     missing.push("case theory");
   }

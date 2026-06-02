@@ -502,6 +502,13 @@ export const normalizeInterviewResult = ({
       /without checking|need to check|would need to confirm|cannot say for sure/i.test(
         normalizedAiPartyResponse
       ));
+  const evidenceAnswerShouldUseFallback =
+    questionAsksForProofLikeEvidence(lowerQuestion) &&
+    normalizedFallbackPartyResponse &&
+    (normalizedAiPartyResponse.length > 180 ||
+      /confirmed in the file|not confirmed in the file|proof gaps|solid photographic proof|actual move-out condition photos|if i have anything/i.test(
+        normalizedAiPartyResponse
+      ));
   const mergedDiscoveredFactIds = uniqueList([
     ...(fallback.patch?.discoveredFactIds || []),
     ...patch.discoveredFactIds,
@@ -568,6 +575,8 @@ export const normalizeInterviewResult = ({
       repeatedProductionLoop
         ? buildStalledProductionReply(lowerQuestion)
         : productionAnswerShouldUseFallback
+        ? normalizedFallbackPartyResponse
+        : evidenceAnswerShouldUseFallback
         ? normalizedFallbackPartyResponse
         : useKnownSpecificFallback
         ? normalizedFallbackPartyResponse

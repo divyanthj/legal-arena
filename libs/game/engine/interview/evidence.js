@@ -195,12 +195,12 @@ export const buildEvidenceResponseSegment = (item, side) => {
       return `I can point to ${lowerLabel} on that point.`;
     case "mentioned":
       if (holderIsOtherParty) {
-        return `I think they may have ${lowerLabel}, but I have not confirmed it yet.`;
+        return `I think they may have ${lowerLabel}.`;
       }
       if (item.holderSide === "third-party") {
-        return `I think a third party may have ${lowerLabel}, but I have not confirmed it yet.`;
+        return `I think a third party may have ${lowerLabel}.`;
       }
-      return `I think there should be ${lowerLabel}, but I cannot say that for certain yet.`;
+      return `I am not sure whether I have ${lowerLabel}.`;
     case "missing":
       if (holderIsOtherParty) {
         return `I do not have ${lowerLabel}, and the other side may be the one holding it.`;
@@ -240,7 +240,7 @@ export const buildEvidencePossessionResponse = (item, side) => {
     case "mentioned":
     case "unknown":
       return holderIsSelf
-        ? `I may have ${lowerLabel}, but I cannot say for sure without checking my records.`
+        ? `I am not sure whether I have ${lowerLabel}.`
         : `No, I do not have ${lowerLabel} right now.`;
     case "contested":
       return holderIsSelf
@@ -276,8 +276,8 @@ export const buildEvidenceProductionResponse = (item, side) => {
     case "mentioned":
     case "unknown":
       return holderIsSelf
-        ? `I may be able to produce ${lowerLabel}, but I would need to check my records first.`
-        : `I cannot send you ${lowerLabel} right now. I would need to confirm where it is first.`;
+        ? `I am not sure whether I can send ${lowerLabel}.`
+        : `No, I cannot send you ${lowerLabel} right now.`;
     case "missing":
       return `No, I cannot send you ${lowerLabel} because I do not have it.`;
     case "contested":
@@ -285,7 +285,7 @@ export const buildEvidenceProductionResponse = (item, side) => {
         ? `I can send you ${lowerLabel}, but there may be a fight about what it really shows.`
         : `There is ${lowerLabel}, but I cannot promise I am the one who can produce it directly.`;
     default:
-      return `I cannot tell you yet whether I can send you ${lowerLabel}. I need to check whether I still have it.`;
+      return `I am not sure whether I can send you ${lowerLabel}.`;
   }
 };
 
@@ -339,7 +339,7 @@ export const buildEvidenceProductionSummary = (items = [], side) => {
         return `${label} is not in hand`;
       }
 
-      return `${label} has not been confirmed in the file`;
+      return `${label} is not in hand`;
     })
     .join("; ");
 
@@ -401,7 +401,7 @@ export const buildEvidenceHolderResponseSegment = (item) => {
     case "third-party":
       return item.availabilityStatus === "confirmed"
         ? `A third party has ${lowerLabel}, but I do not know which one yet.`
-        : `I do not know which third party has ${lowerLabel} yet. I only know a third party may have it, but I have not confirmed who.`;
+        : `I do not know which third party has ${lowerLabel} yet.`;
     case "shared":
       return `Both sides should be able to access ${lowerLabel}.`;
     case "plaintiff":

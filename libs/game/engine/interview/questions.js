@@ -298,7 +298,9 @@ export const buildSpecificDetailFallback = ({
   }
 
   if (proofQuestion && supportingEvidence.length === 0 && matchedEvidence.length === 0) {
-    return "I do not have confirmed proof in hand on that point right now.";
+    return possessionQuestion || productionQuestion
+      ? "No, not that I know of."
+      : "I do not have that.";
   }
 
   if (possessionQuestion && bestEvidence) {

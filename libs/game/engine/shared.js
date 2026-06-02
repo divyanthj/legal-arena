@@ -564,7 +564,6 @@ export const mergeFactSheet = (current, patch, template, options = {}) => {
   };
 
   next.ready =
-    next.summary.length >= 1 &&
     next.theory.length >= 1 &&
     next.desiredRelief.length >= 1 &&
     next.timeline.length >= 1 &&

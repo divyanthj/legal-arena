@@ -621,8 +621,11 @@ export default function DashboardHub({
   }, [lawyerSearch, overallLeaderboard]);
 
   useEffect(() => {
-    setActiveTemplateIndex(0);
-  }, [selectedCategory]);
+    const nextTemplates = filteredTemplates.length > 0 ? filteredTemplates : templates;
+    const firstUnlockedIndex = nextTemplates.findIndex((template) => template.unlocked);
+
+    setActiveTemplateIndex(firstUnlockedIndex >= 0 ? firstUnlockedIndex : 0);
+  }, [filteredTemplates, selectedCategory, templates]);
 
   const handleCreateCase = async (caseTemplateId) => {
     if (!caseTemplateId) return;
@@ -652,6 +655,10 @@ export default function DashboardHub({
     visibleTemplates.length > 0
       ? visibleTemplates[Math.min(activeTemplateIndex, visibleTemplates.length - 1)]
       : null;
+  const firstUnlockedTemplate =
+    visibleTemplates.find((template) => template.unlocked) ||
+    templates.find((template) => template.unlocked) ||
+    null;
   const carouselCategoryLabel =
     filteredTemplates.length > 0
       ? `${String(selectedCategoryTitle || "available").toLowerCase()} cases`
@@ -685,7 +692,8 @@ export default function DashboardHub({
 
   const isNewUser = (progression.completedCases || 0) === 0;
   const lastCaseProgress = getCaseProgress(lastActiveCase);
-  const primaryTemplateId = activeTemplate?.id;
+  const primaryTemplateId =
+    (activeTemplate?.unlocked ? activeTemplate : firstUnlockedTemplate)?.id || "";
   const primaryCtaLabel = canResumeLastCase
     ? "Continue Case"
     : isNewUser
@@ -878,7 +886,7 @@ export default function DashboardHub({
                           data-onboarding-target="quick-start-case"
                           className="arena-btn-light inline-flex min-w-0 items-center justify-center gap-3 px-4 py-4 sm:px-6"
                           onClick={() => handleCreateCase(primaryTemplateId)}
-                          disabled={creating || !activeTemplate?.unlocked}
+                          disabled={creating || !primaryTemplateId}
                         >
                           {creating ? <span className="loading loading-spinner loading-xs" /> : null}
                           <span>{primaryCtaLabel}</span>
@@ -956,7 +964,17 @@ export default function DashboardHub({
                               ? "arena-status arena-status-favorable"
                               : "arena-pill"
                           }`}
-                          onClick={() => setSelectedCategory(category.slug)}
+                          onClick={() => {
+                            const nextTemplates = templates.filter(
+                              (template) => template.primaryCategory === category.slug
+                            );
+                            const firstUnlockedIndex = nextTemplates.findIndex(
+                              (template) => template.unlocked
+                            );
+
+                            setSelectedCategory(category.slug);
+                            setActiveTemplateIndex(firstUnlockedIndex >= 0 ? firstUnlockedIndex : 0);
+                          }}
                         >
                           {category.title}
                         </button>
@@ -999,9 +1017,20 @@ export default function DashboardHub({
                               disabled={creating || !activeTemplate.unlocked}
                             >
                               {creating ? <span className="loading loading-spinner loading-xs" /> : null}
-                              <span>{isNewUser ? "Begin Client Interview" : "Start This Case"}</span>
+                              <span>
+                                {activeTemplate.unlocked
+                                  ? isNewUser
+                                    ? "Begin Client Interview"
+                                    : "Start This Case"
+                                  : "Locked"}
+                              </span>
                               <HeroIcons.ChevronRightIcon className="h-5 w-5" aria-hidden="true" />
                             </button>
+                            {!activeTemplate.unlocked ? (
+                              <p className="mt-3 rounded-2xl border border-amber-300/20 bg-amber-500/10 px-4 py-3 text-sm leading-6 text-amber-100/82">
+                                {getTemplateUnlockMessage(activeTemplate, browserTimeZone)}
+                              </p>
+                            ) : null}
                             <p className="mt-4 text-sm text-white/52">
                               New here? This case is designed to teach the core loop.
                             </p>
@@ -1083,7 +1112,9 @@ export default function DashboardHub({
                             &lt;
                           </button>
                           <p className="min-w-0 text-center text-sm text-white/58">
-                            {getTemplateUnlockMessage(activeTemplate, browserTimeZone)}
+                            {activeTemplate.unlocked
+                              ? getTemplateUnlockMessage(activeTemplate, browserTimeZone)
+                              : "Use the arrows to pick an available case."}
                           </p>
                           <button
                             type="button"

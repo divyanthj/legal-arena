@@ -28,6 +28,7 @@ import {
 import { DEFAULT_CATEGORY_SLUG } from "./categories";
 import { ensureStoredLawyerProfileSummary } from "./profileSummary";
 import { normalizeOnboarding } from "./onboarding";
+import { sanitizeFactSheet } from "./factSheetSanitizer";
 
 const toPlain = (doc) => (doc?.toJSON ? doc.toJSON() : doc);
 const CASE_EXIT_COOLDOWN_MS = 24 * 60 * 60 * 1000;
@@ -37,6 +38,172 @@ const OPPOSING_SIDE = {
   opponent: "client",
 };
 const MONGO_ID_PATTERN = /^[a-f0-9]{24}$/i;
+
+const unavailableProofAnswerPattern =
+  /\b(no|nope|not really|never|none|do not have|don't have|does not exist|doesn't exist|did not|didn't|cannot|can't|not available|unavailable|not shown|not provided|not produced|not in hand)\b/i;
+const confirmedProofAnswerPattern =
+  /\b(yes|yeah|yep|i have|i had|have some|have those|sent|shared|provided|produced|showed|shown|kept|saved|attached|documented)\b/i;
+
+const cleanUnavailablePrefix = (value = "") =>
+  String(value || "").replace(/^unavailable:\s*/i, "");
+
+const transcriptHasUnavailableAnswerFor = (transcript = [], matcher) => {
+  for (let index = 0; index < transcript.length - 1; index += 1) {
+    const questionEntry = transcript[index];
+    const answerEntry = transcript[index + 1];
+
+    if (questionEntry?.role !== "player" || answerEntry?.role !== "party") {
+      continue;
+    }
+
+    const question = String(questionEntry.text || "");
+    const answer = String(answerEntry.text || "");
+
+    if (matcher(question, answer) && unavailableProofAnswerPattern.test(answer)) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
+const transcriptHasConfirmedAnswerFor = (transcript = [], matcher) => {
+  for (let index = 0; index < transcript.length - 1; index += 1) {
+    const questionEntry = transcript[index];
+    const answerEntry = transcript[index + 1];
+
+    if (questionEntry?.role !== "player" || answerEntry?.role !== "party") {
+      continue;
+    }
+
+    const question = String(questionEntry.text || "");
+    const answer = String(answerEntry.text || "");
+
+    if (matcher(question, answer) && confirmedProofAnswerPattern.test(answer)) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
+const transcriptShowsOpponentControlsProof = ({
+  transcript = [],
+  matcher,
+  opponentPartyName = "",
+}) => {
+  const normalizedOpponent = String(opponentPartyName || "").trim().toLowerCase();
+
+  for (let index = 0; index < transcript.length - 1; index += 1) {
+    const questionEntry = transcript[index];
+    const answerEntry = transcript[index + 1];
+
+    if (questionEntry?.role !== "player" || answerEntry?.role !== "party") {
+      continue;
+    }
+
+    const question = String(questionEntry.text || "");
+    const answer = String(answerEntry.text || "");
+    const lowerAnswer = answer.toLowerCase();
+    const mentionsOpponent =
+      (normalizedOpponent && lowerAnswer.includes(normalizedOpponent)) ||
+      /\b(other side|opposing side|landlord|property manager|management|they would have|they should have|would have those|should have those)\b/i.test(
+        answer
+      );
+
+    if (matcher(question, answer) && mentionsOpponent) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
+const refineFactSheetFromTranscript = ({
+  factSheet,
+  transcript = [],
+  playerSide,
+  opponentPartyName = "",
+}) => {
+  const next = {
+    ...factSheet,
+    supportingFacts: [...(factSheet.supportingFacts || [])],
+    disputedFacts: [...(factSheet.disputedFacts || [])],
+    missingEvidence: [...(factSheet.missingEvidence || [])],
+  };
+
+  const isPlaintiffSide = playerSide === "client";
+  const invoiceMatcher = (question = "", answer = "") =>
+    /\b(invoice|invoices|receipt|receipts)\b/i.test(`${question} ${answer}`) &&
+    /\b(deduction|deductions|charge|charges)\b/i.test(`${question} ${answer}`);
+  const moveOutPhotoMatcher = (question = "", answer = "") =>
+    /\b(photo|photos|picture|pictures)\b/i.test(`${question} ${answer}`) &&
+    /\b(clean|cleaning|move-?out|surrender|turnover)\b/i.test(`${question} ${answer}`);
+  const moveOutTextMatcher = (question = "", answer = "") =>
+    /\b(email|emails|text|texts|message|messages)\b/i.test(`${question} ${answer}`) &&
+    /\b(move-?out|surrender|turnover|returning the keys|key return|instructions)\b/i.test(
+      `${question} ${answer}`
+    );
+  const opponentControlledPlaintiffMissing = (item = "") =>
+    isPlaintiffSide &&
+    (/\bitemized deduction letter\b/i.test(item) ||
+      /\bmove-?out inspection report\b/i.test(item) ||
+      /\bmove-?in checklist\b/i.test(item) ||
+      /\bmove-?out checklist|inspection form\b/i.test(item));
+
+  next.missingEvidence = next.missingEvidence.flatMap((item) => {
+    const lower = String(item || "").toLowerCase();
+
+    if (
+      /\bmove-?out photos after cleaning\b/i.test(lower) &&
+      transcriptHasUnavailableAnswerFor(transcript, moveOutPhotoMatcher)
+    ) {
+      return [`Unavailable: ${cleanUnavailablePrefix(item)}`];
+    }
+
+    if (
+      /\btext messages? with move-?out instructions\b/i.test(lower) &&
+      transcriptHasConfirmedAnswerFor(transcript, moveOutTextMatcher)
+    ) {
+      next.corroboratedFacts = [
+        ...(next.corroboratedFacts || []),
+        "Text messages with move-out instructions.",
+      ];
+      return [];
+    }
+
+    if (
+      isPlaintiffSide &&
+      /\binvoices? or receipts? supporting each deduction\b/i.test(lower) &&
+      transcriptShowsOpponentControlsProof({
+        transcript,
+        matcher: invoiceMatcher,
+        opponentPartyName,
+      })
+    ) {
+      const opponent = opponentPartyName || "Other side";
+      next.supportingFacts.push(
+        `${opponent} has not provided invoices or receipts supporting each deduction.`
+      );
+      next.disputedFacts.push(
+        `Whether ${opponent} can support each deduction with invoices or receipts.`
+      );
+      return [];
+    }
+
+    if (opponentControlledPlaintiffMissing(item)) {
+      const opponent = opponentPartyName || "Other side";
+      const proof = cleanUnavailablePrefix(item).replace(/\.+$/g, "").toLowerCase();
+      next.supportingFacts.push(`${opponent} has not provided ${proof}.`);
+      next.disputedFacts.push(`Whether ${opponent} can support its position with ${proof}.`);
+      return [];
+    }
+
+    return [item];
+  });
+
+  return sanitizeFactSheet(next);
+};
 
 const slugify = (value = "") =>
   String(value || "")
@@ -482,9 +649,16 @@ export const buildCasePayload = (caseSession, templateOverride = null) => {
   const opponentPartyName = template ? getPartyName(template, opponentSide) : "";
   const playerSideLabel = getSideLabel(playerSide);
   const opponentSideLabel = getSideLabel(opponentSide);
+  const factSheet = refineFactSheetFromTranscript({
+    factSheet: sanitizeFactSheet(plainCase.factSheet || {}),
+    transcript: plainCase.interviewTranscript || [],
+    playerSide,
+    opponentPartyName,
+  });
 
   return {
     ...plainCase,
+    factSheet,
     slug:
       plainCase.slug ||
       buildCaseSessionSlug(plainCase.title, plainCase.id || plainCase._id || ""),
