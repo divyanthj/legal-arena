@@ -126,6 +126,71 @@ const cleanVerdictListItem = (item = "") =>
     .replace(/^[-*•]\s+/, "")
     .trim();
 
+const escapeRegExp = (value = "") =>
+  String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const replaceRoleReferences = (text = "", role = "", replacement = "") => {
+  if (!role || !replacement) {
+    return text;
+  }
+
+  const rolePattern = escapeRegExp(role);
+
+  return text
+    .replace(new RegExp(`\\b${rolePattern}'s\\b`, "gi"), `${replacement}'s`)
+    .replace(new RegExp(`\\b${rolePattern}\\b`, "gi"), replacement);
+};
+
+export const rewriteVerdictForPlayerAddress = (
+  value = "",
+  { playerSide = "player", playerPartyName = "", opponentPartyName = "" } = {}
+) => {
+  let text = cleanVerdictListItem(value);
+
+  if (!text) {
+    return "";
+  }
+
+  const playerRole = playerSide === "opponent" ? "Defendant" : "Plaintiff";
+  const opponentRole = playerSide === "opponent" ? "Plaintiff" : "Defendant";
+  const playerNamePattern = escapeRegExp(playerPartyName);
+  const opponentNamePattern = escapeRegExp(opponentPartyName);
+
+  if (playerNamePattern) {
+    text = text
+      .replace(new RegExp(`\\b(judg(?:e)?ment|ruling|verdict|decision) for ${playerNamePattern}\\b`, "gi"), "$1 for your side")
+      .replace(new RegExp(`\\bfinds for ${playerNamePattern}\\b`, "gi"), "finds for your side")
+      .replace(new RegExp(`\\b${playerNamePattern}'s\\b`, "gi"), "Your")
+      .replace(new RegExp(`\\b${playerNamePattern}\\b`, "gi"), "You");
+  }
+
+  if (opponentNamePattern) {
+    text = text
+      .replace(new RegExp(`\\b(judg(?:e)?ment|ruling|verdict|decision) for ${opponentNamePattern}\\b`, "gi"), "$1 for the other side")
+      .replace(new RegExp(`\\bfinds for ${opponentNamePattern}\\b`, "gi"), "finds for the other side")
+      .replace(new RegExp(`\\b${opponentNamePattern}'s\\b`, "gi"), "The other side's")
+      .replace(new RegExp(`\\b${opponentNamePattern}\\b`, "gi"), "The other side");
+  }
+
+  text = replaceRoleReferences(text, playerRole, "You");
+  text = replaceRoleReferences(text, opponentRole, "The other side");
+
+  return text
+    .replace(/\bYou's\b/g, "Your")
+    .replace(/\bThe other side's's\b/g, "The other side's")
+    .replace(/\bfor You\b/g, "for your side")
+    .replace(/\bfor the You\b/gi, "for your side")
+    .replace(/\bfor The other side\b/g, "for the other side")
+    .replace(/\bfor the The other side\b/gi, "for the other side")
+    .replace(/\bthe The other side\b/g, "the other side")
+    .replace(/\bYou was\b/g, "You were")
+    .replace(/\bYou has\b/g, "You have")
+    .replace(/\bYou does\b/g, "You do")
+    .replace(/\bYou is\b/g, "You are")
+    .replace(/\s+/g, " ")
+    .trim();
+};
+
 const normalizeVerdictList = (items = [], limit = 3) =>
   [...new Set((Array.isArray(items) ? items : []).map(cleanVerdictListItem).filter(Boolean))]
     .slice(0, limit);
@@ -337,14 +402,30 @@ export const normalizePlayerPerspectiveVerdictLists = ({
   playerStrengths = [],
   playerWeaknesses = [],
   fallbackVerdict = {},
+  playerSide = "player",
+  playerPartyName = "",
+  opponentPartyName = "",
 }) => {
   const safeVerdict = verdict && typeof verdict === "object" ? verdict : {};
-  const providedHighlights = normalizeVerdictList(safeVerdict.highlights);
-  const providedConcerns = normalizeVerdictList(safeVerdict.concerns);
-  const fallbackHighlights = normalizeVerdictList(fallbackVerdict.highlights);
-  const fallbackConcerns = normalizeVerdictList(fallbackVerdict.concerns);
-  const strengths = normalizeVerdictList(playerStrengths);
-  const weaknesses = normalizeVerdictList(playerWeaknesses);
+  const perspective = { playerSide, playerPartyName, opponentPartyName };
+  const providedHighlights = normalizeVerdictList(safeVerdict.highlights).map((item) =>
+    rewriteVerdictForPlayerAddress(item, perspective)
+  );
+  const providedConcerns = normalizeVerdictList(safeVerdict.concerns).map((item) =>
+    rewriteVerdictForPlayerAddress(item, perspective)
+  );
+  const fallbackHighlights = normalizeVerdictList(fallbackVerdict.highlights).map((item) =>
+    rewriteVerdictForPlayerAddress(item, perspective)
+  );
+  const fallbackConcerns = normalizeVerdictList(fallbackVerdict.concerns).map((item) =>
+    rewriteVerdictForPlayerAddress(item, perspective)
+  );
+  const strengths = normalizeVerdictList(playerStrengths).map((item) =>
+    rewriteVerdictForPlayerAddress(item, perspective)
+  );
+  const weaknesses = normalizeVerdictList(playerWeaknesses).map((item) =>
+    rewriteVerdictForPlayerAddress(item, perspective)
+  );
 
   const adverseHighlights = providedHighlights.filter(isPlayerAdverseVerdictPoint);
   const playerHelpfulHighlights = providedHighlights.filter(

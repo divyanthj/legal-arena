@@ -563,6 +563,8 @@ export const mergeFactSheet = (current, patch, template, options = {}) => {
     discoveredEvidenceIds,
   };
 
+  next.risks = sanitizeFactSheet(next).risks;
+
   next.ready =
     next.theory.length >= 1 &&
     next.desiredRelief.length >= 1 &&

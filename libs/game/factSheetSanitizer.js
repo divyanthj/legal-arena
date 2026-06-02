@@ -195,6 +195,10 @@ const simplifySupportingFact = (text = "") => {
     return "Rent was paid on time.";
   }
 
+  if (mentionsNormalRentalHistory(cleaned)) {
+    return "Rental history was normal, with no prior similar disputes.";
+  }
+
   if (
     /\b(cleaned|clean)\b/i.test(cleaned) &&
     /\b(apartment|unit|floors|kitchen|bathroom|before leaving|before move-?out)\b/i.test(cleaned)
@@ -593,7 +597,34 @@ const isBadRisk = (item = "") => {
     return true;
   }
 
+  if (mentionsNormalRentalHistory(text)) {
+    return true;
+  }
+
   return false;
+};
+
+const mentionsNormalRentalHistory = (item = "") =>
+  /\b(rental history|prior landlord|prior landlords|other landlord|other landlords|first time|first problem|first dispute|never had|no prior|no bad notes|normal)\b/i.test(
+    item
+  ) &&
+  /\b(normal|first time|first problem|first dispute|never had|no prior|no bad notes|no issue|no issues)\b/i.test(
+    item
+  );
+
+const removeResolvedCredibilityRisks = (risks = [], factSheet = {}) => {
+  const supportCorpus = [
+    ...(factSheet.supportingFacts || []),
+    ...(factSheet.corroboratedFacts || []),
+  ].join(" ");
+
+  if (!mentionsNormalRentalHistory(supportCorpus)) {
+    return risks;
+  }
+
+  return risks.filter(
+    (risk) => !/^cleanliness depends partly on client credibility\.$/i.test(risk)
+  );
 };
 
 const withUnavailablePrefix = (original = "", cleaned = "") => {
@@ -850,9 +881,11 @@ export const sanitizeFactSheet = (factSheet = {}) => {
     corroboratedFacts: sanitizeFactSheetList("corroboratedFacts", factSheet.corroboratedFacts),
     missingEvidence: sanitizeFactSheetList("missingEvidence", factSheet.missingEvidence),
   };
+  const resolvedRisks = removeResolvedCredibilityRisks(sanitized.risks, sanitized);
 
   return {
     ...sanitized,
+    risks: resolvedRisks,
     summary: buildUsefulSummary(sanitized),
   };
 };

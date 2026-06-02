@@ -79,6 +79,50 @@ const getMissingEvidenceTone = (item = "") => {
 const formatMissingEvidenceLabel = (item = "") =>
   String(item || "").replace(/^unavailable:\s*/i, "");
 
+const strongProofPattern =
+  /\b(photo|photos|message|messages|text|texts|receipt|receipts|invoice|invoices|letter|email|emails|witness|witnesses|record|records|checklist|inspection|lease|statement|bank|deposit|paid|returned the keys|notice)\b/i;
+
+const coreHelpfulFactPattern =
+  /\b(security deposit|deposit|paid rent|paid on time|cleaned|ordinary wear|ordinary wear and tear|returned the keys|gave notice|not justified|unsupported|not provided|withheld|deduction|deductions|repair charges|text messages|move-out instructions)\b/i;
+
+const seriousWeaknessPattern =
+  /\b(no|not|none|lack|missing|cannot|can't|unavailable|unsupported|vague|credibility|depends|may say|might say|inspection|photos|proof|receipts|invoice|letter|not confirmed|harder to prove)\b/i;
+
+const centralDisputePattern =
+  /\b(dispute|disputed|fight|argue|condition|clean|ordinary wear|damage|deduction|deductions|withheld|deposit|repair|repairs|charges|notice|timeline|amount|owed)\b/i;
+
+const getFactSheetItemTone = (sectionKey, item = "") => {
+  const text = String(item || "");
+
+  if (sectionKey === "missingEvidence") {
+    return getMissingEvidenceTone(text) === "unavailable" ? "danger" : "secondary";
+  }
+
+  if (sectionKey === "supportingFacts") {
+    return coreHelpfulFactPattern.test(text) ? "strong" : "secondary";
+  }
+
+  if (sectionKey === "corroboratedFacts") {
+    return strongProofPattern.test(text) ? "strong" : "secondary";
+  }
+
+  if (sectionKey === "risks") {
+    return seriousWeaknessPattern.test(text) ? "danger" : "secondary";
+  }
+
+  if (sectionKey === "disputedFacts") {
+    return centralDisputePattern.test(text) ? "danger" : "secondary";
+  }
+
+  return "secondary";
+};
+
+const factSheetBulletToneClass = {
+  danger: "bg-red-400/85",
+  strong: "bg-emerald-300/85",
+  secondary: "bg-amber-300/80",
+};
+
 const LoadingBar = ({ label = "Loading" }) => (
   <div className="space-y-2" role="status" aria-label={label}>
     <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
@@ -1054,9 +1098,7 @@ export default function CaseWorkspace({
           {hasDraftRows ? (
             <div className="space-y-3">
               {items.map((item, itemIndex) => {
-                const unavailableGap =
-                  section.key === "missingEvidence" &&
-                  getMissingEvidenceTone(item) === "unavailable";
+                const bulletTone = getFactSheetItemTone(section.key, item);
 
                 return (
                   <div
@@ -1065,7 +1107,7 @@ export default function CaseWorkspace({
                   >
                     <span
                       className={`mt-2.5 h-1.5 w-1.5 shrink-0 rounded-full ${
-                        unavailableGap ? "bg-red-400/85" : "bg-amber-300/80"
+                        factSheetBulletToneClass[bulletTone] || factSheetBulletToneClass.secondary
                       }`}
                     />
                     <p className="min-w-0 flex-1 text-sm leading-7 text-white/78">

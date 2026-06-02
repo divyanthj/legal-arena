@@ -49,6 +49,7 @@ import {
   normalizeCourtroomDeltasForDifficulty,
   normalizePlayerPerspectiveVerdictLists,
   normalizeVerdictForDifficulty,
+  rewriteVerdictForPlayerAddress,
 } from "../courtroomDifficulty.js";
 import { pickRuleMentions } from "../lawbookCitation.js";
 
@@ -692,16 +693,27 @@ const normalizeVerdictForPlayerPerspective = ({
   playerStrengths,
   playerWeaknesses,
   fallbackVerdict,
+  playerSide,
+  playerPartyName,
+  opponentPartyName,
 }) => {
   const lists = normalizePlayerPerspectiveVerdictLists({
     verdict,
     playerStrengths,
     playerWeaknesses,
     fallbackVerdict,
+    playerSide,
+    playerPartyName,
+    opponentPartyName,
   });
 
   return {
     ...verdict,
+    summary: rewriteVerdictForPlayerAddress(verdict.summary, {
+      playerSide,
+      playerPartyName,
+      opponentPartyName,
+    }),
     highlights: lists.highlights,
     concerns: lists.concerns,
   };
@@ -859,6 +871,9 @@ export const normalizeCourtResult = ({
       playerStrengths: normalized.strengths,
       playerWeaknesses: normalized.weaknesses,
       fallbackVerdict: normalizedFallbackVerdict,
+      playerSide,
+      playerPartyName: getPartyName(template, playerSide),
+      opponentPartyName: getPartyName(template, opponentSide),
     }),
   };
 };

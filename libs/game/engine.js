@@ -359,6 +359,10 @@ const buildConversationFactSheetPatch = async ({
     const mergedPatch = normalizeFactSheetPatch({
       ...patch,
       timeline: uniqueList([...patch.timeline, ...fallbackProofAndClassificationPatch.timeline]),
+      supportingFacts: uniqueList([
+        ...patch.supportingFacts,
+        ...fallbackProofAndClassificationPatch.supportingFacts,
+      ]),
       risks: uniqueList([...patch.risks, ...fallbackProofAndClassificationPatch.risks]),
       disputedFacts: uniqueList([
         ...patch.disputedFacts,
@@ -410,6 +414,8 @@ const disputePattern =
   /\b(accused|allege|alleged|alleges|alleging|claim|claims|claimed|dispute|disputed|disagreement|wrong category|miscategorization|misclassification|misclassified|not acknowledg(?:e|ing)|do not acknowledg(?:e|ing)|don't acknowledg(?:e|ing)|not conced(?:e|ing)|deny|denies|denied|should have been|lower-fee|reduction should have applied|refund was due|no refund was due|no confirmed error)\b/i;
 const intakeRiskPattern =
   /\b(risk|risks|argue|against|worry|problem|weak|weakness|unsupported|guessing|prove|cannot prove|records showed|not sure|don't remember|do not remember|cannot confirm|can't confirm|not confirmed|no confirmed|do not have|don't have|not have|cannot point to|can't point to|no documented|no clear written|no confirmed written|no confirmed set|exact category|specific actionable response)\b/i;
+const normalRentalHistoryPattern =
+  /(?=.*\b(rental history|prior landlord|prior landlords|other landlord|other landlords)\b)(?=.*\b(normal|first time|first problem|first dispute|never had|no prior|no bad notes|no issue|no issues)\b)/i;
 
 const summarizeProofNeed = (question = "", answer = "") => {
   const text = `${question} ${answer}`.toLowerCase();
@@ -575,6 +581,10 @@ export const buildConversationFactSheetFallback = ({
   };
   const proofRelated = proofTermPattern.test(lower);
 
+  if (!proofRelated && normalRentalHistoryPattern.test(lower)) {
+    patch.supportingFacts.push("Rental history was normal, with no prior similar disputes.");
+  }
+
   if (
     !proofRelated &&
     /\b(need|want|asking|request|relief|deposit|damages|refund|return)\b/i.test(lower)
@@ -619,8 +629,12 @@ export const buildConversationFactSheetFallback = ({
     patch.disputedFacts.push(`Live dispute from intake: ${answer}`);
   }
 
-  if (!proofRelated && intakeRiskPattern.test(lower)) {
-    patch.risks.push(`Risk from intake: ${answer}`);
+  if (
+    !proofRelated &&
+    !normalRentalHistoryPattern.test(lower) &&
+    intakeRiskPattern.test(lower)
+  ) {
+    patch.risks.push("Point may need more support.");
   }
 
   if (
@@ -710,6 +724,9 @@ export const runCourtroomRound = async ({ caseSession, argument, userId }) => {
         "If returning a verdict, highlights must list only points that helped the represented player's side.",
         "If returning a verdict, concerns must list only points that weakened the represented player's side.",
         "Do not put adverse findings against the represented player in highlights, even if they were important to the court's ruling.",
+        "Write verdict.summary, highlights, and concerns for the player as the reader. Prefer 'you', 'your side', and 'the other side' over role labels like plaintiff or defendant.",
+        "Still respect representedSide when using 'you': 'you' means only the represented player's side, not the opposing side.",
+        "Keep highlights and concerns short, direct, and player-facing: for example, 'You established the deposit amount' or 'You did not tie the requested relief to specific deductions.'",
         "Do not prefix highlights or concerns with bullets, hyphens, numbering, or markdown.",
       ],
       courtroomArchitecture: buildCourtroomAgentContext({
