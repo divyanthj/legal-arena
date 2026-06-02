@@ -513,7 +513,7 @@ export default function DashboardHub({
   userName = "Counsel",
   userImage = "",
   userEmail = "",
-  hasArenaAccess = false,
+  canStartSoloCases = false,
 }) {
   const router = useRouter();
   const { startNavigationLoading } = useNavigationLoading();
@@ -650,7 +650,7 @@ export default function DashboardHub({
 
   const handleCreateCase = async (caseTemplateId) => {
     if (!caseTemplateId) return;
-    if (!hasArenaAccess) {
+    if (!canStartSoloCases) {
       setShowPaywallModal(true);
       return;
     }

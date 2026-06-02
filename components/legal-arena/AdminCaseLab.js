@@ -50,6 +50,88 @@ const retentionThresholdLabels = {
   newContentWindowDays: "Relevant new matter freshness window in days",
 };
 
+const defaultFreeGameplayCampaign = {
+  enabled: false,
+  startsAt: "",
+  endsAt: "",
+  announcementEnabled: false,
+  announcementTitle: "Free solo cases are open",
+  announcementBody:
+    "Start any solo case and play through your first verdict while this campaign is live.",
+  announcementCtaLabel: "Play Free Case",
+  announcementCtaHref: "/dashboard",
+};
+const FREE_GAMEPLAY_START_NOW_DEFAULT_DAYS = 7;
+
+const toDatetimeLocal = (value = "") => {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  const offsetMs = date.getTimezoneOffset() * 60 * 1000;
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+};
+
+const fromDatetimeLocal = (value = "") => {
+  if (!value) return "";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString();
+};
+
+const getValidFutureCampaignEnd = (currentEnd = "", now = new Date()) => {
+  const endDate = currentEnd ? new Date(currentEnd) : null;
+
+  if (endDate && !Number.isNaN(endDate.getTime()) && endDate > now) {
+    return endDate.toISOString();
+  }
+
+  return new Date(
+    now.getTime() + FREE_GAMEPLAY_START_NOW_DEFAULT_DAYS * 24 * 60 * 60 * 1000
+  ).toISOString();
+};
+
+const getCampaignStatusLabel = (campaign = {}) => {
+  if (!campaign.enabled) {
+    return { label: "Inactive", body: "Free solo gameplay is closed.", tone: "text-white/56" };
+  }
+
+  const startsAt = campaign.startsAt ? new Date(campaign.startsAt) : null;
+  const endsAt = campaign.endsAt ? new Date(campaign.endsAt) : null;
+  const now = new Date();
+
+  if (
+    !startsAt ||
+    !endsAt ||
+    Number.isNaN(startsAt.getTime()) ||
+    Number.isNaN(endsAt.getTime()) ||
+    startsAt >= endsAt
+  ) {
+    return { label: "Invalid Window", body: "Add a valid start and end date.", tone: "text-amber-300" };
+  }
+
+  if (now < startsAt) {
+    return {
+      label: "Scheduled",
+      body: `Opens ${startsAt.toLocaleString()}.`,
+      tone: "text-sky-300",
+    };
+  }
+
+  if (now > endsAt) {
+    return {
+      label: "Expired",
+      body: `Closed ${endsAt.toLocaleString()}.`,
+      tone: "text-white/56",
+    };
+  }
+
+  return {
+    label: "Active",
+    body: `Open until ${endsAt.toLocaleString()}.`,
+    tone: "text-emerald-300",
+  };
+};
+
 export default function AdminCaseLab({
   categories,
   initialTemplates,
@@ -100,6 +182,9 @@ export default function AdminCaseLab({
   const [deletingTemplateId, setDeletingTemplateId] = useState("");
   const [retentionConfig, setRetentionConfig] = useState(null);
   const [digestConfig, setDigestConfig] = useState(null);
+  const [freeGameplayCampaign, setFreeGameplayCampaign] = useState(
+    defaultFreeGameplayCampaign
+  );
   const [retentionRunForm, setRetentionRunForm] = useState({
     dryRun: true,
     limit: 50,
@@ -184,6 +269,8 @@ export default function AdminCaseLab({
   const hasActiveInventoryFilters =
     inventoryFilters.category !== ALL_FILTER_OPTION ||
     inventoryFilters.complexity !== ALL_FILTER_OPTION;
+  const freeGameplayCampaignStatus =
+    getCampaignStatusLabel(freeGameplayCampaign);
 
   useEffect(() => {
     let cancelled = false;
@@ -198,6 +285,10 @@ export default function AdminCaseLab({
 
         setRetentionConfig(result.config?.retention || null);
         setDigestConfig(result.config?.digest || null);
+        setFreeGameplayCampaign({
+          ...defaultFreeGameplayCampaign,
+          ...(result.config?.freeGameplayCampaign || {}),
+        });
         setRecentNudges(result.recentNudges || []);
         setRetentionRunForm((current) => ({
           ...current,
@@ -647,16 +738,21 @@ export default function AdminCaseLab({
       const result = await apiClient.patch("/admin/ops-config", {
         retention: retentionConfig,
         digest: digestConfig,
+        freeGameplayCampaign,
       });
 
       setRetentionConfig(result.config.retention);
       setDigestConfig(result.config.digest);
+      setFreeGameplayCampaign({
+        ...defaultFreeGameplayCampaign,
+        ...(result.config.freeGameplayCampaign || {}),
+      });
       setRetentionRunForm((current) => ({
         ...current,
         dryRun: result.config.retention.runDefaults?.dryRun ?? current.dryRun,
         limit: result.config.retention.runDefaults?.limit ?? current.limit,
       }));
-      toast.success("Retention ops configuration saved.");
+      toast.success("Admin ops configuration saved.");
     } catch (error) {
       toast.error(
         error?.response?.data?.error ||
@@ -666,6 +762,27 @@ export default function AdminCaseLab({
     } finally {
       setOpsSaving(false);
     }
+  };
+
+  const startFreeGameplayCampaignImmediately = () => {
+    const now = new Date();
+
+    setFreeGameplayCampaign((current) => ({
+      ...current,
+      enabled: true,
+      startsAt: now.toISOString(),
+      endsAt: getValidFutureCampaignEnd(current.endsAt, now),
+      announcementEnabled: true,
+      announcementTitle:
+        current.announcementTitle || defaultFreeGameplayCampaign.announcementTitle,
+      announcementBody:
+        current.announcementBody || defaultFreeGameplayCampaign.announcementBody,
+      announcementCtaLabel:
+        current.announcementCtaLabel ||
+        defaultFreeGameplayCampaign.announcementCtaLabel,
+      announcementCtaHref:
+        current.announcementCtaHref || defaultFreeGameplayCampaign.announcementCtaHref,
+    }));
   };
 
   const handleRunRetention = async (event) => {
@@ -1826,9 +1943,185 @@ export default function AdminCaseLab({
         ) : null}
 
         {activeTab === "system" ? (
-          <section className="grid gap-6 xl:grid-cols-[1fr_1fr]">
-            <div className="arena-surface">
+          <section className="space-y-6">
+            <form className="arena-surface" onSubmit={handleSaveOpsConfig}>
               <div className="p-6">
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <p className="arena-kicker">Free Gameplay Campaign</p>
+                    <h2 className="arena-headline mt-2 text-2xl">
+                      One free solo verdict
+                    </h2>
+                    <p className={`mt-2 text-sm ${freeGameplayCampaignStatus.tone}`}>
+                      {freeGameplayCampaignStatus.label}: {freeGameplayCampaignStatus.body}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      className="arena-btn-dark px-5 py-3"
+                      disabled={opsSaving}
+                      onClick={startFreeGameplayCampaignImmediately}
+                    >
+                      Start Immediately
+                    </button>
+                    <button className="arena-btn-light px-5 py-3" disabled={opsSaving}>
+                      {opsSaving ? "Saving..." : "Save Campaign"}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-5 grid gap-4 lg:grid-cols-3">
+                  <label className="arena-surface-soft flex items-center justify-between gap-4 p-4">
+                    <div>
+                      <p className="text-sm font-semibold text-white">
+                        Campaign enabled
+                      </p>
+                      <p className="mt-1 text-sm text-white/56">
+                        Opens unpaid solo gameplay only during the configured window.
+                      </p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      className={arenaToggleClass}
+                      checked={freeGameplayCampaign.enabled}
+                      onChange={(event) =>
+                        setFreeGameplayCampaign((current) => ({
+                          ...current,
+                          enabled: event.target.checked,
+                        }))
+                      }
+                    />
+                  </label>
+
+                  <label className="form-control">
+                    <span className="label-text font-semibold text-white">Starts at</span>
+                    <input
+                      className={arenaInputClass}
+                      type="datetime-local"
+                      value={toDatetimeLocal(freeGameplayCampaign.startsAt)}
+                      onChange={(event) =>
+                        setFreeGameplayCampaign((current) => ({
+                          ...current,
+                          startsAt: fromDatetimeLocal(event.target.value),
+                        }))
+                      }
+                    />
+                  </label>
+
+                  <label className="form-control">
+                    <span className="label-text font-semibold text-white">Ends at</span>
+                    <input
+                      className={arenaInputClass}
+                      type="datetime-local"
+                      value={toDatetimeLocal(freeGameplayCampaign.endsAt)}
+                      onChange={(event) =>
+                        setFreeGameplayCampaign((current) => ({
+                          ...current,
+                          endsAt: fromDatetimeLocal(event.target.value),
+                        }))
+                      }
+                    />
+                  </label>
+                </div>
+
+                <div className="mt-6 grid gap-4 lg:grid-cols-[0.75fr_1fr_1fr]">
+                  <label className="arena-surface-soft flex items-center justify-between gap-4 p-4">
+                    <div>
+                      <p className="text-sm font-semibold text-white">
+                        Landing notice
+                      </p>
+                      <p className="mt-1 text-sm text-white/56">
+                        Shows only while the campaign is active.
+                      </p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      className={arenaToggleClass}
+                      checked={freeGameplayCampaign.announcementEnabled}
+                      onChange={(event) =>
+                        setFreeGameplayCampaign((current) => ({
+                          ...current,
+                          announcementEnabled: event.target.checked,
+                        }))
+                      }
+                    />
+                  </label>
+
+                  <label className="form-control">
+                    <span className="label-text font-semibold text-white">
+                      Notice title
+                    </span>
+                    <input
+                      className={arenaInputClass}
+                      value={freeGameplayCampaign.announcementTitle}
+                      onChange={(event) =>
+                        setFreeGameplayCampaign((current) => ({
+                          ...current,
+                          announcementTitle: event.target.value,
+                        }))
+                      }
+                      placeholder="Free gameplay weekend is live"
+                    />
+                  </label>
+
+                  <label className="form-control">
+                    <span className="label-text font-semibold text-white">
+                      CTA label
+                    </span>
+                    <input
+                      className={arenaInputClass}
+                      value={freeGameplayCampaign.announcementCtaLabel}
+                      onChange={(event) =>
+                        setFreeGameplayCampaign((current) => ({
+                          ...current,
+                          announcementCtaLabel: event.target.value,
+                        }))
+                      }
+                      placeholder="Try a Case"
+                    />
+                  </label>
+                </div>
+
+                <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_0.45fr]">
+                  <label className="form-control">
+                    <span className="label-text font-semibold text-white">
+                      Notice body
+                    </span>
+                    <textarea
+                      className={`${arenaTextareaClass} h-28`}
+                      value={freeGameplayCampaign.announcementBody}
+                      onChange={(event) =>
+                        setFreeGameplayCampaign((current) => ({
+                          ...current,
+                          announcementBody: event.target.value,
+                        }))
+                      }
+                      placeholder="Start any solo case and play until your first verdict before the campaign closes."
+                    />
+                  </label>
+
+                  <label className="form-control">
+                    <span className="label-text font-semibold text-white">CTA href</span>
+                    <input
+                      className={arenaInputClass}
+                      value={freeGameplayCampaign.announcementCtaHref}
+                      onChange={(event) =>
+                        setFreeGameplayCampaign((current) => ({
+                          ...current,
+                          announcementCtaHref: event.target.value,
+                        }))
+                      }
+                      placeholder="/dashboard"
+                    />
+                  </label>
+                </div>
+              </div>
+            </form>
+
+            <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
+              <div className="arena-surface">
+                <div className="p-6">
                 <p className="arena-kicker">System</p>
                 <h2 className="arena-headline mt-2 text-2xl">Admin access</h2>
                 <div className="mt-5 space-y-3">
@@ -1838,11 +2131,11 @@ export default function AdminCaseLab({
                     </div>
                   ))}
                 </div>
+                </div>
               </div>
-            </div>
 
-            <div className="arena-surface">
-              <div className="p-6">
+              <div className="arena-surface">
+                <div className="p-6">
                 <p className="arena-kicker">User Access</p>
                 <h2 className="arena-headline mt-2 text-2xl">Free access grants</h2>
                 <form className="mt-5 grid gap-4" onSubmit={handleGrantFreeAccess}>
@@ -1915,6 +2208,7 @@ export default function AdminCaseLab({
                       </div>
                     )}
                   </div>
+                </div>
                 </div>
               </div>
             </div>

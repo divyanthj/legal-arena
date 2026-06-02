@@ -156,6 +156,20 @@ const caseSessionSchema = mongoose.Schema(
       type: Date,
       default: null,
     },
+    freeGameplayCampaignAccess: {
+      grantedAt: {
+        type: Date,
+        default: null,
+      },
+      campaignStartsAt: {
+        type: Date,
+        default: null,
+      },
+      campaignEndsAt: {
+        type: Date,
+        default: null,
+      },
+    },
     lawbookVersion: {
       type: String,
       required: true,

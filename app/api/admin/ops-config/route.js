@@ -68,6 +68,7 @@ export async function PATCH(req) {
     const config = await upsertAdminOpsConfig({
       retention: body.retention,
       digest: body.digest,
+      freeGameplayCampaign: body.freeGameplayCampaign,
     });
 
     return NextResponse.json({ config });

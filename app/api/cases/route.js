@@ -5,7 +5,7 @@ import {
   createCaseSession,
   listDashboardDataForUser,
 } from "@/libs/game/store";
-import { userCanAccessArena } from "@/libs/admin";
+import { getSoloGameplayAccessForSession } from "@/libs/admin";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -13,10 +13,14 @@ export async function GET() {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   }
-  if (!(await userCanAccessArena(session))) {
+  const access = await getSoloGameplayAccessForSession({
+    session,
+    action: "list",
+  });
+  if (!access.allowed) {
     return NextResponse.json(
-      { error: "Legal Arena is still in development. Access is currently limited." },
-      { status: 403 }
+      { error: access.message },
+      { status: access.status || 403 }
     );
   }
 
@@ -45,10 +49,14 @@ export async function POST(req) {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   }
-  if (!(await userCanAccessArena(session))) {
+  const access = await getSoloGameplayAccessForSession({
+    session,
+    action: "create",
+  });
+  if (!access.allowed) {
     return NextResponse.json(
-      { error: "Legal Arena is still in development. Access is currently limited." },
-      { status: 403 }
+      { error: access.message },
+      { status: access.status || 403 }
     );
   }
 
@@ -58,6 +66,7 @@ export async function POST(req) {
       userId: session.user.id,
       userProfile: session.user,
       caseTemplateId: body?.caseTemplateId,
+      freeGameplayCampaignAccess: access.freeGameplayCampaignAccess,
     });
 
     return NextResponse.json({ caseSession });

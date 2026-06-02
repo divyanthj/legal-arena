@@ -2,6 +2,15 @@ import "server-only";
 import mongoose from "mongoose";
 import connectMongo from "@/libs/mongoose";
 import User from "@/models/User";
+import CaseSession from "@/models/CaseSession";
+import {
+  getAdminOpsConfig,
+  getFreeGameplayCampaignStatus,
+} from "@/libs/adminOps";
+import {
+  FREE_GAMEPLAY_PAYWALL_MESSAGE,
+  resolveSoloGameplayAccessDecision,
+} from "@/libs/freeGameplayCampaignAccess";
 
 const normalizeEmail = (value = "") => value.trim().toLowerCase();
 
@@ -97,6 +106,85 @@ export const userCanAccessArena = async (session) => {
   }
 
   return true;
+};
+
+export const getFullArenaAccessForSession = async (session) =>
+  userCanAccessArena(session);
+
+const getUserForAccess = async (session) => {
+  if (!session?.user?.id) {
+    return null;
+  }
+
+  await connectMongo();
+  return User.findById(session.user.id).select(
+    "_id email hasAccess freeAccessGranted progression"
+  );
+};
+
+const buildFreeCampaignGrant = (campaign) => ({
+  grantedAt: new Date(),
+  campaignStartsAt: campaign.startsAt ? new Date(campaign.startsAt) : null,
+  campaignEndsAt: campaign.endsAt ? new Date(campaign.endsAt) : null,
+});
+
+const buildCaseAccessQuery = ({ userId, caseId }) => {
+  const normalizedCaseId = String(caseId || "").trim();
+
+  if (mongoose.Types.ObjectId.isValid(normalizedCaseId)) {
+    return {
+      userId,
+      $or: [{ _id: normalizedCaseId }, { slug: normalizedCaseId }],
+    };
+  }
+
+  return { userId, slug: normalizedCaseId };
+};
+
+export const getSoloGameplayAccessForSession = async ({
+  session,
+  caseId = "",
+  action = "play",
+} = {}) => {
+  if (!session?.user?.id) {
+    return resolveSoloGameplayAccessDecision({ signedIn: false });
+  }
+
+  const hasFullAccess = await userCanAccessArena(session);
+  if (hasFullAccess) {
+    return resolveSoloGameplayAccessDecision({ hasFullAccess: true });
+  }
+
+  const [user, config] = await Promise.all([
+    getUserForAccess(session),
+    getAdminOpsConfig(),
+  ]);
+  const campaignStatus = getFreeGameplayCampaignStatus(
+    config.freeGameplayCampaign
+  );
+
+  let caseSession = null;
+  if (caseId) {
+    caseSession = await CaseSession.findOne(
+      buildCaseAccessQuery({ userId: session.user.id, caseId })
+    ).select("status freeGameplayCampaignAccess");
+  }
+
+  const decision = resolveSoloGameplayAccessDecision({
+    signedIn: true,
+    hasFullAccess,
+    progression: user?.progression,
+    caseSession,
+    campaignStatus,
+    action,
+    buildCampaignGrant: buildFreeCampaignGrant,
+  });
+
+  return {
+    ...decision,
+    message: decision.message || FREE_GAMEPLAY_PAYWALL_MESSAGE,
+    caseSession,
+  };
 };
 
 export const getCaseGeneratorApiKey = () =>

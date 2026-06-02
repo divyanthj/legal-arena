@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/libs/next-auth";
 import { exitCaseSessionForUser } from "@/libs/game/store";
-import { userCanAccessArena } from "@/libs/admin";
+import { getSoloGameplayAccessForSession } from "@/libs/admin";
 
 export async function POST(req, { params }) {
   const session = await getServerSession(authOptions);
@@ -10,10 +10,15 @@ export async function POST(req, { params }) {
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   }
-  if (!(await userCanAccessArena(session))) {
+  const access = await getSoloGameplayAccessForSession({
+    session,
+    caseId: params.caseId,
+    action: "play",
+  });
+  if (!access.allowed) {
     return NextResponse.json(
-      { error: "Legal Arena is still in development. Access is currently limited." },
-      { status: 403 }
+      { error: access.message },
+      { status: access.status || 403 }
     );
   }
 

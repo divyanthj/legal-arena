@@ -9,7 +9,7 @@ import {
   listOverallLeaderboard,
 } from "@/libs/game/progression";
 import { LEGAL_CASE_CATEGORIES } from "@/libs/game/categories";
-import { isAdminEmail, userCanAccessArena } from "@/libs/admin";
+import { getSoloGameplayAccessForSession, isAdminEmail } from "@/libs/admin";
 import { toClientJSON } from "@/libs/serialize";
 
 export const dynamic = "force-dynamic";
@@ -46,7 +46,10 @@ export default async function Dashboard() {
     redirect("/");
   }
 
-  const hasArenaAccess = await userCanAccessArena(session);
+  const soloCreateAccess = await getSoloGameplayAccessForSession({
+    session,
+    action: "create",
+  });
 
   const [dashboardData, challenges, overallLeaderboard, categoryLeaderboards] = await Promise.all([
     listDashboardDataForUser(session.user.id, session.user),
@@ -80,7 +83,7 @@ export default async function Dashboard() {
       userName={session.user?.name || session.user?.email}
       userImage={session.user?.image || ""}
       userEmail={session.user?.email || ""}
-      hasArenaAccess={hasArenaAccess}
+      canStartSoloCases={soloCreateAccess.allowed}
     />
   );
 }

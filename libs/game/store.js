@@ -34,7 +34,6 @@ import { normalizeOnboarding } from "./onboarding";
 import { sanitizeFactSheet } from "./factSheetSanitizer";
 
 const toPlain = (doc) => (doc?.toJSON ? doc.toJSON() : doc);
-const CASE_EXIT_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_PLAYER_SIDE = "client";
 const OPPOSING_SIDE = {
   client: "opponent",
@@ -493,14 +492,6 @@ export const buildPlaintiffCourtOpeningStatement = (templateInput = {}) => {
 const getTemplateSlugFromSession = (caseSession) =>
   caseSession.templateSlug || caseSession.scenarioId || "";
 
-const formatCooldownEndsAt = (value) =>
-  value.toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-
 const applyTemplateMetadataToSession = (caseSession, template) => {
   if (!caseSession || !template) {
     return false;
@@ -539,33 +530,6 @@ const applyTemplateMetadataToSession = (caseSession, template) => {
 const defaultOpenQuestions = (template, side) =>
   buildSuggestedQuestionsForSide(template, side);
 
-const getActiveExitCooldowns = async (userId) => {
-  const threshold = new Date(Date.now() - CASE_EXIT_COOLDOWN_MS);
-  const exitedSessions = await CaseSession.find({
-    userId,
-    status: "exited",
-    exitedAt: { $gte: threshold },
-  })
-    .select("caseTemplateId exitedAt")
-    .sort({ exitedAt: -1 });
-
-  const cooldowns = new Map();
-
-  exitedSessions.forEach((session) => {
-    const templateId = String(session.caseTemplateId);
-    const cooldownEndsAt = new Date(
-      new Date(session.exitedAt).getTime() + CASE_EXIT_COOLDOWN_MS
-    );
-    const current = cooldowns.get(templateId);
-
-    if (!current || cooldownEndsAt > current) {
-      cooldowns.set(templateId, cooldownEndsAt);
-    }
-  });
-
-  return cooldowns;
-};
-
 const getActiveCompletedCooldowns = async (userId) => {
   const completedSessions = await CaseSession.find({
     userId,
@@ -590,15 +554,12 @@ const getActiveCompletedCooldowns = async (userId) => {
 const getTemplateAvailability = ({
   template,
   progression,
-  exitCooldownEndsAt = null,
   completionCooldownEndsAt = null,
 }) => {
   const eligibleComplexity = getEligibleComplexityForCategory(
     progression,
     template.primaryCategory
   );
-  const now = new Date();
-  const exitCooldownActive = exitCooldownEndsAt && exitCooldownEndsAt > now;
   const completionLockActive = Boolean(completionCooldownEndsAt);
   const unlockedByProgression = template.complexity <= eligibleComplexity;
 
@@ -609,18 +570,6 @@ const getTemplateAvailability = ({
       cooldownEndsAt: null,
       unlockReason: "Case completed.",
       blockReason: "This case has already been completed.",
-    };
-  }
-
-  if (exitCooldownActive) {
-    return {
-      visible: true,
-      unlocked: unlockedByProgression && !exitCooldownActive,
-      cooldownEndsAt: exitCooldownEndsAt,
-      unlockReason: "Available again soon.",
-      blockReason: `This case is on cooldown until ${formatCooldownEndsAt(
-        exitCooldownEndsAt
-      )}.`,
     };
   }
 
@@ -646,13 +595,11 @@ const getTemplateAvailability = ({
 const buildTemplateCard = ({
   template,
   progression,
-  exitCooldownEndsAt = null,
   completionCooldownEndsAt = null,
 }) => {
   const availability = getTemplateAvailability({
     template,
     progression,
-    exitCooldownEndsAt,
     completionCooldownEndsAt,
   });
 
@@ -773,13 +720,12 @@ export const listScenarioOptions = async (userId, userProfile = null) => {
 
   const user = await ensureUserProfile(userId, userProfile);
   const progression = normalizeProgression(user?.progression);
-  const [templates, exitCooldowns, completedCooldowns] = await Promise.all([
+  const [templates, completedCooldowns] = await Promise.all([
     CaseTemplate.find({ status: "active" }).sort({
       primaryCategory: 1,
       complexity: 1,
       createdAt: -1,
     }),
-    getActiveExitCooldowns(userId),
     getActiveCompletedCooldowns(userId),
   ]);
 
@@ -788,7 +734,6 @@ export const listScenarioOptions = async (userId, userProfile = null) => {
     const availability = getTemplateAvailability({
       template,
       progression,
-      exitCooldownEndsAt: exitCooldowns.get(String(templateDocument._id)) || null,
       completionCooldownEndsAt:
         completedCooldowns.get(String(templateDocument._id)) || null,
     });
@@ -801,7 +746,6 @@ export const listScenarioOptions = async (userId, userProfile = null) => {
       buildTemplateCard({
         template,
         progression,
-        exitCooldownEndsAt: exitCooldowns.get(String(templateDocument._id)) || null,
         completionCooldownEndsAt:
           completedCooldowns.get(String(templateDocument._id)) || null,
       }),
@@ -809,7 +753,12 @@ export const listScenarioOptions = async (userId, userProfile = null) => {
   });
 };
 
-export const createCaseSession = async ({ userId, userProfile = null, caseTemplateId }) => {
+export const createCaseSession = async ({
+  userId,
+  userProfile = null,
+  caseTemplateId,
+  freeGameplayCampaignAccess = null,
+}) => {
   await connectMongo();
 
   const templateDocument = await CaseTemplate.findOne({
@@ -827,14 +776,10 @@ export const createCaseSession = async ({ userId, userProfile = null, caseTempla
 
   const user = await ensureUserProfile(userId, userProfile);
   const progression = normalizeProgression(user?.progression);
-  const [exitCooldowns, completedCooldowns] = await Promise.all([
-    getActiveExitCooldowns(userId),
-    getActiveCompletedCooldowns(userId),
-  ]);
+  const completedCooldowns = await getActiveCompletedCooldowns(userId);
   const availability = getTemplateAvailability({
     template,
     progression,
-    exitCooldownEndsAt: exitCooldowns.get(String(templateDocument._id)) || null,
     completionCooldownEndsAt:
       completedCooldowns.get(String(templateDocument._id)) || null,
   });
@@ -856,6 +801,7 @@ export const createCaseSession = async ({ userId, userProfile = null, caseTempla
     complexity: template.complexity,
     playerSide,
     status: "interview",
+    freeGameplayCampaignAccess: freeGameplayCampaignAccess || undefined,
     lawbookVersion: LAWBOOK_VERSION,
     maxCourtRounds: Math.max(3, template.complexity + 1),
     templateSnapshot,

@@ -11,3 +11,4 @@ await import("./run-lawbook-tests.mjs");
 await import("./run-template-builder-no-undef-tests.mjs");
 await import("./run-template-title-tests.mjs");
 await import("./run-lemonsqueezy-tests.mjs");
+await import("./run-free-gameplay-campaign-tests.mjs");

@@ -3,6 +3,11 @@ import Image from "next/image";
 import connectMongo from "@/libs/mongoose";
 import CaseTemplate from "@/models/CaseTemplate";
 import { getCategoryTitle } from "@/libs/game/categories";
+import {
+  getActiveFreeGameplayAnnouncement,
+  getAdminOpsConfig,
+  getFreeGameplayCampaignStatus,
+} from "@/libs/adminOps";
 import { getSEOTags } from "@/libs/seo";
 import config from "@/config";
 
@@ -253,7 +258,23 @@ const Icon = ({ kind, className = "h-5 w-5" }) => {
 };
 
 export default async function Page() {
-  const { featuredCases, totalActiveCases } = await loadFeaturedCases();
+  const [{ featuredCases, totalActiveCases }, adminOpsConfig] = await Promise.all([
+    loadFeaturedCases(),
+    getAdminOpsConfig().catch((error) => {
+      console.error("Landing page campaign config load failed:", error.message);
+      return null;
+    }),
+  ]);
+  const freeGameplayAnnouncement = getActiveFreeGameplayAnnouncement(
+    adminOpsConfig?.freeGameplayCampaign
+  );
+  const freeGameplayCampaignStatus = getFreeGameplayCampaignStatus(
+    adminOpsConfig?.freeGameplayCampaign
+  );
+  const freeGameplayCampaignActive = freeGameplayCampaignStatus.active;
+  const campaignCtaLabel =
+    freeGameplayAnnouncement?.ctaLabel ||
+    (freeGameplayCampaignActive ? "Play Free Case" : "Start Free");
   const displayCases =
     featuredCases.length > 0
       ? featuredCases.slice(0, 6).map((template) => ({
@@ -323,7 +344,7 @@ export default async function Page() {
               href="/dashboard"
               className="rounded-2xl border border-white/15 bg-white px-5 py-3 text-sm font-semibold text-black transition hover:bg-white/90"
             >
-              Start Free
+              {campaignCtaLabel}
             </Link>
           </div>
         </div>
@@ -331,6 +352,27 @@ export default async function Page() {
 
       <section className="arena-column-bg relative">
         <div className="mx-auto max-w-7xl px-5 pb-12 pt-10 md:px-8 md:pb-16 md:pt-16">
+          {freeGameplayAnnouncement ? (
+            <div className="mx-auto mb-8 flex max-w-5xl flex-col gap-4 rounded-2xl border border-emerald-300/20 bg-emerald-300/10 px-5 py-4 text-left shadow-[0_20px_80px_rgba(0,0,0,0.26)] md:flex-row md:items-center md:justify-between">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-100/72">
+                  Free Gameplay Campaign
+                </p>
+                <h2 className="mt-2 text-xl font-semibold leading-tight text-white">
+                  {freeGameplayAnnouncement.title}
+                </h2>
+                <p className="mt-2 max-w-3xl text-sm leading-6 text-emerald-50/78">
+                  {freeGameplayAnnouncement.body}
+                </p>
+              </div>
+              <Link
+                href={freeGameplayAnnouncement.ctaHref || "/dashboard"}
+                className="inline-flex shrink-0 justify-center rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-black transition hover:bg-white/90"
+              >
+                {freeGameplayAnnouncement.ctaLabel || "Try a Case"}
+              </Link>
+            </div>
+          ) : null}
           <div className="mx-auto max-w-6xl">
             <div className="mx-auto max-w-4xl text-center">
               <p className="arena-kicker">A first-of-its-kind AI lawyer game</p>
@@ -346,7 +388,7 @@ export default async function Page() {
                   href="/dashboard"
                   className="rounded-2xl bg-white px-6 py-4 text-sm font-semibold text-black transition hover:bg-white/90"
                 >
-                  Try a Case
+                  {freeGameplayCampaignActive ? campaignCtaLabel : "Try a Case"}
                 </Link>
                 <a
                   href="#how-it-works"

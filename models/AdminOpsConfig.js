@@ -18,6 +18,10 @@ const adminOpsConfigSchema = mongoose.Schema(
       type: mongoose.Schema.Types.Mixed,
       default: {},
     },
+    freeGameplayCampaign: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
   },
   {
     timestamps: true,
