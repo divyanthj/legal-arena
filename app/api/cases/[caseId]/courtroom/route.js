@@ -121,6 +121,8 @@ export async function POST(req, { params }) {
         primaryCategory: caseSession.primaryCategory,
         complexity: caseSession.complexity,
         verdictWinner: result.verdict.winner,
+        caseTitle: caseSession.title,
+        verdictSummary: result.verdict.summary,
         highlights: result.verdict.highlights,
         lockedCourtEntryChance:
           caseSession.caseAssessment?.lockedCourtEntryChance ?? null,

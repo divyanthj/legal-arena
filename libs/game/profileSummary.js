@@ -9,6 +9,9 @@ const getCategoryTitle = (slug = "") =>
 export const getDefaultLawyerProfileSummary = (name = "This lawyer") =>
   `${name} is building a public lawyer profile in the arena.`;
 
+export const getDefaultDashboardEncouragementNote = (name = "Counsel") =>
+  `${name}, every careful intake and courtroom turn builds your arena record. Pick the next matter and keep sharpening your advocacy.`;
+
 const buildFallbackSummary = ({ player, cases = [] }) => {
   const topCategories = [...(player.categoryStats || [])]
     .filter((category) => (category.completedCases || 0) > 0)
@@ -148,4 +151,113 @@ export const ensureStoredLawyerProfileSummary = async ({ user, cases = [] }) => 
   await user.save();
 
   return user.lawyerProfileSummary;
+};
+
+const buildFallbackDashboardNote = ({ player = {}, latestVerdict = null }) => {
+  const name = player.name || "Counsel";
+  const completedCases = player.completedCases || 0;
+  const record = `${player.wins || 0}-${player.losses || 0}-${player.draws || 0}`;
+
+  if (latestVerdict?.title) {
+    const outcome =
+      latestVerdict.outcome === "player"
+        ? "win"
+        : latestVerdict.outcome === "draw"
+          ? "draw"
+          : "finish";
+
+    return `${name}, your ${outcome} in ${latestVerdict.title} added real experience. Carry that focus into the next matter.`;
+  }
+
+  if (completedCases > 0) {
+    return `${name}, your ${record} record across ${completedCases} completed matters is taking shape. Keep building clean facts and strong arguments.`;
+  }
+
+  return getDefaultDashboardEncouragementNote(name);
+};
+
+export const generateDashboardEncouragementNote = async ({
+  player,
+  latestVerdict = null,
+}) => {
+  const fallback = buildFallbackDashboardNote({ player, latestVerdict });
+
+  const aiResult = await requestStructuredCompletion({
+    userId: String(player?.id || player?.email || player?.name || "dashboard-note"),
+    maxTokens: 120,
+    retryAttempts: 1,
+    usageLabel: "dashboard-encouragement-note",
+    systemPrompt:
+      "You write concise encouragement notes for a courtroom simulation dashboard. Return JSON only with a single key: note.",
+    userPrompt: JSON.stringify(
+      {
+        instruction:
+          "Write one encouraging second-person note for the player. Keep it grounded in the provided stats, under 150 characters, and avoid mentioning AI, dashboards, placeholders, or unavailable facts.",
+        player: {
+          name: player?.name || "Counsel",
+          overallRating: player?.overallRating || 0,
+          overallXp: player?.overallXp || 0,
+          completedCases: player?.completedCases || 0,
+          record: `${player?.wins || 0}-${player?.losses || 0}-${player?.draws || 0}`,
+        },
+        latestVerdict,
+      },
+      null,
+      2
+    ),
+  });
+
+  const note = String(aiResult?.note || "").trim();
+
+  return note || fallback;
+};
+
+export const ensureStoredDashboardEncouragementNote = async ({
+  user,
+  latestVerdict = null,
+  forceRefresh = false,
+}) => {
+  if (!user) {
+    return getDefaultDashboardEncouragementNote();
+  }
+
+  const currentNote = String(user.dashboardEncouragementNote || "").trim();
+
+  if (currentNote && !forceRefresh) {
+    return currentNote;
+  }
+
+  const fallback = buildFallbackDashboardNote({
+    player: {
+      name: user.name || user.email?.split("@")[0] || "Counsel",
+      completedCases: user.progression?.completedCases || 0,
+      wins: user.progression?.wins || 0,
+      losses: user.progression?.losses || 0,
+      draws: user.progression?.draws || 0,
+    },
+    latestVerdict,
+  });
+
+  const note =
+    (await generateDashboardEncouragementNote({
+      player: {
+        id: user.id,
+        name: user.name || user.email?.split("@")[0] || "Counsel",
+        email: user.email,
+        overallRating: user.progression?.overallRating || 0,
+        overallXp: user.progression?.overallXp || 0,
+        completedCases: user.progression?.completedCases || 0,
+        wins: user.progression?.wins || 0,
+        losses: user.progression?.losses || 0,
+        draws: user.progression?.draws || 0,
+      },
+      latestVerdict,
+    })) || fallback;
+
+  user.dashboardEncouragementNote = note;
+  user.dashboardEncouragementNoteSource = note === fallback ? "default" : "generated";
+  user.dashboardEncouragementNoteUpdatedAt = new Date();
+  await user.save();
+
+  return user.dashboardEncouragementNote || fallback;
 };

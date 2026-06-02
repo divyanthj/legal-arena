@@ -10,7 +10,10 @@ import {
   getDefaultProgression,
   normalizeProgression,
 } from "@/libs/game/progression";
-import { getDefaultLawyerProfileSummary } from "@/libs/game/profileSummary";
+import {
+  getDefaultDashboardEncouragementNote,
+  getDefaultLawyerProfileSummary,
+} from "@/libs/game/profileSummary";
 
 const RESET_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -65,6 +68,11 @@ export async function POST() {
       user.name || user.email?.split("@")[0] || "This lawyer"
     );
     user.lawyerProfileSummarySource = "default";
+    user.dashboardEncouragementNote = getDefaultDashboardEncouragementNote(
+      user.name || user.email?.split("@")[0] || "Counsel"
+    );
+    user.dashboardEncouragementNoteSource = "default";
+    user.dashboardEncouragementNoteUpdatedAt = new Date();
     user.lastGameplayResetAt = new Date();
     await user.save();
 

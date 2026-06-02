@@ -141,6 +141,20 @@ const userSchema = mongoose.Schema(
       enum: ["default", "generated"],
       default: "default",
     },
+    dashboardEncouragementNote: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    dashboardEncouragementNoteSource: {
+      type: String,
+      enum: ["default", "generated"],
+      default: "default",
+    },
+    dashboardEncouragementNoteUpdatedAt: {
+      type: Date,
+      default: null,
+    },
     lastGameplayResetAt: {
       type: Date,
       default: null,

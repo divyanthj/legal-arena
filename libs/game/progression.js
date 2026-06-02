@@ -4,7 +4,11 @@ import connectMongo from "@/libs/mongoose";
 import User from "@/models/User";
 import { LEGAL_CASE_CATEGORIES } from "./categories";
 import { calculateUnderdogBonus } from "./caseAssessment";
-import { getDefaultLawyerProfileSummary } from "./profileSummary";
+import {
+  ensureStoredDashboardEncouragementNote,
+  getDefaultDashboardEncouragementNote,
+  getDefaultLawyerProfileSummary,
+} from "./profileSummary";
 
 const DEFAULT_RATING = 1000;
 
@@ -170,6 +174,11 @@ export const ensureUserProfile = async (userId, profile = null) => {
         profile?.name?.trim?.() || email.split("@")[0] || "This lawyer"
       ),
       lawyerProfileSummarySource: "default",
+      dashboardEncouragementNote: getDefaultDashboardEncouragementNote(
+        profile?.name?.trim?.() || email.split("@")[0] || "Counsel"
+      ),
+      dashboardEncouragementNoteSource: "default",
+      dashboardEncouragementNoteUpdatedAt: new Date(),
       progression: getDefaultProgression(),
     });
   }
@@ -233,6 +242,8 @@ export const applyVerdictToProgression = async ({
   verdictWinner,
   highlights = [],
   lockedCourtEntryChance = null,
+  caseTitle = "",
+  verdictSummary = "",
 }) => {
   const user = await ensureUserProfile(userId, userProfile);
   if (!user) {
@@ -301,6 +312,19 @@ export const applyVerdictToProgression = async ({
   progression.categoryStats = categoryStats;
   user.progression = progression;
   await user.save();
+
+  await ensureStoredDashboardEncouragementNote({
+    user,
+    forceRefresh: true,
+    latestVerdict: {
+      title: caseTitle,
+      category: primaryCategory,
+      complexity,
+      outcome: verdictWinner,
+      summary: verdictSummary,
+      highlights: highlights.slice(0, 2),
+    },
+  });
 
   return progression;
 };

@@ -71,6 +71,7 @@ export default async function Dashboard() {
       categories={toClientJSON(dashboardData.categories)}
       onboarding={toClientJSON(dashboardData.onboarding)}
       progression={toClientJSON(dashboardData.progression)}
+      dashboardEncouragementNote={dashboardData.dashboardEncouragementNote}
       challenges={toClientJSON(challenges)}
       overallLeaderboard={toClientJSON(overallLeaderboard)}
       categoryLeaderboards={toClientJSON(Object.fromEntries(categoryLeaderboards))}

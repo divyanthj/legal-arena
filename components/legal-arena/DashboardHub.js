@@ -145,12 +145,14 @@ const getArenaHeadshot = (value = "") => {
 
 const isDefaultHeadshot = (value = "") => getArenaHeadshot(value) === "/images/profile.jpg";
 
-const LeaderboardPortrait = ({ image = "", name = "" }) => {
+const LeaderboardPortrait = ({ image = "", name = "", className = "" }) => {
   const headshot = getArenaHeadshot(image);
   const fallbackHeadshot = getArenaHeadshot("");
 
   return (
-    <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full border border-white/15 bg-white/[0.04] shadow-[0_0_0_3px_rgba(255,255,255,0.025)]">
+    <div
+      className={`h-10 w-10 shrink-0 overflow-hidden rounded-full border border-white/15 bg-white/[0.04] shadow-[0_0_0_3px_rgba(255,255,255,0.025)] ${className}`}
+    >
       <img
         src={headshot}
         alt={`${name || "Counsel"} headshot`}
@@ -496,6 +498,7 @@ export default function DashboardHub({
   categories,
   onboarding = {},
   progression,
+  dashboardEncouragementNote = "",
   challenges = [],
   overallLeaderboard,
   categoryLeaderboards,
@@ -578,6 +581,16 @@ export default function DashboardHub({
   const streakGoal = 3;
   const winStreakProgress = Math.min(progression.wins, streakGoal);
   const winStreakPercent = Math.max(10, Math.round((winStreakProgress / streakGoal) * 100));
+  const playerLevel = Math.max(1, Math.floor((progression.overallXp || 0) / 250) + 1);
+  const currentLevelXp = (progression.overallXp || 0) % 250;
+  const nextLevelProgressPercent = Math.max(8, Math.min(100, currentLevelXp / 2.5));
+  const playerRankLabel = currentLeaderboardEntry ? `#${currentLeaderboardEntry.rank}` : "Unranked";
+  const playerRecordLabel = `${progression.wins || 0}-${progression.losses || 0}-${
+    progression.draws || 0
+  }`;
+  const playerEncouragementNote =
+    dashboardEncouragementNote ||
+    `${userName}, every case you complete makes your advocacy sharper.`;
 
   useEffect(() => {
     const detectedTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -782,10 +795,10 @@ export default function DashboardHub({
                       <a
                         key={item.href}
                         href={item.href}
-                        className={`flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-semibold transition ${
+                        className={`flex origin-center items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-semibold transition hover:scale-[1.01] ${
                           index === 0
-                            ? "border-white/18 bg-white/[0.08] text-white"
-                            : "border-white/8 bg-white/[0.025] text-white/64 hover:border-white/16 hover:text-white"
+                            ? "border-white/[0.08] bg-white/[0.08] text-white hover:border-white/[0.12]"
+                            : "border-white/[0.045] bg-white/[0.025] text-white/64 hover:border-white/[0.09] hover:text-white"
                         }`}
                         onClick={() => setMobileCommandOpen(false)}
                       >
@@ -797,7 +810,7 @@ export default function DashboardHub({
                   {isAdmin ? (
                     <Link
                       href="/dashboard/admin"
-                      className="flex items-center gap-3 rounded-2xl border border-white/8 bg-white/[0.025] px-4 py-3 text-sm font-semibold text-white/64 transition hover:border-white/16 hover:text-white"
+                      className="flex origin-center items-center gap-3 rounded-2xl border border-white/[0.045] bg-white/[0.025] px-4 py-3 text-sm font-semibold text-white/64 transition hover:scale-[1.01] hover:border-white/[0.09] hover:text-white"
                     >
                       <HeroIcons.WrenchScrewdriverIcon className="h-5 w-5" aria-hidden="true" />
                       <span>Admin Lab</span>
@@ -908,13 +921,67 @@ export default function DashboardHub({
                     </p>
                   </div>
 
-                  <div className="relative min-h-[12rem] overflow-hidden border-t border-white/10 sm:min-h-[18rem] lg:border-l lg:border-t-0">
+                  <div className="relative min-h-[18rem] overflow-hidden border-t border-white/10 sm:min-h-[20rem] lg:border-l lg:border-t-0">
                     <img
                       src="/images/court.jpg"
                       alt=""
                       className="absolute inset-0 h-full w-full object-cover opacity-46"
                     />
                     <div className="absolute inset-0 bg-gradient-to-r from-black via-black/45 to-black/10 lg:bg-gradient-to-l" />
+                    <div className="relative z-10 flex h-full min-h-[18rem] items-center p-5 sm:min-h-[20rem] md:p-7">
+                      <div className="w-full rounded-[1.35rem] border border-white/10 bg-black/40 p-4 shadow-[0_24px_70px_rgba(0,0,0,0.46)] backdrop-blur-md sm:p-5">
+                        <div className="flex min-w-0 items-center gap-4">
+                          <LeaderboardPortrait
+                            image={userPortrait}
+                            name={userName}
+                            className="h-16 w-16 border-white/20 shadow-[0_0_0_6px_rgba(255,255,255,0.035)]"
+                          />
+                          <div className="min-w-0">
+                            <p className="arena-kicker">Player Brief</p>
+                            <p className="mt-2 truncate text-xl font-semibold leading-tight text-white">
+                              {userName}
+                            </p>
+                            <p className="mt-1 text-sm text-white/56">
+                              Level {playerLevel} | {progression.overallXp || 0} XP
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="mt-5 grid grid-cols-3 gap-2">
+                          <div className="rounded-xl border border-white/10 bg-white/[0.035] p-3">
+                            <p className="text-[0.65rem] uppercase tracking-[0.16em] text-white/42">Rank</p>
+                            <p className="mt-2 text-sm font-semibold text-white">{playerRankLabel}</p>
+                          </div>
+                          <div className="rounded-xl border border-white/10 bg-white/[0.035] p-3">
+                            <p className="text-[0.65rem] uppercase tracking-[0.16em] text-white/42">Record</p>
+                            <p className="mt-2 text-sm font-semibold text-white">{playerRecordLabel}</p>
+                          </div>
+                          <div className="rounded-xl border border-white/10 bg-white/[0.035] p-3">
+                            <p className="text-[0.65rem] uppercase tracking-[0.16em] text-white/42">Cases</p>
+                            <p className="mt-2 text-sm font-semibold text-white">
+                              {progression.completedCases || 0}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="mt-5">
+                          <div className="flex items-center justify-between gap-3 text-xs text-white/58">
+                            <span>Next level</span>
+                            <span>{currentLevelXp}/250 XP</span>
+                          </div>
+                          <div className="mt-2 arena-progress-track">
+                            <div
+                              className="arena-progress-fill"
+                              style={{ width: `${nextLevelProgressPercent}%` }}
+                            />
+                          </div>
+                        </div>
+
+                        <p className="mt-5 rounded-xl border border-emerald-300/10 bg-emerald-300/10 px-4 py-3 text-sm leading-6 text-emerald-50/90">
+                          {playerEncouragementNote}
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </section>
@@ -969,10 +1036,10 @@ export default function DashboardHub({
                       {categories.map((category) => (
                         <button
                           key={category.slug}
-                          className={`badge h-auto min-h-8 max-w-full cursor-pointer whitespace-normal border px-2.5 py-2 text-center text-xs leading-tight transition sm:text-sm ${
+                          className={`badge h-auto min-h-8 max-w-full origin-center cursor-pointer whitespace-normal border px-2.5 py-2 text-center text-xs leading-tight transition sm:text-sm ${
                             selectedCategory === category.slug
-                              ? "arena-pill arena-pill-selected"
-                              : "arena-pill"
+                              ? "arena-pill arena-pill-selected hover:scale-[1.03]"
+                              : "arena-pill hover:scale-[1.01]"
                           }`}
                           onClick={() => {
                             const nextTemplates = templates.filter(
@@ -1423,35 +1490,35 @@ export default function DashboardHub({
             <nav className="flex-1 space-y-2 px-3 py-4">
               <a
                 href="#battle-console"
-                className="arena-surface-soft flex items-center justify-between px-4 py-3 text-sm text-white/72 transition hover:border-white/20 hover:text-white"
+                className="arena-surface-soft flex origin-center items-center justify-between !border-white/[0.045] px-4 py-3 text-sm text-white/72 transition hover:scale-[1.01] hover:!border-white/[0.09] hover:text-white"
               >
                 <span>Case Intake</span>
                 <span className="text-white/35">01</span>
               </a>
               <a
                 href="#recent-matters"
-                className="arena-surface-soft flex items-center justify-between px-4 py-3 text-sm text-white/72 transition hover:border-white/20 hover:text-white"
+                className="arena-surface-soft flex origin-center items-center justify-between !border-white/[0.045] px-4 py-3 text-sm text-white/72 transition hover:scale-[1.01] hover:!border-white/[0.09] hover:text-white"
               >
                 <span>My Matters</span>
                 <span className="text-white/35">02</span>
               </a>
               <a
                 href="#overall-board"
-                className="arena-surface-soft flex items-center justify-between px-4 py-3 text-sm text-white/72 transition hover:border-white/20 hover:text-white"
+                className="arena-surface-soft flex origin-center items-center justify-between !border-white/[0.045] px-4 py-3 text-sm text-white/72 transition hover:scale-[1.01] hover:!border-white/[0.09] hover:text-white"
               >
                 <span>Leaderboards</span>
                 <span className="text-white/35">03</span>
               </a>
               <a
                 href="#pvp-challenges"
-                className="arena-surface-soft flex items-center justify-between px-4 py-3 text-sm text-white/72 transition hover:border-white/20 hover:text-white"
+                className="arena-surface-soft flex origin-center items-center justify-between !border-white/[0.045] px-4 py-3 text-sm text-white/72 transition hover:scale-[1.01] hover:!border-white/[0.09] hover:text-white"
               >
                 <span>PVP Challenges</span>
                 <span className="text-white/35">04</span>
               </a>
               <a
                 href="#specialty-board"
-                className="arena-surface-soft flex items-center justify-between px-4 py-3 text-sm text-white/72 transition hover:border-white/20 hover:text-white"
+                className="arena-surface-soft flex origin-center items-center justify-between !border-white/[0.045] px-4 py-3 text-sm text-white/72 transition hover:scale-[1.01] hover:!border-white/[0.09] hover:text-white"
               >
                 <span>Specialty Board</span>
                 <span className="text-white/35">05</span>
@@ -1459,7 +1526,7 @@ export default function DashboardHub({
               {isAdmin ? (
                 <Link
                   href="/dashboard/admin"
-                  className="arena-surface-soft flex items-center justify-between px-4 py-3 text-sm text-white/72 transition hover:border-white/20 hover:text-white"
+                  className="arena-surface-soft flex origin-center items-center justify-between !border-white/[0.045] px-4 py-3 text-sm text-white/72 transition hover:scale-[1.01] hover:!border-white/[0.09] hover:text-white"
                 >
                   <span>Admin Lab</span>
                   <span className="text-white/35">06</span>
@@ -1467,7 +1534,7 @@ export default function DashboardHub({
               ) : null}
               <Link
                 href="/"
-                className="arena-surface-soft flex items-center justify-between px-4 py-3 text-sm text-white/72 transition hover:border-white/20 hover:text-white"
+                className="arena-surface-soft flex origin-center items-center justify-between !border-white/[0.045] px-4 py-3 text-sm text-white/72 transition hover:scale-[1.01] hover:!border-white/[0.09] hover:text-white"
               >
                 <span>Public Home</span>
                 <span className="text-white/35">{isAdmin ? "07" : "06"}</span>
@@ -1615,10 +1682,10 @@ export default function DashboardHub({
                   {categories.map((category) => (
                     <button
                       key={category.slug}
-                      className={`badge badge-lg h-auto min-h-10 w-full cursor-pointer whitespace-normal border px-3 py-3 text-center leading-tight transition lg:w-auto ${
+                      className={`badge badge-lg h-auto min-h-10 w-full origin-center cursor-pointer whitespace-normal border px-3 py-3 text-center leading-tight transition lg:w-auto ${
                         selectedCategory === category.slug
-                          ? "arena-pill arena-pill-selected"
-                          : "arena-pill"
+                          ? "arena-pill arena-pill-selected hover:scale-[1.03]"
+                          : "arena-pill hover:scale-[1.01]"
                       }`}
                       onClick={() => setSelectedCategory(category.slug)}
                     >

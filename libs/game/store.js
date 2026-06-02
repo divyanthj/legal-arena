@@ -26,7 +26,10 @@ import {
   normalizeProgression,
 } from "./progression";
 import { DEFAULT_CATEGORY_SLUG } from "./categories";
-import { ensureStoredLawyerProfileSummary } from "./profileSummary";
+import {
+  ensureStoredDashboardEncouragementNote,
+  ensureStoredLawyerProfileSummary,
+} from "./profileSummary";
 import { normalizeOnboarding } from "./onboarding";
 import { sanitizeFactSheet } from "./factSheetSanitizer";
 
@@ -1064,6 +1067,20 @@ export const listDashboardDataForUser = async (userId, userProfile = null) => {
     listScenarioOptions(userId, userProfile),
     ensureUserProfile(userId, userProfile),
   ]);
+  const latestVerdict = cases.find((caseSession) => caseSession.status === "verdict");
+  const dashboardEncouragementNote = await ensureStoredDashboardEncouragementNote({
+    user,
+    latestVerdict: latestVerdict
+      ? {
+          title: latestVerdict.title,
+          category: latestVerdict.primaryCategory,
+          complexity: latestVerdict.complexity,
+          outcome: latestVerdict.verdict?.winner || "",
+          summary: latestVerdict.verdict?.summary || "",
+          highlights: latestVerdict.verdict?.highlights?.slice(0, 2) || [],
+        }
+      : null,
+  });
 
   return {
     cases,
@@ -1071,6 +1088,7 @@ export const listDashboardDataForUser = async (userId, userProfile = null) => {
     categories: listCategoryOptions(),
     onboarding: normalizeOnboarding(user?.onboarding),
     progression: normalizeProgression(user?.progression),
+    dashboardEncouragementNote,
   };
 };
 
