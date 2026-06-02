@@ -511,6 +511,7 @@ export default function DashboardHub({
   const [browserTimeZone, setBrowserTimeZone] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState(categories[0]?.slug || "");
   const [activeTemplateIndex, setActiveTemplateIndex] = useState(0);
+  const [showPlayableOnly, setShowPlayableOnly] = useState(true);
   const [showPaywallModal, setShowPaywallModal] = useState(false);
   const [creating, setCreating] = useState(false);
   const [lawyerSearch, setLawyerSearch] = useState("");
@@ -524,9 +525,11 @@ export default function DashboardHub({
   const filteredTemplates = useMemo(
     () =>
       templates.filter(
-        (template) => !selectedCategory || template.primaryCategory === selectedCategory
+        (template) =>
+          (!selectedCategory || template.primaryCategory === selectedCategory) &&
+          (!showPlayableOnly || template.unlocked)
       ),
-    [selectedCategory, templates]
+    [selectedCategory, showPlayableOnly, templates]
   );
 
   const selectedLeaderboard = categoryLeaderboards[selectedCategory] || [];
@@ -621,11 +624,10 @@ export default function DashboardHub({
   }, [lawyerSearch, overallLeaderboard]);
 
   useEffect(() => {
-    const nextTemplates = filteredTemplates.length > 0 ? filteredTemplates : templates;
-    const firstUnlockedIndex = nextTemplates.findIndex((template) => template.unlocked);
+    const firstUnlockedIndex = filteredTemplates.findIndex((template) => template.unlocked);
 
     setActiveTemplateIndex(firstUnlockedIndex >= 0 ? firstUnlockedIndex : 0);
-  }, [filteredTemplates, selectedCategory, templates]);
+  }, [filteredTemplates, selectedCategory, showPlayableOnly]);
 
   const handleCreateCase = async (caseTemplateId) => {
     if (!caseTemplateId) return;
@@ -650,7 +652,7 @@ export default function DashboardHub({
     }
   };
 
-  const visibleTemplates = filteredTemplates.length > 0 ? filteredTemplates : templates;
+  const visibleTemplates = filteredTemplates;
   const activeTemplate =
     visibleTemplates.length > 0
       ? visibleTemplates[Math.min(activeTemplateIndex, visibleTemplates.length - 1)]
@@ -660,7 +662,7 @@ export default function DashboardHub({
     templates.find((template) => template.unlocked) ||
     null;
   const carouselCategoryLabel =
-    filteredTemplates.length > 0
+    selectedCategory
       ? `${String(selectedCategoryTitle || "available").toLowerCase()} cases`
       : "all available cases";
   const carouselStatus = visibleTemplates.length
@@ -943,13 +945,21 @@ export default function DashboardHub({
                 <section id="case-library" data-onboarding-target="case-library" className="arena-surface min-w-0">
                   <div className="p-4 md:p-6">
                     <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-                      <div className="min-w-0">
-                        <p className="arena-kicker">Recommended for you</p>
-                        <h2 className="arena-headline mt-2 break-words text-2xl">Beginner-friendly case</h2>
+                      <div className="min-w-0" />
+                      <div className="flex flex-wrap items-center gap-3 md:justify-end">
+                        <p className="max-w-full break-words text-xs uppercase tracking-[0.12em] text-white/42">
+                          {carouselStatus}
+                        </p>
+                        <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-white/10 bg-white/[0.035] px-3 py-2 text-xs font-semibold text-white/70 transition hover:border-white/18 hover:text-white">
+                          <span>Playable only</span>
+                          <input
+                            type="checkbox"
+                            className="toggle toggle-xs border-white/20 bg-white/10 [--tglbg:#151515] checked:border-emerald-300/40 checked:bg-emerald-400"
+                            checked={showPlayableOnly}
+                            onChange={(event) => setShowPlayableOnly(event.target.checked)}
+                          />
+                        </label>
                       </div>
-                      <p className="max-w-full break-words text-xs uppercase tracking-[0.12em] text-white/42">
-                        {carouselStatus}
-                      </p>
                     </div>
 
                     <div
@@ -961,12 +971,14 @@ export default function DashboardHub({
                           key={category.slug}
                           className={`badge h-auto min-h-8 max-w-full cursor-pointer whitespace-normal border px-2.5 py-2 text-center text-xs leading-tight transition sm:text-sm ${
                             selectedCategory === category.slug
-                              ? "arena-status arena-status-favorable"
+                              ? "arena-pill arena-pill-selected"
                               : "arena-pill"
                           }`}
                           onClick={() => {
                             const nextTemplates = templates.filter(
-                              (template) => template.primaryCategory === category.slug
+                              (template) =>
+                                template.primaryCategory === category.slug &&
+                                (!showPlayableOnly || template.unlocked)
                             );
                             const firstUnlockedIndex = nextTemplates.findIndex(
                               (template) => template.unlocked
@@ -988,7 +1000,7 @@ export default function DashboardHub({
                             <span className="badge badge-outline border-white/15 text-white/80">
                               {activeTemplate.unlocked ? "Beginner Friendly" : "Locked"}
                             </span>
-                            <h3 className="mt-4 flex min-h-[4.5rem] items-start break-words text-xl font-semibold leading-tight text-white sm:min-h-[5.5rem] sm:text-2xl">
+                            <h3 className="mt-4 flex h-[4.75rem] items-start overflow-hidden break-words text-xl font-semibold leading-tight text-white sm:h-[5.625rem] sm:text-2xl">
                               {activeTemplate.title}
                             </h3>
 
@@ -1024,13 +1036,19 @@ export default function DashboardHub({
                                     : "Start This Case"
                                   : "Locked"}
                               </span>
-                              <HeroIcons.ChevronRightIcon className="h-5 w-5" aria-hidden="true" />
+                              {activeTemplate.unlocked ? (
+                                <HeroIcons.ChevronRightIcon className="h-5 w-5" aria-hidden="true" />
+                              ) : (
+                                <HeroIcons.LockClosedIcon className="h-5 w-5" aria-hidden="true" />
+                              )}
                             </button>
-                            {!activeTemplate.unlocked ? (
-                              <p className="mt-3 rounded-2xl border border-amber-300/20 bg-amber-500/10 px-4 py-3 text-sm leading-6 text-amber-100/82">
-                                {getTemplateUnlockMessage(activeTemplate, browserTimeZone)}
-                              </p>
-                            ) : null}
+                            <div className="mt-3 min-h-[4.5rem]">
+                              {!activeTemplate.unlocked ? (
+                                <p className="rounded-2xl border border-amber-300/20 bg-amber-500/10 px-4 py-3 text-sm leading-6 text-amber-100/82">
+                                  {getTemplateUnlockMessage(activeTemplate, browserTimeZone)}
+                                </p>
+                              ) : null}
+                            </div>
                             <p className="mt-4 text-sm text-white/52">
                               New here? This case is designed to teach the core loop.
                             </p>
@@ -1131,7 +1149,9 @@ export default function DashboardHub({
                       <div className="arena-surface-soft mt-5 border-dashed p-8 text-center">
                         <p className="text-lg font-semibold text-white">No cases available</p>
                         <p className="mt-2 text-sm text-white/62">
-                          Check back after new disputes are added to the case library.
+                          {showPlayableOnly
+                            ? "Turn off playable only to view locked cases in this category."
+                            : "Check back after new disputes are added to the case library."}
                         </p>
                       </div>
                     )}
@@ -1572,9 +1592,20 @@ export default function DashboardHub({
                       Pick a category and enter an available matter.
                     </p>
                   </div>
-                  <p className="text-xs uppercase tracking-[0.16em] text-white/42">
-                    {carouselStatus}
-                  </p>
+                  <div className="flex flex-wrap items-center gap-3 md:justify-end">
+                    <p className="text-xs uppercase tracking-[0.16em] text-white/42">
+                      {carouselStatus}
+                    </p>
+                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-white/10 bg-white/[0.035] px-3 py-2 text-xs font-semibold text-white/70 transition hover:border-white/18 hover:text-white">
+                      <span>Playable only</span>
+                      <input
+                        type="checkbox"
+                        className="toggle toggle-xs border-white/20 bg-white/10 [--tglbg:#151515] checked:border-emerald-300/40 checked:bg-emerald-400"
+                        checked={showPlayableOnly}
+                        onChange={(event) => setShowPlayableOnly(event.target.checked)}
+                      />
+                    </label>
+                  </div>
                 </div>
 
                 <div
@@ -1586,7 +1617,7 @@ export default function DashboardHub({
                       key={category.slug}
                       className={`badge badge-lg h-auto min-h-10 w-full cursor-pointer whitespace-normal border px-3 py-3 text-center leading-tight transition lg:w-auto ${
                         selectedCategory === category.slug
-                          ? "arena-status arena-status-favorable"
+                          ? "arena-pill arena-pill-selected"
                           : "arena-pill"
                       }`}
                       onClick={() => setSelectedCategory(category.slug)}
@@ -1625,7 +1656,7 @@ export default function DashboardHub({
                               {activeTemplate.primaryCategory}
                             </span>
                           </div>
-                          <h3 className="mt-4 text-3xl font-semibold leading-tight text-white">
+                          <h3 className="mt-4 h-[7.1rem] overflow-hidden break-words text-3xl font-semibold leading-tight text-white">
                             {activeTemplate.title}
                           </h3>
                           <p className="mt-3 text-sm leading-7 text-white/70">
@@ -1730,7 +1761,9 @@ export default function DashboardHub({
                         No case templates available
                       </p>
                       <p className="mt-2 text-sm text-white/62">
-                        Check back after new disputes are added to the case library.
+                        {showPlayableOnly
+                          ? "Turn off playable only to view locked cases in this category."
+                          : "Check back after new disputes are added to the case library."}
                       </p>
                     </div>
                   )}
