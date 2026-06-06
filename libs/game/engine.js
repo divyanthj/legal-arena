@@ -37,6 +37,8 @@ import {
 } from "./courtroomDifficulty";
 
 const INTERVIEW_RESPONSE_MAX_TOKENS = 1500;
+const GAMEPLAY_MODEL =
+  process.env.OPENAI_GAMEPLAY_MODEL?.trim() || "gpt-5.4-mini";
 
 export const continueInterview = async ({ caseSession, question, userId }) => {
   const template = ensureTemplate(getTemplate(caseSession));
@@ -57,6 +59,7 @@ export const continueInterview = async ({ caseSession, question, userId }) => {
 
   const aiResult = await requestStructuredCompletion({
     userId,
+    model: GAMEPLAY_MODEL,
     temperature: 0.7,
     maxTokens: INTERVIEW_RESPONSE_MAX_TOKENS,
     retryAttempts: 1,
@@ -205,6 +208,7 @@ export const assessCaseSuccessChance = async ({
   try {
     const aiResult = await requestStructuredCompletion({
       userId,
+      model: GAMEPLAY_MODEL,
       temperature: 0.25,
       maxTokens: 600,
       retryAttempts: 1,
@@ -261,6 +265,7 @@ const buildConversationFactSheetPatch = async ({
   try {
     const aiResult = await requestStructuredCompletion({
       userId,
+      model: GAMEPLAY_MODEL,
       temperature: 0.35,
       maxTokens: 900,
       retryAttempts: 1,
@@ -669,6 +674,7 @@ export const runCourtroomRound = async ({ caseSession, argument, userId }) => {
 
   const counselAnalysisResult = await requestStructuredCompletion({
     userId,
+    model: GAMEPLAY_MODEL,
     temperature: 0.6,
     maxTokens: 900,
     retryAttempts: 1,
@@ -697,6 +703,7 @@ export const runCourtroomRound = async ({ caseSession, argument, userId }) => {
 
   const aiResult = await requestStructuredCompletion({
     userId,
+    model: GAMEPLAY_MODEL,
     temperature: 0.65,
     maxTokens: 1500,
     retryAttempts: 1,

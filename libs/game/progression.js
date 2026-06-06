@@ -433,6 +433,9 @@ export const listOverallLeaderboard = async ({ search = "", limit = null } = {})
   return limit ? searchedEntries.slice(0, limit) : searchedEntries;
 };
 
+export const listPlayerDirectory = async ({ search = "", limit = null } = {}) =>
+  listOverallLeaderboard({ search, limit });
+
 export const listCategoryLeaderboard = async (categorySlug) => {
   await connectMongo();
 

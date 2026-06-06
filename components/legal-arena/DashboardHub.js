@@ -736,6 +736,11 @@ export default function DashboardHub({
     { href: "#activation-home", label: "Home", icon: HeroIcons.HomeIcon },
     { href: "#recent-cases", label: "My Cases", icon: HeroIcons.ClipboardDocumentListIcon },
     { href: "#case-library", label: "Case Library", icon: HeroIcons.BookOpenIcon },
+    {
+      href: "/dashboard/bar-association",
+      label: "Bar Association",
+      icon: HeroIcons.UserGroupIcon,
+    },
     { href: "#progress", label: "My Progress", icon: HeroIcons.ArrowTrendingUpIcon },
     { href: "#rankings", label: "Rankings", icon: HeroIcons.TrophyIcon },
     { href: "#specialty-board", label: "Specialty Board", icon: HeroIcons.ChartBarSquareIcon },
@@ -796,9 +801,10 @@ export default function DashboardHub({
                 <nav className="flex-1 space-y-2 px-3 py-4">
                   {navItems.map((item, index) => {
                     const Icon = item.icon;
+                    const NavLink = item.href.startsWith("/") ? Link : "a";
 
                     return (
-                      <a
+                      <NavLink
                         key={item.href}
                         href={item.href}
                         className={`flex origin-center items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-semibold transition hover:scale-[1.01] ${
@@ -810,7 +816,7 @@ export default function DashboardHub({
                       >
                         <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />
                         <span>{item.label}</span>
-                      </a>
+                      </NavLink>
                     );
                   })}
                   {isAdmin ? (
@@ -1376,9 +1382,17 @@ export default function DashboardHub({
                         <p className="arena-kicker">Rankings</p>
                         <h2 className="arena-headline mt-2 text-2xl">Overall board</h2>
                       </div>
-                      <p className="text-sm font-semibold text-white/70">
-                        {currentLeaderboardEntry ? `#${currentLeaderboardEntry.rank}` : "Unranked"}
-                      </p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Link
+                          href="/dashboard/bar-association"
+                          className="arena-btn-dark min-h-0 px-3 py-2 text-sm"
+                        >
+                          Bar Association
+                        </Link>
+                        <p className="text-sm font-semibold text-white/70">
+                          {currentLeaderboardEntry ? `#${currentLeaderboardEntry.rank}` : "Unranked"}
+                        </p>
+                      </div>
                     </div>
                     <div className="mt-5 space-y-2">
                       {isNewUser ? (
@@ -1527,12 +1541,19 @@ export default function DashboardHub({
                 <span>PVP Challenges</span>
                 <span className="text-white/35">04</span>
               </a>
+              <Link
+                href="/dashboard/bar-association"
+                className="arena-surface-soft flex origin-center items-center justify-between !border-white/[0.045] px-4 py-3 text-sm text-white/72 transition hover:scale-[1.01] hover:!border-white/[0.09] hover:text-white"
+              >
+                <span>Bar Association</span>
+                <span className="text-white/35">05</span>
+              </Link>
               <a
                 href="#specialty-board"
                 className="arena-surface-soft flex origin-center items-center justify-between !border-white/[0.045] px-4 py-3 text-sm text-white/72 transition hover:scale-[1.01] hover:!border-white/[0.09] hover:text-white"
               >
                 <span>Specialty Board</span>
-                <span className="text-white/35">05</span>
+                <span className="text-white/35">06</span>
               </a>
               {isAdmin ? (
                 <Link
@@ -1540,7 +1561,7 @@ export default function DashboardHub({
                   className="arena-surface-soft flex origin-center items-center justify-between !border-white/[0.045] px-4 py-3 text-sm text-white/72 transition hover:scale-[1.01] hover:!border-white/[0.09] hover:text-white"
                 >
                   <span>Admin Lab</span>
-                  <span className="text-white/35">06</span>
+                  <span className="text-white/35">07</span>
                 </Link>
               ) : null}
               <Link
@@ -1548,7 +1569,7 @@ export default function DashboardHub({
                 className="arena-surface-soft flex origin-center items-center justify-between !border-white/[0.045] px-4 py-3 text-sm text-white/72 transition hover:scale-[1.01] hover:!border-white/[0.09] hover:text-white"
               >
                 <span>Public Home</span>
-                <span className="text-white/35">{isAdmin ? "07" : "06"}</span>
+                <span className="text-white/35">{isAdmin ? "08" : "07"}</span>
               </Link>
             </nav>
 
@@ -1987,7 +2008,15 @@ export default function DashboardHub({
               <div className="p-5 md:p-6">
                 <p className="arena-kicker">Top Counsel Today</p>
                 <div className="mt-2">
-                  <h2 className="arena-headline text-2xl">Overall board</h2>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <h2 className="arena-headline text-2xl">Overall board</h2>
+                    <Link
+                      href="/dashboard/bar-association"
+                      className="arena-btn-dark min-h-0 px-3 py-2 text-sm"
+                    >
+                      Bar Association
+                    </Link>
+                  </div>
                   <div className="relative mt-4 w-full">
                     <input
                       type="search"
