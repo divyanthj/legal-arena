@@ -7,6 +7,7 @@ import User from "@/models/User";
 import { LAWBOOK_VERSION, getLawbookRules } from "@/data/legalArenaLawbook";
 import { listCategoryOptions } from "./templates";
 import {
+  buildInterviewSubjectForSide,
   buildMissingEvidenceNotesForSide,
   buildSuggestedQuestionsForSide,
   cleanPartyClaimText,
@@ -650,6 +651,18 @@ export const buildCasePayload = (caseSession, templateOverride = null) => {
   const opponentPartyName = template ? getPartyName(template, opponentSide) : "";
   const playerSideLabel = getSideLabel(playerSide);
   const opponentSideLabel = getSideLabel(opponentSide);
+  const playerInterviewSubject = template
+    ? buildInterviewSubjectForSide(
+        template,
+        playerSide === "opponent" ? "defendant" : "plaintiff"
+      )
+    : null;
+  const opponentInterviewSubject = template
+    ? buildInterviewSubjectForSide(
+        template,
+        opponentSide === "opponent" ? "defendant" : "plaintiff"
+      )
+    : null;
   const factSheet = refineFactSheetFromTranscript({
     factSheet: sanitizeFactSheet(plainCase.factSheet || {}),
     transcript: plainCase.interviewTranscript || [],
@@ -669,6 +682,10 @@ export const buildCasePayload = (caseSession, templateOverride = null) => {
     opponentSideLabel,
     playerPartyName,
     opponentPartyName,
+    playerInterviewSubjectName: playerInterviewSubject?.name || playerPartyName,
+    playerInterviewSubjectRole: playerInterviewSubject?.role || "",
+    opponentInterviewSubjectName: opponentInterviewSubject?.name || opponentPartyName,
+    opponentInterviewSubjectRole: opponentInterviewSubject?.role || "",
     plaintiffName: template?.clientName || plainCase.premise?.clientName || "",
     defendantName: template?.opponentName || plainCase.premise?.opponentName || "",
     scenarioId: templateSlug,
@@ -785,6 +802,10 @@ export const createCaseSession = async ({
   });
   const playerSide = Math.random() < 0.5 ? "client" : "opponent";
   const openingStatement = buildOpeningStatementForSide(template, playerSide);
+  const playerInterviewSubject = buildInterviewSubjectForSide(
+    template,
+    playerSide === "opponent" ? "defendant" : "plaintiff"
+  );
 
   if (!availability.unlocked) {
     throw new Error(availability.blockReason);
@@ -817,7 +838,7 @@ export const createCaseSession = async ({
     interviewTranscript: [
       {
         role: "party",
-        speaker: getPartyName(template, playerSide),
+        speaker: playerInterviewSubject.name || getPartyName(template, playerSide),
         text: openingStatement,
         sourceType: "claim",
         relatedFactIds: [],

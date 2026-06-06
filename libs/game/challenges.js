@@ -37,6 +37,7 @@ import {
   getCanonicalStoryWorld,
 } from "./storyWorld";
 import {
+  buildInterviewSubjectForSide,
   buildSuggestedQuestionsForSide,
   enrichTemplateForGameplay,
   getSideOpeningStatement,
@@ -618,6 +619,10 @@ export const createChallenge = async ({
   ];
   const participants = participantInputs.map((participant) => {
     const openingStatement = buildOpeningStatementForSide(template, participant.side);
+    const interviewSubject = buildInterviewSubjectForSide(
+      template,
+      participant.side === "opponent" ? "defendant" : "plaintiff"
+    );
 
     return {
       userId: participant.userId,
@@ -630,7 +635,7 @@ export const createChallenge = async ({
       interviewTranscript: [
         {
           role: "party",
-          speaker: getPartyName(template, participant.side),
+          speaker: interviewSubject.name || getPartyName(template, participant.side),
           text: openingStatement,
           sourceType: "claim",
           relatedFactIds: [],
@@ -840,7 +845,9 @@ export const continueChallengeInterview = async ({ userId, challengeId, question
   });
   participant.interviewTranscript.push({
     role: "party",
-    speaker: getPartyName(challenge.templateSnapshot, participant.side),
+    speaker:
+      result.interviewSubjectName ||
+      getPartyName(challenge.templateSnapshot, participant.side),
     text: result.partyResponse,
     sourceType: "claim",
     relatedFactIds: result.relatedFactIds || [],
@@ -1347,6 +1354,20 @@ export const buildChallengePayload = async ({ challenge, viewerUserId }) => {
   const slug =
     plainChallenge.slug ||
     buildChallengeSlug(plainChallenge.title, plainChallenge.id || plainChallenge._id);
+  const viewerInterviewSubject =
+    participant && plainChallenge.templateSnapshot
+      ? buildInterviewSubjectForSide(
+          plainChallenge.templateSnapshot,
+          participant.side === "opponent" ? "defendant" : "plaintiff"
+        )
+      : null;
+  const opponentInterviewSubject =
+    otherParticipant && plainChallenge.templateSnapshot
+      ? buildInterviewSubjectForSide(
+          plainChallenge.templateSnapshot,
+          otherParticipant.side === "opponent" ? "defendant" : "plaintiff"
+        )
+      : null;
 
   const rounds = (plainChallenge.courtroomRounds || []).map((round) => {
     const viewerSubmitted = participant
@@ -1389,6 +1410,10 @@ export const buildChallengePayload = async ({ challenge, viewerUserId }) => {
           interviewTranscript: participant.interviewTranscript || [],
           readyAt: participant.readyAt,
           partyName: getPartyName(plainChallenge.templateSnapshot, participant.side),
+          interviewSubjectName:
+            viewerInterviewSubject?.name ||
+            getPartyName(plainChallenge.templateSnapshot, participant.side),
+          interviewSubjectRole: viewerInterviewSubject?.role || "",
           objective: buildDesiredReliefForSide(
             plainChallenge.templateSnapshot,
             participant.side
@@ -1405,6 +1430,10 @@ export const buildChallengePayload = async ({ challenge, viewerUserId }) => {
           verdict: otherParticipant.verdict || "",
           readyAt: otherParticipant.readyAt,
           partyName: getPartyName(plainChallenge.templateSnapshot, otherParticipant.side),
+          interviewSubjectName:
+            opponentInterviewSubject?.name ||
+            getPartyName(plainChallenge.templateSnapshot, otherParticipant.side),
+          interviewSubjectRole: opponentInterviewSubject?.role || "",
         }
       : null,
     initiator: {

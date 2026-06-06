@@ -428,6 +428,124 @@ export const enrichTemplateForGameplay = (template = {}) => {
   };
 };
 
+const isInstitutionalPartyName = (name = "") =>
+  /\b(the people|people of|state of|commonwealth|united states|city of|county of|department|agency|office of|corporation|company|llc|inc\.?|ltd\.?|store|market|shop|electronics|management|property|bank|school|hospital)\b/i.test(
+    String(name || "")
+  );
+
+const evidenceCorpus = (template = {}) =>
+  [
+    template.title,
+    template.subtitle,
+    template.overview,
+    template.practiceArea,
+    template.primaryCategory,
+    ...(template.legalTags || []),
+    ...(template.evidenceItems || []).flatMap((item) => [
+      item.label,
+      item.detail,
+      item.type,
+      item.holderSide,
+    ]),
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+const pickInstitutionalInterviewSubject = (template = {}, side = "plaintiff") => {
+  const corpus = evidenceCorpus(template);
+  const lower = corpus.toLowerCase();
+  const isCriminal =
+    /\bcriminal|theft|shoplifting|burglary|assault|traffic stop|possession|police|prosecution|prosecutor\b/i.test(
+      corpus
+    );
+
+  if (isCriminal && side === "plaintiff") {
+    if (/\bloss[-\s]?prevention|store security|security guard\b/i.test(lower)) {
+      return {
+        name: "Loss-prevention employee",
+        role: "store witness",
+      };
+    }
+
+    if (/\bstore|retail|shop|merchant|cashier|checkout\b/i.test(lower)) {
+      return {
+        name: "Store manager",
+        role: "complaining witness",
+      };
+    }
+
+    if (/\bpolice|officer|arrest|responding officer|detective\b/i.test(lower)) {
+      return {
+        name: "Responding officer",
+        role: "investigating witness",
+      };
+    }
+
+    if (/\bvictim|complaining witness\b/i.test(lower)) {
+      return {
+        name: "Complaining witness",
+        role: "complaining witness",
+      };
+    }
+
+    return {
+      name: "Investigating officer",
+      role: "prosecution witness",
+    };
+  }
+
+  if (/\bproperty|landlord|tenant|lease|rental|deposit|repairs?\b/i.test(lower)) {
+    return {
+      name: side === "plaintiff" ? "Tenant witness" : "Property manager",
+      role: side === "plaintiff" ? "tenant witness" : "company representative",
+    };
+  }
+
+  if (/\bstore|retail|shop|customer|receipt|checkout|inventory\b/i.test(lower)) {
+    return {
+      name: "Store representative",
+      role: "company representative",
+    };
+  }
+
+  return {
+    name: side === "plaintiff" ? "Party representative" : "Company representative",
+    role: "representative",
+  };
+};
+
+export const buildInterviewSubjectForSide = (template = {}, side = "plaintiff") => {
+  const safeTemplate = enrichTemplateForGameplay(template);
+  const normalizedSide = normalizeTemplateParty(side === "opponent" ? "defendant" : side);
+  const legalPartyName =
+    normalizedSide === "defendant" ? safeTemplate.defendantName : safeTemplate.plaintiffName;
+  const explicitSubject =
+    safeTemplate.interviewSubjects?.[normalizedSide] ||
+    safeTemplate.interviewSubject?.[normalizedSide] ||
+    null;
+
+  if (explicitSubject?.name) {
+    return {
+      name: String(explicitSubject.name).trim(),
+      role: String(explicitSubject.role || "interview witness").trim(),
+      legalPartyName,
+    };
+  }
+
+  if (!isInstitutionalPartyName(legalPartyName)) {
+    return {
+      name: legalPartyName,
+      role: normalizedSide,
+      legalPartyName,
+    };
+  }
+
+  return {
+    ...pickInstitutionalInterviewSubject(safeTemplate, normalizedSide),
+    legalPartyName,
+  };
+};
+
 export const getInterviewBlueprintForSide = (template = {}, side = "plaintiff") => {
   const safeTemplate = enrichTemplateForGameplay(template);
   const normalizedSide = normalizeTemplateParty(side);

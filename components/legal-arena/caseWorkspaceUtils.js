@@ -195,6 +195,11 @@ export const getPlayerPartyName = (caseSession) =>
     ? caseSession.premise.opponentName
     : caseSession.premise.clientName);
 
+export const getPlayerInterviewSubjectName = (caseSession) =>
+  caseSession.playerInterviewSubjectName ||
+  caseSession.interviewSubjectName ||
+  getPlayerPartyName(caseSession);
+
 export const getOpponentPartyName = (caseSession) =>
   caseSession.opponentPartyName ||
   (caseSession.playerSide === "opponent"

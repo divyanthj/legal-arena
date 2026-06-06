@@ -74,9 +74,10 @@ export async function POST(req, { params }) {
     caseSession.interviewTranscript.push({
       role: "party",
       speaker:
-        caseSession.playerSide === "opponent"
+        result.interviewSubjectName ||
+        (caseSession.playerSide === "opponent"
           ? caseSession.premise.opponentName
-          : caseSession.premise.clientName,
+          : caseSession.premise.clientName),
       text: result.partyResponse,
       sourceType: "claim",
       relatedFactIds: result.relatedFactIds || [],

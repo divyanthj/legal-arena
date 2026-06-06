@@ -31,6 +31,7 @@ import {
   buildCanonicalFactLookup,
   resolveFactReference,
   getPlayerPartyName,
+  getPlayerInterviewSubjectName,
   getOpponentPartyName,
   getPlaintiffName,
   getDefendantName,
@@ -479,7 +480,7 @@ export default function CaseWorkspace({
     setQuestion("");
     setWorking(true);
     setPendingAction("interview");
-    setPendingSpeaker(getPlayerPartyName(caseSession));
+    setPendingSpeaker(getPlayerInterviewSubjectName(caseSession));
 
     try {
       const response = await apiClient.post(
@@ -608,6 +609,7 @@ export default function CaseWorkspace({
   };
 
   const playerPartyName = getPlayerPartyName(caseSession);
+  const playerInterviewSubjectName = getPlayerInterviewSubjectName(caseSession);
   const opponentPartyName = getOpponentPartyName(caseSession);
   const useCounselLabels = Boolean(apiConfig.counselLabels);
   const playerCounselTitle = useCounselLabels
@@ -1288,7 +1290,7 @@ export default function CaseWorkspace({
                         Collect your side&apos;s facts
                       </h2>
                       <p className="mt-3 text-sm text-white/62">
-                        Interview {playerPartyName} and tighten the record.
+                        Interview {playerInterviewSubjectName} and tighten the record.
                       </p>
                     </div>
                     <div className="arena-surface-soft min-w-0 p-4">
@@ -1345,7 +1347,7 @@ export default function CaseWorkspace({
                   <form className="mt-6 min-w-0 space-y-4" onSubmit={handleInterviewSubmit}>
                     <textarea
                       className="textarea textarea-bordered arena-textarea arena-field h-28 min-w-0 w-full text-slate-100"
-                      placeholder={`Ask ${playerPartyName} about dates, records, witnesses, notice, or any proof gaps you need to pin down.`}
+                      placeholder={`Ask ${playerInterviewSubjectName} about dates, records, witnesses, notice, or any proof gaps you need to pin down.`}
                       value={question}
                       onChange={(event) => setQuestion(event.target.value)}
                       onKeyDown={handleChatTextareaKeyDown}

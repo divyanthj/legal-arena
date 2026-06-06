@@ -7,6 +7,7 @@ import {
   enrichTemplateForGameplay,
   getEvidenceItemsForFact,
   getInterviewBlueprintForSide,
+  buildInterviewSubjectForSide,
   normalizeTemplateParty,
 } from "../templateInterview.js";
 import { buildStoryContextForSide, getCanonicalStoryWorld } from "../storyWorld.js";
@@ -217,6 +218,11 @@ export const getOpposingSide = (side) => OPPOSING_SIDE[side] || DEFAULT_PLAYER_S
 
 export const getPartyName = (template, side) =>
   side === "opponent" ? template.opponentName : template.clientName;
+export const getInterviewSubjectForSide = (template, side) =>
+  buildInterviewSubjectForSide(
+    template,
+    side === "opponent" ? "defendant" : "plaintiff"
+  );
 export const getPartyProfileForSide = (template, side) =>
   template.partyProfiles?.[getTemplatePartyForSessionSide(side)] || {
     communicationStyle: "plain",
@@ -698,11 +704,13 @@ export const buildInterviewAgentContext = ({ template, playerSide, factSheet }) 
   const safeTemplate = ensureTemplate(template);
   const templateSide = getTemplatePartyForSessionSide(playerSide);
   const blueprint = getInterviewBlueprintForSide(safeTemplate, templateSide);
+  const interviewSubject = getInterviewSubjectForSide(safeTemplate, playerSide);
 
   return {
     representedParty: {
       side: templateSide,
       name: getPartyName(safeTemplate, playerSide),
+      interviewSubject,
       objective: buildDesiredReliefForSide(safeTemplate, playerSide),
       profile: getPartyProfileForSide(safeTemplate, playerSide),
       opening: blueprint?.opening || "",
