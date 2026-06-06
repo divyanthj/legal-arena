@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { getToken } from "next-auth/jwt";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/libs/next-auth";
+import { isAdminEmail } from "@/libs/admin";
 import connectMongo from "@/libs/mongoose";
 import { sendCustomEmail } from "@/libs/emailSender";
 
 export async function POST(req) {
-  const admins = JSON.parse(process.env.ADMINS || "[]");
-
   try {
     await connectMongo();
   } catch (error) {
@@ -16,9 +16,9 @@ export async function POST(req) {
     );
   }
 
-  const token = await getToken({ req });
+  const session = await getServerSession(authOptions);
 
-  if (!token || !admins.includes(token.email || token.sub)) {
+  if (!session?.user?.id || !isAdminEmail(session.user.email)) {
     return NextResponse.json({ error: "Access denied" }, { status: 403 });
   }
 

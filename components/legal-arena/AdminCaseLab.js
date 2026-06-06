@@ -641,8 +641,8 @@ export default function AdminCaseLab({
         content: "",
         type: "announcement",
       });
-    } catch (error) {
-      toast.error(error?.response?.data?.error || error?.message || "Failed to send email.");
+    } catch (_error) {
+      // apiClient already displays the error toast for failed requests.
     } finally {
       setEmailWorking(false);
     }
