@@ -9,7 +9,8 @@ import config from "@/config";
 
 const MAX_BATCH_SIZE = 100;
 
-const greeting = (name) => (name ? `Hello ${name},\n\n` : "Hello,\n\n");
+const greeting = (name) =>
+  name ? `Hey advocate ${name},\n\n` : "Hey advocate,\n\n";
 
 const getDigestSignature = (type) =>
   type === "marketing" ? `${config.appName} team` : config.appName;
