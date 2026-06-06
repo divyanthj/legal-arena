@@ -1421,7 +1421,7 @@ export default function AdminCaseLab({
                     <textarea
                       className={`${arenaTextareaClass} h-56`}
                       value={emailForm.content}
-                      placeholder="Write the body only. The email already starts with \"Hey advocate [name]\" for each recipient."
+                      placeholder={"Write the body only. The email already starts with \"Hey advocate [name]\" for each recipient."}
                       onChange={(event) =>
                         setEmailForm((current) => ({
                           ...current,
