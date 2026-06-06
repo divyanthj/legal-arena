@@ -59,6 +59,11 @@ export async function POST(req, { params }) {
       userId: session.user.id,
     });
 
+    if (result.clientMemory) {
+      caseSession.clientMemory = result.clientMemory;
+      caseSession.markModified?.("clientMemory");
+    }
+
     caseSession.interviewTranscript.push({
       role: "player",
       speaker: "You",

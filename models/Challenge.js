@@ -92,6 +92,11 @@ const participantSchema = mongoose.Schema(
       type: [interviewEntrySchema],
       default: [],
     },
+    clientMemory: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+      private: true,
+    },
   },
   { _id: false }
 );

@@ -15,9 +15,12 @@ import {
   getPartyName,
   getPlayerSide,
   getTemplate,
+  getTemplatePartyForSessionSide,
   mergeFactSheet,
   normalizeFactSheetPatch,
+  coerceString,
   coerceStringList,
+  sanitizeIdList,
   uniqueList,
 } from "./engine/shared";
 import {
@@ -39,17 +42,154 @@ import {
 const INTERVIEW_RESPONSE_MAX_TOKENS = 1500;
 const GAMEPLAY_MODEL =
   process.env.OPENAI_GAMEPLAY_MODEL?.trim() || "gpt-5.4-mini";
+const CLIENT_MEMORY_MODEL =
+  process.env.OPENAI_CLIENT_MEMORY_MODEL?.trim() || GAMEPLAY_MODEL;
+
+const hasUsableClientMemory = (clientMemory) =>
+  Boolean(
+    clientMemory &&
+      typeof clientMemory === "object" &&
+      !Array.isArray(clientMemory) &&
+      (clientMemory.voice ||
+        clientMemory.posture ||
+        clientMemory.personalMemory?.length ||
+        clientMemory.evidenceAccess?.length)
+  );
+
+const normalizeClientMemory = ({
+  aiResult,
+  template,
+  playerSide,
+  playerPartyName,
+  opposingPartyName,
+}) => {
+  if (!aiResult || typeof aiResult !== "object") {
+    return null;
+  }
+
+  const validFactIds = (template.canonicalFacts || []).map((fact) => fact.factId);
+  const validEvidenceIds = (template.evidenceItems || []).map((item) => item.id);
+  const normalized = {
+    version: 1,
+    generatedAt: new Date().toISOString(),
+    representedSide: playerSide,
+    representedTemplateSide: getTemplatePartyForSessionSide(playerSide),
+    representedPartyName: playerPartyName,
+    opposingPartyName,
+    voice: coerceString(aiResult.voice),
+    posture: coerceString(aiResult.posture),
+    personalMemory: coerceStringList(aiResult.personalMemory, 14),
+    uncertainty: coerceStringList(aiResult.uncertainty, 8),
+    evidenceAccess: coerceStringList(aiResult.evidenceAccess, 10),
+    blindSpots: coerceStringList(aiResult.blindSpots, 8),
+    motivations: coerceStringList(aiResult.motivations, 6),
+    boundaries: coerceStringList(aiResult.boundaries, 8),
+    factIds: sanitizeIdList(aiResult.factIds, validFactIds, 20),
+    evidenceIds: sanitizeIdList(aiResult.evidenceIds, validEvidenceIds, 20),
+  };
+
+  return hasUsableClientMemory(normalized) ? normalized : null;
+};
+
+export const ensureClientMemory = async ({
+  caseSession,
+  template,
+  playerSide,
+  userId,
+}) => {
+  if (hasUsableClientMemory(caseSession?.clientMemory)) {
+    return { clientMemory: caseSession.clientMemory, created: false };
+  }
+
+  const playerPartyName = getPartyName(template, playerSide);
+  const opposingPartyName = getPartyName(template, getOpposingSide(playerSide));
+  const actorContext = buildInterviewAgentContext({
+    template,
+    playerSide,
+    factSheet: caseSession.factSheet || {},
+  });
+
+  try {
+    const aiResult = await requestStructuredCompletion({
+      userId,
+      model: CLIENT_MEMORY_MODEL,
+      temperature: 0.45,
+      maxTokens: 1000,
+      retryAttempts: 1,
+      systemPrompt:
+        "You convert a legal simulation's canonical case packet into a compact first-person memory dossier for one represented party. Write human memory, not legal analysis. The dossier will be reused so the party can answer intake questions naturally without seeing the full canonical story again. Do not include advice to lawyers, investigation instructions, strategy coaching, scoring language, hidden metadata, or labels like proof gaps. Output valid JSON only.",
+      userPrompt: JSON.stringify({
+        task: `Create a compact memory dossier for ${playerPartyName}, the represented ${playerSide} side.`,
+        representedPartyName: playerPartyName,
+        opposingPartyName,
+        representedSide: playerSide,
+        overview: buildOverviewForSide(template, playerSide),
+        desiredRelief: buildDesiredReliefForSide(template, playerSide),
+        openingStatement: caseSession.premise?.openingStatement || "",
+        canonicalRoleContext: actorContext,
+        styleRules: [
+          "Write as material the person remembers, believes, doubts, personally saw, personally has, or personally lacks.",
+          "Use natural first-person memory fragments, not a legal brief.",
+          "Keep each item short and reusable for future Q&A.",
+          "Separate personal uncertainty from facts the person is confident about.",
+          "Evidence access means what this person personally has, saw, sent, received, can identify, or knows someone else controls.",
+          "Boundaries should say what the party should not volunteer or cannot know.",
+        ],
+        outputSchema: {
+          voice: "string",
+          posture: "string",
+          personalMemory: ["string"],
+          uncertainty: ["string"],
+          evidenceAccess: ["string"],
+          blindSpots: ["string"],
+          motivations: ["string"],
+          boundaries: ["string"],
+          factIds: ["string"],
+          evidenceIds: ["string"],
+        },
+      }),
+    });
+    const clientMemory = normalizeClientMemory({
+      aiResult,
+      template,
+      playerSide,
+      playerPartyName,
+      opposingPartyName,
+    });
+
+    return clientMemory
+      ? { clientMemory, created: true }
+      : { clientMemory: null, created: false };
+  } catch (error) {
+    console.error("client memory generation failed", error);
+    return { clientMemory: null, created: false };
+  }
+};
 
 export const continueInterview = async ({ caseSession, question, userId }) => {
   const template = ensureTemplate(getTemplate(caseSession));
   const playerSide = getPlayerSide(caseSession);
   const playerPartyName = getPartyName(template, playerSide);
   const opposingPartyName = getPartyName(template, getOpposingSide(playerSide));
-  const interviewContext = buildInterviewAgentContext({
+  const clientMemoryResult = await ensureClientMemory({
+    caseSession,
     template,
     playerSide,
-    factSheet: caseSession.factSheet,
+    userId,
   });
+  const interviewContext = clientMemoryResult.clientMemory
+    ? {
+        mode: "stored_client_memory",
+        clientMemory: clientMemoryResult.clientMemory,
+      }
+    : {
+        mode: "canonical_fallback",
+        ...buildInterviewAgentContext({
+          template,
+          playerSide,
+          factSheet: caseSession.factSheet,
+        }),
+      };
   const fallback = buildInterviewFallback({
     caseSession,
     template,
@@ -66,7 +206,9 @@ export const continueInterview = async ({ caseSession, question, userId }) => {
     systemPrompt:
       "You are simulating a legal-case party speaking to their own lawyer during intake. Treat this as a role actor, not a script expander. The canonical story is the real event history; structured facts and evidence are helper maps, not the only memory you have. Answer first from the represented party's lived perspective, thought process, and accessible story memory. Decide what to reveal, hedge, minimize, or withhold based on the latest question and the party profile. The partyResponse must sound like the represented party speaking in first person; never write dossier language such as 'Maria says,' 'client says,' 'the tenant says,' 'the plaintiff says,' or any third-person self-reference by the represented party. The partyResponse must answer only the lawyer's latest question. Do not volunteer extra explanation, legal analysis, investigation advice, next steps, or caveats the lawyer did not ask for. For yes/no questions, start with yes, no, or not sure, then add at most one short plain-language sentence if needed. If the lawyer asks whether you have, can provide, send, share, or show photos, records, documents, or other evidence, answer directly about whether you personally have it. If you have it, say yes and briefly identify it. If you do not have it, say no or not that I know of and stop. If someone else likely has it, add one short sentence naming who. Never say 'confirmed in the file,' 'not confirmed in the file,' 'proof gaps,' 'the record,' or similar dossier language in partyResponse; speak as the client from memory. For ordinary factual questions, answer from memory as concretely as you honestly can before talking about records. If the lawyer asks a broad question, connect it to the nearest relevant events, mental states, evidence, or ambiguity in the canonical story instead of stonewalling. If the lawyer asks for names, dates, amounts, or other facts already present in the hidden world state or side-specific memory, give the fact instead of saying you need to check records. Use uncertainty only for genuine hearsay, missing records, low-access facts, or exact details the represented party would not know. If you do not remember an exact detail, say that plainly and stop. Do not tell the lawyer how to investigate, what to pin down next, or how to run the case. Speak like a normal person in first person. Never mention internal schemas, canonical truth, or metadata. Keep fact-sheet updates concise, but you may fill summary, theory, and desiredRelief when the case posture is already clear from the intake or the lawyer asks for them. When records are produced or confirmed, add them to corroboratedFacts/sourceLinks; when records cannot be produced, add the specific missing item to missingEvidence. Output valid JSON only.",
     userPrompt: JSON.stringify({
-      task: `Answer the lawyer's latest question as ${playerPartyName}. You are the represented ${playerSide} side. Use the hidden canonical world and your side-specific memory to choose what this person would naturally say and what they would keep back for now.`,
+      task: clientMemoryResult.clientMemory
+        ? `Answer the lawyer's latest question as ${playerPartyName}. You are the represented ${playerSide} side. Use only the stored client memory, current visible fact sheet, and recent transcript to choose what this person would naturally say and what they would keep back for now.`
+        : `Answer the lawyer's latest question as ${playerPartyName}. You are the represented ${playerSide} side. Use the hidden canonical world and your side-specific memory to choose what this person would naturally say and what they would keep back for now.`,
       stage: "interview",
       roleArchitecture: {
         representedPartyName: playerPartyName,
@@ -135,6 +277,7 @@ export const continueInterview = async ({ caseSession, question, userId }) => {
 
   return {
     ...interviewResult,
+    clientMemory: clientMemoryResult.created ? clientMemoryResult.clientMemory : null,
     patch: combinedPatch,
     nextFactSheet,
     caseAssessment: nextAssessment,

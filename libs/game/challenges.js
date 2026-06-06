@@ -425,6 +425,16 @@ const setParticipantCaseAssessment = (challenge, participant, caseAssessment) =>
   markParticipantsModified(challenge);
 };
 
+const setParticipantClientMemory = (challenge, participant, clientMemory) => {
+  if (typeof participant?.set === "function") {
+    participant.set("clientMemory", clientMemory);
+  } else if (participant) {
+    participant.clientMemory = clientMemory;
+  }
+
+  markParticipantsModified(challenge);
+};
+
 const userMapForChallenge = async (challenge) => {
   const userIds = [
     challenge.initiatorId,
@@ -472,6 +482,7 @@ const buildParticipantCaseSession = ({ challenge, participant, otherParticipant 
     interviewTranscript: participant.interviewTranscript || [],
     factSheet: participant.factSheet,
     caseAssessment: participant.caseAssessment,
+    clientMemory: participant.clientMemory || null,
     courtroomTranscript: judgedRounds.flatMap((round) =>
       (round.submissions || []).map((submission) => ({
         round: round.round,
@@ -815,6 +826,10 @@ export const continueChallengeInterview = async ({ userId, challengeId, question
     otherParticipant,
   });
   const result = await continueInterview({ caseSession, question, userId });
+
+  if (result.clientMemory) {
+    setParticipantClientMemory(challenge, participant, result.clientMemory);
+  }
 
   participant.interviewTranscript.push({
     role: "player",
@@ -1315,6 +1330,13 @@ export const submitChallengeCourtroomArgument = async ({
 
 export const buildChallengePayload = async ({ challenge, viewerUserId }) => {
   const plainChallenge = toPlain(challenge);
+  const publicChallenge = {
+    ...plainChallenge,
+    participants: (plainChallenge.participants || []).map((participant) => {
+      const { clientMemory, ...publicParticipant } = participant;
+      return publicParticipant;
+    }),
+  };
   const participant = getParticipant(plainChallenge, viewerUserId);
   const otherParticipant = getOtherParticipant(plainChallenge, viewerUserId);
   const usersById = await userMapForChallenge(plainChallenge);
@@ -1351,7 +1373,7 @@ export const buildChallengePayload = async ({ challenge, viewerUserId }) => {
   });
 
   return {
-    ...plainChallenge,
+    ...publicChallenge,
     id: plainChallenge.id || toObjectIdString(plainChallenge._id),
     slug,
     viewer: participant
