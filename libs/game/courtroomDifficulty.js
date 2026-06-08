@@ -241,6 +241,38 @@ const hasBurdenFailureForParty = (summary = "", partyName = "") => {
   return failure && burden;
 };
 
+const hasPlayerReliefDenied = (summary = "") => {
+  const text = normalizeVerdictText(summary);
+  if (!text) return false;
+
+  const denial =
+    /\b(denies|denied|declines|refuses|rejects|does not grant|will not grant|cannot award|no award|no recovery|no judgment|no judgement|without award|denied relief)\b/.test(
+      text
+    );
+  const playerRelief =
+    /\b(your requested|your request|your claim|you seek|you sought|requested relief|requested money|money judgment|money judgement|repayment award|award of damages|requested award|relief you seek|judgment you seek|judgement you seek)\b/.test(
+      text
+    );
+
+  return denial && playerRelief;
+};
+
+const hasOpponentReliefDenied = (summary = "") => {
+  const text = normalizeVerdictText(summary);
+  if (!text) return false;
+
+  const denial =
+    /\b(denies|denied|declines|refuses|rejects|does not grant|will not grant|cannot award|no award|no recovery|no judgment|no judgement|without award|denied relief)\b/.test(
+      text
+    );
+  const opponentRelief =
+    /\b(the other side s requested|the other side requested|opposing counsel s requested|opponent s requested|their requested|their request|their claim|they seek|they sought|the other side seeks|the other side sought)\b/.test(
+      text
+    );
+
+  return denial && opponentRelief;
+};
+
 export const reconcileVerdictWinnerWithSummary = ({
   winner,
   summary = "",
@@ -251,6 +283,9 @@ export const reconcileVerdictWinnerWithSummary = ({
   const text = String(summary || "").trim();
 
   if (!text) return safeWinner;
+
+  if (hasPlayerReliefDenied(text) && !hasOpponentReliefDenied(text)) return "opponent";
+  if (hasOpponentReliefDenied(text) && !hasPlayerReliefDenied(text)) return "player";
 
   const judgmentForPlayer = hasJudgmentForParty(text, playerPartyName);
   const judgmentForOpponent = hasJudgmentForParty(text, opponentPartyName);
@@ -355,31 +390,18 @@ export const normalizeCourtroomDeltasForDifficulty = ({
 
 export const normalizeVerdictForDifficulty = ({
   verdict,
-  updatedScore,
   fallbackVerdict,
   difficultyProfile,
   playerPartyName = "",
   opponentPartyName = "",
 }) => {
-  const profile = difficultyProfile || getCourtroomDifficultyProfile();
   const safeVerdict =
     verdict && typeof verdict === "object" ? verdict : fallbackVerdict || {};
   const fallbackWinner = fallbackVerdict?.winner || "draw";
-  const scoreMargin = (updatedScore?.player || 0) - (updatedScore?.opponent || 0);
-  let scoreWinner = "draw";
-
-  if (scoreMargin > 0) {
-    scoreWinner = "player";
-  } else if (scoreMargin < 0) {
-    scoreWinner = "opponent";
-  }
-
-  const closeCase = Math.abs(scoreMargin) <= profile.verdictCloseCaseBand;
   const requestedWinner = safeVerdict.winner || fallbackWinner;
-  const scoreAdjustedWinner = closeCase ? requestedWinner : scoreWinner;
   const summary = safeVerdict.summary || fallbackVerdict?.summary || "";
   const winner = reconcileVerdictWinnerWithSummary({
-    winner: scoreAdjustedWinner,
+    winner: requestedWinner,
     summary,
     playerPartyName,
     opponentPartyName,

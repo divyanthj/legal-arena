@@ -17,19 +17,35 @@ const legacyFactSheet = sanitizeFactSheet({
 });
 
 assert.deepEqual(legacyFactSheet.summary, [
-  "Client says the sink was slow before move-out.",
+  "The sink was slow before move-out.",
 ]);
 assert.deepEqual(legacyFactSheet.theory, [
   "I can argue the charge was not caused by my client.",
 ]);
-assert.deepEqual(legacyFactSheet.desiredRelief, ["Return the withheld deposit."]);
+assert.deepEqual(legacyFactSheet.desiredRelief, ["Return the withheld security deposit."]);
 assert.deepEqual(legacyFactSheet.supportingFacts, [
-  "Client says the sink was slow before move-out.",
+  "The sink was slow before move-out.",
 ]);
 
 assert.deepEqual(
   sanitizeFactSheetList("timeline", "Client moved in.\nClient moved out.\n"),
   ["Client moved in.", "Client moved out."]
+);
+
+assert.deepEqual(
+  sanitizeFactSheetList(
+    "timeline",
+    "I run North Star Web Studio. BrightPath hired me to build a basic website. We worked out the project through email and text, and the understanding was that it was a fixed-price job with part paid up front and the rest due when the site launched."
+  ),
+  []
+);
+
+assert.deepEqual(
+  sanitizeFactSheetList(
+    "missingEvidence",
+    "Unavailable: Unavailable: Unavailable: Relevant messages."
+  ),
+  ["Unavailable: Relevant messages."]
 );
 
 const storeSource = await readFile(new URL("../libs/game/store.js", import.meta.url), "utf8");
@@ -76,7 +92,7 @@ assert.match(
 );
 assert.match(
   engineSource,
-  /patch\.desiredRelief\.push\(`Client says: \$\{answer\}`\);\s*}\s*if \(\s*\/\\b\(when\|date/
+  /patch\.desiredRelief\.push\(answer\);\s*}\s*if \(\s*!\s*proofRelated/
 );
 assert.match(
   engineSource,
@@ -92,13 +108,21 @@ assert.match(
 );
 assert.match(
   engineSource,
-  /patch\.risks\.push\(`Risk from intake: \$\{answer\}`\);/
+  /patch\.risks\.push\("Point may need more support\."\);/
 );
 assert.match(
   engineSource,
   /disputedFacts: uniqueList\(\[\s*\.\.\.patch\.disputedFacts,\s*\.\.\.fallbackProofAndClassificationPatch\.disputedFacts,\s*\]\)/
 );
 assert.match(engineSource, /what i had\|what i have/);
+assert.match(
+  engineSource,
+  /timeline:\s*bestItem\?\.section === "memory" \? \[bestItem\.text\] : \[\]/
+);
+assert.match(
+  engineSource,
+  /knownClaims:\s*bestItem\?\.section === "memory" \? \[bestItem\.text\] : \[\]/
+);
 assert.doesNotMatch(
   engineSource,
   /answerShowsProofPossession \|\|\s*proofTermPattern\.test\(lowerAnswer\)/

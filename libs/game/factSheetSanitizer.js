@@ -18,7 +18,7 @@ const toSentence = (value = "") => {
 const canonicalize = (value = "") =>
   collapseWhitespace(value)
     .toLowerCase()
-    .replace(/^unavailable:\s*/g, "")
+    .replace(/^(unavailable:\s*)+/g, "")
     .replace(/^[-•]\s*/g, "")
     .replace(/^(client says|client wants|client requests|client is asking for|client asked for)\s+(that\s+)?/g, "")
     .replace(/\bany formal\s+/g, "")
@@ -39,6 +39,12 @@ const canonicalize = (value = "") =>
     .trim();
 
 const marksUnavailable = (value = "") => /^unavailable:\s*/i.test(String(value || "").trim());
+
+const stripUnavailablePrefixes = (value = "") =>
+  collapseWhitespace(value)
+    .replace(/^(unavailable:\s*)+/i, "")
+    .replace(/\bunavailable:\s*/gi, "")
+    .trim();
 
 const uniqueList = (items = []) => {
   const seen = new Map();
@@ -628,13 +634,15 @@ const removeResolvedCredibilityRisks = (risks = [], factSheet = {}) => {
 };
 
 const withUnavailablePrefix = (original = "", cleaned = "") => {
-  if (!cleaned) {
+  const normalized = stripUnavailablePrefixes(cleaned);
+
+  if (!normalized) {
     return "";
   }
 
   return /^unavailable:\s*/i.test(original)
-    ? `Unavailable: ${cleaned.replace(/\.+$/g, "")}.`
-    : cleaned;
+    ? `Unavailable: ${normalized.replace(/\.+$/g, "")}.`
+    : normalized;
 };
 
 const simplifyMissingEvidence = (text = "") =>
@@ -647,6 +655,13 @@ const rewriteFactSheetEntry = (field, value = "") => {
   const text = cleanFactSheetPrefix(value);
 
   if (!text) {
+    return "";
+  }
+
+  if (
+    ["timeline", "supportingFacts", "knownClaims", "theory"].includes(field) &&
+    (text.length > 260 || text.split(/(?<=[.!?])\s+/).filter(Boolean).length > 2)
+  ) {
     return "";
   }
 

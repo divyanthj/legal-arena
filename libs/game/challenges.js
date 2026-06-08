@@ -14,6 +14,7 @@ import {
   assessCaseSuccessChance,
   buildConversationFactSheetFallback,
   continueInterview,
+  ensureClientMemory,
   finalizeFactSheetInput,
   lockAssessmentForCourt,
   runCourtroomRound,
@@ -517,6 +518,31 @@ const buildParticipantCaseSession = ({ challenge, participant, otherParticipant 
   };
 };
 
+const ensureParticipantClientMemory = async ({ challenge, participant, otherParticipant, userId }) => {
+  if (!participant || participant.status !== "active") {
+    return false;
+  }
+
+  const caseSession = buildParticipantCaseSession({
+    challenge,
+    participant,
+    otherParticipant,
+  });
+  const result = await ensureClientMemory({
+    caseSession,
+    template: challenge.templateSnapshot,
+    playerSide: participant.side,
+    userId,
+  });
+
+  if (result.clientMemory && result.created) {
+    setParticipantClientMemory(challenge, participant, result.clientMemory);
+    return true;
+  }
+
+  return false;
+};
+
 const getOpenRound = (challenge) =>
   (challenge.courtroomRounds || []).find((round) => round.status === "open") ||
   null;
@@ -725,6 +751,15 @@ export const getChallengeForUser = async ({ userId, challengeId }) => {
   changed = (await backfillChallengeCourtroomScores(challenge)) || changed;
   changed = backfillChallengeCourtroomFeedback(challenge) || changed;
   changed = appendOpenRoundIfNeeded(challenge) || changed;
+  const participant = getParticipant(challenge, userId);
+  const otherParticipant = getOtherParticipant(challenge, userId);
+  changed =
+    (await ensureParticipantClientMemory({
+      challenge,
+      participant,
+      otherParticipant,
+      userId,
+    })) || changed;
   if (changed) {
     await challenge.save();
   }
@@ -769,6 +804,12 @@ export const acceptChallengeForUser = async ({ userId, challengeId }) => {
   participant.status = "active";
   challenge.status = "active";
   challenge.acceptedAt = new Date();
+  await ensureParticipantClientMemory({
+    challenge,
+    participant,
+    otherParticipant: getOtherParticipant(challenge, userId),
+    userId,
+  });
   await challenge.save();
 
   try {

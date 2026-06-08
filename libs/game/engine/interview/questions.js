@@ -115,6 +115,23 @@ export const questionAsksForProofLikeEvidence = (lowerQuestion = "") =>
   !lowerQuestion.includes("how did") &&
   !lowerQuestion.includes("where did");
 
+const questionAsksForProofPossession = (lowerQuestion = "") =>
+  questionAsksForProofLikeEvidence(lowerQuestion) &&
+  (lowerQuestion.includes("do you have") ||
+    lowerQuestion.includes("did you have") ||
+    lowerQuestion.includes("have any") ||
+    lowerQuestion.includes("have email") ||
+    lowerQuestion.includes("have emails") ||
+    lowerQuestion.includes("have chat") ||
+    lowerQuestion.includes("have chats") ||
+    lowerQuestion.includes("have text") ||
+    lowerQuestion.includes("have texts") ||
+    lowerQuestion.includes("is there") ||
+    lowerQuestion.includes("can you show") ||
+    lowerQuestion.includes("can you send") ||
+    lowerQuestion.includes("can you share") ||
+    lowerQuestion.includes("can you provide"));
+
 export const hasRecordSearchPromise = (value = "") =>
   /\b(need to look|need to check|i'?ll look|i will look|i'?ll check|i will check|before i can send|before sending|once i'?ve pulled|once i have pulled|pull(?:ed)? my|check my messages|check my notes|look for it)\b/i.test(
     value
@@ -189,6 +206,19 @@ export const isResponsiveInterviewAnswer = (question = "", answer = "") => {
   const normalizedAnswer = String(answer || "").trim();
 
   if (!normalizedAnswer) {
+    return false;
+  }
+
+  if (
+    (questionAsksForExactDate(lowerQuestion) ||
+      questionAsksForContactMethod(lowerQuestion) ||
+      questionAsksForAmount(lowerQuestion)) &&
+    normalizedAnswer.length > 220
+  ) {
+    return false;
+  }
+
+  if (questionAsksForProofPossession(lowerQuestion) && normalizedAnswer.length > 180) {
     return false;
   }
 

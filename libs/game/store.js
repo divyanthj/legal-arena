@@ -33,6 +33,7 @@ import {
 } from "./profileSummary";
 import { normalizeOnboarding } from "./onboarding";
 import { sanitizeFactSheet } from "./factSheetSanitizer";
+import { ensureClientMemory } from "./engine";
 
 const toPlain = (doc) => (doc?.toJSON ? doc.toJSON() : doc);
 const DEFAULT_PLAYER_SIDE = "client";
@@ -888,6 +889,16 @@ export const createCaseSession = async ({
     caseSessionId: caseSession._id || caseSession.id || caseSession.slug,
     complexity: template.complexity,
   });
+  const clientMemoryResult = await ensureClientMemory({
+    caseSession,
+    template,
+    playerSide,
+    userId,
+  });
+  if (clientMemoryResult.clientMemory) {
+    caseSession.clientMemory = clientMemoryResult.clientMemory;
+    caseSession.markModified?.("clientMemory");
+  }
   await caseSession.save();
 
   return buildCasePayload(caseSession, template);

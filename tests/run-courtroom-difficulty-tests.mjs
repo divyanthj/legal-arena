@@ -69,7 +69,7 @@ assert.equal(
     },
     difficultyProfile: lowestProfile,
   }).winner,
-  "player"
+  "opponent"
 );
 
 assert.equal(
@@ -93,6 +93,28 @@ assert.equal(
 );
 
 assert.equal(
+  normalizeVerdictForDifficulty({
+    verdict: {
+      winner: "opponent",
+      summary: "The requested relief is denied because the exact amount was not proven.",
+      highlights: [],
+      concerns: [],
+    },
+    updatedScore: { player: 99, opponent: 1 },
+    fallbackVerdict: {
+      winner: "player",
+      summary: "The player had the higher performance score.",
+      highlights: [],
+      concerns: [],
+    },
+    difficultyProfile: lowestProfile,
+    playerPartyName: "Maya Rivera",
+    opponentPartyName: "Ethan Cole",
+  }).winner,
+  "opponent"
+);
+
+assert.equal(
   reconcileVerdictWinnerWithSummary({
     winner: "player",
     summary:
@@ -100,6 +122,40 @@ assert.equal(
     playerPartyName: "The State",
     opponentPartyName: "Jordan Lee",
   }),
+  "opponent"
+);
+
+assert.equal(
+  reconcileVerdictWinnerWithSummary({
+    winner: "player",
+    summary:
+      "The Court denies your requested money judgment on the present record. You presented a plausible theory that the two transfers were advances to be repaid, but you did not place the exact amount before the Court.",
+    playerPartyName: "Maya Rivera",
+    opponentPartyName: "Ethan Cole",
+  }),
+  "opponent"
+);
+
+assert.equal(
+  normalizeVerdictForDifficulty({
+    verdict: {
+      winner: "player",
+      summary:
+        "The Court denies your requested money judgment on the present record. You presented a plausible theory that the two transfers were advances to be repaid, but you did not place the exact amount before the Court.",
+      highlights: [],
+      concerns: [],
+    },
+    updatedScore: { player: 35, opponent: 22 },
+    fallbackVerdict: {
+      winner: "player",
+      summary: "Maya Rivera carried the record.",
+      highlights: [],
+      concerns: [],
+    },
+    difficultyProfile: highestProfile,
+    playerPartyName: "Maya Rivera",
+    opponentPartyName: "Ethan Cole",
+  }).winner,
   "opponent"
 );
 
