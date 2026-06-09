@@ -402,7 +402,11 @@ const fuzzyLeaderboardNameMatch = (name = "", query = "") => {
   return false;
 };
 
-export const listOverallLeaderboard = async ({ search = "", limit = null } = {}) => {
+export const listOverallLeaderboard = async ({
+  search = "",
+  limit = null,
+  includeUserId = "",
+} = {}) => {
   await connectMongo();
 
   const refreshedUsers = await User.find({}).sort({
@@ -430,7 +434,24 @@ export const listOverallLeaderboard = async ({ search = "", limit = null } = {})
     ? rankedEntries.filter((entry) => fuzzyLeaderboardNameMatch(entry.name, search))
     : rankedEntries;
 
-  return limit ? searchedEntries.slice(0, limit) : searchedEntries;
+  if (!limit) {
+    return searchedEntries;
+  }
+
+  const limitedEntries = searchedEntries.slice(0, limit);
+  const includedUserId = String(includeUserId || "");
+  if (
+    includedUserId &&
+    !search &&
+    !limitedEntries.some((entry) => String(entry.id) === includedUserId)
+  ) {
+    const includedEntry = rankedEntries.find((entry) => String(entry.id) === includedUserId);
+    if (includedEntry) {
+      return [...limitedEntries, includedEntry];
+    }
+  }
+
+  return limitedEntries;
 };
 
 export const listPlayerDirectory = async ({ search = "", limit = null } = {}) =>

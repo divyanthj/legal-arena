@@ -9,6 +9,7 @@ await import("./run-courtroom-difficulty-tests.mjs");
 await import("./run-courtroom-evidence-gating-tests.mjs");
 await import("./run-challenge-progression-tests.mjs");
 await import("./run-lawbook-tests.mjs");
+await import("./run-leaderboard-tests.mjs");
 await import("./run-template-builder-no-undef-tests.mjs");
 await import("./run-template-title-tests.mjs");
 await import("./run-lemonsqueezy-tests.mjs");

@@ -54,7 +54,11 @@ export default async function Dashboard() {
   const [dashboardData, challenges, overallLeaderboard, categoryLeaderboards] = await Promise.all([
     listDashboardDataForUser(session.user.id, session.user),
     withOptionalTimeout(listChallengesForUser(session.user.id), [], "challenges"),
-    withOptionalTimeout(listOverallLeaderboard({ limit: 8 }), [], "overall leaderboard"),
+    withOptionalTimeout(
+      listOverallLeaderboard({ limit: 8, includeUserId: session.user.id }),
+      [],
+      "overall leaderboard"
+    ),
     withOptionalTimeout(
       Promise.all(
         LEGAL_CASE_CATEGORIES.map(async (category) => [
