@@ -286,6 +286,11 @@ const caseSessionSchema = mongoose.Schema(
       default: null,
       private: true,
     },
+    clientMemoryExcerpt: {
+      type: String,
+      default: "",
+      trim: true,
+    },
     judgeProfile: {
       type: mongoose.Schema.Types.Mixed,
       default: null,

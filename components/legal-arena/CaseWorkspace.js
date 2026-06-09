@@ -755,9 +755,8 @@ export default function CaseWorkspace({
       : "Locked when the case entered court.";
   const heroNarrativeExcerpt =
     String(caseSession.clientMemoryExcerpt || "").trim() ||
-    (isInterview
-      ? "I need to walk through this from my side before we treat anything as settled."
-      : String(caseSession.premise?.overview || "").trim());
+    String(caseSession.premise?.openingStatement || "").trim() ||
+    String(caseSession.premise?.overview || "").trim();
   const heroPanelStyle = {
     backgroundImage: [
       "linear-gradient(90deg, rgba(4,4,4,0.96) 0%, rgba(4,4,4,0.88) 42%, rgba(4,4,4,0.5) 68%, rgba(4,4,4,0.9) 100%)",

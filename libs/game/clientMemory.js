@@ -1,7 +1,10 @@
-import {
-  hasThirdPersonSelfReference,
-  normalizePartySpeechToFirstPerson,
-} from "./engine/voice.js";
+import { requestStructuredCompletion } from "@/libs/gpt";
+
+const CLIENT_MEMORY_EXCERPT_MODEL =
+  process.env.OPENAI_CLIENT_MEMORY_MODEL?.trim() ||
+  process.env.OPENAI_GAMEPLAY_MODEL?.trim() ||
+  process.env.OPENAI_MODEL?.trim() ||
+  "gpt-5.4-mini";
 
 export const normalizeClientMemoryText = (clientMemory) => {
   if (typeof clientMemory === "string") {
@@ -25,87 +28,61 @@ export const normalizeClientMemoryText = (clientMemory) => {
   ]
     .map((item) => String(item || "").trim())
     .filter(Boolean)
-    .join(" ");
+    .join("\n");
 };
 
-const splitSentences = (value = "") =>
+const cleanGeneratedExcerpt = (value = "") =>
   String(value || "")
     .replace(/\s+/g, " ")
-    .trim()
-    .split(/(?<=[.!?])\s+/)
-    .map((item) => item.trim())
-    .filter(Boolean);
+    .trim();
 
-const clipText = (value = "", maxLength = 420, maxSentences = 4) => {
-  const sentences = splitSentences(value);
-  const sentenceLimited = sentences.length
-    ? sentences.slice(0, maxSentences).join(" ")
-    : String(value || "").replace(/\s+/g, " ").trim();
-
-  if (sentenceLimited.length <= maxLength) {
-    return sentenceLimited;
-  }
-
-  const clipped = sentenceLimited.slice(0, maxLength).trim();
-  const sentenceEnd = Math.max(
-    clipped.lastIndexOf("."),
-    clipped.lastIndexOf("!"),
-    clipped.lastIndexOf("?")
-  );
-
-  if (sentenceEnd >= 120) {
-    return clipped.slice(0, sentenceEnd + 1).trim();
-  }
-
-  return `${clipped.replace(/[,;:\s]+$/g, "")}...`;
-};
-
-const normalizeSentenceStartSelfPronouns = (value = "") =>
-  String(value || "")
-    .replace(/(^|[.!?]\s+)(?:he|she|they|it)\s+/gi, (match, before) => `${before}I `)
-    .replace(/\bI does\b/gi, "I do")
-    .replace(/\bI has\b/gi, "I have")
-    .replace(/\bI is\b/gi, "I am")
-    .replace(/\bI are\b/gi, "I am")
-    .replace(/\bI was\b/gi, "I was")
-    .replace(/\bI were\b/gi, "I was")
-    .replace(/\bI thinks\b/gi, "I think")
-    .replace(/\bI believes\b/gi, "I believe")
-    .replace(/\bI remembers\b/gi, "I remember")
-    .replace(/\bI wants\b/gi, "I want")
-    .replace(/\bI knows\b/gi, "I know");
-
-export const buildSafeClientMemoryExcerpt = ({
+export const generateClientMemoryExcerpt = async ({
   clientMemory,
   partyName = "",
   playerSide = "client",
   fallback = "",
-  maxLength = 420,
-  maxSentences = 4,
+  userId,
+  onUsage,
 } = {}) => {
-  const rawText = normalizeClientMemoryText(clientMemory);
-  const source = rawText || String(fallback || "");
-  const normalized = normalizePartySpeechToFirstPerson({
-    text: source,
-    partyName,
-    playerSide,
-  });
-  const clipped = clipText(
-    normalizeSentenceStartSelfPronouns(normalized),
-    maxLength,
-    maxSentences
-  );
+  const clientStory = normalizeClientMemoryText(clientMemory) || String(fallback || "").trim();
 
-  if (
-    !clipped ||
-    hasThirdPersonSelfReference({
-      text: clipped,
-      partyName,
-      playerSide,
-    })
-  ) {
+  if (!clientStory) {
     return "";
   }
 
-  return clipped;
+  try {
+    const aiResult = await requestStructuredCompletion({
+      userId,
+      model: CLIENT_MEMORY_EXCERPT_MODEL,
+      temperature: 0.35,
+      maxTokens: 360,
+      retryAttempts: 1,
+      usageLabel: "intake.clientMemoryExcerpt",
+      onUsage,
+      systemPrompt:
+        "You write active-intake hero excerpts from a private client memory story. Write only a concise first-person excerpt in the interview subject's voice. Use the client's subjective truth, not a neutral case summary. Do not add objective facts, documents, witnesses, outcomes, legal advice, headings, labels, or JSON-looking prose. Avoid generic setup lines like 'I need to walk through this' and choose concrete story content instead. Output valid JSON only.",
+      userPrompt: JSON.stringify({
+        task: "Generate the hero excerpt shown to the player before intake questioning.",
+        representedPartyName: partyName,
+        representedSide: playerSide,
+        clientStory,
+        styleRules: [
+          "First person only.",
+          "Two to four sentences.",
+          "No third-person reporting voice.",
+          "No legal-summary scaffolding.",
+          "Keep it under 520 characters.",
+          "Make it sound like a vivid excerpt from the client story, not a button label or placeholder.",
+        ],
+        outputSchema: {
+          excerpt: "string",
+        },
+      }),
+    });
+
+    return cleanGeneratedExcerpt(aiResult?.excerpt || aiResult?.clientMemoryExcerpt || "");
+  } catch (error) {
+    console.error("client memory excerpt generation failed", error);
+    return "";
+  }
 };

@@ -64,7 +64,14 @@ export async function POST(req, { params }) {
     if (result.clientMemory) {
       caseSession.clientMemory = result.clientMemory;
       caseSession.markModified?.("clientMemory");
-      applyClientMemoryOpeningToCaseSession(caseSession, result.clientMemory);
+    }
+    if (result.clientMemoryExcerpt) {
+      caseSession.clientMemoryExcerpt = result.clientMemoryExcerpt;
+      applyClientMemoryOpeningToCaseSession(
+        caseSession,
+        result.clientMemory || caseSession.clientMemory,
+        result.clientMemoryExcerpt
+      );
     }
 
     caseSession.interviewTranscript.push({

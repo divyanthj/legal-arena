@@ -34,7 +34,7 @@ import {
 import { normalizeOnboarding } from "./onboarding";
 import { sanitizeFactSheet } from "./factSheetSanitizer";
 import { ensureClientMemory, rebuildFactSheetFromTranscript } from "./engine";
-import { buildSafeClientMemoryExcerpt } from "./clientMemory";
+import { generateClientMemoryExcerpt } from "./clientMemory";
 import {
   appendUsageEntriesToCaseSession,
   createUsageCollector,
@@ -264,21 +264,10 @@ const buildCaseSessionSlug = (title = "", id = "") => {
 
 export const applyClientMemoryOpeningToCaseSession = (
   caseSession,
-  clientMemory = caseSession?.clientMemory
+  clientMemory = caseSession?.clientMemory,
+  clientMemoryExcerpt = caseSession?.clientMemoryExcerpt
 ) => {
-  const playerSide = getPlayerSide(caseSession);
-  const partyName =
-    playerSide === "opponent"
-      ? caseSession?.premise?.opponentName || ""
-      : caseSession?.premise?.clientName || "";
-  const opening = buildSafeClientMemoryExcerpt({
-    clientMemory,
-    partyName,
-    playerSide,
-    fallback: "",
-    maxLength: 420,
-    maxSentences: 4,
-  });
+  const opening = String(clientMemoryExcerpt || "").trim();
 
   if (!caseSession || !opening) {
     return false;
@@ -751,14 +740,7 @@ export const buildCasePayload = (caseSession, templateOverride = null) => {
     playerSide,
     opponentPartyName,
   });
-  const clientMemoryExcerpt = buildSafeClientMemoryExcerpt({
-    clientMemory: plainCase?.clientMemory,
-    partyName: playerPartyName,
-    playerSide,
-    fallback: "",
-    maxLength: 520,
-    maxSentences: 4,
-  });
+  const clientMemoryExcerpt = String(plainCase.clientMemoryExcerpt || "").trim();
 
   return {
     ...plainCase,
@@ -991,7 +973,19 @@ export const createCaseSession = async ({
   if (clientMemoryResult.clientMemory) {
     caseSession.clientMemory = clientMemoryResult.clientMemory;
     caseSession.markModified?.("clientMemory");
-    applyClientMemoryOpeningToCaseSession(caseSession, clientMemoryResult.clientMemory);
+    caseSession.clientMemoryExcerpt = await generateClientMemoryExcerpt({
+      clientMemory: clientMemoryResult.clientMemory,
+      partyName: getPartyName(template, playerSide),
+      playerSide,
+      fallback: openingStatement,
+      userId,
+      onUsage: usageCollector.record,
+    });
+    applyClientMemoryOpeningToCaseSession(
+      caseSession,
+      clientMemoryResult.clientMemory,
+      caseSession.clientMemoryExcerpt
+    );
   }
   appendUsageEntriesToCaseSession(caseSession, usageCollector.entries);
   await caseSession.save();

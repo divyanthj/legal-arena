@@ -186,6 +186,10 @@ assert.doesNotMatch(mergeSource, /buildTheoryForSide/);
 assert.doesNotMatch(mergeSource, /buildDesiredReliefForSide/);
 
 const engineSource = await readFile(new URL("../libs/game/engine.js", import.meta.url), "utf8");
+const clientMemorySource = await readFile(
+  new URL("../libs/game/clientMemory.js", import.meta.url),
+  "utf8"
+);
 const caseSessionModel = await readFile(
   new URL("../models/CaseSession.js", import.meta.url),
   "utf8"
@@ -295,6 +299,7 @@ assert.match(sessionUsageSource, /inputTokens/);
 assert.match(sessionUsageSource, /cachedInputTokens/);
 assert.match(sessionUsageSource, /reasoningTokens/);
 assert.match(engineSource, /usageLabel:\s*"intake\.clientMemory"/);
+assert.match(engineSource + clientMemorySource, /usageLabel:\s*"intake\.clientMemoryExcerpt"/);
 assert.match(engineSource, /usageLabel:\s*"intake\.partyResponse"/);
 assert.match(engineSource, /usageLabel:\s*"intake\.factSheetPatch"/);
 assert.match(engineSource, /usageLabel:\s*"intake\.assessment"/);

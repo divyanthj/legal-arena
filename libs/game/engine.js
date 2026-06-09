@@ -38,6 +38,7 @@ import {
   getOpponentResponsePromptRules,
 } from "./courtroomDifficulty";
 import { createUsageCollector } from "./sessionUsage";
+import { generateClientMemoryExcerpt } from "./clientMemory";
 
 const INTERVIEW_RESPONSE_MAX_TOKENS = 1500;
 const INTERVIEW_RESPONSE_TEMPERATURE = 0.7;
@@ -486,6 +487,18 @@ export const continueInterview = async ({ caseSession, question, userId }) => {
     userId,
     onUsage: usageCollector.record,
   });
+  const clientMemoryExcerpt =
+    clientMemoryResult.clientMemory &&
+    (clientMemoryResult.created || !String(caseSession.clientMemoryExcerpt || "").trim())
+      ? await generateClientMemoryExcerpt({
+          clientMemory: clientMemoryResult.clientMemory,
+          partyName: legalPartyName,
+          playerSide,
+          fallback: caseSession.premise?.openingStatement || "",
+          userId,
+          onUsage: usageCollector.record,
+        })
+      : "";
   const interviewContext = clientMemoryResult.clientMemory
     ? {
         mode: "stored_client_memory",
@@ -609,6 +622,7 @@ export const continueInterview = async ({ caseSession, question, userId }) => {
     nextFactSheet,
     caseAssessment: nextAssessment,
     usageEntries: usageCollector.entries,
+    clientMemoryExcerpt,
   };
 };
 

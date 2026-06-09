@@ -97,6 +97,11 @@ const participantSchema = mongoose.Schema(
       default: null,
       private: true,
     },
+    clientMemoryExcerpt: {
+      type: String,
+      default: "",
+      trim: true,
+    },
   },
   { _id: false }
 );

@@ -43,7 +43,7 @@ import {
   enrichTemplateForGameplay,
   getSideOpeningStatement,
 } from "./templateInterview";
-import { buildSafeClientMemoryExcerpt } from "./clientMemory";
+import { generateClientMemoryExcerpt } from "./clientMemory";
 
 const MONGO_ID_PATTERN = /^[a-f0-9]{24}$/i;
 const CHALLENGE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
@@ -65,15 +65,13 @@ const buildChallengeSlug = (title = "", id = "") => {
   return suffix ? `${base}-${suffix}` : base;
 };
 
-const applyClientMemoryOpeningToParticipant = (challenge, participant, clientMemory) => {
-  const opening = buildSafeClientMemoryExcerpt({
-    clientMemory,
-    partyName: getPartyName(templateForChallenge(challenge), participant?.side),
-    playerSide: participant?.side,
-    fallback: "",
-    maxLength: 420,
-    maxSentences: 4,
-  });
+const applyClientMemoryOpeningToParticipant = (
+  challenge,
+  participant,
+  clientMemory,
+  clientMemoryExcerpt = participant?.clientMemoryExcerpt
+) => {
+  const opening = String(clientMemoryExcerpt || "").trim();
 
   if (!participant || !opening) {
     return false;
@@ -463,14 +461,26 @@ const setParticipantCaseAssessment = (challenge, participant, caseAssessment) =>
   markParticipantsModified(challenge);
 };
 
-const setParticipantClientMemory = (challenge, participant, clientMemory) => {
+const setParticipantClientMemory = (
+  challenge,
+  participant,
+  clientMemory,
+  clientMemoryExcerpt = participant?.clientMemoryExcerpt
+) => {
   if (typeof participant?.set === "function") {
     participant.set("clientMemory", clientMemory);
+    participant.set("clientMemoryExcerpt", clientMemoryExcerpt || "");
   } else if (participant) {
     participant.clientMemory = clientMemory;
+    participant.clientMemoryExcerpt = clientMemoryExcerpt || "";
   }
 
-  applyClientMemoryOpeningToParticipant(challenge, participant, clientMemory);
+  applyClientMemoryOpeningToParticipant(
+    challenge,
+    participant,
+    clientMemory,
+    clientMemoryExcerpt
+  );
   markParticipantsModified(challenge);
 };
 
@@ -573,7 +583,22 @@ const ensureParticipantClientMemory = async ({ challenge, participant, otherPart
   });
 
   if (result.clientMemory && result.created) {
-    setParticipantClientMemory(challenge, participant, result.clientMemory);
+    const clientMemoryExcerpt = await generateClientMemoryExcerpt({
+      clientMemory: result.clientMemory,
+      partyName: getPartyName(challenge.templateSnapshot, participant.side),
+      playerSide: participant.side,
+      fallback:
+        participant.interviewTranscript?.find(
+          (entry) => entry?.role === "party" || entry?.role === "client"
+        )?.text || "",
+      userId,
+    });
+    setParticipantClientMemory(
+      challenge,
+      participant,
+      result.clientMemory,
+      clientMemoryExcerpt
+    );
     return true;
   }
 
@@ -918,7 +943,25 @@ export const continueChallengeInterview = async ({ userId, challengeId, question
   const result = await continueInterview({ caseSession, question, userId });
 
   if (result.clientMemory) {
-    setParticipantClientMemory(challenge, participant, result.clientMemory);
+    setParticipantClientMemory(
+      challenge,
+      participant,
+      result.clientMemory,
+      result.clientMemoryExcerpt
+    );
+  } else if (result.clientMemoryExcerpt) {
+    if (typeof participant?.set === "function") {
+      participant.set("clientMemoryExcerpt", result.clientMemoryExcerpt);
+    } else {
+      participant.clientMemoryExcerpt = result.clientMemoryExcerpt;
+    }
+    applyClientMemoryOpeningToParticipant(
+      challenge,
+      participant,
+      participant.clientMemory,
+      result.clientMemoryExcerpt
+    );
+    markParticipantsModified(challenge);
   }
 
   participant.interviewTranscript.push({
@@ -1495,14 +1538,7 @@ export const buildChallengePayload = async ({ challenge, viewerUserId }) => {
           interviewTranscript: participant.interviewTranscript || [],
           readyAt: participant.readyAt,
           partyName: getPartyName(plainChallenge.templateSnapshot, participant.side),
-          clientMemoryExcerpt: buildSafeClientMemoryExcerpt({
-            clientMemory: participant.clientMemory,
-            partyName: getPartyName(plainChallenge.templateSnapshot, participant.side),
-            playerSide: participant.side,
-            fallback: "",
-            maxLength: 520,
-            maxSentences: 4,
-          }),
+          clientMemoryExcerpt: participant.clientMemoryExcerpt || "",
           interviewSubjectName:
             viewerInterviewSubject?.name ||
             getPartyName(plainChallenge.templateSnapshot, participant.side),
