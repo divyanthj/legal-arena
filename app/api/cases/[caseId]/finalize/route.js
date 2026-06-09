@@ -11,6 +11,10 @@ import {
   buildCasePayload,
   getCaseSessionDocumentForUser,
 } from "@/libs/game/store";
+import {
+  appendUsageEntriesToCaseSession,
+  createUsageCollector,
+} from "@/libs/game/sessionUsage";
 import { getSoloGameplayAccessForSession } from "@/libs/admin";
 
 export async function POST(req, { params }) {
@@ -67,6 +71,7 @@ export async function POST(req, { params }) {
 
     caseSession.factSheet = finalized.factSheet;
     let assessmentToLock = caseSession.caseAssessment;
+    const usageCollector = createUsageCollector("courtroom");
 
     if (assessmentToLock?.currentSuccessChance === null || assessmentToLock?.currentSuccessChance === undefined) {
       assessmentToLock = await assessCaseSuccessChance({
@@ -74,6 +79,8 @@ export async function POST(req, { params }) {
         caseSession,
         factSheet: finalized.factSheet,
         previousAssessment: caseSession.caseAssessment,
+        usageLabel: "courtroom.assessment",
+        onUsage: usageCollector.record,
       });
     }
 
@@ -103,6 +110,8 @@ export async function POST(req, { params }) {
         },
       });
     }
+
+    appendUsageEntriesToCaseSession(caseSession, usageCollector.entries);
 
     await caseSession.save();
 

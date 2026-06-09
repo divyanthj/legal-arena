@@ -7,6 +7,7 @@ import {
   buildCasePayload,
   getCaseSessionDocumentForUser,
 } from "@/libs/game/store";
+import { appendUsageEntriesToCaseSession } from "@/libs/game/sessionUsage";
 import { getSoloGameplayAccessForSession } from "@/libs/admin";
 
 export async function POST(req, { params }) {
@@ -133,6 +134,8 @@ export async function POST(req, { params }) {
           caseSession.caseAssessment?.lockedCourtEntryChance ?? null,
       });
     }
+
+    appendUsageEntriesToCaseSession(caseSession, result.usageEntries);
 
     await caseSession.save();
 

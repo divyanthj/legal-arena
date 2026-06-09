@@ -32,6 +32,7 @@ import {
   resolveFactReference,
   getPlayerPartyName,
   getPlayerInterviewSubjectName,
+  isGenericInterviewSubjectName,
   getOpponentPartyName,
   getPlaintiffName,
   getDefendantName,
@@ -610,6 +611,16 @@ export default function CaseWorkspace({
 
   const playerPartyName = getPlayerPartyName(caseSession);
   const playerInterviewSubjectName = getPlayerInterviewSubjectName(caseSession);
+  const getInterviewEntrySpeaker = (entry) => {
+    if (entry.role === "player") {
+      return entry.speaker || "You";
+    }
+
+    const speaker = String(entry.speaker || "").trim();
+    return speaker && !isGenericInterviewSubjectName(speaker)
+      ? speaker
+      : playerInterviewSubjectName;
+  };
   const opponentPartyName = getOpponentPartyName(caseSession);
   const useCounselLabels = Boolean(apiConfig.counselLabels);
   const playerCounselTitle = useCounselLabels
@@ -742,6 +753,11 @@ export default function CaseWorkspace({
       : isInterview
       ? "Updates after client answers."
       : "Locked when the case entered court.";
+  const heroNarrativeExcerpt =
+    String(caseSession.clientMemoryExcerpt || "").trim() ||
+    (isInterview
+      ? "I need to walk through this from my side before we treat anything as settled."
+      : String(caseSession.premise?.overview || "").trim());
   const heroPanelStyle = {
     backgroundImage: [
       "linear-gradient(90deg, rgba(4,4,4,0.96) 0%, rgba(4,4,4,0.88) 42%, rgba(4,4,4,0.5) 68%, rgba(4,4,4,0.9) 100%)",
@@ -1204,7 +1220,7 @@ export default function CaseWorkspace({
                   {caseSession.title}
                 </h1>
                 <p className="mt-4 max-w-3xl text-white/66">
-                  {caseSession.premise.overview}
+                  {heroNarrativeExcerpt}
                 </p>
                 <div className="mt-6 grid gap-4 text-sm text-white/58 md:grid-cols-3">
                   <div>
@@ -1313,18 +1329,23 @@ export default function CaseWorkspace({
                           entry.role !== "player"
                             ? "arena-transcript-opponent border-amber-500/30"
                             : "arena-transcript-player sm:ml-auto sm:max-w-[90%] border-white/10"
-                        }`}
+                          }`}
                       >
+                        {(() => {
+                          const speaker = getInterviewEntrySpeaker(entry);
+                          return (
                         <div className="flex items-center justify-between gap-3">
                           <p className="font-semibold text-white">
                             {entry.role !== "player"
-                              ? `Interview: ${entry.speaker}`
-                              : entry.speaker}
+                              ? `Interview: ${speaker}`
+                              : speaker}
                           </p>
                           <p className="text-xs text-white/40">
                             {formatDateTime(entry.createdAt)}
                           </p>
                         </div>
+                          );
+                        })()}
                         <p className="mt-2 whitespace-pre-wrap break-words leading-7 text-white">
                           {entry.text}
                         </p>

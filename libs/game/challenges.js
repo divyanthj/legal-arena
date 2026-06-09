@@ -43,6 +43,7 @@ import {
   enrichTemplateForGameplay,
   getSideOpeningStatement,
 } from "./templateInterview";
+import { buildSafeClientMemoryExcerpt } from "./clientMemory";
 
 const MONGO_ID_PATTERN = /^[a-f0-9]{24}$/i;
 const CHALLENGE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
@@ -62,6 +63,41 @@ const buildChallengeSlug = (title = "", id = "") => {
   const base = slugify(title) || "challenge";
   const suffix = String(id || "").slice(-6).toLowerCase();
   return suffix ? `${base}-${suffix}` : base;
+};
+
+const applyClientMemoryOpeningToParticipant = (challenge, participant, clientMemory) => {
+  const opening = buildSafeClientMemoryExcerpt({
+    clientMemory,
+    partyName: getPartyName(templateForChallenge(challenge), participant?.side),
+    playerSide: participant?.side,
+    fallback: "",
+    maxLength: 420,
+    maxSentences: 4,
+  });
+
+  if (!participant || !opening) {
+    return false;
+  }
+
+  const transcript = participant.interviewTranscript || [];
+  const firstPartyEntry = transcript.find((entry) => entry?.role === "party" || entry?.role === "client");
+  const previousOpening = firstPartyEntry?.text || "";
+
+  if (firstPartyEntry) {
+    firstPartyEntry.text = opening;
+  }
+
+  const factSheet = participant.factSheet?.toObject
+    ? participant.factSheet.toObject()
+    : participant.factSheet || {};
+  if (Array.isArray(factSheet.supportingFacts) && previousOpening) {
+    factSheet.supportingFacts = factSheet.supportingFacts.map((item) =>
+      item === previousOpening ? opening : item
+    );
+    participant.factSheet = factSheet;
+  }
+
+  return Boolean(firstPartyEntry);
 };
 
 const uniqueTextList = (items = []) => {
@@ -434,6 +470,7 @@ const setParticipantClientMemory = (challenge, participant, clientMemory) => {
     participant.clientMemory = clientMemory;
   }
 
+  applyClientMemoryOpeningToParticipant(challenge, participant, clientMemory);
   markParticipantsModified(challenge);
 };
 
@@ -701,6 +738,13 @@ export const createChallenge = async ({
   });
 
   ensureChallengeSlug(challenge);
+  const initiatorParticipant = getParticipant(challenge, initiator._id);
+  await ensureParticipantClientMemory({
+    challenge,
+    participant: initiatorParticipant,
+    otherParticipant: getOtherParticipant(challenge, initiator._id),
+    userId: initiator._id,
+  });
   await challenge.save();
 
   try {
@@ -1451,6 +1495,14 @@ export const buildChallengePayload = async ({ challenge, viewerUserId }) => {
           interviewTranscript: participant.interviewTranscript || [],
           readyAt: participant.readyAt,
           partyName: getPartyName(plainChallenge.templateSnapshot, participant.side),
+          clientMemoryExcerpt: buildSafeClientMemoryExcerpt({
+            clientMemory: participant.clientMemory,
+            partyName: getPartyName(plainChallenge.templateSnapshot, participant.side),
+            playerSide: participant.side,
+            fallback: "",
+            maxLength: 520,
+            maxSentences: 4,
+          }),
           interviewSubjectName:
             viewerInterviewSubject?.name ||
             getPartyName(plainChallenge.templateSnapshot, participant.side),

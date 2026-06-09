@@ -110,6 +110,9 @@ const NavigationLoadingOverlay = ({ label, tip }) => (
         <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
           <div className="arena-loading-bar h-full w-1/3 rounded-full bg-white/90" />
         </div>
+        <p className="text-center text-[0.68rem] font-semibold uppercase tracking-[0.22em] text-white/42">
+          Tip
+        </p>
         <p className="text-sm leading-6 text-white/68">{tip}</p>
       </div>
     </div>
@@ -161,12 +164,16 @@ export const NavigationLoadingProvider = ({ children }) => {
   }, [clearFailsafe]);
 
   const startNavigationLoading = useCallback(
-    (label = DEFAULT_LOADING_LABEL) => {
+    (label = DEFAULT_LOADING_LABEL, options = {}) => {
+      const failsafeMs = Math.max(
+        1000,
+        Number(options?.failsafeMs || FAILSAFE_TIMEOUT_MS)
+      );
       clearFailsafe();
       setLoadingState({ isLoading: true, label });
       timeoutRef.current = window.setTimeout(
         stopNavigationLoading,
-        FAILSAFE_TIMEOUT_MS
+        failsafeMs
       );
     },
     [clearFailsafe, stopNavigationLoading]

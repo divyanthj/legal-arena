@@ -3,9 +3,11 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/libs/next-auth";
 import { continueInterview } from "@/libs/game/engine";
 import {
+  applyClientMemoryOpeningToCaseSession,
   buildCasePayload,
   getCaseSessionDocumentForUser,
 } from "@/libs/game/store";
+import { appendUsageEntriesToCaseSession } from "@/libs/game/sessionUsage";
 import { getSoloGameplayAccessForSession } from "@/libs/admin";
 
 export async function POST(req, { params }) {
@@ -62,6 +64,7 @@ export async function POST(req, { params }) {
     if (result.clientMemory) {
       caseSession.clientMemory = result.clientMemory;
       caseSession.markModified?.("clientMemory");
+      applyClientMemoryOpeningToCaseSession(caseSession, result.clientMemory);
     }
 
     caseSession.interviewTranscript.push({
@@ -86,6 +89,7 @@ export async function POST(req, { params }) {
     if (result.caseAssessment) {
       caseSession.caseAssessment = result.caseAssessment;
     }
+    appendUsageEntriesToCaseSession(caseSession, result.usageEntries);
 
     await caseSession.save();
 

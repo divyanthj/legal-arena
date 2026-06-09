@@ -516,7 +516,7 @@ export default function DashboardHub({
   canStartSoloCases = false,
 }) {
   const router = useRouter();
-  const { startNavigationLoading } = useNavigationLoading();
+  const { startNavigationLoading, stopNavigationLoading } = useNavigationLoading();
   const [browserTimeZone, setBrowserTimeZone] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState(categories[0]?.slug || "");
   const [activeTemplateIndex, setActiveTemplateIndex] = useState(0);
@@ -656,15 +656,17 @@ export default function DashboardHub({
     }
 
     setCreating(true);
+    startNavigationLoading("Preparing your client intake", { failsafeMs: 60000 });
 
     try {
       const { caseSession } = await apiClient.post("/cases", {
         caseTemplateId,
       });
 
-      startNavigationLoading("Opening the matter");
+      startNavigationLoading("Opening the matter", { failsafeMs: 60000 });
       router.push(`/dashboard/cases/${caseSession.slug || caseSession.id}`);
     } catch (error) {
+      stopNavigationLoading();
       console.error(error);
     } finally {
       setCreating(false);

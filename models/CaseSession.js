@@ -90,6 +90,100 @@ const courtroomEntrySchema = mongoose.Schema(
   { _id: false }
 );
 
+const usageEntrySchema = mongoose.Schema(
+  {
+    label: {
+      type: String,
+      default: "",
+    },
+    phase: {
+      type: String,
+      enum: ["intake", "courtroom"],
+      default: "intake",
+    },
+    model: {
+      type: String,
+      default: "",
+    },
+    api: {
+      type: String,
+      default: "",
+    },
+    attempt: {
+      type: Number,
+      default: 0,
+    },
+    maxTokens: {
+      type: Number,
+      default: 0,
+    },
+    finishReason: {
+      type: String,
+      default: "",
+    },
+    parsed: {
+      type: Boolean,
+      default: false,
+    },
+    inputTokens: {
+      type: Number,
+      default: 0,
+    },
+    outputTokens: {
+      type: Number,
+      default: 0,
+    },
+    totalTokens: {
+      type: Number,
+      default: 0,
+    },
+    cachedInputTokens: {
+      type: Number,
+      default: 0,
+    },
+    reasoningTokens: {
+      type: Number,
+      default: 0,
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  { _id: false }
+);
+
+const usageBucketSchema = mongoose.Schema(
+  {
+    inputTokens: {
+      type: Number,
+      default: 0,
+    },
+    outputTokens: {
+      type: Number,
+      default: 0,
+    },
+    totalTokens: {
+      type: Number,
+      default: 0,
+    },
+    cachedInputTokens: {
+      type: Number,
+      default: 0,
+    },
+    reasoningTokens: {
+      type: Number,
+      default: 0,
+    },
+    entries: {
+      type: [usageEntrySchema],
+      default: [],
+      private: true,
+    },
+  },
+  { _id: false }
+);
+
 const caseSessionSchema = mongoose.Schema(
   {
     userId: {
@@ -302,6 +396,20 @@ const caseSessionSchema = mongoose.Schema(
       lockedAt: {
         type: Date,
         default: null,
+      },
+    },
+    usage: {
+      intake: {
+        type: usageBucketSchema,
+        default: () => ({}),
+      },
+      courtroom: {
+        type: usageBucketSchema,
+        default: () => ({}),
+      },
+      total: {
+        type: usageBucketSchema,
+        default: () => ({}),
       },
     },
     courtroomTranscript: {

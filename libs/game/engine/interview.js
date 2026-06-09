@@ -86,6 +86,50 @@ const normalizeInterviewPartyResponse = ({
     playerSide,
   });
 
+const FALLBACK_PARTY_RESPONSE_MAX_LENGTH = 260;
+const unclearFallbackResponse = "I do not remember that clearly right now.";
+
+const limitFallbackPartyResponse = (value = "", maxLength = FALLBACK_PARTY_RESPONSE_MAX_LENGTH) => {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+
+  if (text.length <= maxLength) {
+    return text;
+  }
+
+  const clipped = text.slice(0, maxLength).trim();
+  const sentenceEnd = Math.max(
+    clipped.lastIndexOf("."),
+    clipped.lastIndexOf("!"),
+    clipped.lastIndexOf("?")
+  );
+
+  if (sentenceEnd >= 80) {
+    return clipped.slice(0, sentenceEnd + 1).trim();
+  }
+
+  return `${clipped.replace(/[,;:\s]+$/g, "")}...`;
+};
+
+const guardFallbackPartyResponse = ({ text = "", template, playerSide } = {}) => {
+  const normalized = normalizeInterviewPartyResponse({
+    text,
+    template,
+    playerSide,
+  });
+
+  if (
+    hasInterviewSelfReferenceLeak({
+      text: normalized,
+      template,
+      playerSide,
+    })
+  ) {
+    return unclearFallbackResponse;
+  }
+
+  return limitFallbackPartyResponse(normalized);
+};
+
 const hasInterviewSelfReferenceLeak = ({ text = "", template, playerSide } = {}) =>
   hasThirdPersonSelfReference({
     text,
@@ -333,7 +377,7 @@ export const buildInterviewFallback = ({ caseSession, template, question, factSh
     partyResponse = "I do not know anything more specific about that right now.";
   }
 
-  partyResponse = normalizeInterviewPartyResponse({
+  partyResponse = guardFallbackPartyResponse({
     text: partyResponse,
     template: safeTemplate,
     playerSide,
@@ -469,7 +513,7 @@ export const normalizeInterviewResult = ({
     discoveredEvidenceIds: revealedEvidenceIds,
   });
   const questionHistory = getInterviewQuestionHistory(caseSession, question);
-  const normalizedFallbackPartyResponse = normalizeInterviewPartyResponse({
+  const normalizedFallbackPartyResponse = guardFallbackPartyResponse({
     text: fallback.partyResponse,
     template: safeTemplate,
     playerSide,

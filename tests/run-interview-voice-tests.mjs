@@ -4,6 +4,7 @@ const {
   hasThirdPersonSelfReference,
   normalizePartySpeechToFirstPerson,
 } = await import("../libs/game/engine/voice.js");
+const { buildSafeClientMemoryExcerpt } = await import("../libs/game/clientMemory.js");
 
 assert.equal(
   normalizePartySpeechToFirstPerson({
@@ -66,6 +67,33 @@ assert.equal(
     playerSide: "client",
   }),
   false
+);
+
+assert.equal(
+  buildSafeClientMemoryExcerpt({
+    clientMemory: "Jordan Lee says he cleaned the apartment before returning the keys. He does not think the deductions were fair.",
+    partyName: "Jordan Lee",
+    playerSide: "client",
+  }),
+  "I cleaned the apartment before returning the keys. I do not think the deductions were fair."
+);
+
+assert.equal(
+  buildSafeClientMemoryExcerpt({
+    clientMemory: "Maple Street Properties says it kept photos and an invoice. The property manager thinks the tenant left real damage.",
+    partyName: "Maple Street Properties, LLC",
+    playerSide: "opponent",
+  }),
+  "I kept photos and an invoice. The property manager thinks the tenant left real damage."
+);
+
+assert.equal(
+  buildSafeClientMemoryExcerpt({
+    clientMemory: "The defendant claims the invoice exists.",
+    partyName: "Maple Street Properties, LLC",
+    playerSide: "opponent",
+  }),
+  ""
 );
 
 console.log("Interview voice tests passed");

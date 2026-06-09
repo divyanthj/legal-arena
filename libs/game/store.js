@@ -33,9 +33,48 @@ import {
 } from "./profileSummary";
 import { normalizeOnboarding } from "./onboarding";
 import { sanitizeFactSheet } from "./factSheetSanitizer";
-import { ensureClientMemory } from "./engine";
+import { ensureClientMemory, rebuildFactSheetFromTranscript } from "./engine";
+import { buildSafeClientMemoryExcerpt } from "./clientMemory";
+import {
+  appendUsageEntriesToCaseSession,
+  createUsageCollector,
+} from "./sessionUsage";
 
 const toPlain = (doc) => (doc?.toJSON ? doc.toJSON() : doc);
+const stripUsageEntries = (usage = {}) => {
+  if (!usage || typeof usage !== "object") {
+    return usage;
+  }
+
+  return ["intake", "courtroom", "total"].reduce((result, key) => {
+    const bucket = usage[key];
+
+    if (!bucket || typeof bucket !== "object") {
+      result[key] = bucket || {};
+      return result;
+    }
+
+    const { entries, ...totals } = bucket;
+    result[key] = totals;
+    return result;
+  }, {});
+};
+const factSheetHasVisibleContent = (factSheet = {}) =>
+  [
+    "summary",
+    "theory",
+    "desiredRelief",
+    "timeline",
+    "supportingFacts",
+    "risks",
+    "knownFacts",
+    "knownClaims",
+    "disputedFacts",
+    "corroboratedFacts",
+    "sourceLinks",
+    "missingEvidence",
+    "openQuestions",
+  ].some((field) => Array.isArray(factSheet?.[field]) && factSheet[field].length > 0);
 const DEFAULT_PLAYER_SIDE = "client";
 const OPPOSING_SIDE = {
   client: "opponent",
@@ -221,6 +260,44 @@ const buildCaseSessionSlug = (title = "", id = "") => {
   const suffix = String(id || "").slice(-6).toLowerCase();
 
   return suffix ? `${base}-${suffix}` : base;
+};
+
+export const applyClientMemoryOpeningToCaseSession = (
+  caseSession,
+  clientMemory = caseSession?.clientMemory
+) => {
+  const playerSide = getPlayerSide(caseSession);
+  const partyName =
+    playerSide === "opponent"
+      ? caseSession?.premise?.opponentName || ""
+      : caseSession?.premise?.clientName || "";
+  const opening = buildSafeClientMemoryExcerpt({
+    clientMemory,
+    partyName,
+    playerSide,
+    fallback: "",
+    maxLength: 420,
+    maxSentences: 4,
+  });
+
+  if (!caseSession || !opening) {
+    return false;
+  }
+
+  const transcript = caseSession.interviewTranscript || [];
+  const firstPartyEntry = transcript.find((entry) => entry?.role === "party" || entry?.role === "client");
+
+  if (caseSession.premise) {
+    caseSession.premise.openingStatement = opening;
+  }
+
+  if (firstPartyEntry) {
+    firstPartyEntry.text = opening;
+  }
+
+  caseSession.markModified?.("premise");
+  caseSession.markModified?.("interviewTranscript");
+  return true;
 };
 
 const ensureCaseSessionSlug = (caseSession) => {
@@ -664,15 +741,28 @@ export const buildCasePayload = (caseSession, templateOverride = null) => {
         opponentSide === "opponent" ? "defendant" : "plaintiff"
       )
     : null;
+  const activeIntakeRebuild =
+    plainCase.status === "interview" && template && !factSheetHasVisibleContent(plainCase.factSheet)
+      ? rebuildFactSheetFromTranscript({ caseSession: plainCase, template })
+      : null;
   const factSheet = refineFactSheetFromTranscript({
-    factSheet: sanitizeFactSheet(plainCase.factSheet || {}),
+    factSheet: sanitizeFactSheet(plainCase.factSheet || activeIntakeRebuild || {}),
     transcript: plainCase.interviewTranscript || [],
     playerSide,
     opponentPartyName,
   });
+  const clientMemoryExcerpt = buildSafeClientMemoryExcerpt({
+    clientMemory: plainCase?.clientMemory,
+    partyName: playerPartyName,
+    playerSide,
+    fallback: "",
+    maxLength: 520,
+    maxSentences: 4,
+  });
 
   return {
     ...plainCase,
+    usage: stripUsageEntries(plainCase.usage),
     factSheet,
     slug:
       plainCase.slug ||
@@ -687,6 +777,7 @@ export const buildCasePayload = (caseSession, templateOverride = null) => {
     playerInterviewSubjectRole: playerInterviewSubject?.role || "",
     opponentInterviewSubjectName: opponentInterviewSubject?.name || opponentPartyName,
     opponentInterviewSubjectRole: opponentInterviewSubject?.role || "",
+    clientMemoryExcerpt,
     plaintiffName: template?.clientName || plainCase.premise?.clientName || "",
     defendantName: template?.opponentName || plainCase.premise?.opponentName || "",
     scenarioId: templateSlug,
@@ -889,16 +980,20 @@ export const createCaseSession = async ({
     caseSessionId: caseSession._id || caseSession.id || caseSession.slug,
     complexity: template.complexity,
   });
+  const usageCollector = createUsageCollector("intake");
   const clientMemoryResult = await ensureClientMemory({
     caseSession,
     template,
     playerSide,
     userId,
+    onUsage: usageCollector.record,
   });
   if (clientMemoryResult.clientMemory) {
     caseSession.clientMemory = clientMemoryResult.clientMemory;
     caseSession.markModified?.("clientMemory");
+    applyClientMemoryOpeningToCaseSession(caseSession, clientMemoryResult.clientMemory);
   }
+  appendUsageEntriesToCaseSession(caseSession, usageCollector.entries);
   await caseSession.save();
 
   return buildCasePayload(caseSession, template);

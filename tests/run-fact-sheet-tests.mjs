@@ -20,7 +20,7 @@ assert.deepEqual(legacyFactSheet.summary, [
   "The sink was slow before move-out.",
 ]);
 assert.deepEqual(legacyFactSheet.theory, [
-  "I can argue the charge was not caused by my client.",
+  "Charge was not caused by the client.",
 ]);
 assert.deepEqual(legacyFactSheet.desiredRelief, ["Return the withheld security deposit."]);
 assert.deepEqual(legacyFactSheet.supportingFacts, [
@@ -45,8 +45,116 @@ assert.deepEqual(
     "missingEvidence",
     "Unavailable: Unavailable: Unavailable: Relevant messages."
   ),
-  ["Unavailable: Relevant messages."]
+  []
 );
+
+const screenshotStyleFactSheet = sanitizeFactSheet({
+  theory: [
+    "Agreement was made through emails/texts and deposit payment rather than a formal signed MOU.",
+    "Agreement was formed through emails/texts and performance, confirmed by deposit payment and later launch/access records rather than a signed pre-start document.",
+    "Contract formed through communications, deposit, and performance.",
+    "Contract formed through emails, texts, deposit payment, and performance; site was substantially completed and launched, so final payment became due.",
+  ],
+  timeline: [
+    "I know that is not ideal, in hindsight, and I wish I had made them sign something more detailed, but at the time it did not feel unusual.",
+    "Before work began, no formal signed documents were executed.",
+    "Project terms were discussed by email and text.",
+    "A deposit was paid.",
+    "The site went live.",
+    "After launch, payment dispute arose over final invoice.",
+    "After launch, there was back-and-forth about fixes and changes.",
+    "After launch, client kept addressing raised issues.",
+  ],
+  supportingFacts: [
+    "I recalls there was no formal signed agreement before work began.",
+    "No formal pre-start memorandum signed.",
+    "No formal signed agreement before work began.",
+    "Project communications occurred by email and text.",
+    "Deposit payment exists.",
+    "Client identifies deposit payment and final invoice records.",
+    "Agreement was handled through emails and texts.",
+    "A deposit was paid.",
+  ],
+  risks: [
+    "No signed memorandum documenting terms.",
+    "What I do have, or at least what I believe shows the real story, are the emails and texts about the project, the deposit payment, the final invoice, and whatever records exist showing the site was live or that they had access.",
+    "BrightPath may argue the project was not finished as promised or had unresolved problems.",
+    "Post-launch issues may support nonpayment defense.",
+    "BrightPath may argue post-launch issues showed the work was incomplete.",
+  ],
+  disputedFacts: [
+    "Whether launch meant the project was completed enough for final payment.",
+    "Whether the remaining issues were ordinary tweaks or serious defects.",
+    "Whether post-launch issues justified withholding payment.",
+    "Whether the parties agreed to ongoing post-launch maintenance or bug-fix obligations.",
+    "Whether post-launch issues were minor tweaks or serious defects justifying nonpayment.",
+    "Whether raised issues were bugs, revisions, or maintenance.",
+  ],
+  corroboratedFacts: [
+    "Email communications.",
+    "Text messages.",
+    "Deposit payment record.",
+    "Final invoice.",
+    "Relevant messages.",
+    "Proof for this point.",
+  ],
+  missingEvidence: [
+    "Any signed memorandum of understanding or formal written contract.",
+    "Signed pre-start agreement absent.",
+    "Records showing site went live or client access.",
+    "A written term specifically defining post-launch maintenance or bug-fix obligations.",
+    "Formal post-launch maintenance agreement.",
+  ],
+  desiredRelief: [
+    "Payment of the unpaid contract balance, late fees or interest if allowed, and court costs.",
+    "Unpaid balance, allowable interest or fees, costs.",
+  ],
+});
+
+assert.deepEqual(screenshotStyleFactSheet.theory, [
+  "Contract formation rests on emails, texts, deposit payment, and performance.",
+  "Site launch and substantial completion support final payment.",
+]);
+assert.equal(
+  screenshotStyleFactSheet.timeline.includes(
+    "I know that is not ideal, in hindsight, and I wish I had made them sign something more detailed, but at the time it did not feel unusual."
+  ),
+  false
+);
+assert.equal(
+  screenshotStyleFactSheet.supportingFacts.filter((item) =>
+    /signed|memorandum|agreement/i.test(item)
+  ).length,
+  1
+);
+assert.equal(
+  screenshotStyleFactSheet.disputedFacts.filter((item) =>
+    /post-launch|bugs|revisions|maintenance|defects/i.test(item)
+  ).length <= 3,
+  true
+);
+assert.deepEqual(screenshotStyleFactSheet.corroboratedFacts, [
+  "Deposit payment record.",
+  "Final invoice.",
+]);
+assert.equal(
+  screenshotStyleFactSheet.missingEvidence.filter((item) =>
+    /signed|memorandum|contract|agreement/i.test(item)
+  ).length,
+  1
+);
+
+const allScreenshotNotes = Object.values(screenshotStyleFactSheet).flat();
+assert.equal(allScreenshotNotes.some((item) => /^(i|my|we|our)\b/i.test(item)), false);
+assert.equal(
+  allScreenshotNotes.some((item) =>
+    /^(client says|i recall|i recalls|i believe|what i)\b/i.test(item)
+  ),
+  false
+);
+assert.equal(allScreenshotNotes.includes("Proof for this point."), false);
+assert.equal(allScreenshotNotes.includes("Relevant messages."), false);
+assert.equal(screenshotStyleFactSheet.theory.length <= 2, true);
 
 const storeSource = await readFile(new URL("../libs/game/store.js", import.meta.url), "utf8");
 assert.match(storeSource, /factSheet:\s*{[\s\S]*?summary:\s*\[\]/);
@@ -78,9 +186,57 @@ assert.doesNotMatch(mergeSource, /buildTheoryForSide/);
 assert.doesNotMatch(mergeSource, /buildDesiredReliefForSide/);
 
 const engineSource = await readFile(new URL("../libs/game/engine.js", import.meta.url), "utf8");
+const caseSessionModel = await readFile(
+  new URL("../models/CaseSession.js", import.meta.url),
+  "utf8"
+);
+const sessionUsageSource = await readFile(
+  new URL("../libs/game/sessionUsage.js", import.meta.url),
+  "utf8"
+);
+const interviewRouteSource = await readFile(
+  new URL("../app/api/cases/[caseId]/interview/route.js", import.meta.url),
+  "utf8"
+);
+const courtroomRouteSource = await readFile(
+  new URL("../app/api/cases/[caseId]/courtroom/route.js", import.meta.url),
+  "utf8"
+);
+const finalizeRouteSource = await readFile(
+  new URL("../app/api/cases/[caseId]/finalize/route.js", import.meta.url),
+  "utf8"
+);
 assert.match(
   engineSource,
-  /const combinedPatch = mergeFactSheetPatches\(interviewResult\.patch, conversationPatch\)/
+  /const combinedPatch = mergeFactSheetPatches\(conversationPatch\)/
+);
+assert.doesNotMatch(
+  engineSource,
+  /mergeFactSheetPatches\(interviewResult\.patch, conversationPatch\)/
+);
+assert.match(
+  engineSource,
+  /const transcriptFactSheet = rebuildFactSheetFromTranscript/
+);
+assert.match(
+  engineSource,
+  /const currentConversationFactSheet = factSheetHasVisibleContent\(caseSession\.factSheet\)/
+);
+assert.match(
+  engineSource,
+  /export const rebuildFactSheetFromTranscript/
+);
+assert.match(
+  engineSource,
+  /blankConversationFactSheet\(\)/
+);
+assert.match(
+  storeSource,
+  /plainCase\.status === "interview"[\s\S]*!factSheetHasVisibleContent\(plainCase\.factSheet\)[\s\S]*rebuildFactSheetFromTranscript/
+);
+assert.match(
+  storeSource,
+  /plainCase\.factSheet \|\| activeIntakeRebuild/
 );
 assert.match(
   engineSource,
@@ -127,6 +283,27 @@ assert.doesNotMatch(
   engineSource,
   /answerShowsProofPossession \|\|\s*proofTermPattern\.test\(lowerAnswer\)/
 );
+
+assert.match(caseSessionModel, /usage:\s*{/);
+assert.match(caseSessionModel, /intake:\s*{[\s\S]*?usageBucketSchema/);
+assert.match(caseSessionModel, /courtroom:\s*{[\s\S]*?usageBucketSchema/);
+assert.match(caseSessionModel, /total:\s*{[\s\S]*?usageBucketSchema/);
+assert.match(caseSessionModel, /entries:\s*{[\s\S]*?private:\s*true/);
+assert.match(sessionUsageSource, /export const createUsageCollector/);
+assert.match(sessionUsageSource, /export const appendUsageEntriesToCaseSession/);
+assert.match(sessionUsageSource, /inputTokens/);
+assert.match(sessionUsageSource, /cachedInputTokens/);
+assert.match(sessionUsageSource, /reasoningTokens/);
+assert.match(engineSource, /usageLabel:\s*"intake\.clientMemory"/);
+assert.match(engineSource, /usageLabel:\s*"intake\.partyResponse"/);
+assert.match(engineSource, /usageLabel:\s*"intake\.factSheetPatch"/);
+assert.match(engineSource, /usageLabel:\s*"intake\.assessment"/);
+assert.match(engineSource, /usageLabel:\s*"courtroom\.counselAnalysis"/);
+assert.match(engineSource, /usageLabel:\s*shouldReturnVerdict \? "courtroom\.roundWithVerdict" : "courtroom\.round"/);
+assert.match(interviewRouteSource, /appendUsageEntriesToCaseSession\(caseSession, result\.usageEntries\)/);
+assert.match(courtroomRouteSource, /appendUsageEntriesToCaseSession\(caseSession, result\.usageEntries\)/);
+assert.match(finalizeRouteSource, /createUsageCollector\("courtroom"\)/);
+assert.match(finalizeRouteSource, /usageLabel:\s*"courtroom\.assessment"/);
 
 const challengeSource = await readFile(
   new URL("../libs/game/challenges.js", import.meta.url),

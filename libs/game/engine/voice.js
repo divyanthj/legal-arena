@@ -12,6 +12,9 @@ const lowerFirst = (value = "") =>
 
 const getPartyAliases = ({ partyName = "", playerSide = "client" } = {}) => {
   const name = String(partyName || "").trim();
+  const nameWithoutEntitySuffix = name
+    .replace(/,\s*(?:llc|l\.l\.c\.|inc\.?|corp\.?|corporation|ltd\.?)$/i, "")
+    .trim();
   const firstName = name.split(/\s+/)[0] || "";
   const sideAliases =
     playerSide === "opponent"
@@ -20,6 +23,7 @@ const getPartyAliases = ({ partyName = "", playerSide = "client" } = {}) => {
 
   return uniqueList([
     name,
+    nameWithoutEntitySuffix,
     firstName.length > 2 ? firstName : "",
     ...sideAliases,
   ]).sort((left, right) => right.length - left.length);
@@ -96,7 +100,7 @@ export const normalizePartySpeechToFirstPerson = ({
   }
 
   const aliasPattern = makeAliasPattern(aliases);
-  const selfPronounPattern = `she|he|they|${aliasPattern}`;
+  const selfPronounPattern = `she|he|they|it|${aliasPattern}`;
   let normalized = String(text || "").trim();
 
   if (!normalized) {

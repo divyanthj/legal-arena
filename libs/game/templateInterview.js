@@ -451,7 +451,11 @@ const evidenceCorpus = (template = {}) =>
     .filter(Boolean)
     .join(" ");
 
-const pickInstitutionalInterviewSubject = (template = {}, side = "plaintiff") => {
+const pickInstitutionalInterviewSubject = (
+  template = {},
+  side = "plaintiff",
+  legalPartyName = ""
+) => {
   const corpus = evidenceCorpus(template);
   const lower = corpus.toLowerCase();
   const isCriminal =
@@ -496,20 +500,22 @@ const pickInstitutionalInterviewSubject = (template = {}, side = "plaintiff") =>
 
   if (/\bproperty|landlord|tenant|lease|rental|deposit|repairs?\b/i.test(lower)) {
     return {
-      name: side === "plaintiff" ? "Tenant witness" : "Property manager",
+      name: legalPartyName || "Interview subject",
       role: side === "plaintiff" ? "tenant witness" : "company representative",
     };
   }
 
   if (/\bstore|retail|shop|customer|receipt|checkout|inventory\b/i.test(lower)) {
     return {
-      name: "Store representative",
+      name: legalPartyName || "Store representative",
       role: "company representative",
     };
   }
 
   return {
-    name: side === "plaintiff" ? "Party representative" : "Company representative",
+    name:
+      legalPartyName ||
+      (side === "plaintiff" ? "Party representative" : "Company representative"),
     role: "representative",
   };
 };
@@ -541,7 +547,7 @@ export const buildInterviewSubjectForSide = (template = {}, side = "plaintiff") 
   }
 
   return {
-    ...pickInstitutionalInterviewSubject(safeTemplate, normalizedSide),
+    ...pickInstitutionalInterviewSubject(safeTemplate, normalizedSide, legalPartyName),
     legalPartyName,
   };
 };

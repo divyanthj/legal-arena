@@ -33,6 +33,10 @@ const storeSource = await readFile(
   new URL("../libs/game/store.js", import.meta.url),
   "utf8"
 );
+const clientMemorySource = await readFile(
+  new URL("../libs/game/clientMemory.js", import.meta.url),
+  "utf8"
+);
 const caseWorkspaceSource = await readFile(
   new URL("../components/legal-arena/CaseWorkspace.js", import.meta.url),
   "utf8"
@@ -47,21 +51,33 @@ assert.match(engineSource, /const CLIENT_MEMORY_MODEL =/);
 assert.match(engineSource, /const INTERVIEW_RESPONSE_TEMPERATURE = 0\.7/);
 assert.match(engineSource, /temperature:\s*INTERVIEW_RESPONSE_TEMPERATURE/);
 assert.match(engineSource, /export const ensureClientMemory = async/);
-assert.match(engineSource, /Number\(clientMemory\.version \|\| 0\) >= 3/);
-assert.match(engineSource, /clientMemory\.interviewSubjectName/);
+assert.match(engineSource, /const getClientMemoryText =/);
+assert.match(engineSource, /const normalizeLegacyClientMemoryText =/);
+assert.match(engineSource, /typeof clientMemory === "string"/);
 assert.match(engineSource, /clientMemory\.clientNarrative/);
-assert.match(engineSource, /version:\s*3/);
-assert.match(engineSource, /clientNarrative:\s*coerceString\(aiResult\.clientNarrative\)/);
-assert.match(engineSource, /clientNarrative:\s*"string"/);
-assert.match(engineSource, /Use clientNarrative as background for voice and continuity/);
+assert.match(engineSource, /clientMemory\.personalMemory/);
+assert.match(engineSource, /clientMemory\.evidenceAccess/);
+assert.match(engineSource, /const normalizeClientMemory = \(aiResult\) =>/);
+assert.match(engineSource, /coerceString\(aiResult\.clientStory\)/);
+assert.match(engineSource, /clientStory:\s*"string"/);
+assert.match(engineSource, /freeform first-person client memory story/);
+assert.match(engineSource, /subjective truth as they see it/);
+assert.match(engineSource, /may be wrong, self-serving, defensive, or selectively truthful/);
+assert.match(engineSource, /do not create new objective events, documents, witnesses, records/);
+assert.match(engineSource, /this story can express client belief, but it does not create new evidence inventory/);
 assert.match(engineSource, /treat the latest question as a continuation/);
-assert.match(engineSource, /Retell the clientNarrative only if the lawyer explicitly asks/);
+assert.match(engineSource, /Retell the stored client memory only if the lawyer explicitly asks/);
 assert.match(engineSource, /const pickSpecificMemoryAnswer =/);
 assert.match(engineSource, /const buildProofPossessionMemoryAnswer =/);
-assert.match(engineSource, /Never answer a proof-possession question by retelling the clientNarrative/);
+assert.match(engineSource, /Never answer a proof-possession question by retelling the full memory story/);
 assert.match(engineSource, /Yes, I have emails or texts about that\./);
 assert.match(engineSource, /I do not remember the exact amount\./);
-assert.match(engineSource, /clientMemory\.clientNarrative[\s\S]*section:\s*"narrative"/);
+assert.match(engineSource, /splitMemorySentences\(memoryText\)/);
+assert.match(engineSource, /section:\s*UNCERTAINTY_PATTERN\.test\(text\)/);
+assert.match(engineSource, /discoveredFactIds:\s*\[\]/);
+assert.match(engineSource, /discoveredEvidenceIds:\s*\[\]/);
+assert.doesNotMatch(engineSource, /sanitizeIdList\(clientMemory\.factIds/);
+assert.doesNotMatch(engineSource, /sanitizeIdList\(clientMemory\.evidenceIds/);
 assert.match(engineSource, /const interviewSubject = getInterviewSubjectForSide\(template, playerSide\)/);
 assert.match(engineSource, /representedLegalPartyName:\s*legalPartyName/);
 assert.match(engineSource, /process\.env\.OPENAI_CLIENT_MEMORY_MODEL\?\.trim\(\) \|\| GAMEPLAY_MODEL/);
@@ -71,16 +87,29 @@ assert.match(engineSource, /mode:\s*"canonical_fallback"/);
 assert.match(engineSource, /clientMemory:\s*clientMemoryResult\.created \? clientMemoryResult\.clientMemory : null/);
 assert.match(
   engineSource,
-  /Use only the stored client memory, current visible fact sheet, and recent transcript/
+  /Use only the stored freeform client memory story, current visible fact sheet, and recent transcript/
+);
+assert.match(
+  engineSource,
+  /You update a lawyer's private working fact sheet from the conversation only/
+);
+assert.match(
+  engineSource,
+  /Do not state anything as proven unless the client actually said it or produced it/
 );
 
 assert.match(soloInterviewRoute, /caseSession\.clientMemory = result\.clientMemory/);
 assert.match(soloInterviewRoute, /caseSession\.markModified\?\.\("clientMemory"\)/);
+assert.match(soloInterviewRoute, /applyClientMemoryOpeningToCaseSession\(caseSession, result\.clientMemory\)/);
 assert.match(soloInterviewRoute, /speaker:\s*[\s\S]*result\.interviewSubjectName/);
 
 assert.match(challengeSource, /const setParticipantClientMemory =/);
+assert.match(challengeSource, /const applyClientMemoryOpeningToParticipant =/);
+assert.match(challengeSource, /buildSafeClientMemoryExcerpt/);
 assert.match(challengeSource, /const ensureParticipantClientMemory = async/);
 assert.match(challengeSource, /clientMemory:\s*participant\.clientMemory \|\| null/);
+assert.match(challengeSource, /clientMemoryExcerpt: buildSafeClientMemoryExcerpt/);
+assert.match(challengeSource, /applyClientMemoryOpeningToParticipant\(challenge, participant, clientMemory\)/);
 assert.match(challengeSource, /setParticipantClientMemory\(challenge, participant, result\.clientMemory\)/);
 assert.match(challengeSource, /ensureParticipantClientMemory\(\{[\s\S]*?participant,[\s\S]*?otherParticipant,[\s\S]*?userId/);
 assert.match(challengeSource, /speaker:\s*[\s\S]*result\.interviewSubjectName/);
@@ -93,9 +122,17 @@ assert.match(
 assert.match(templateInterviewSource, /export const buildInterviewSubjectForSide =/);
 assert.match(templateInterviewSource, /the people\|people of\|state of/);
 assert.match(templateInterviewSource, /Loss-prevention employee/);
-assert.match(storeSource, /import \{ ensureClientMemory \} from "\.\/engine"/);
+assert.match(
+  storeSource,
+  /import \{ ensureClientMemory, rebuildFactSheetFromTranscript \} from "\.\/engine"/
+);
+assert.match(storeSource, /buildSafeClientMemoryExcerpt/);
+assert.match(storeSource, /export const applyClientMemoryOpeningToCaseSession =/);
+assert.match(storeSource, /const clientMemoryExcerpt = buildSafeClientMemoryExcerpt/);
+assert.match(storeSource, /clientMemoryExcerpt,/);
 assert.match(storeSource, /const clientMemoryResult = await ensureClientMemory\(/);
 assert.match(storeSource, /caseSession\.clientMemory = clientMemoryResult\.clientMemory/);
+assert.match(storeSource, /applyClientMemoryOpeningToCaseSession\(caseSession, clientMemoryResult\.clientMemory\)/);
 assert.match(storeSource, /await caseSession\.save\(\)/);
 assert.ok(
   storeSource.indexOf("const clientMemoryResult = await ensureClientMemory(") <
@@ -105,14 +142,21 @@ assert.ok(
 const createChallengeStart = challengeSource.indexOf("export const createChallenge = async");
 const createChallengeEnd = challengeSource.indexOf("export const listChallengesForUser");
 const createChallengeSource = challengeSource.slice(createChallengeStart, createChallengeEnd);
-assert.doesNotMatch(createChallengeSource, /ensureClientMemory|ensureParticipantClientMemory/);
+assert.match(createChallengeSource, /await ensureParticipantClientMemory/);
 assert.match(challengeSource, /export const getChallengeForUser = async[\s\S]*ensureParticipantClientMemory/);
 assert.match(challengeSource, /export const acceptChallengeForUser = async[\s\S]*ensureParticipantClientMemory/);
 assert.match(storeSource, /playerInterviewSubjectName:/);
 assert.match(storeSource, /speaker:\s*playerInterviewSubject\.name/);
 assert.match(caseWorkspaceSource, /getPlayerInterviewSubjectName/);
 assert.match(caseWorkspaceSource, /Interview \{playerInterviewSubjectName\}/);
+assert.match(caseWorkspaceSource, /const heroNarrativeExcerpt =/);
+assert.match(caseWorkspaceSource, /caseSession\.clientMemoryExcerpt/);
+assert.match(caseWorkspaceSource, /\{heroNarrativeExcerpt\}/);
 assert.match(interviewQuestionsSource, /normalizedAnswer\.length > 220/);
 assert.match(interviewQuestionsSource, /questionAsksForProofPossession\(lowerQuestion\) && normalizedAnswer\.length > 180/);
+assert.match(clientMemorySource, /export const buildSafeClientMemoryExcerpt/);
+assert.match(clientMemorySource, /normalizePartySpeechToFirstPerson/);
+assert.match(clientMemorySource, /hasThirdPersonSelfReference/);
+assert.match(clientMemorySource, /maxLength = 420/);
 
 console.log("Client memory intake tests passed");

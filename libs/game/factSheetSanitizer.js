@@ -75,8 +75,8 @@ const uniqueList = (items = []) => {
 
 const FACT_SHEET_FIELD_LIMITS = {
   summary: 4,
-  theory: 4,
-  desiredRelief: 3,
+  theory: 2,
+  desiredRelief: 2,
   timeline: 8,
   supportingFacts: 8,
   risks: 6,
@@ -106,6 +106,57 @@ const hasMemoryQualifier = (text = "") =>
   /\b(from memory|in memory|without the file|without my file|without reviewing|right now)\b/i.test(
     text
   );
+
+const startsWithClientVoice = (text = "") =>
+  /^(i|my|me|we|our|what i|from what i|i know|i recall|i recalls|i remember|i believe|i think|client says|client recalls|client believes)\b/i.test(
+    String(text || "").trim()
+  );
+
+const hasFirstPersonVoice = (text = "") =>
+  /\b(i|my|me|we|our|what i|from what i)\b/i.test(String(text || ""));
+
+const isTranscriptLike = (text = "") =>
+  startsWithClientVoice(text) ||
+  /\b(i know|i recall|i recalls|i remember|i believe|i think|what i do have|what i have|what i had|wish i had|does not offend me to admit)\b/i.test(
+    text
+  );
+
+const isVagueProofLabel = (text = "") =>
+  /^(proof for this point|relevant messages?|messages?|records?|documents?|proof|evidence|supporting proof)\.?$/i.test(
+    collapseWhitespace(text)
+  );
+
+const rewriteClientVoiceNote = (field, text = "") => {
+  const cleaned = collapseWhitespace(text);
+
+  if (!isTranscriptLike(cleaned)) {
+    return cleaned;
+  }
+
+  if (/\bno\b.*\b(formal|signed|written)\b.*\b(agreement|memorandum|mou|contract|document)\b/i.test(cleaned)) {
+    return field === "timeline"
+      ? "Before work began, no signed pre-start agreement was executed."
+      : "No signed pre-start agreement.";
+  }
+
+  if (
+    /\b(emails?|texts?|messages?)\b/i.test(cleaned) &&
+    /\bdeposit\b/i.test(cleaned) &&
+    /\b(invoice|site went live|launch|access records?)\b/i.test(cleaned)
+  ) {
+    return "Proof depends on emails, texts, deposit, invoice, and launch/access records.";
+  }
+
+  if (field === "theory" && /\bcharge\b/i.test(cleaned) && /\bnot caused by\b/i.test(cleaned)) {
+    return "Charge was not caused by the client.";
+  }
+
+  if (/\bwish\b/i.test(cleaned) && /\bsign(ed|ing)?\b/i.test(cleaned)) {
+    return field === "risks" ? "No signed agreement may weaken proof of terms." : "";
+  }
+
+  return "";
+};
 
 const mentionsExactUnverifiedDetail = (text = "") =>
   /\b(do not have|don't have|do not remember|don't remember|cannot confirm|can't confirm)\b/i.test(
@@ -230,6 +281,18 @@ const simplifySupportingFact = (text = "") => {
     return "";
   }
 
+  if (/\bno\b.*\b(formal|signed|written)\b.*\b(agreement|memorandum|mou|contract|document)\b/i.test(cleaned)) {
+    return "No signed pre-start agreement.";
+  }
+
+  if (/\b(deposit payment|deposit)\b/i.test(cleaned) && /\b(exists|paid|record)\b/i.test(cleaned)) {
+    return "Deposit payment is documented.";
+  }
+
+  if (/\bproject communications?\b/i.test(cleaned) && /\bemail|text\b/i.test(cleaned)) {
+    return "Project terms were discussed by email and text.";
+  }
+
   return cleaned
     .replace(
       /^Lease permits deductions for damage beyond ordinary wear and tear\.$/i,
@@ -349,9 +412,26 @@ const simplifyTimeline = (text = "") => {
     /^(yes|yeah|yep|no|nope|not really)\b/i.test(cleaned) ||
     /\bconfirmed in the file|not confirmed in the file|solid photographic proof|actual move-out condition photos\b/i.test(
       cleaned
-    )
+    ) ||
+    isTranscriptLike(cleaned)
   ) {
     return "";
+  }
+
+  if (/\bbefore work began\b/i.test(cleaned) && /\bno\b.*\b(signed|formal|written)\b/i.test(cleaned)) {
+    return "Before work began: no signed pre-start agreement.";
+  }
+
+  if (/\bterms\b/i.test(cleaned) && /\bemail|text\b/i.test(cleaned)) {
+    return "Project terms discussed by email and text.";
+  }
+
+  if (/\bdeposit\b/i.test(cleaned) && /\bpaid\b/i.test(cleaned)) {
+    return "Deposit paid.";
+  }
+
+  if (/\bsite\b/i.test(cleaned) && /\b(live|launch)\b/i.test(cleaned)) {
+    return "Site launched.";
   }
 
   if (/\bmove-?in\b/i.test(cleaned) && /\bsecurity deposit\b/i.test(cleaned)) {
@@ -468,6 +548,22 @@ const simplifyTheory = (text = "") => {
   }
 
   if (
+    /\bsite\b/i.test(cleaned) &&
+    /\b(substantially completed|completed|launched|live)\b/i.test(cleaned) &&
+    /\b(final payment|invoice|remaining balance)\b/i.test(cleaned)
+  ) {
+    return "Site launch and substantial completion support final payment.";
+  }
+
+  if (
+    /\bcontract|agreement\b/i.test(cleaned) &&
+    /\bemail|text|communications?\b/i.test(cleaned) &&
+    /\bdeposit|performance|launch|launched|completed\b/i.test(cleaned)
+  ) {
+    return "Contract formation rests on emails, texts, deposit payment, and performance.";
+  }
+
+  if (
     /\bordinary move-?out condition|normal move-?out condition|ordinary wear and tear\b/i.test(
       cleaned
     ) &&
@@ -491,6 +587,10 @@ const simplifyTheory = (text = "") => {
 
 const simplifyEvidenceNeed = (text = "") => {
   const lower = text.toLowerCase();
+
+  if (isVagueProofLabel(text)) {
+    return "";
+  }
 
   if (
     /\b(photo|photos|picture|pictures|photographic)\b/.test(lower) &&
@@ -534,6 +634,29 @@ const simplifyEvidenceNeed = (text = "") => {
 
   if (
     /\b(email|emails|text|texts|message|messages)\b/.test(lower) &&
+    /\b(project|scope|terms|revision|approval|launch|invoice|payment|contract|agreement)\b/.test(lower)
+  ) {
+    if (/\bemail|emails\b/.test(lower) && /\btext|texts|message|messages\b/.test(lower)) {
+      return "Project emails and text messages.";
+    }
+
+    if (/\bemail|emails\b/.test(lower)) {
+      return "Project emails.";
+    }
+
+    return "Project text messages.";
+  }
+
+  if (/\bdeposit payment\b|\bpayment record\b|\bdeposit record\b/.test(lower)) {
+    return "Deposit payment record.";
+  }
+
+  if (/\bfinal invoice\b|\binvoice record\b/.test(lower)) {
+    return "Final invoice.";
+  }
+
+  if (
+    /\b(email|emails|text|texts|message|messages)\b/.test(lower) &&
     /\b(move-?out|surrender|turnover|returning the keys|key return|instructions)\b/.test(lower)
   ) {
     return "Text messages with move-out instructions.";
@@ -569,6 +692,17 @@ const isBadCorroboratedFact = (item = "") => {
     !/\b(receipt|photo|photos|picture|pictures|text messages?|emails?|invoice|invoices|letter|checklist|inspection report|witness)\b/i.test(
       text
     )
+  ) {
+    return true;
+  }
+
+  if (isVagueProofLabel(text)) {
+    return true;
+  }
+
+  if (
+    /^(email communications?|text messages?|relevant messages?)\.?$/i.test(text) &&
+    !/\b(project|scope|terms|revision|approval|launch|invoice|payment|contract|agreement)\b/i.test(text)
   ) {
     return true;
   }
@@ -645,14 +779,21 @@ const withUnavailablePrefix = (original = "", cleaned = "") => {
     : normalized;
 };
 
-const simplifyMissingEvidence = (text = "") =>
-  withUnavailablePrefix(
+const simplifyMissingEvidence = (text = "") => {
+  const stripped = stripUnavailablePrefixes(text);
+
+  if (isVagueProofLabel(stripped)) {
+    return "";
+  }
+
+  return withUnavailablePrefix(
     text,
     simplifyEvidenceNeed(text) || normalizeLeadingFraming("missingEvidence", text)
   );
+};
 
 const rewriteFactSheetEntry = (field, value = "") => {
-  const text = cleanFactSheetPrefix(value);
+  const text = rewriteClientVoiceNote(field, cleanFactSheetPrefix(value));
 
   if (!text) {
     return "";
@@ -662,6 +803,10 @@ const rewriteFactSheetEntry = (field, value = "") => {
     ["timeline", "supportingFacts", "knownClaims", "theory"].includes(field) &&
     (text.length > 260 || text.split(/(?<=[.!?])\s+/).filter(Boolean).length > 2)
   ) {
+    return "";
+  }
+
+  if (field !== "summary" && field !== "desiredRelief" && startsWithClientVoice(text)) {
     return "";
   }
 
@@ -788,6 +933,26 @@ const removeSubsumedRelief = (items = []) => {
 };
 
 const removeSubsumedTheory = (items = []) => {
+  const contractFormation = items.find((item) =>
+    /\bcontract formation rests on emails, texts, deposit payment, and performance\b/i.test(item)
+  );
+  const substantialCompletion = items.find((item) =>
+    /\bsite launch and substantial completion support final payment\b/i.test(item)
+  );
+
+  if (contractFormation || substantialCompletion) {
+    return [
+      contractFormation,
+      substantialCompletion,
+      ...items.filter(
+        (item) =>
+          item !== contractFormation &&
+          item !== substantialCompletion &&
+          !/\b(contract|agreement)\b.*\b(email|text|communications?|deposit|performance|launch)\b/i.test(item)
+      ),
+    ].filter(Boolean);
+  }
+
   const broadTheory = items.find((item) =>
     /\bnorthside improperly withheld most of\b/i.test(item)
   );
@@ -826,6 +991,112 @@ const sanitizeCorroboratedFacts = (items = []) =>
 
 const sanitizeRisks = (items = []) => items.filter((item) => !isBadRisk(item));
 
+const semanticKeyForFactSheetItem = (field, item = "") => {
+  const text = canonicalize(item);
+
+  if (!text) {
+    return "";
+  }
+
+  if (/\bno signed pre start agreement\b|\bno formal signed agreement\b|\bno formal pre start memorandum\b|\bsigned pre start agreement absent\b|\bsigned memorandum\b|\bformal written contract\b/.test(text)) {
+    return "no-signed-pre-start-agreement";
+  }
+
+  if (/\bcontract formation rests\b|\bagreement was formed through emails texts\b|\bcontract formed through communications deposit and performance\b|\bcontract formed through emails texts deposit payment and performance\b/.test(text)) {
+    return "contract-formation-communications-deposit-performance";
+  }
+
+  if (/\bsite launch and substantial completion\b|\bsite was substantially completed and launched\b/.test(text)) {
+    return "site-launch-final-payment";
+  }
+
+  if (/\bdeposit payment is documented\b|\bdeposit payment exists\b|\ba deposit was paid\b|\bdeposit was paid\b|\bdeposit payment record\b/.test(text)) {
+    return field === "corroboratedFacts" ? "deposit-payment-record" : "deposit-paid";
+  }
+
+  if (/\bproject emails and text messages\b|\bproject emails\b|\bproject text messages\b|\bproject communications occurred by email and text\b|\bagreement was handled through emails and texts\b|\bproject terms were discussed by email and text\b/.test(text)) {
+    return "project-emails-texts";
+  }
+
+  if (/\bfinal invoice\b/.test(text)) {
+    return "final-invoice";
+  }
+
+  if (/\bpost launch issues\b|\braised issues\b|\bbugs revisions or maintenance\b|\bminor tweaks or serious defects\b|\bunresolved problems\b/.test(text)) {
+    return "post-launch-issues";
+  }
+
+  if (/\bongoing post launch maintenance\b|\bbug fix obligations\b|\bformal post launch maintenance agreement\b|\bwritten term specifically defining post launch\b/.test(text)) {
+    return "post-launch-maintenance-obligation";
+  }
+
+  if (/\brecords showing site went live\b|\bclient access\b|\blaunch access records\b/.test(text)) {
+    return "site-live-access-records";
+  }
+
+  return text;
+};
+
+const factSheetItemScore = (item = "") => {
+  const text = String(item || "");
+  let score = Math.min(text.length, 180);
+
+  if (/\b(email|text|deposit|invoice|photo|receipt|record|agreement|launch|access|maintenance|bug|revision|payment)\b/i.test(text)) {
+    score += 30;
+  }
+
+  if (/\bsubstantial|specific|pre-start|final|project|documented|access\b/i.test(text)) {
+    score += 20;
+  }
+
+  if (hasFirstPersonVoice(text) || /^(client says|client recalls|client believes)\b/i.test(text)) {
+    score -= 100;
+  }
+
+  if (isVagueProofLabel(text)) {
+    score -= 200;
+  }
+
+  return score;
+};
+
+const distillFactSheetList = (field, items = []) => {
+  const selected = new Map();
+
+  items.forEach((item) => {
+    const key = semanticKeyForFactSheetItem(field, item);
+
+    if (!key) {
+      return;
+    }
+
+    const existing = selected.get(key);
+    if (!existing || factSheetItemScore(item) > factSheetItemScore(existing)) {
+      selected.set(key, item);
+    }
+  });
+
+  return [...selected.values()].filter((item) => {
+    if (!item || isVagueProofLabel(item)) {
+      return false;
+    }
+
+    if (field !== "summary" && field !== "desiredRelief" && startsWithClientVoice(item)) {
+      return false;
+    }
+
+    if (field === "timeline" && isTranscriptLike(item)) {
+      return false;
+    }
+
+    if (field === "corroboratedFacts") {
+      return !isBadCorroboratedFact(item);
+    }
+
+    return true;
+  });
+};
+
 export const sanitizeFactSheetList = (field, items = []) =>
   (field === "desiredRelief"
     ? removeSubsumedRelief
@@ -838,7 +1109,10 @@ export const sanitizeFactSheetList = (field, items = []) =>
     : field === "risks"
     ? sanitizeRisks
     : (value) => value)(
-    uniqueList(coerceFactSheetList(items).map((item) => rewriteFactSheetEntry(field, item)))
+    distillFactSheetList(
+      field,
+      uniqueList(coerceFactSheetList(items).map((item) => rewriteFactSheetEntry(field, item)))
+    )
   ).slice(0, FACT_SHEET_FIELD_LIMITS[field] || 8);
 
 const summaryIsThin = (items = []) =>

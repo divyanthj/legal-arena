@@ -16,12 +16,10 @@ import {
   getPartyName,
   getPlayerSide,
   getTemplate,
-  getTemplatePartyForSessionSide,
   mergeFactSheet,
   normalizeFactSheetPatch,
   coerceString,
   coerceStringList,
-  sanitizeIdList,
   uniqueList,
 } from "./engine/shared";
 import {
@@ -39,6 +37,7 @@ import {
   getCourtroomDifficultyProfile,
   getOpponentResponsePromptRules,
 } from "./courtroomDifficulty";
+import { createUsageCollector } from "./sessionUsage";
 
 const INTERVIEW_RESPONSE_MAX_TOKENS = 1500;
 const INTERVIEW_RESPONSE_TEMPERATURE = 0.7;
@@ -63,6 +62,46 @@ const AMOUNT_PATTERN =
   /\$\s?\d[\d,]*(?:\.\d{2})?|\b\d[\d,]*(?:\.\d{2})?\s?(dollars?|usd|bucks)\b/i;
 const PROOF_RECORD_PATTERN =
   /\b(proof|evidence|record|records|document|documents|photo|photos|picture|pictures|invoice|invoices|receipt|receipts|email|emails|chat|chats|text|texts|message|messages)\b/i;
+const UNCERTAINTY_PATTERN =
+  /\b(not sure|do not remember|don't remember|cannot remember|can't remember|do not know|don't know|uncertain|maybe|might have|i think|i believe)\b/i;
+const CLIENT_MEMORY_FALLBACK_MAX_LENGTH = 260;
+
+const blankConversationFactSheet = () => ({
+  summary: [],
+  theory: [],
+  desiredRelief: [],
+  timeline: [],
+  supportingFacts: [],
+  risks: [],
+  knownFacts: [],
+  knownClaims: [],
+  disputedFacts: [],
+  corroboratedFacts: [],
+  sourceLinks: [],
+  missingEvidence: [],
+  openQuestions: [],
+  discoveredFactIds: [],
+  discoveredClaimIds: [],
+  discoveredEvidenceIds: [],
+  ready: false,
+});
+
+const factSheetHasVisibleContent = (factSheet = {}) =>
+  [
+    "summary",
+    "theory",
+    "desiredRelief",
+    "timeline",
+    "supportingFacts",
+    "risks",
+    "knownFacts",
+    "knownClaims",
+    "disputedFacts",
+    "corroboratedFacts",
+    "sourceLinks",
+    "missingEvidence",
+    "openQuestions",
+  ].some((field) => Array.isArray(factSheet?.[field]) && factSheet[field].length > 0);
 
 const questionAsksForSpecificDetail = (question = "") => {
   const lowerQuestion = String(question || "").trim().toLowerCase();
@@ -87,6 +126,27 @@ const splitMemorySentences = (value = "") =>
     .map((item) => item.trim())
     .filter(Boolean);
 
+const limitClientMemoryAnswer = (value = "", maxLength = CLIENT_MEMORY_FALLBACK_MAX_LENGTH) => {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+
+  if (text.length <= maxLength) {
+    return text;
+  }
+
+  const clipped = text.slice(0, maxLength).trim();
+  const sentenceEnd = Math.max(
+    clipped.lastIndexOf("."),
+    clipped.lastIndexOf("!"),
+    clipped.lastIndexOf("?")
+  );
+
+  if (sentenceEnd >= 80) {
+    return clipped.slice(0, sentenceEnd + 1).trim();
+  }
+
+  return `${clipped.replace(/[,;:\s]+$/g, "")}...`;
+};
+
 const questionAsksForProofPossession = (question = "") => {
   const lowerQuestion = String(question || "").trim().toLowerCase();
   return (
@@ -108,7 +168,56 @@ const questionAsksForProofPossession = (question = "") => {
   );
 };
 
-const buildProofPossessionMemoryAnswer = ({ clientMemory, question }) => {
+const normalizeLegacyClientMemoryText = (clientMemory) => {
+  if (!clientMemory || typeof clientMemory !== "object" || Array.isArray(clientMemory)) {
+    return "";
+  }
+
+  return [
+    clientMemory.clientNarrative,
+    clientMemory.voice,
+    clientMemory.posture,
+    ...(Array.isArray(clientMemory.personalMemory) ? clientMemory.personalMemory : []),
+    ...(Array.isArray(clientMemory.evidenceAccess) ? clientMemory.evidenceAccess : []),
+    ...(Array.isArray(clientMemory.uncertainty) ? clientMemory.uncertainty : []),
+    ...(Array.isArray(clientMemory.blindSpots) ? clientMemory.blindSpots : []),
+    ...(Array.isArray(clientMemory.motivations) ? clientMemory.motivations : []),
+    ...(Array.isArray(clientMemory.boundaries) ? clientMemory.boundaries : []),
+  ]
+    .map((item) => coerceString(item))
+    .filter(Boolean)
+    .join("\n\n");
+};
+
+const getClientMemoryText = (clientMemory) => {
+  if (typeof clientMemory === "string") {
+    return coerceString(clientMemory);
+  }
+
+  return normalizeLegacyClientMemoryText(clientMemory);
+};
+
+const hasUsableClientMemory = (clientMemory) => getClientMemoryText(clientMemory).length >= 80;
+
+const normalizeClientMemory = (aiResult) => {
+  if (typeof aiResult === "string") {
+    return coerceString(aiResult);
+  }
+
+  if (!aiResult || typeof aiResult !== "object") {
+    return null;
+  }
+
+  const story =
+    coerceString(aiResult.clientStory) ||
+    coerceString(aiResult.clientNarrative) ||
+    coerceString(aiResult.story) ||
+    coerceString(aiResult.narrative);
+
+  return story.length >= 80 ? story : null;
+};
+
+const buildProofPossessionMemoryAnswer = ({ memoryText, question }) => {
   if (!questionAsksForProofPossession(question)) {
     return "";
   }
@@ -116,8 +225,7 @@ const buildProofPossessionMemoryAnswer = ({ clientMemory, question }) => {
   const lowerQuestion = String(question || "").trim().toLowerCase();
   const wantsMessages =
     /\b(email|emails|chat|chats|text|texts|message|messages)\b/i.test(lowerQuestion);
-  const evidenceAccess = clientMemory.evidenceAccess || [];
-  const matchingEvidence = evidenceAccess.find((item) => {
+  const matchingEvidence = splitMemorySentences(memoryText).find((item) => {
     const text = String(item || "");
     if (wantsMessages && /\b(email|emails|chat|chats|text|texts|message|messages)\b/i.test(text)) {
       return true;
@@ -137,17 +245,14 @@ const buildProofPossessionMemoryAnswer = ({ clientMemory, question }) => {
   }
 
   const firstSentence = splitMemorySentences(matchingEvidence)[0] || matchingEvidence;
-  return `Yes, I have ${firstSentence.replace(/^i (have|know|saved|can provide)\s+/i, "")}`;
+  return limitClientMemoryAnswer(
+    `Yes, I have ${firstSentence.replace(/^i (have|know|saved|can provide)\s+/i, "")}`
+  );
 };
 
 const pickSpecificMemoryAnswer = ({ clientMemory, question }) => {
   const lowerQuestion = String(question || "").trim().toLowerCase();
-  const searchableItems = [
-    ...(clientMemory.personalMemory || []),
-    ...(clientMemory.evidenceAccess || []),
-    ...(clientMemory.uncertainty || []),
-    clientMemory.clientNarrative || "",
-  ].filter(Boolean);
+  const searchableItems = splitMemorySentences(clientMemory);
 
   if (
     lowerQuestion.includes("how much") ||
@@ -165,62 +270,6 @@ const pickSpecificMemoryAnswer = ({ clientMemory, question }) => {
   return "";
 };
 
-const hasUsableClientMemory = (clientMemory) =>
-  Boolean(
-    clientMemory &&
-      typeof clientMemory === "object" &&
-      !Array.isArray(clientMemory) &&
-      Number(clientMemory.version || 0) >= 3 &&
-      clientMemory.interviewSubjectName &&
-      clientMemory.clientNarrative &&
-      (clientMemory.voice ||
-        clientMemory.posture ||
-        clientMemory.personalMemory?.length ||
-        clientMemory.evidenceAccess?.length)
-  );
-
-const normalizeClientMemory = ({
-  aiResult,
-  template,
-  playerSide,
-  playerPartyName,
-  legalPartyName,
-  opposingPartyName,
-}) => {
-  if (!aiResult || typeof aiResult !== "object") {
-    return null;
-  }
-
-  const validFactIds = (template.canonicalFacts || []).map((fact) => fact.factId);
-  const validEvidenceIds = (template.evidenceItems || []).map((item) => item.id);
-  const normalized = {
-    version: 3,
-    generatedAt: new Date().toISOString(),
-    representedSide: playerSide,
-    representedTemplateSide: getTemplatePartyForSessionSide(playerSide),
-    representedPartyName: coerceString(aiResult.representedPartyName) || playerPartyName,
-    legalPartyName:
-      coerceString(aiResult.legalPartyName) || legalPartyName || playerPartyName,
-    interviewSubjectName: playerPartyName,
-    interviewSubjectRole:
-      coerceString(aiResult.interviewSubjectRole) || "interview witness",
-    opposingPartyName,
-    clientNarrative: coerceString(aiResult.clientNarrative),
-    voice: coerceString(aiResult.voice),
-    posture: coerceString(aiResult.posture),
-    personalMemory: coerceStringList(aiResult.personalMemory, 14),
-    uncertainty: coerceStringList(aiResult.uncertainty, 8),
-    evidenceAccess: coerceStringList(aiResult.evidenceAccess, 10),
-    blindSpots: coerceStringList(aiResult.blindSpots, 8),
-    motivations: coerceStringList(aiResult.motivations, 6),
-    boundaries: coerceStringList(aiResult.boundaries, 8),
-    factIds: sanitizeIdList(aiResult.factIds, validFactIds, 20),
-    evidenceIds: sanitizeIdList(aiResult.evidenceIds, validEvidenceIds, 20),
-  };
-
-  return hasUsableClientMemory(normalized) ? normalized : null;
-};
-
 const buildClientMemoryInterviewFallback = ({
   clientMemory,
   question,
@@ -229,8 +278,9 @@ const buildClientMemoryInterviewFallback = ({
   playerSide,
 }) => {
   const questionTokens = tokenizeMemoryText(question);
+  const memoryText = getClientMemoryText(clientMemory);
   const proofPossessionAnswer = buildProofPossessionMemoryAnswer({
-    clientMemory,
+    memoryText,
     question,
   });
   if (proofPossessionAnswer) {
@@ -250,21 +300,13 @@ const buildClientMemoryInterviewFallback = ({
       sourceLinks: proofPossessionAnswer.startsWith("Yes") ? ["Client intake answer"] : [],
       missingEvidence: proofPossessionAnswer.startsWith("No") ? [proofPossessionAnswer] : [],
       openQuestions: [],
-      discoveredFactIds: sanitizeIdList(
-        clientMemory.factIds,
-        (template.canonicalFacts || []).map((fact) => fact.factId),
-        6
-      ),
+      discoveredFactIds: [],
       discoveredClaimIds: [],
-      discoveredEvidenceIds: sanitizeIdList(
-        clientMemory.evidenceIds,
-        (template.evidenceItems || []).map((item) => item.id),
-        6
-      ),
+      discoveredEvidenceIds: [],
     });
 
     return {
-      partyResponse: proofPossessionAnswer,
+      partyResponse: limitClientMemoryAnswer(proofPossessionAnswer),
       patch,
       nextFactSheet: mergeFactSheet(factSheet, patch, template, { playerSide }),
       relatedFactIds: patch.discoveredFactIds,
@@ -273,7 +315,7 @@ const buildClientMemoryInterviewFallback = ({
   }
 
   const specificAnswer = questionAsksForSpecificDetail(question)
-    ? pickSpecificMemoryAnswer({ clientMemory, question })
+    ? pickSpecificMemoryAnswer({ clientMemory: memoryText, question })
     : "";
   if (specificAnswer) {
     const patch = normalizeFactSheetPatch({
@@ -290,21 +332,13 @@ const buildClientMemoryInterviewFallback = ({
       sourceLinks: [],
       missingEvidence: AMOUNT_PATTERN.test(specificAnswer) ? [] : [specificAnswer],
       openQuestions: [],
-      discoveredFactIds: sanitizeIdList(
-        clientMemory.factIds,
-        (template.canonicalFacts || []).map((fact) => fact.factId),
-        6
-      ),
+      discoveredFactIds: [],
       discoveredClaimIds: [],
-      discoveredEvidenceIds: sanitizeIdList(
-        clientMemory.evidenceIds,
-        (template.evidenceItems || []).map((item) => item.id),
-        6
-      ),
+      discoveredEvidenceIds: [],
     });
 
     return {
-      partyResponse: specificAnswer,
+      partyResponse: limitClientMemoryAnswer(specificAnswer),
       patch,
       nextFactSheet: mergeFactSheet(factSheet, patch, template, { playerSide }),
       relatedFactIds: patch.discoveredFactIds,
@@ -312,14 +346,15 @@ const buildClientMemoryInterviewFallback = ({
     };
   }
 
-  const memoryItems = [
-    ...(clientMemory.personalMemory || []).map((text) => ({ text, section: "memory" })),
-    ...(clientMemory.evidenceAccess || []).map((text) => ({ text, section: "evidence" })),
-    ...(clientMemory.uncertainty || []).map((text) => ({ text, section: "uncertainty" })),
-    clientMemory.clientNarrative
-      ? { text: clientMemory.clientNarrative, section: "narrative" }
-      : null,
-  ]
+  const memoryItems = splitMemorySentences(memoryText)
+    .map((text) => ({
+      text,
+      section: UNCERTAINTY_PATTERN.test(text)
+        ? "uncertainty"
+        : PROOF_RECORD_PATTERN.test(text)
+        ? "evidence"
+        : "memory",
+    }))
     .filter(Boolean)
     .map((item) => ({
       ...item,
@@ -327,11 +362,11 @@ const buildClientMemoryInterviewFallback = ({
     }))
     .sort((left, right) => right.score - left.score);
   const bestItem = memoryItems.find((item) => item.score > 0);
-  const partyResponse = bestItem
+  const partyResponse = limitClientMemoryAnswer(bestItem
     ? bestItem.section === "uncertainty"
       ? bestItem.text
       : bestItem.text.replace(/^my understanding is that\s+/i, "")
-    : "I do not remember that detail clearly.";
+    : "I do not remember that detail clearly.");
   const patch = normalizeFactSheetPatch({
     summary: [],
     theory: [],
@@ -346,17 +381,9 @@ const buildClientMemoryInterviewFallback = ({
     sourceLinks: [],
     missingEvidence: [],
     openQuestions: [],
-    discoveredFactIds: sanitizeIdList(
-      clientMemory.factIds,
-      (template.canonicalFacts || []).map((fact) => fact.factId),
-      6
-    ),
+    discoveredFactIds: [],
     discoveredClaimIds: [],
-    discoveredEvidenceIds: sanitizeIdList(
-      clientMemory.evidenceIds,
-      (template.evidenceItems || []).map((item) => item.id),
-      6
-    ),
+    discoveredEvidenceIds: [],
   });
 
   return {
@@ -373,6 +400,7 @@ export const ensureClientMemory = async ({
   template,
   playerSide,
   userId,
+  onUsage,
 }) => {
   if (hasUsableClientMemory(caseSession?.clientMemory)) {
     return { clientMemory: caseSession.clientMemory, created: false };
@@ -393,12 +421,14 @@ export const ensureClientMemory = async ({
       userId,
       model: CLIENT_MEMORY_MODEL,
       temperature: 0.45,
-      maxTokens: 1000,
+      maxTokens: 1200,
       retryAttempts: 1,
+      usageLabel: "intake.clientMemory",
+      onUsage,
       systemPrompt:
-        "You convert a legal simulation's canonical case packet into a compact first-person memory dossier for one represented party. Write human memory, not legal analysis. Include one coherent first-person clientNarrative that tells the interview subject's subjective version of the case. The dossier will be reused so the party can answer intake questions naturally without seeing the full canonical story again. You may add subjective framing, excuses, emphasis, and self-serving interpretation, but do not invent major external facts that contradict the canonical case. Do not include advice to lawyers, investigation instructions, strategy coaching, scoring language, hidden metadata, or labels like proof gaps. Output valid JSON only.",
+        "You convert a legal simulation's canonical case packet into one freeform first-person client memory story for intake. Write only the interview subject's subjective truth as they see it: what they remember, believe, doubt, minimize, exaggerate, misunderstand, resent, or are embarrassed to admit. The client may be wrong, self-serving, defensive, or selectively truthful, but do not create new objective events, documents, witnesses, records, injuries, payments, communications, admissions, or legal outcome facts as canon. Extra details must read as subjective perception or incidental color unless grounded in the canonical context. Do not write a JSON dossier, labels, bullet sections, lawyer advice, investigation instructions, strategy coaching, scoring language, hidden metadata, or schema language. Output valid JSON only.",
       userPrompt: JSON.stringify({
-        task: `Create a compact memory dossier for ${interviewSubjectName}, who is being interviewed for the represented ${playerSide} side.`,
+        task: `Write one private freeform client memory story for ${interviewSubjectName}, who is being interviewed for the represented ${playerSide} side.`,
         representedPartyName: interviewSubjectName,
         legalPartyName: playerPartyName,
         interviewSubject,
@@ -409,41 +439,19 @@ export const ensureClientMemory = async ({
         openingStatement: caseSession.premise?.openingStatement || "",
         canonicalRoleContext: actorContext,
         styleRules: [
-          "Write as material the person remembers, believes, doubts, personally saw, personally has, or personally lacks.",
-          "Make clientNarrative a concise first-person story in the interview subject's voice.",
-          "Use clientNarrative for tone and continuity; use the structured lists as guardrails for later questions.",
-          "Use natural first-person memory fragments, not a legal brief.",
-          "Keep each item short and reusable for future Q&A.",
-          "Separate personal uncertainty from facts the person is confident about.",
-          "Evidence access means what this person personally has, saw, sent, received, can identify, or knows someone else controls.",
-          "Boundaries should say what the party should not volunteer or cannot know.",
+          "Write in first person as the interview subject, not as a narrator.",
+          "Make it feel like a messy but coherent story this person could tell their own lawyer.",
+          "Include confidence, uncertainty, self-serving explanations, omissions, and emotional posture inside the prose.",
+          "Mention evidence only as something the person believes they have, saw, sent, received, lacks, or thinks someone else controls.",
+          "Keep canonical evidence and objective truth separate: this story can express client belief, but it does not create new evidence inventory.",
+          "Do not include headings, field names, arrays, ids, fact ids, evidence ids, or JSON-looking structure inside the story.",
         ],
         outputSchema: {
-          voice: "string",
-          posture: "string",
-          clientNarrative: "string",
-          representedPartyName: "string",
-          legalPartyName: "string",
-          interviewSubjectRole: "string",
-          personalMemory: ["string"],
-          uncertainty: ["string"],
-          evidenceAccess: ["string"],
-          blindSpots: ["string"],
-          motivations: ["string"],
-          boundaries: ["string"],
-          factIds: ["string"],
-          evidenceIds: ["string"],
+          clientStory: "string",
         },
       }),
     });
-    const clientMemory = normalizeClientMemory({
-      aiResult,
-      template,
-      playerSide,
-      playerPartyName: interviewSubjectName,
-      legalPartyName: playerPartyName,
-      opposingPartyName,
-    });
+    const clientMemory = normalizeClientMemory(aiResult);
 
     return clientMemory
       ? { clientMemory, created: true }
@@ -455,36 +463,47 @@ export const ensureClientMemory = async ({
 };
 
 export const continueInterview = async ({ caseSession, question, userId }) => {
+  const usageCollector = createUsageCollector("intake");
   const template = ensureTemplate(getTemplate(caseSession));
   const playerSide = getPlayerSide(caseSession);
   const legalPartyName = getPartyName(template, playerSide);
   const interviewSubject = getInterviewSubjectForSide(template, playerSide);
   const playerPartyName = interviewSubject.name || legalPartyName;
   const opposingPartyName = getPartyName(template, getOpposingSide(playerSide));
+  const transcriptFactSheet = rebuildFactSheetFromTranscript({
+    caseSession,
+    template,
+  });
+  const currentConversationFactSheet = factSheetHasVisibleContent(caseSession.factSheet)
+    ? mergeFactSheet(blankConversationFactSheet(), caseSession.factSheet, template, {
+        playerSide,
+      })
+    : transcriptFactSheet;
   const clientMemoryResult = await ensureClientMemory({
     caseSession,
     template,
     playerSide,
     userId,
+    onUsage: usageCollector.record,
   });
   const interviewContext = clientMemoryResult.clientMemory
     ? {
         mode: "stored_client_memory",
-        clientMemory: clientMemoryResult.clientMemory,
+        clientMemory: getClientMemoryText(clientMemoryResult.clientMemory),
       }
     : {
         mode: "canonical_fallback",
         ...buildInterviewAgentContext({
           template,
           playerSide,
-          factSheet: caseSession.factSheet,
+          factSheet: currentConversationFactSheet,
         }),
       };
   const fallback = clientMemoryResult.clientMemory
     ? buildClientMemoryInterviewFallback({
         clientMemory: clientMemoryResult.clientMemory,
         question,
-        factSheet: caseSession.factSheet,
+        factSheet: currentConversationFactSheet,
         template,
         playerSide,
       })
@@ -492,10 +511,10 @@ export const continueInterview = async ({ caseSession, question, userId }) => {
         caseSession,
         template,
         question,
-        factSheet: caseSession.factSheet,
+        factSheet: currentConversationFactSheet,
       });
   const clientResponseSystemPrompt = clientMemoryResult.clientMemory
-    ? "You are simulating a legal-case interview subject speaking to the lawyer for the represented side during intake. Treat this as a role actor, not a script expander. Use the stored client memory as the interview subject's only private source of truth. Use clientNarrative as background for voice and continuity, not as text to retell. For narrow follow-up questions, answer only the narrow detail asked and prefer personalMemory, evidenceAccess, uncertainty, blindSpots, motivations, and boundaries over the full narrative. If the recent transcript already contains the broad story, treat the latest question as a continuation and do not repeat facts already stated unless the answer would be unclear without one brief reference. Retell the clientNarrative only if the lawyer explicitly asks for the whole story, timeline, or full explanation. The visible fact sheet and recent transcript are conversation context only. The partyResponse must sound like the interview subject speaking in first person; never write dossier language such as 'Maria says,' 'client says,' 'the tenant says,' 'the plaintiff says,' or any third-person self-reference by the speaker. The partyResponse must answer only the lawyer's latest question. Do not volunteer extra explanation, legal analysis, investigation advice, next steps, or caveats the lawyer did not ask for. For yes/no questions, start with yes, no, or not sure, then add at most one short plain-language sentence if needed. For amount, date, name, location, or count questions, answer in one sentence with that detail only; if you do not remember it, say that plainly and stop. If the lawyer asks whether you have, can provide, send, share, or show photos, records, documents, or other evidence, answer in one sentence only. If you have it, say yes and briefly identify it. If you do not have it, say no or not that I know of and stop. If someone else likely has it, add one short sentence naming who. Never answer a proof-possession question by retelling the clientNarrative or full timeline. Never say 'confirmed in the file,' 'not confirmed in the file,' 'proof gaps,' 'the record,' or similar dossier language in partyResponse; speak from memory. Do not tell the lawyer how to investigate, what to pin down next, or how to run the case. Never mention internal schemas, canonical truth, or metadata. Output valid JSON only."
+    ? "You are simulating a legal-case interview subject speaking to the lawyer for the represented side during intake. Treat this as a role actor, not a script expander. Use the stored freeform client memory story as the interview subject's only private source of truth. The story is the client's subjective truth as they see it, not guaranteed objective canon. For narrow follow-up questions, answer only the narrow detail asked by retrieving the closest remembered sentence, uncertainty, or evidence-access statement from the story. If the recent transcript already contains the broad story, treat the latest question as a continuation and do not repeat facts already stated unless the answer would be unclear without one brief reference. Retell the stored client memory only if the lawyer explicitly asks for the whole story, timeline, or full explanation. The visible fact sheet and recent transcript are conversation context only. The partyResponse must sound like the interview subject speaking in first person; never write dossier language such as 'Maria says,' 'client says,' 'the tenant says,' 'the plaintiff says,' or any third-person self-reference by the speaker. The partyResponse must answer only the lawyer's latest question. Do not volunteer extra explanation, legal analysis, investigation advice, next steps, or caveats the lawyer did not ask for. For yes/no questions, start with yes, no, or not sure, then add at most one short plain-language sentence if needed. For amount, date, name, location, or count questions, answer in one sentence with that detail only; if you do not remember it, say that plainly and stop. If the lawyer asks whether you have, can provide, send, share, or show photos, records, documents, or other evidence, answer in one sentence only. If you have it, say yes and briefly identify it. If you do not have it, say no or not that I know of and stop. If someone else likely has it, add one short sentence naming who. Never answer a proof-possession question by retelling the full memory story or timeline. Never say 'confirmed in the file,' 'not confirmed in the file,' 'proof gaps,' 'the record,' or similar dossier language in partyResponse; speak from memory. Do not tell the lawyer how to investigate, what to pin down next, or how to run the case. Never mention internal schemas, canonical truth, or metadata. Output valid JSON only."
     : "You are simulating a legal-case party speaking to their own lawyer during intake. Treat this as a role actor, not a script expander. The canonical story is the real event history; structured facts and evidence are helper maps, not the only memory you have. Answer first from the represented party's lived perspective, thought process, and accessible story memory. Decide what to reveal, hedge, minimize, or withhold based on the latest question and the party profile. The partyResponse must sound like the represented party speaking in first person; never write dossier language such as 'Maria says,' 'client says,' 'the tenant says,' 'the plaintiff says,' or any third-person self-reference by the represented party. The partyResponse must answer only the lawyer's latest question. Do not volunteer extra explanation, legal analysis, investigation advice, next steps, or caveats the lawyer did not ask for. For yes/no questions, start with yes, no, or not sure, then add at most one short plain-language sentence if needed. If the lawyer asks whether you have, can provide, send, share, or show photos, records, documents, or other evidence, answer directly about whether you personally have it. If you have it, say yes and briefly identify it. If you do not have it, say no or not that I know of and stop. If someone else likely has it, add one short sentence naming who. Never say 'confirmed in the file,' 'not confirmed in the file,' 'proof gaps,' 'the record,' or similar dossier language in partyResponse; speak as the client from memory. For ordinary factual questions, answer from memory as concretely as you honestly can before talking about records. If the lawyer asks a broad question, connect it to the nearest relevant events, mental states, evidence, or ambiguity in the canonical story instead of stonewalling. If the lawyer asks for names, dates, amounts, or other facts already present in the hidden world state or side-specific memory, give the fact instead of saying you need to check records. Use uncertainty only for genuine hearsay, missing records, low-access facts, or exact details the represented party would not know. If you do not remember an exact detail, say that plainly and stop. Do not tell the lawyer how to investigate, what to pin down next, or how to run the case. Speak like a normal person in first person. Never mention internal schemas, canonical truth, or metadata. Keep fact-sheet updates concise, but you may fill summary, theory, and desiredRelief when the case posture is already clear from the intake or the lawyer asks for them. When records are produced or confirmed, add them to corroboratedFacts/sourceLinks; when records cannot be produced, add the specific missing item to missingEvidence. Output valid JSON only.";
 
   const aiResult = await requestStructuredCompletion({
@@ -504,10 +523,12 @@ export const continueInterview = async ({ caseSession, question, userId }) => {
     temperature: INTERVIEW_RESPONSE_TEMPERATURE,
     maxTokens: INTERVIEW_RESPONSE_MAX_TOKENS,
     retryAttempts: 1,
+    usageLabel: "intake.partyResponse",
+    onUsage: usageCollector.record,
     systemPrompt: clientResponseSystemPrompt,
     userPrompt: JSON.stringify({
       task: clientMemoryResult.clientMemory
-        ? `Answer the lawyer's latest question as ${playerPartyName}. You are the represented ${playerSide} side. Use only the stored client memory, current visible fact sheet, and recent transcript to choose what this person would naturally say and what they would keep back for now.`
+        ? `Answer the lawyer's latest question as ${playerPartyName}. You are the represented ${playerSide} side. Use only the stored freeform client memory story, current visible fact sheet, and recent transcript to choose what this person would naturally say and what they would keep back for now.`
         : `Answer the lawyer's latest question as ${playerPartyName}. You are the represented ${playerSide} side. Use the hidden canonical world and your side-specific memory to choose what this person would naturally say and what they would keep back for now.`,
       stage: "interview",
       roleArchitecture: {
@@ -520,7 +541,7 @@ export const continueInterview = async ({ caseSession, question, userId }) => {
         desiredRelief: buildDesiredReliefForSide(template, playerSide),
         actorContext: interviewContext,
       },
-      currentFactSheet: caseSession.factSheet,
+      currentFactSheet: currentConversationFactSheet,
       recentTranscript: caseSession.interviewTranscript.slice(-6),
       latestQuestion: question,
       outputSchema: {
@@ -550,22 +571,23 @@ export const continueInterview = async ({ caseSession, question, userId }) => {
     template,
     caseSession,
     question,
-    factSheet: caseSession.factSheet,
+    factSheet: currentConversationFactSheet,
     playerSide,
   });
 
   const conversationPatch = await buildConversationFactSheetPatch({
     userId,
-    currentFactSheet: caseSession.factSheet,
+    currentFactSheet: currentConversationFactSheet,
     recentTranscript: caseSession.interviewTranscript.slice(-8),
     latestQuestion: question,
     latestAnswer: interviewResult.partyResponse,
     playerSide,
     playerPartyName: legalPartyName,
     opposingPartyName,
+    onUsage: usageCollector.record,
   });
-  const combinedPatch = mergeFactSheetPatches(interviewResult.patch, conversationPatch);
-  const nextFactSheet = mergeFactSheet(caseSession.factSheet, combinedPatch, template, {
+  const combinedPatch = mergeFactSheetPatches(conversationPatch);
+  const nextFactSheet = mergeFactSheet(currentConversationFactSheet, combinedPatch, template, {
     playerSide,
   });
   const nextAssessment = await assessCaseSuccessChance({
@@ -575,6 +597,8 @@ export const continueInterview = async ({ caseSession, question, userId }) => {
     latestQuestion: question,
     latestAnswer: interviewResult.partyResponse,
     previousAssessment: caseSession.caseAssessment,
+    usageLabel: "intake.assessment",
+    onUsage: usageCollector.record,
   });
 
   return {
@@ -584,6 +608,7 @@ export const continueInterview = async ({ caseSession, question, userId }) => {
     patch: combinedPatch,
     nextFactSheet,
     caseAssessment: nextAssessment,
+    usageEntries: usageCollector.entries,
   };
 };
 
@@ -625,6 +650,8 @@ export const assessCaseSuccessChance = async ({
   latestQuestion = "",
   latestAnswer = "",
   previousAssessment = null,
+  usageLabel = "intake.assessment",
+  onUsage,
 }) => {
   const template = ensureTemplate(getTemplate(caseSession));
   const playerSide = getPlayerSide(caseSession);
@@ -658,6 +685,8 @@ export const assessCaseSuccessChance = async ({
       temperature: 0.25,
       maxTokens: 600,
       retryAttempts: 1,
+      usageLabel,
+      onUsage,
       systemPrompt:
         "You estimate the player's chance of winning a legal simulation if they go to court with only the visible case file. Use only the supplied transcript, fact sheet, side, and public lawbook labels. Do not infer from hidden truth, canonical story, template facts, or evidence that is not visible. Output valid JSON only.",
       userPrompt: JSON.stringify({
@@ -699,6 +728,7 @@ const buildConversationFactSheetPatch = async ({
   playerSide,
   playerPartyName,
   opposingPartyName,
+  onUsage,
 }) => {
   const fallbackPatch = buildConversationFactSheetFallback({
     latestQuestion,
@@ -715,8 +745,10 @@ const buildConversationFactSheetPatch = async ({
       temperature: 0.35,
       maxTokens: 900,
       retryAttempts: 1,
+      usageLabel: "intake.factSheetPatch",
+      onUsage,
       systemPrompt:
-        "You update a lawyer's private working fact sheet from the conversation only. You do not know the hidden case truth, canonical story, template facts, evidence graph, or any source outside the transcript you are given. Write short, useful lawyer notes, not transcript summaries. If something was not said or clearly implied in the conversation, leave it out. Output valid JSON only.",
+        "You update a lawyer's private working fact sheet from the conversation only. You do not know the hidden case truth, canonical story, template facts, evidence graph, or any source outside the transcript you are given. Write short, neutral lawyer notes, not transcript summaries or client voice. If something was not said or clearly implied in the conversation, leave it out. Output valid JSON only.",
       userPrompt: JSON.stringify({
         task: "Create a fact-sheet patch from only the visible intake conversation.",
         currentFactSheet,
@@ -730,12 +762,16 @@ const buildConversationFactSheetPatch = async ({
         opposingPartyName,
         styleRules: [
           "Use concise bullet fragments, not paragraphs.",
+          "Use neutral lawyer-note voice only. Never write in first person.",
           "Do not copy the client's answer into the fact sheet.",
           "Each note should usually be 4 to 12 words.",
           "Add at most one new note per section for this exchange.",
+          "Do not start any note with 'I,' 'my,' 'we,' 'our,' 'I recall,' 'I believe,' or 'what I have.'",
           "Avoid prefixes like 'Client says,' 'Proof gap,' 'Risk from intake,' or 'Live dispute from intake.'",
+          "Merge with existing notes mentally and only add a note if it is materially new, sharper, or more specific.",
           "Do not state anything as proven unless the client actually said it or produced it.",
-          "Only put concrete evidence artifacts in corroboratedFacts, such as a receipt, photo, text message, invoice, letter, inspection report, checklist, or named witness. Never put raw client testimony, denials, or full client answer text in corroboratedFacts.",
+          "Only put concrete evidence artifacts in corroboratedFacts, such as a receipt, photo, text message, invoice, letter, inspection report, checklist, or named witness. Never put raw client testimony, denials, vague labels like 'relevant messages,' or full client answer text in corroboratedFacts.",
+          "When naming evidence, identify the artifact and purpose where possible, such as 'Texts approving launch' rather than 'messages.'",
           "If the client confirms a photo, record, invoice, receipt, document, witness, or other proof exists, was shown, was produced, or is in hand, put a short artifact label in corroboratedFacts.",
           "If the client says proof your side needs does not exist, was not shown, cannot be provided, or still needs to be found, put that note in missingEvidence.",
           "If the client says the opposing side controls or failed to provide proof for its own position, do not put that in missingEvidence. Put it in supportingFacts or disputedFacts as an opponent proof problem.",
@@ -1102,7 +1138,55 @@ export const buildConversationFactSheetFallback = ({
   return normalizeFactSheetPatch(patch);
 };
 
+const getTranscriptQuestionAnswerPairs = (transcript = []) => {
+  const pairs = [];
+
+  for (let index = 0; index < transcript.length; index += 1) {
+    const entry = transcript[index] || {};
+    if (entry.role !== "player") {
+      continue;
+    }
+
+    const answerEntry = (transcript || [])
+      .slice(index + 1)
+      .find((candidate) => candidate?.role === "party" || candidate?.role === "client");
+
+    if (!answerEntry) {
+      continue;
+    }
+
+    pairs.push({
+      question: entry.text || "",
+      answer: answerEntry.text || "",
+    });
+  }
+
+  return pairs;
+};
+
+export const rebuildFactSheetFromTranscript = ({ caseSession, template }) => {
+  const safeTemplate = ensureTemplate(template || getTemplate(caseSession));
+  const playerSide = getPlayerSide(caseSession);
+  const opposingPartyName = getPartyName(safeTemplate, getOpposingSide(playerSide));
+
+  return getTranscriptQuestionAnswerPairs(caseSession?.interviewTranscript || []).reduce(
+    (factSheet, pair) => {
+      const patch = buildConversationFactSheetFallback({
+        latestQuestion: pair.question,
+        latestAnswer: pair.answer,
+        playerSide,
+        playerPartyName: getPartyName(safeTemplate, playerSide),
+        opposingPartyName,
+      });
+
+      return mergeFactSheet(factSheet, patch, safeTemplate, { playerSide });
+    },
+    blankConversationFactSheet()
+  );
+};
+
 export const runCourtroomRound = async ({ caseSession, argument, userId }) => {
+  const usageCollector = createUsageCollector("courtroom");
   const template = ensureTemplate(getTemplate(caseSession));
   const rules = getLawbookRules();
   const playerSide = getPlayerSide(caseSession);
@@ -1124,6 +1208,8 @@ export const runCourtroomRound = async ({ caseSession, argument, userId }) => {
     temperature: 0.6,
     maxTokens: 900,
     retryAttempts: 1,
+    usageLabel: "courtroom.counselAnalysis",
+    onUsage: usageCollector.record,
     systemPrompt:
       "You are simulating the player's side counsel in a legal game. Your job is not to invent new facts. Read the player's latest courtroom argument as an attempted advocacy move, then interpret the strongest responsible version of it using only the public case file and lawbook rules already available to the player. Output valid JSON only.",
     userPrompt: JSON.stringify({
@@ -1153,6 +1239,8 @@ export const runCourtroomRound = async ({ caseSession, argument, userId }) => {
     temperature: 0.65,
     maxTokens: 1500,
     retryAttempts: 1,
+    usageLabel: shouldReturnVerdict ? "courtroom.roundWithVerdict" : "courtroom.round",
+    onUsage: usageCollector.record,
     systemPrompt:
       "You are simulating a courtroom exchange in a legal strategy game. The courtroom is fully record-bound. Use role actors, not deterministic scripts. One role is the player's counsel position, one role is opposing counsel, and one role is the bench. Opposing counsel is always talented, adversarial, strategic, and professionally restrained: they should attack the player's legal theory, proof, credibility, requested relief, or handling of disputes using only opposingCounsel.preparedCaseFile, the lawbook, and the courtroom transcript. Opposing counsel may make narrow concessions only when they are tactically necessary, but must not compliment, praise, coach, validate, or give feedback on the player's advocacy. The bench should score the exchange based only on each side's visible courtroom file, facts actually presented, argument quality, proof gaps, the lawbook, judge profile, and hidden courtroom calibration. Do not infer, cite, or credit any fact, story detail, claim, or evidence outside the supplied side files. Outcomes may vary in close cases based on judicial weighting, but they must remain explainable and sensitive to the record. Never reveal or refer to calibration, difficulty, complexity scaling, junior counsel, senior counsel, scoring bounds, or hidden tuning in player-facing text. Do not narrate metadata or internal schemas. Output JSON only.",
     userPrompt: JSON.stringify({
@@ -1216,7 +1304,8 @@ export const runCourtroomRound = async ({ caseSession, argument, userId }) => {
     }),
   });
 
-  return normalizeCourtResult({
+  return {
+    ...normalizeCourtResult({
     aiResult,
     fallback,
     counselAnalysis,
@@ -1224,7 +1313,9 @@ export const runCourtroomRound = async ({ caseSession, argument, userId }) => {
     caseSession,
     rules,
     template,
-  });
+    }),
+    usageEntries: usageCollector.entries,
+  };
 };
 
 export const finalizeFactSheetInput = ({ factSheet, caseTemplate }) => {

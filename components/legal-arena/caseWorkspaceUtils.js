@@ -195,10 +195,28 @@ export const getPlayerPartyName = (caseSession) =>
     ? caseSession.premise.opponentName
     : caseSession.premise.clientName);
 
-export const getPlayerInterviewSubjectName = (caseSession) =>
-  caseSession.playerInterviewSubjectName ||
-  caseSession.interviewSubjectName ||
-  getPlayerPartyName(caseSession);
+const genericInterviewSubjectNames = new Set([
+  "tenant witness",
+  "property manager",
+  "party representative",
+  "company representative",
+  "store representative",
+]);
+
+export const isGenericInterviewSubjectName = (value = "") =>
+  genericInterviewSubjectNames.has(String(value || "").trim().toLowerCase());
+
+export const getPlayerInterviewSubjectName = (caseSession) => {
+  const fallbackName = getPlayerPartyName(caseSession);
+  const subjectName = [
+    caseSession.playerInterviewSubjectName,
+    caseSession.interviewSubjectName,
+  ]
+    .map((item) => String(item || "").trim())
+    .find((item) => item && !isGenericInterviewSubjectName(item));
+
+  return subjectName || fallbackName;
+};
 
 export const getOpponentPartyName = (caseSession) =>
   caseSession.opponentPartyName ||

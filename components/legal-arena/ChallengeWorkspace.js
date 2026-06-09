@@ -173,6 +173,7 @@ const challengeToCaseSession = (challenge = {}) => {
     opponentInterviewSubjectRole: opponent.interviewSubjectRole || "",
     playerCounselName: viewer.name,
     opponentCounselName: opponent.name,
+    clientMemoryExcerpt: viewer.clientMemoryExcerpt || "",
     plaintiffName: challenge.premise?.clientName,
     defendantName: challenge.premise?.opponentName,
     interviewTranscript: viewer.interviewTranscript || [],
