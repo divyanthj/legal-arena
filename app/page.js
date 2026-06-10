@@ -10,6 +10,7 @@ import {
 } from "@/libs/adminOps";
 import { getSEOTags } from "@/libs/seo";
 import config from "@/config";
+import WhatsNewDialog from "@/components/legal-arena/WhatsNewDialog";
 
 export const dynamic = "force-dynamic";
 
@@ -125,6 +126,10 @@ const categoryFallbacks = [
   { title: "Family Law", cases: "Case Track" },
   { title: "And More", cases: "Growing Library" },
 ];
+
+const earlyAccessPlan = config.lemonsqueezy.plans[0];
+const currentEarlyAccessPrice = `$${earlyAccessPlan.price.toFixed(2)}`;
+const nextEarlyAccessPrice = `$${earlyAccessPlan.priceAnchor.toFixed(2)}`;
 
 const loadFeaturedCases = async () => {
   try {
@@ -373,6 +378,31 @@ export default async function Page() {
               </Link>
             </div>
           ) : null}
+          <div className="mx-auto mb-8 flex max-w-5xl flex-col gap-4 rounded-2xl border border-amber-200/20 bg-amber-200/10 px-5 py-4 text-left shadow-[0_20px_80px_rgba(0,0,0,0.26)] md:flex-row md:items-center md:justify-between">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-amber-100/72">
+                Magna Carta Early-Access Offer
+              </p>
+              <h2 className="mt-2 text-xl font-semibold leading-tight text-white">
+                Lifetime access is {currentEarlyAccessPrice} through{" "}
+                {earlyAccessPlan.priceDeadline}.
+              </h2>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-amber-50/78">
+                On {earlyAccessPlan.priceIncreaseDate}, the price increases to{" "}
+                {nextEarlyAccessPrice}. Buy now and keep access as the Legal
+                Arena case library grows.
+              </p>
+            </div>
+            <div className="flex w-full shrink-0 flex-col gap-3 md:w-auto">
+              <Link
+                href="/dashboard"
+                className="inline-flex w-full justify-center whitespace-nowrap rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-black transition hover:bg-white/90"
+              >
+                Lock In {currentEarlyAccessPrice}
+              </Link>
+              <WhatsNewDialog />
+            </div>
+          </div>
           <div className="mx-auto max-w-6xl">
             <div className="mx-auto max-w-4xl text-center">
               <p className="arena-kicker">A first-of-its-kind AI lawyer game</p>

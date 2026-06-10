@@ -25,6 +25,9 @@ export function DevelopmentAccessPanel({
     });
   };
 
+  const currentPrice = `$${plan.price.toFixed(2)}`;
+  const nextPrice = `$${plan.priceAnchor.toFixed(2)}`;
+
   return (
     <div className="relative">
       <div className="absolute inset-0 scale-[1.03] rounded-[2rem] bg-white/5 blur-3xl" />
@@ -38,9 +41,10 @@ export function DevelopmentAccessPanel({
               Legal Arena is live in early access.
             </h1>
             <p className="mt-4 max-w-xl text-base leading-8 text-white/66">
-              Get immediate access now while the game is still being built. Your
-              purchase includes the current experience plus all early-access
-              updates as we keep expanding and refining Legal Arena.
+              Magna Carta early-access offer: lifetime access is {currentPrice}{" "}
+              through {plan.priceDeadline}. On {plan.priceIncreaseDate}, the
+              price increases to {nextPrice}. Buy now and keep access as the
+              case library grows.
             </p>
           </div>
           <div className="flex items-start gap-3">
@@ -87,8 +91,8 @@ export function DevelopmentAccessPanel({
         </ul>
 
         <div className="arena-surface-soft mt-6 rounded-2xl p-4 text-sm leading-7 text-white/62">
-          We are still refining content, polish, and progression, so some
-          features may change as the game matures.
+          Your purchase includes the current experience plus future early-access
+          updates while we keep expanding cases, polish, and progression.
         </div>
 
         {showAccountActions && email ? (

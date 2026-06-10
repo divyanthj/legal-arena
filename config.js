@@ -57,7 +57,9 @@ const config = {
         description:
           "One-time purchase for immediate access while Legal Arena is still in early access.",
         price: 9.99,
-        priceAnchor: 29.99,
+        priceAnchor: 15.99,
+        priceIncreaseDate: "July 1, 2026",
+        priceDeadline: "June 30, 2026",
         features: [
           { name: "Immediate access to the full Legal Arena build" },
           { name: "Challenge other players to PVP cases with an AI judge" },
