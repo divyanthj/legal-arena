@@ -513,6 +513,7 @@ export default function DashboardHub({
   userName = "Counsel",
   userImage = "",
   userEmail = "",
+  hasArenaAccess = false,
   canStartSoloCases = false,
 }) {
   const router = useRouter();
@@ -714,20 +715,27 @@ export default function DashboardHub({
   }, [activeTemplateIndex, visibleTemplates.length]);
 
   const isNewUser = (progression.completedCases || 0) === 0;
+  const shouldSellLifetimeAccess = !hasArenaAccess;
   const lastCaseProgress = getCaseProgress(lastActiveCase);
   const primaryTemplateId =
     (activeTemplate?.unlocked ? activeTemplate : firstUnlockedTemplate)?.id || "";
-  const primaryCtaLabel = canResumeLastCase
+  const primaryCtaLabel = shouldSellLifetimeAccess
+    ? "Unlock Lifetime Access"
+    : canResumeLastCase
     ? "Continue Case"
     : isNewUser
       ? "Start Your First Case"
       : "Start New Case";
-  const heroTitle = canResumeLastCase
+  const heroTitle = shouldSellLifetimeAccess
+    ? "Unlock Legal Arena for life."
+    : canResumeLastCase
     ? "Continue your case."
     : isNewUser
       ? "Win the courtroom. Start your first case."
       : "Choose your next case.";
-  const heroBody = canResumeLastCase
+  const heroBody = shouldSellLifetimeAccess
+    ? "Get permanent access to the AI lawyer game: interview clients, argue cases, challenge players, and keep every future update as the case library grows."
+    : canResumeLastCase
     ? `${lastCaseProgress.nextStep} in ${lastActiveCase.title}.`
     : "Interview your client. Build your case. Argue in court. Get the verdict and earn XP.";
   const firstCaseProgressPercent = Math.min(
@@ -868,8 +876,16 @@ export default function DashboardHub({
                   <div className="arena-surface-soft p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="text-sm font-semibold text-white">Complete your first case</p>
-                        <p className="mt-1 text-xs text-white/52">Earn 250 XP</p>
+                        <p className="text-sm font-semibold text-white">
+                          {shouldSellLifetimeAccess
+                            ? "Unlock lifetime access"
+                            : "Complete your first case"}
+                        </p>
+                        <p className="mt-1 text-xs text-white/52">
+                          {shouldSellLifetimeAccess
+                            ? "All future updates included"
+                            : "Earn 250 XP"}
+                        </p>
                       </div>
                       <HeroIcons.RocketLaunchIcon className="h-5 w-5 text-white/64" aria-hidden="true" />
                     </div>
@@ -901,7 +917,7 @@ export default function DashboardHub({
                     </p>
 
                     <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                      {canResumeLastCase ? (
+                      {canResumeLastCase && !shouldSellLifetimeAccess ? (
                         <Link
                           href={`/dashboard/cases/${lastActiveCase.slug || lastActiveCase.id}`}
                           data-onboarding-target="quick-start-case"
@@ -914,10 +930,19 @@ export default function DashboardHub({
                         <button
                           data-onboarding-target="quick-start-case"
                           className="arena-btn-light inline-flex min-w-0 items-center justify-center gap-3 px-4 py-4 sm:px-6"
-                          onClick={() => handleCreateCase(primaryTemplateId)}
-                          disabled={creating || !primaryTemplateId}
+                          onClick={() => {
+                            if (shouldSellLifetimeAccess) {
+                              setShowPaywallModal(true);
+                              return;
+                            }
+
+                            handleCreateCase(primaryTemplateId);
+                          }}
+                          disabled={creating || (!shouldSellLifetimeAccess && !primaryTemplateId)}
                         >
-                          {creating ? <span className="loading loading-spinner loading-xs" /> : null}
+                          {creating && !shouldSellLifetimeAccess ? (
+                            <span className="loading loading-spinner loading-xs" />
+                          ) : null}
                           <span>{primaryCtaLabel}</span>
                           <HeroIcons.ChevronRightIcon className="h-5 w-5" aria-hidden="true" />
                         </button>
@@ -931,7 +956,9 @@ export default function DashboardHub({
                     </div>
                     <p className="mt-4 flex items-center gap-2 text-sm text-white/52">
                       <HeroIcons.ShieldCheckIcon className="h-4 w-4" aria-hidden="true" />
-                      No commitment. Just your first step.
+                      {shouldSellLifetimeAccess
+                        ? "Pay once. Keep permanent access to every future Legal Arena update."
+                        : "No commitment. Just your first step."}
                     </p>
                   </div>
 
@@ -1084,7 +1111,11 @@ export default function DashboardHub({
                         <div className="grid min-w-0 md:grid-cols-[minmax(0,1fr)_220px]">
                           <div className="min-w-0 p-4 sm:p-5">
                             <span className="badge badge-outline border-white/15 text-white/80">
-                              {activeTemplate.unlocked ? "Beginner Friendly" : "Locked"}
+                              {shouldSellLifetimeAccess
+                                ? "Included with lifetime access"
+                                : activeTemplate.unlocked
+                                  ? "Beginner Friendly"
+                                  : "Locked"}
                             </span>
                             <h3 className="mt-4 flex h-[4.75rem] items-start overflow-hidden break-words text-xl font-semibold leading-tight text-white sm:h-[5.625rem] sm:text-2xl">
                               {activeTemplate.title}
@@ -1111,18 +1142,29 @@ export default function DashboardHub({
 
                             <button
                               className="arena-btn-light mt-5 inline-flex w-full min-w-0 items-center justify-center gap-3 px-4 py-4 sm:px-5"
-                              onClick={() => handleCreateCase(activeTemplate.id)}
-                              disabled={creating || !activeTemplate.unlocked}
+                              onClick={() => {
+                                if (shouldSellLifetimeAccess) {
+                                  setShowPaywallModal(true);
+                                  return;
+                                }
+
+                                handleCreateCase(activeTemplate.id);
+                              }}
+                              disabled={creating || (!shouldSellLifetimeAccess && !activeTemplate.unlocked)}
                             >
-                              {creating ? <span className="loading loading-spinner loading-xs" /> : null}
+                              {creating && !shouldSellLifetimeAccess ? (
+                                <span className="loading loading-spinner loading-xs" />
+                              ) : null}
                               <span>
-                                {activeTemplate.unlocked
+                                {shouldSellLifetimeAccess
+                                  ? "Unlock Lifetime Access"
+                                  : activeTemplate.unlocked
                                   ? isNewUser
                                     ? "Begin Client Interview"
                                     : "Start This Case"
                                   : "Locked"}
                               </span>
-                              {activeTemplate.unlocked ? (
+                              {activeTemplate.unlocked || shouldSellLifetimeAccess ? (
                                 <HeroIcons.ChevronRightIcon className="h-5 w-5" aria-hidden="true" />
                               ) : (
                                 <HeroIcons.LockClosedIcon className="h-5 w-5" aria-hidden="true" />
@@ -1786,10 +1828,16 @@ export default function DashboardHub({
                               <p className="arena-kicker">Status</p>
                               <p
                                 className={`mt-2 text-sm ${
-                                  activeTemplate.unlocked ? "text-emerald-300" : "text-amber-300"
+                                  activeTemplate.unlocked || shouldSellLifetimeAccess
+                                    ? "text-emerald-300"
+                                    : "text-amber-300"
                                 }`}
                               >
-                                {activeTemplate.unlocked ? "Ready to enter" : "Locked"}
+                                {shouldSellLifetimeAccess
+                                  ? "Included after purchase"
+                                  : activeTemplate.unlocked
+                                    ? "Ready to enter"
+                                    : "Locked"}
                               </p>
                             </div>
                           </div>

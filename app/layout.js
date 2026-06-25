@@ -7,6 +7,9 @@ import Footer from "@/components/Footer";
 import config from "@/config";
 import "./globals.css";
 
+const DATAFAST_WEBSITE_ID =
+  process.env.NEXT_PUBLIC_DATAFAST_WEBSITE_ID || "dfid_jj19izF8dJN5YpCrXoA2G";
+
 const font = Inter({ subsets: ["latin"] });
 const arenaHeadlineFont = Inter_Tight({
   subsets: ["latin"],
@@ -86,7 +89,7 @@ export default function RootLayout({ children }) {
           />
           <Script
             defer
-            data-website-id="dfid_jj19izF8dJN5YpCrXoA2G"
+            data-website-id={DATAFAST_WEBSITE_ID}
             data-domain="legalarena.app"
             src="https://datafa.st/js/script.js"
             strategy="afterInteractive"

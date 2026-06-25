@@ -87,6 +87,7 @@ export default async function Dashboard() {
       userName={session.user?.name || session.user?.email}
       userImage={session.user?.image || ""}
       userEmail={session.user?.email || ""}
+      hasArenaAccess={Boolean(soloCreateAccess.hasArenaAccess)}
       canStartSoloCases={soloCreateAccess.allowed}
     />
   );

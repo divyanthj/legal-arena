@@ -3,7 +3,10 @@
 import { useState } from "react";
 import apiClient from "@/libs/api";
 
-export default function EarlyAccessCheckoutButton({ variantId }) {
+export default function EarlyAccessCheckoutButton({
+  variantId,
+  label = "Get early access for $9.99",
+}) {
   const [isLoading, setIsLoading] = useState(false);
 
   const handleCheckout = async () => {
@@ -34,7 +37,7 @@ export default function EarlyAccessCheckoutButton({ variantId }) {
       {isLoading ? (
         <span className="loading loading-spinner loading-sm" />
       ) : (
-        "Get early access for $9.99"
+        label
       )}
     </button>
   );

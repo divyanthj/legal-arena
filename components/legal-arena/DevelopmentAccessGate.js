@@ -38,13 +38,12 @@ export function DevelopmentAccessPanel({
               Early Access
             </p>
             <h1 className="arena-headline mt-4 text-4xl uppercase leading-[0.92] text-white md:text-5xl">
-              Legal Arena is live in early access.
+              Unlock lifetime access to Legal Arena.
             </h1>
             <p className="mt-4 max-w-xl text-base leading-8 text-white/66">
-              Magna Carta early-access offer: lifetime access is {currentPrice}{" "}
-              through {plan.priceDeadline}. On {plan.priceIncreaseDate}, the
-              price increases to {nextPrice}. Buy now and keep access as the
-              case library grows.
+              Play the full early-access build: AI client interviews, case prep,
+              courtroom arguments, PVP challenges, verdicts, XP, and the growing
+              case library.
             </p>
           </div>
           <div className="flex items-start gap-3">
@@ -79,6 +78,16 @@ export function DevelopmentAccessPanel({
           </div>
         </div>
 
+        <div className="arena-surface-soft mt-6 rounded-2xl border border-emerald-300/20 bg-emerald-300/10 p-4 text-sm font-semibold leading-7 text-emerald-50">
+          Pay once. Keep permanent access to all future Legal Arena updates.
+        </div>
+
+        <p className="mt-4 text-sm leading-7 text-white/62">
+          Magna Carta early-access offer: lifetime access is {currentPrice} through{" "}
+          {plan.priceDeadline}. On {plan.priceIncreaseDate}, the price increases
+          to {nextPrice}.
+        </p>
+
         <ul className="mt-8 space-y-3 text-sm leading-7 text-white/72">
           {plan.features.map((feature) => (
             <li key={feature.name} className="flex gap-3">
@@ -91,8 +100,8 @@ export function DevelopmentAccessPanel({
         </ul>
 
         <div className="arena-surface-soft mt-6 rounded-2xl p-4 text-sm leading-7 text-white/62">
-          Your purchase includes the current experience plus future early-access
-          updates while we keep expanding cases, polish, and progression.
+          Your purchase includes the current experience plus every future update
+          while we keep expanding cases, polish, and progression.
         </div>
 
         {showAccountActions && email ? (
@@ -119,7 +128,10 @@ export function DevelopmentAccessPanel({
         ) : null}
 
         <div className="mt-8">
-          <EarlyAccessCheckoutButton variantId={plan.variantId} />
+          <EarlyAccessCheckoutButton
+            variantId={plan.variantId}
+            label={`Unlock Lifetime Access for ${currentPrice}`}
+          />
         </div>
 
         <p className="mt-4 text-center text-xs leading-5 text-white/42">
