@@ -40,11 +40,10 @@ export const generateClientMemoryExcerpt = async ({
   clientMemory,
   partyName = "",
   playerSide = "client",
-  fallback = "",
   userId,
   onUsage,
 } = {}) => {
-  const clientStory = normalizeClientMemoryText(clientMemory) || String(fallback || "").trim();
+  const clientStory = normalizeClientMemoryText(clientMemory);
 
   if (!clientStory) {
     return "";

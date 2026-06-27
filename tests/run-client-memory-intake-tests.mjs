@@ -13,10 +13,6 @@ const engineSource = await readFile(
   new URL("../libs/game/engine.js", import.meta.url),
   "utf8"
 );
-const interviewQuestionsSource = await readFile(
-  new URL("../libs/game/engine/interview/questions.js", import.meta.url),
-  "utf8"
-);
 const soloInterviewRoute = await readFile(
   new URL("../app/api/cases/[caseId]/interview/route.js", import.meta.url),
   "utf8"
@@ -69,15 +65,11 @@ assert.match(engineSource, /do not create new objective events, documents, witne
 assert.match(engineSource, /this story can express client belief, but it does not create new evidence inventory/);
 assert.match(engineSource, /treat the latest question as a continuation/);
 assert.match(engineSource, /Retell the stored client memory only if the lawyer explicitly asks/);
-assert.match(engineSource, /const pickSpecificMemoryAnswer =/);
-assert.match(engineSource, /const buildProofPossessionMemoryAnswer =/);
 assert.match(engineSource, /Never answer a proof-possession question by retelling the full memory story/);
-assert.match(engineSource, /Yes, I have emails or texts about that\./);
-assert.match(engineSource, /I do not remember the exact amount\./);
-assert.match(engineSource, /splitMemorySentences\(memoryText\)/);
-assert.match(engineSource, /section:\s*UNCERTAINTY_PATTERN\.test\(text\)/);
-assert.match(engineSource, /discoveredFactIds:\s*\[\]/);
-assert.match(engineSource, /discoveredEvidenceIds:\s*\[\]/);
+assert.doesNotMatch(engineSource, /const pickSpecificMemoryAnswer =/);
+assert.doesNotMatch(engineSource, /const buildProofPossessionMemoryAnswer =/);
+assert.doesNotMatch(engineSource, /splitMemorySentences\(memoryText\)/);
+assert.doesNotMatch(engineSource, /section:\s*UNCERTAINTY_PATTERN\.test\(text\)/);
 assert.doesNotMatch(engineSource, /sanitizeIdList\(clientMemory\.factIds/);
 assert.doesNotMatch(engineSource, /sanitizeIdList\(clientMemory\.evidenceIds/);
 assert.match(engineSource, /const interviewSubject = getInterviewSubjectForSide\(template, playerSide\)/);
@@ -87,7 +79,8 @@ assert.match(engineSource, /generateClientMemoryExcerpt/);
 assert.match(engineSource, /clientMemoryExcerpt,/);
 assert.match(engineSource, /canonicalRoleContext:\s*actorContext/);
 assert.match(engineSource, /mode:\s*"stored_client_memory"/);
-assert.match(engineSource, /mode:\s*"canonical_fallback"/);
+assert.match(engineSource, /mode:\s*"canonical_context"/);
+assert.doesNotMatch(engineSource, /mode:\s*"canonical_fallback"/);
 assert.match(engineSource, /clientMemory:\s*clientMemoryResult\.created \? clientMemoryResult\.clientMemory : null/);
 assert.match(
   engineSource,
@@ -158,8 +151,6 @@ assert.match(caseWorkspaceSource, /Interview \{playerInterviewSubjectName\}/);
 assert.match(caseWorkspaceSource, /const heroNarrativeExcerpt =/);
 assert.match(caseWorkspaceSource, /caseSession\.clientMemoryExcerpt/);
 assert.match(caseWorkspaceSource, /\{heroNarrativeExcerpt\}/);
-assert.match(interviewQuestionsSource, /normalizedAnswer\.length > 220/);
-assert.match(interviewQuestionsSource, /questionAsksForProofPossession\(lowerQuestion\) && normalizedAnswer\.length > 180/);
 assert.match(clientMemorySource, /export const generateClientMemoryExcerpt = async/);
 assert.match(clientMemorySource, /requestStructuredCompletion/);
 assert.match(clientMemorySource, /usageLabel:\s*"intake\.clientMemoryExcerpt"/);

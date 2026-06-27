@@ -4,6 +4,7 @@ await import("./run-story-world-tests.mjs");
 await import("./run-fact-sheet-tests.mjs");
 await import("./run-client-memory-intake-tests.mjs");
 await import("./run-interview-voice-tests.mjs");
+await import("./run-interview-language-regression-tests.mjs");
 await import("./run-case-assessment-tests.mjs");
 await import("./run-courtroom-difficulty-tests.mjs");
 await import("./run-courtroom-evidence-gating-tests.mjs");

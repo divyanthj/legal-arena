@@ -81,11 +81,12 @@ assert.match(
 assert.match(challengeStoreSource, /plaintiffParticipant\?\.status === "ready"/);
 assert.match(challengeStoreSource, /const plaintiffReady = participant\.side === "client"/);
 assert.match(challengeStoreSource, /if \(allReady \|\| plaintiffReady\)/);
-assert.match(challengeStoreSource, /buildConversationFactSheetFallback/);
 assert.match(
   challengeStoreSource,
-  /const exchangePatch = buildConversationFactSheetFallback/
+  /const buildTranscriptBackfillPatch = \(\) => normalizeFactSheetPatch\(\{\}\)/
 );
+assert.doesNotMatch(challengeStoreSource, /buildConversationFactSheetFallback/);
+assert.doesNotMatch(challengeStoreSource, /const exchangePatch =/);
 assert.doesNotMatch(challengeStoreSource, /const confirmedProofCuePattern =/);
 assert.match(challengeStoreSource, /const scoreChallengeSubmission = async/);
 assert.match(challengeStoreSource, /const backfillChallengeCourtroomScores = async/);

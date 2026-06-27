@@ -242,47 +242,15 @@ assert.match(
   storeSource,
   /plainCase\.factSheet \|\| activeIntakeRebuild/
 );
-assert.match(
-  engineSource,
-  /const fallbackProofAndClassificationPatch = normalizeFactSheetPatch/
-);
-assert.match(
-  engineSource,
-  /timeline: uniqueList\(\[\.\.\.patch\.timeline, \.\.\.fallbackProofAndClassificationPatch\.timeline\]\)/
-);
-assert.match(
-  engineSource,
-  /patch\.desiredRelief\.push\(answer\);\s*}\s*if \(\s*!\s*proofRelated/
-);
-assert.match(
-  engineSource,
-  /const disputePattern =/
-);
-assert.match(
-  engineSource,
-  /const intakeRiskPattern =/
-);
-assert.match(
-  engineSource,
-  /patch\.disputedFacts\.push\(`Live dispute from intake: \$\{answer\}`\);/
-);
-assert.match(
-  engineSource,
-  /patch\.risks\.push\("Point may need more support\."\);/
-);
-assert.match(
-  engineSource,
-  /disputedFacts: uniqueList\(\[\s*\.\.\.patch\.disputedFacts,\s*\.\.\.fallbackProofAndClassificationPatch\.disputedFacts,\s*\]\)/
-);
-assert.match(engineSource, /what i had\|what i have/);
-assert.match(
-  engineSource,
-  /timeline:\s*bestItem\?\.section === "memory" \? \[bestItem\.text\] : \[\]/
-);
-assert.match(
-  engineSource,
-  /knownClaims:\s*bestItem\?\.section === "memory" \? \[bestItem\.text\] : \[\]/
-);
+assert.doesNotMatch(engineSource, /fallbackProofAndClassificationPatch/);
+assert.doesNotMatch(engineSource, /buildConversationFactSheetFallback/);
+assert.doesNotMatch(engineSource, /buildConversationProofClassificationFallback/);
+assert.doesNotMatch(engineSource, /const disputePattern =/);
+assert.doesNotMatch(engineSource, /const intakeRiskPattern =/);
+assert.doesNotMatch(engineSource, /Live dispute from intake/);
+assert.doesNotMatch(engineSource, /Point may need more support/);
+assert.doesNotMatch(engineSource, /what i had\|what i have/);
+assert.doesNotMatch(engineSource, /bestItem\?\.section === "memory"/);
 assert.doesNotMatch(
   engineSource,
   /answerShowsProofPossession \|\|\s*proofTermPattern\.test\(lowerAnswer\)/
@@ -314,13 +282,11 @@ const challengeSource = await readFile(
   new URL("../libs/game/challenges.js", import.meta.url),
   "utf8"
 );
-assert.match(challengeSource, /buildConversationFactSheetFallback/);
+assert.match(challengeSource, /const buildTranscriptBackfillPatch = \(\) => normalizeFactSheetPatch\(\{\}\)/);
+assert.doesNotMatch(challengeSource, /buildConversationFactSheetFallback/);
 assert.doesNotMatch(challengeSource, /const disputeCuePattern =/);
 assert.match(challengeSource, /\"disputedFacts\"/);
-assert.match(
-  challengeSource,
-  /const exchangePatch = buildConversationFactSheetFallback/
-);
-assert.match(challengeSource, /exchangePatch\[field\]\?\.length/);
+assert.doesNotMatch(challengeSource, /const exchangePatch =/);
+assert.doesNotMatch(challengeSource, /exchangePatch\[field\]\?\.length/);
 
 console.log("Fact sheet tests passed");

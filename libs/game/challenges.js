@@ -12,7 +12,6 @@ import {
 } from "@/libs/emailSender";
 import {
   assessCaseSuccessChance,
-  buildConversationFactSheetFallback,
   continueInterview,
   ensureClientMemory,
   finalizeFactSheetInput,
@@ -224,54 +223,7 @@ const seedChallengeFactSheetsIfNeeded = (challenge) =>
     false
   );
 
-const buildTranscriptBackfillPatch = (transcript = []) => {
-  const patch = {
-    summary: [],
-    theory: [],
-    desiredRelief: [],
-    timeline: [],
-    supportingFacts: [],
-    risks: [],
-    knownFacts: [],
-    knownClaims: [],
-    disputedFacts: [],
-    corroboratedFacts: [],
-    sourceLinks: [],
-    missingEvidence: [],
-    openQuestions: [],
-    discoveredFactIds: [],
-    discoveredClaimIds: [],
-    discoveredEvidenceIds: [],
-  };
-  const patchFields = Object.keys(patch);
-
-  for (let index = 0; index < transcript.length; index += 1) {
-    const entry = transcript[index];
-    if (entry?.role !== "party") {
-      continue;
-    }
-
-    const previousQuestion =
-      transcript[index - 1]?.role === "player" ? transcript[index - 1]?.text || "" : "";
-    const answer = String(entry.text || "").trim();
-    if (!answer) {
-      continue;
-    }
-
-    const exchangePatch = buildConversationFactSheetFallback({
-      latestQuestion: previousQuestion,
-      latestAnswer: answer,
-    });
-
-    patchFields.forEach((field) => {
-      if (exchangePatch[field]?.length) {
-        patch[field].push(...exchangePatch[field]);
-      }
-    });
-  }
-
-  return normalizeFactSheetPatch(patch);
-};
+const buildTranscriptBackfillPatch = () => normalizeFactSheetPatch({});
 
 const factSheetBackfillFields = [
   "summary",
@@ -587,10 +539,6 @@ const ensureParticipantClientMemory = async ({ challenge, participant, otherPart
       clientMemory: result.clientMemory,
       partyName: getPartyName(challenge.templateSnapshot, participant.side),
       playerSide: participant.side,
-      fallback:
-        participant.interviewTranscript?.find(
-          (entry) => entry?.role === "party" || entry?.role === "client"
-        )?.text || "",
       userId,
     });
     setParticipantClientMemory(

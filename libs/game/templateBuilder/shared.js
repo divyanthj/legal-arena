@@ -429,7 +429,9 @@ export const buildFallbackClaimText = ({ party, canonicalDetail, kind }) => {
       return "My position is that the apartment was not left in ordinary move-out condition.";
     }
 
-    return "My position is that the apartment needed more work after move-out than the tenant now admits.";
+    return `My position is that ${detail.charAt(0).toLowerCase()}${detail.slice(
+      1
+    )}, but the other side frames that point differently.`;
   }
 
   if (kind === "risk") {
