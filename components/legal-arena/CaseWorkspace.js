@@ -60,6 +60,37 @@ const cleanDraftList = (value) =>
     .map((item) => item.trim())
     .filter(Boolean);
 
+const CourtPortraitAvatar = ({
+  src,
+  alt,
+  className = "",
+  fallbackIcon: FallbackIcon = HeroIcons.UserIcon,
+}) => {
+  const cleanSrc = String(src || "").trim();
+  const [imageFailed, setImageFailed] = useState(false);
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [cleanSrc]);
+
+  return (
+    <span
+      className={`flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full ${className}`}
+    >
+      {cleanSrc && !imageFailed ? (
+        <img
+          src={cleanSrc}
+          alt={alt}
+          className="h-full w-full object-cover"
+          onError={() => setImageFailed(true)}
+        />
+      ) : (
+        <FallbackIcon className="h-6 w-6" aria-hidden="true" />
+      )}
+    </span>
+  );
+};
+
 const missingEvidenceUnavailablePattern =
   /\b(no|none|never|does not exist|doesn't exist|did not exist|didn't exist|not available|unavailable|cannot get|can't get|unobtainable|destroyed|lost|client never|never took|never received|other side has|opposing side has|landlord has|tenant has|third party has|only the other side|not provided to me)\b/i;
 
@@ -194,6 +225,28 @@ const LawbookRuleIcon = ({ icon, className = "h-5 w-5" }) => {
   return <Icon className={className} aria-hidden="true" />;
 };
 
+const factSheetSectionIconMap = {
+  theory: HeroIcons.LightBulbIcon,
+  timeline: HeroIcons.ClockIcon,
+  supportingFacts: HeroIcons.FolderIcon,
+  risks: HeroIcons.ExclamationTriangleIcon,
+  disputedFacts: HeroIcons.QuestionMarkCircleIcon,
+  corroboratedFacts: HeroIcons.ShieldCheckIcon,
+  missingEvidence: HeroIcons.MagnifyingGlassIcon,
+  desiredRelief: HeroIcons.ScaleIcon,
+};
+
+const factSheetSectionCompactLabel = {
+  theory: "Theory",
+  timeline: "Timeline",
+  supportingFacts: "Proof",
+  risks: "Risks",
+  disputedFacts: "Disputed",
+  corroboratedFacts: "Records",
+  missingEvidence: "Gaps",
+  desiredRelief: "Relief",
+};
+
 const filterLawbookRulesByCategory = (rules, categorySlug) => {
   if (!categorySlug || categorySlug === LAWBOOK_ALL_CATEGORIES) {
     return rules;
@@ -290,6 +343,13 @@ export default function CaseWorkspace({
     initialCase.primaryCategory || LAWBOOK_ALL_CATEGORIES
   );
   const [lawbookSearch, setLawbookSearch] = useState("");
+  const [showFullMobileBrief, setShowFullMobileBrief] = useState(false);
+  const [showMobileExchangeHistory, setShowMobileExchangeHistory] = useState(false);
+  const [showFullMobileOpponentArgument, setShowFullMobileOpponentArgument] = useState(false);
+  const [activeMobileFactSheetKey, setActiveMobileFactSheetKey] = useState("theory");
+  const [showMobileFactSheetDialog, setShowMobileFactSheetDialog] = useState(false);
+  const [showMobileBriefDialog, setShowMobileBriefDialog] = useState(false);
+  const [showMobileLawbookDialog, setShowMobileLawbookDialog] = useState(false);
   const interviewTranscriptRef = useRef(null);
   const courtroomTranscriptRef = useRef(null);
   const workingRef = useRef(false);
@@ -297,7 +357,6 @@ export default function CaseWorkspace({
   const {
     recordingQuestion,
     transcribingQuestion,
-    questionAudioLevel,
     recordingArgument,
     transcribingArgument,
     argumentAudioLevel,
@@ -359,7 +418,6 @@ export default function CaseWorkspace({
     });
   }, [caseSession]);
 
-
   const buildFactSheetPayload = () =>
     sanitizeFactSheet({
       ...caseSession.factSheet,
@@ -374,13 +432,21 @@ export default function CaseWorkspace({
       missingEvidence: cleanDraftList(factSheetDraft.missingEvidence),
     });
 
-  const visibleInterviewTranscript = optimisticTranscriptEntry
-    ? [...caseSession.interviewTranscript, optimisticTranscriptEntry]
-    : caseSession.interviewTranscript;
+  const visibleInterviewTranscript = useMemo(
+    () =>
+      optimisticTranscriptEntry
+        ? [...caseSession.interviewTranscript, optimisticTranscriptEntry]
+        : caseSession.interviewTranscript,
+    [caseSession.interviewTranscript, optimisticTranscriptEntry]
+  );
 
-  const visibleCourtroomTranscript = optimisticTranscriptEntry
-    ? [...caseSession.courtroomTranscript, optimisticTranscriptEntry]
-    : caseSession.courtroomTranscript;
+  const visibleCourtroomTranscript = useMemo(
+    () =>
+      optimisticTranscriptEntry
+        ? [...caseSession.courtroomTranscript, optimisticTranscriptEntry]
+        : caseSession.courtroomTranscript,
+    [caseSession.courtroomTranscript, optimisticTranscriptEntry]
+  );
   const normalizedCourtroomTranscript =
     visibleCourtroomTranscript.map(normalizeCourtroomEntry);
   const isInterview = caseSession.status === "interview";
@@ -621,6 +687,43 @@ export default function CaseWorkspace({
       ? speaker
       : playerInterviewSubjectName;
   };
+  const mobileInterviewExchangePairs = useMemo(() => {
+    const pairs = [];
+    let pendingQuestion = null;
+
+    visibleInterviewTranscript.forEach((entry, index) => {
+      if (entry.role === "player") {
+        pendingQuestion = { entry, index };
+        return;
+      }
+
+      if (pendingQuestion) {
+        pairs.push({
+          id: `${pendingQuestion.entry.createdAt || pendingQuestion.index}-${
+            entry.createdAt || index
+          }`,
+          question: pendingQuestion.entry,
+          response: entry,
+        });
+        pendingQuestion = null;
+      }
+    });
+
+    if (pendingQuestion) {
+      pairs.push({
+        id: `${pendingQuestion.entry.createdAt || pendingQuestion.index}-pending`,
+        question: pendingQuestion.entry,
+        response: null,
+      });
+    }
+
+    return pairs;
+  }, [visibleInterviewTranscript]);
+  const latestMobileInterviewExchange =
+    mobileInterviewExchangePairs[mobileInterviewExchangePairs.length - 1] || null;
+  const mobileInterviewExchangeHistory = mobileInterviewExchangePairs
+    .slice(0, -1)
+    .reverse();
   const opponentPartyName = getOpponentPartyName(caseSession);
   const useCounselLabels = Boolean(apiConfig.counselLabels);
   const playerCounselTitle = useCounselLabels
@@ -661,6 +764,28 @@ export default function CaseWorkspace({
     caseSession.playerSide === "opponent" ? "Defendant Side" : "Plaintiff Side";
   const verdictStyle =
     verdictTone[caseSession.verdict?.winner] || verdictTone.draw;
+  const verdictIsPlayerWin = caseSession.verdict?.winner === "player";
+  const verdictIsOpponentWin = caseSession.verdict?.winner === "opponent";
+  const verdictAccentClass = verdictIsPlayerWin
+    ? "text-emerald-100"
+    : verdictIsOpponentWin
+    ? "text-rose-100"
+    : "text-amber-100";
+  const verdictGlowClass = verdictIsPlayerWin
+    ? "from-emerald-500/18 via-emerald-500/5"
+    : verdictIsOpponentWin
+    ? "from-rose-500/18 via-rose-500/5"
+    : "from-amber-500/18 via-amber-500/5";
+  const verdictPillClass = verdictIsPlayerWin
+    ? "border-emerald-300/35 bg-emerald-300/12 text-emerald-100"
+    : verdictIsOpponentWin
+    ? "border-rose-300/35 bg-rose-300/12 text-rose-100"
+    : "border-amber-300/35 bg-amber-300/12 text-amber-100";
+  const verdictKeyIssue =
+    caseSession.verdict?.concerns?.[0] ||
+    caseSession.verdict?.highlights?.[0] ||
+    caseSession.score.lastBenchSignal ||
+    "The record was close on the decisive issue.";
   const canonicalFactLookup = buildCanonicalFactLookup(caseSession);
   const lawbookRules =
     Array.isArray(caseSession.lawbook) && caseSession.lawbook.length >= legalArenaLawbook.length
@@ -701,6 +826,8 @@ export default function CaseWorkspace({
   const opponentPressurePct = clampPercent(
     (caseSession.score.opponent / pressureTotal) * 100
   );
+  const opponentCourtPortrait = String(caseSession.opponentPortrait?.image || "").trim();
+  const playerCourtPortrait = String(caseSession.playerImage || "").trim() || "/images/profile.jpg";
 
   const courtroomStageLabel = useMemo(() => {
     if (isExited) return "Exited";
@@ -928,6 +1055,27 @@ export default function CaseWorkspace({
     ["Handle proof gap", proofGapSnippet()],
     ["Cite lawbook", lawbookSnippet()],
   ].filter((tool) => tool[1]);
+  const lastOpponentCourtEntry = [...normalizedCourtroomTranscript]
+    .reverse()
+    .find((entry) => entry.speaker !== "player");
+  const lastOpponentCourtEntryKey = lastOpponentCourtEntry
+    ? `${lastOpponentCourtEntry.round || ""}-${lastOpponentCourtEntry.text || ""}`
+    : "";
+  const lastOpponentCourtEntryDisplayRound = Math.max(
+    Number(lastOpponentCourtEntry?.round || 0),
+    Math.min(caseSession.score.roundsCompleted + 1, caseSession.maxCourtRounds || 1)
+  );
+  const mobileOpponentArgumentCanExpand =
+    String(lastOpponentCourtEntry?.text || "").length > 160 ||
+    String(lastOpponentCourtEntry?.text || "").includes("\n");
+  const courtroomFocusItems = [
+    firstDraftItem(factSheetDraft.theory),
+    firstDraftItem(factSheetDraft.risks, factSheetDraft.disputedFacts),
+    firstDraftItem(factSheetDraft.corroboratedFacts, factSheetDraft.supportingFacts),
+  ].filter(Boolean).slice(0, 3);
+  useEffect(() => {
+    setShowFullMobileOpponentArgument(false);
+  }, [lastOpponentCourtEntryKey]);
 
   const renderLawbookFilters = () => (
     <div className="mt-4 flex min-w-0 max-w-full flex-wrap gap-1.5 sm:mt-5 sm:gap-2">
@@ -1008,8 +1156,11 @@ export default function CaseWorkspace({
     </details>
   );
 
-  const renderLawbookPanel = (className = "") => (
-    <div className={`arena-surface min-w-0 max-w-full overflow-hidden ${className}`}>
+  const renderLawbookPanel = (className = "", panelId = "lawbook-details") => (
+    <div
+      id={panelId}
+      className={`arena-surface min-w-0 max-w-full overflow-hidden ${className}`}
+    >
       <details className="group min-w-0 max-w-full" open>
         <summary className="list-none cursor-pointer p-4 sm:p-6">
           <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -1184,11 +1335,141 @@ export default function CaseWorkspace({
     );
   };
 
+  const activeMobileFactSheetSection =
+    factSheetSections.find((section) => section.key === activeMobileFactSheetKey) ||
+    factSheetSections[0];
+  const activeMobileFactSheetItems = activeMobileFactSheetSection
+    ? ensureDraftList(factSheetDraft[activeMobileFactSheetSection.key])
+    : [];
+
+  const openMobileFactSheetDialog = (sectionKey) => {
+    setActiveMobileFactSheetKey(sectionKey);
+    setShowMobileFactSheetDialog(true);
+  };
+
+  const renderMobileFactSheetButton = (section, className = "") => {
+    const sectionCount = cleanDraftList(factSheetDraft[section.key]).length;
+    const Icon = factSheetSectionIconMap[section.key] || HeroIcons.DocumentTextIcon;
+    const isComplete = sectionCount > 0;
+    const isSelected = activeMobileFactSheetKey === section.key;
+
+    return (
+      <button
+        key={`mobile-${section.key}`}
+        type="button"
+        className={`min-h-[4.05rem] rounded-xl border p-2 text-center transition ${
+          isSelected
+            ? "border-amber-200/45 bg-amber-300/12 text-amber-100"
+            : isComplete
+            ? "border-emerald-300/25 bg-emerald-300/8"
+            : "border-white/10 bg-white/[0.025]"
+        } ${className}`}
+        onClick={() => openMobileFactSheetDialog(section.key)}
+      >
+        <Icon
+          className={`mx-auto h-4 w-4 ${
+            isSelected ? "text-amber-100" : isComplete ? "text-emerald-200" : "text-amber-200"
+          }`}
+          aria-hidden="true"
+        />
+        <span className="mt-1 block line-clamp-1 text-[0.56rem] font-semibold text-white/74">
+          {factSheetSectionCompactLabel[section.key] || section.title}
+        </span>
+        <span className="mt-0.5 block text-[0.6rem] text-white/42">
+          {sectionCount}/{Math.max(sectionCount, 1)}
+        </span>
+      </button>
+    );
+  };
+
   return (
-    <main className="arena-app-shell min-h-screen overflow-x-hidden px-3 py-4 sm:px-4 sm:py-6 md:px-8 md:py-10">
+    <main className="arena-app-shell min-h-screen overflow-x-hidden px-3 pb-24 pt-4 sm:px-4 sm:py-6 md:px-8 md:py-10">
       <section className="mx-auto max-w-[1600px] space-y-6 arena-reveal">
+        <div className="sm:hidden">
+          <div className="flex items-center justify-between gap-3">
+            <Link
+              href="/dashboard"
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.035] text-white/72"
+              aria-label="Back to cases"
+            >
+              <HeroIcons.ArrowLeftIcon className="h-5 w-5" aria-hidden="true" />
+            </Link>
+            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-amber-200">
+              Legal Arena
+            </p>
+            <div className="flex items-center gap-2">
+              {isInterview ? (
+                <button
+                  type="button"
+                  className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-rose-300/22 bg-rose-500/10 px-3 text-xs font-semibold text-rose-100 transition hover:border-rose-200/45 hover:bg-rose-500/18 disabled:cursor-not-allowed disabled:opacity-55"
+                  onClick={handleExitCase}
+                  disabled={working}
+                  aria-label={apiConfig.exitLabel || "Exit case"}
+                >
+                  <HeroIcons.XMarkIcon className="h-4 w-4" aria-hidden="true" />
+                  Exit
+                </button>
+              ) : null}
+              <ButtonAccount />
+            </div>
+          </div>
+          <h1 className="mt-4 text-2xl font-semibold leading-tight text-white">
+            {caseSession.title}
+          </h1>
+          <div className="mt-3 flex items-center gap-2 overflow-hidden">
+            <span
+              className={`shrink-0 rounded-lg border px-2.5 py-1 text-xs font-semibold ${
+                caseSession.playerSide === "opponent"
+                  ? "border-sky-300/25 bg-sky-300/10 text-sky-100"
+                  : "border-emerald-300/25 bg-emerald-300/10 text-emerald-100"
+              }`}
+            >
+              {sideBadgeLabel}
+            </span>
+            <span className="shrink-0 rounded-lg border border-white/10 bg-white/[0.035] px-2.5 py-1 text-xs font-semibold text-white/72">
+              {isCourtroom ? courtroomRoundLabel : courtroomStageLabel}
+            </span>
+            {Number.isFinite(Number(displayedSuccessChance)) ? (
+              <span
+                className="shrink-0 rounded-lg border border-emerald-300/25 bg-emerald-300/10 px-2.5 py-1 text-xs font-semibold text-emerald-100"
+                data-tooltip-id="success-chance-tooltip"
+                aria-label={successChanceLabel}
+              >
+                Win chance {Math.round(Number(displayedSuccessChance))}%
+              </span>
+            ) : null}
+          </div>
+          <div className="mt-4 grid grid-cols-3 border-y border-white/10 text-xs font-semibold text-white/62">
+            <button
+              type="button"
+              className="flex items-center justify-center gap-1.5 py-3 transition hover:text-white"
+              onClick={() => setShowMobileBriefDialog(true)}
+            >
+              <HeroIcons.DocumentTextIcon className="h-4 w-4" aria-hidden="true" />
+              Brief
+            </button>
+            <button
+              type="button"
+              className="flex items-center justify-center gap-1.5 py-3 transition hover:text-white"
+              onClick={() => openMobileFactSheetDialog(activeMobileFactSheetKey)}
+            >
+              <HeroIcons.ClipboardDocumentListIcon className="h-4 w-4" aria-hidden="true" />
+              Fact Sheet
+            </button>
+            <button
+              type="button"
+              className="flex items-center justify-center gap-1.5 py-3 transition hover:text-white"
+              onClick={() => setShowMobileLawbookDialog(true)}
+            >
+              <HeroIcons.BookOpenIcon className="h-4 w-4" aria-hidden="true" />
+              Lawbook
+            </button>
+          </div>
+        </div>
+
         <div
-          className="arena-surface arena-scanline arena-column-bg"
+          id="case-brief-desktop"
+          className="arena-surface arena-scanline arena-column-bg hidden sm:block"
           style={heroPanelStyle}
         >
           <div className="p-4 sm:p-6 md:p-8">
@@ -1202,6 +1483,19 @@ export default function CaseWorkspace({
                   >
                     Back to Cases
                   </Link>
+                  {isInterview ? (
+                    <button
+                      type="button"
+                      className="arena-btn-danger inline-flex items-center gap-2 px-4 py-2 text-sm"
+                      onClick={handleExitCase}
+                      disabled={working}
+                    >
+                      <HeroIcons.XMarkIcon className="h-4 w-4" aria-hidden="true" />
+                      {pendingAction === "exit"
+                        ? apiConfig.exitPendingLabel || "Exiting..."
+                        : apiConfig.exitLabel || "Exit Case"}
+                    </button>
+                  ) : null}
                   <span className="badge badge-outline border-white/15 text-white/80">
                     {caseSession.practiceArea}
                   </span>
@@ -1296,7 +1590,362 @@ export default function CaseWorkspace({
         <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
           <section className="min-w-0 space-y-6">
             {isInterview ? (
-              <div className="arena-surface">
+              <>
+              <div className="space-y-4 pb-24 sm:hidden">
+                <section className="arena-surface border-amber-200/20 bg-amber-200/[0.045]">
+                  <form className="p-4" onSubmit={handleInterviewSubmit}>
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-amber-200">
+                          Ask a question
+                        </p>
+                        <p className="mt-1 text-xs font-semibold text-white/48">
+                          {mobileInterviewExchangePairs.length
+                            ? `${mobileInterviewExchangePairs.length} exchange${
+                                mobileInterviewExchangePairs.length === 1 ? "" : "s"
+                              } so far`
+                            : `Start with ${playerInterviewSubjectName}`}
+                        </p>
+                      </div>
+                      <span className="rounded-full border border-white/10 bg-black/24 px-2.5 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.12em] text-white/48">
+                        {question.trim().length}/500
+                      </span>
+                    </div>
+
+                    <div className="mt-3 rounded-2xl border border-white/10 bg-black/20 p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-white/42">
+                            Latest exchange
+                          </p>
+                          <p className="mt-1 text-xs text-white/45">
+                            {mobileInterviewExchangePairs.length
+                              ? `${mobileInterviewExchangePairs.length} total`
+                              : "No questions yet"}
+                          </p>
+                        </div>
+                        {mobileInterviewExchangeHistory.length > 0 ? (
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-black/20 px-3 py-2 text-xs font-semibold text-white/68 transition hover:border-white/20 hover:text-white"
+                            onClick={() =>
+                              setShowMobileExchangeHistory((current) => !current)
+                            }
+                            aria-expanded={showMobileExchangeHistory}
+                          >
+                            History
+                            <HeroIcons.ChevronDownIcon
+                              className={`h-3.5 w-3.5 transition ${
+                                showMobileExchangeHistory ? "rotate-180" : ""
+                              }`}
+                              aria-hidden="true"
+                            />
+                          </button>
+                        ) : null}
+                      </div>
+
+                      {latestMobileInterviewExchange ? (
+                        <div className="mt-3 space-y-2">
+                          <div className="rounded-xl border border-white/10 bg-black/24 p-3">
+                            <p className="text-[0.68rem] font-semibold uppercase tracking-[0.13em] text-white/44">
+                              You
+                            </p>
+                            <p className="mt-1 break-words text-sm font-semibold leading-5 text-white/88">
+                              {latestMobileInterviewExchange.question.text}
+                            </p>
+                          </div>
+                          <div className="rounded-xl border border-amber-200/15 bg-amber-200/8 p-3">
+                            <p className="text-[0.68rem] font-semibold uppercase tracking-[0.13em] text-amber-200/78">
+                              {latestMobileInterviewExchange.response
+                                ? getInterviewEntrySpeaker(latestMobileInterviewExchange.response)
+                                : playerInterviewSubjectName}
+                            </p>
+                            {latestMobileInterviewExchange.response ? (
+                              <p className="mt-1 break-words text-sm font-semibold leading-5 text-white/88">
+                                {latestMobileInterviewExchange.response.text}
+                              </p>
+                            ) : (
+                              <div className="mt-1">
+                                <p className="text-sm font-semibold leading-5 text-white/72">
+                                  {pendingSpeaker || playerInterviewSubjectName} is answering...
+                                </p>
+                                <TypingIndicator
+                                  speaker={pendingSpeaker || playerInterviewSubjectName}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="mt-3 rounded-xl border border-white/10 bg-black/20 p-3">
+                          <p className="text-sm font-semibold leading-5 text-white/78">
+                            Ask your first question to start building the record.
+                          </p>
+                        </div>
+                      )}
+
+                      {showMobileExchangeHistory && mobileInterviewExchangeHistory.length > 0 ? (
+                        <div className="mt-3 space-y-2 border-t border-white/10 pt-3">
+                          {mobileInterviewExchangeHistory.map((exchange) => (
+                            <article
+                              key={exchange.id}
+                              className="rounded-xl border border-white/10 bg-black/18 p-3"
+                            >
+                              <p className="break-words text-xs font-semibold leading-5 text-white/82">
+                                <span className="text-white/44">You: </span>
+                                {exchange.question.text}
+                              </p>
+                              {exchange.response ? (
+                                <p className="mt-2 break-words text-xs font-semibold leading-5 text-white/68">
+                                  <span className="text-amber-200/72">
+                                    {getInterviewEntrySpeaker(exchange.response)}:{" "}
+                                  </span>
+                                  {exchange.response.text}
+                                </p>
+                              ) : null}
+                            </article>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div className="relative mt-3">
+                      <textarea
+                        className="textarea textarea-bordered arena-textarea arena-field h-24 min-w-0 w-full pr-12 text-slate-100"
+                        placeholder={`Type your question to ${playerInterviewSubjectName}...`}
+                        value={question}
+                        onChange={(event) => setQuestion(event.target.value)}
+                        onKeyDown={handleChatTextareaKeyDown}
+                        disabled={transcribingQuestion}
+                      />
+                      <button
+                        type="button"
+                        className={`absolute bottom-3 right-3 flex h-9 w-9 items-center justify-center rounded-full border ${
+                          recordingQuestion
+                            ? "border-rose-300/35 bg-rose-400/15 text-rose-100"
+                            : "border-white/10 bg-black/24 text-white/58"
+                        }`}
+                        disabled={working || transcribingQuestion}
+                        onClick={handleQuestionVoiceInput}
+                        aria-label={recordingQuestion ? "Stop recording" : "Record question"}
+                      >
+                        {transcribingQuestion ? (
+                          <span className="loading loading-spinner loading-xs" />
+                        ) : (
+                          <HeroIcons.MicrophoneIcon className="h-5 w-5" aria-hidden="true" />
+                        )}
+                      </button>
+                    </div>
+                    <button
+                      className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-amber-200/35 bg-amber-200 px-4 py-3 text-sm font-semibold text-black transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={working || recordingQuestion || transcribingQuestion || !question.trim()}
+                    >
+                      {pendingAction === "interview" ? "Sending..." : "Send Question"}
+                      <HeroIcons.PaperAirplaneIcon className="h-4 w-4" aria-hidden="true" />
+                    </button>
+
+                    {suggestedQuestions.length > 0 ? (
+                      <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+                        {suggestedQuestions.slice(0, 3).map((item) => (
+                          <button
+                            key={item}
+                            type="button"
+                            className="shrink-0 rounded-full border border-white/10 bg-black/24 px-3 py-2 text-xs font-semibold text-white/74"
+                            onClick={() => setQuestion(item)}
+                          >
+                            + {item}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </form>
+                </section>
+
+                <section id="case-brief" className="arena-surface overflow-hidden">
+                  <div className="relative min-h-[14.5rem] p-4">
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_78%_20%,rgba(251,191,36,0.16),transparent_28%),linear-gradient(135deg,rgba(255,255,255,0.06),transparent_38%),linear-gradient(180deg,rgba(0,0,0,0.08),rgba(0,0,0,0.72))]" />
+                    <div className="absolute right-3 top-4 h-36 w-32 overflow-hidden rounded-2xl border border-white/10 bg-black/28 shadow-[0_18px_45px_rgba(0,0,0,0.35)]">
+                      {caseSession.clientPortrait?.image ? (
+                        <img
+                          src={caseSession.clientPortrait.image}
+                          alt={`${playerInterviewSubjectName} portrait`}
+                          width={640}
+                          height={720}
+                          className="h-full w-full rounded-[inherit] object-cover object-top"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-white/42">
+                          <HeroIcons.UserCircleIcon className="h-10 w-10" aria-hidden="true" />
+                          <span className="text-[0.58rem] font-semibold uppercase tracking-[0.08em]">
+                            Portrait
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="relative z-10">
+                      <p className="text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-amber-200">
+                        Interview your client
+                      </p>
+                      <h2 className="mt-3 max-w-[11.5rem] text-xl font-semibold leading-tight text-white">
+                        {playerInterviewSubjectName} is waiting.
+                      </h2>
+                      <p className="mt-3 max-w-[11.5rem] text-sm leading-6 text-white/64">
+                        Ask the right questions to uncover facts and build your case.
+                      </p>
+                      <button
+                        type="button"
+                        className="mt-5 w-full rounded-2xl border border-white/10 bg-black/36 p-3 text-left backdrop-blur transition hover:border-white/20"
+                        onClick={() => setShowFullMobileBrief((current) => !current)}
+                        aria-expanded={showFullMobileBrief}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-emerald-300/30 bg-emerald-300/10 text-emerald-200">
+                            <HeroIcons.BuildingOffice2Icon className="h-6 w-6" aria-hidden="true" />
+                          </span>
+                          <div className="min-w-0">
+                            <p className="line-clamp-1 text-sm font-semibold text-white">
+                              {playerPartyName}
+                            </p>
+                            <p
+                              className={`mt-1 text-xs leading-5 text-white/58 ${
+                                showFullMobileBrief ? "" : "line-clamp-2"
+                              }`}
+                            >
+                              {heroNarrativeExcerpt}
+                            </p>
+                          </div>
+                          <HeroIcons.ChevronDownIcon
+                            className={`h-4 w-4 shrink-0 text-white/42 transition ${
+                              showFullMobileBrief ? "rotate-180" : ""
+                            }`}
+                            aria-hidden="true"
+                          />
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+                </section>
+
+                <section id="fact-sheet" className="arena-surface">
+                  <div className="p-4">
+                    <div>
+                      <p className="text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-amber-200">
+                        Case file progress
+                      </p>
+                      <p className="mt-2 text-sm font-semibold text-white">
+                        {completedFactSheetItems} / {factSheetCompletionItems.length} sections discovered
+                      </p>
+                    </div>
+                    <div className="mt-4 grid grid-cols-4 gap-1.5">
+                      {factSheetSections.map((section) => renderMobileFactSheetButton(section))}
+                    </div>
+                    <div className="mt-4 arena-progress-track">
+                      <div
+                        className="arena-progress-fill"
+                        style={{ width: `${roundedFactSheetProgressPercent}%` }}
+                      />
+                    </div>
+                    <div className="mt-4 rounded-2xl border border-amber-200/15 bg-amber-200/[0.055] p-3">
+                      <p className="text-sm font-semibold leading-6 text-white">
+                        Cross-check your fact sheet before court.
+                      </p>
+                      <p className="mt-1 text-xs leading-5 text-white/55">
+                        Tap each section to review the points your client has given you. Once the
+                        file looks right, finalize it to take the case to court.
+                      </p>
+                      {isIntakeLocked ? (
+                        <div className="mt-3 rounded-xl border border-white/10 bg-black/18 p-3 text-xs leading-5 text-white/60">
+                          {apiConfig.intakeLockedMessage ||
+                            "Your fact sheet is finalized. Waiting for the other side."}
+                        </div>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-amber-200/35 bg-amber-200 px-4 py-3 text-sm font-semibold text-black transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                        onClick={handleFinalize}
+                        disabled={working || isIntakeLocked}
+                      >
+                        {isIntakeLocked
+                          ? "Waiting for Opponent"
+                          : pendingAction === "finalize"
+                          ? "Finalizing Fact Sheet..."
+                          : "Finalize Fact Sheet"}
+                        <HeroIcons.ArrowRightIcon className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                      {pendingAction === "finalize" ? (
+                        <div className="mt-3">
+                          <LoadingBar label="Finalizing fact sheet" />
+                        </div>
+                      ) : null}
+                      {finalizeFeedback?.text ? (
+                        <p
+                          className={`mt-3 text-xs leading-5 ${
+                            finalizeFeedback.tone === "error"
+                              ? "text-rose-200"
+                              : "text-emerald-200"
+                          }`}
+                        >
+                          {finalizeFeedback.text}
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
+                </section>
+
+                {visibleLawbookRules[0] ? (
+                  <section id="lawbook" className="rounded-2xl border border-emerald-300/20 bg-emerald-300/10 p-4">
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-emerald-300/25 bg-emerald-300/12 text-emerald-200">
+                        <LawbookRuleIcon icon={visibleLawbookRules[0].icon} className="h-6 w-6" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-semibold text-emerald-200">Relevant rule unlocked</p>
+                        <p className="mt-1 line-clamp-2 text-sm font-semibold leading-5 text-emerald-50">
+                          {visibleLawbookRules[0].title}
+                        </p>
+                      </div>
+                      <a
+                        href="#mobile-lawbook-details"
+                        className="shrink-0 rounded-xl border border-white/15 bg-black/18 px-3 py-2 text-xs font-semibold text-white/82"
+                      >
+                        View
+                      </a>
+                    </div>
+                  </section>
+                ) : null}
+
+                {renderLawbookPanel("sm:hidden", "mobile-lawbook-details")}
+
+                <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-black/92 px-3 pb-[calc(env(safe-area-inset-bottom)+0.45rem)] pt-2 shadow-[0_-18px_50px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+                  <div className="mx-auto grid max-w-md grid-cols-4 gap-1">
+                    {[
+                      { href: "#case-brief", label: "Interview", icon: HeroIcons.ChatBubbleLeftRightIcon, active: true },
+                      { href: "#fact-sheet", label: "Case File", icon: HeroIcons.DocumentTextIcon, active: false },
+                      { href: "#mobile-lawbook-details", label: "Rules", icon: HeroIcons.ScaleIcon, active: false },
+                      { href: "#courtroom", label: "Courtroom", icon: HeroIcons.ScaleIcon, active: false },
+                    ].map((item) => {
+                      const Icon = item.icon;
+
+                      return (
+                        <a
+                          key={item.href}
+                          href={item.href}
+                          className={`flex min-h-[3.75rem] flex-col items-center justify-center gap-1 rounded-xl px-1 text-[0.64rem] font-semibold ${
+                            item.active
+                              ? "border border-amber-200/30 bg-amber-200/10 text-amber-200"
+                              : "text-white/58"
+                          }`}
+                        >
+                          <Icon className="h-5 w-5" aria-hidden="true" />
+                          <span className="truncate">{item.label}</span>
+                        </a>
+                      );
+                    })}
+                  </div>
+                </nav>
+              </div>
+
+              <div className="arena-surface hidden sm:block">
                 <div className="p-4 sm:p-6">
                   <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_240px]">
                     <div>
@@ -1317,9 +1966,88 @@ export default function CaseWorkspace({
                     </div>
                   </div>
 
+                  <form className="mt-6 min-w-0 rounded-2xl border border-amber-200/18 bg-amber-200/[0.04] p-4" onSubmit={handleInterviewSubmit}>
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
+                      <div className="relative min-w-0 flex-1">
+                        <textarea
+                          className="textarea textarea-bordered arena-textarea arena-field h-24 min-w-0 w-full pr-12 text-slate-100"
+                          placeholder={`Ask ${playerInterviewSubjectName} about dates, records, witnesses, notice, or any proof gaps you need to pin down.`}
+                          value={question}
+                          onChange={(event) => setQuestion(event.target.value)}
+                          onKeyDown={handleChatTextareaKeyDown}
+                          disabled={transcribingQuestion}
+                        />
+                        <button
+                          type="button"
+                          className={`absolute bottom-3 right-3 flex h-9 w-9 items-center justify-center rounded-full border ${
+                            recordingQuestion
+                              ? "border-rose-300/35 bg-rose-400/15 text-rose-100"
+                              : "border-white/10 bg-black/24 text-white/58"
+                          }`}
+                          disabled={working || transcribingQuestion}
+                          onClick={handleQuestionVoiceInput}
+                          data-tooltip-id="tooltip"
+                          data-tooltip-content={
+                            recordingQuestion
+                              ? "Stop recording and transcribe"
+                              : "Record a question with your microphone"
+                          }
+                          aria-label={
+                            recordingQuestion
+                              ? "Stop recording and transcribe"
+                              : "Record a question with your microphone"
+                          }
+                        >
+                          {transcribingQuestion ? (
+                            <span className="loading loading-spinner loading-xs" />
+                          ) : (
+                            <HeroIcons.MicrophoneIcon className="h-5 w-5" aria-hidden="true" />
+                          )}
+                        </button>
+                      </div>
+                      <div className="flex shrink-0 flex-col gap-2 lg:w-44">
+                        <button
+                          className="arena-btn-light w-full px-5 py-3"
+                          disabled={working || recordingQuestion || transcribingQuestion || !question.trim()}
+                        >
+                          {pendingAction === "interview"
+                            ? "Sending..."
+                            : "Send Question"}
+                        </button>
+                        <button
+                          type="button"
+                          className="arena-btn-danger w-full px-4 py-3"
+                          disabled={working || recordingQuestion || transcribingQuestion}
+                          onClick={handleExitCase}
+                        >
+                          {pendingAction === "exit"
+                            ? apiConfig.exitPendingLabel || "Exiting..."
+                            : apiConfig.exitLabel || "Exit Case"}
+                        </button>
+                        <span className="text-right text-xs uppercase tracking-[0.14em] text-white/38">
+                          {question.trim().length} / 500
+                        </span>
+                      </div>
+                    </div>
+                    {suggestedQuestions.length > 0 ? (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {suggestedQuestions.map((item) => (
+                          <button
+                            key={item}
+                            type="button"
+                            className="arena-btn-dark min-h-0 px-3 py-2 text-sm"
+                            onClick={() => setQuestion(item)}
+                          >
+                            + {item}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </form>
+
                   <div
                     ref={interviewTranscriptRef}
-                    className="arena-scroll mt-5 max-h-[24rem] space-y-4 overflow-y-auto pr-1 sm:max-h-[26rem] sm:pr-2"
+                    className="arena-scroll mt-5 max-h-[20rem] space-y-4 overflow-y-auto pr-1 sm:max-h-[22rem] sm:pr-2"
                   >
                     {visibleInterviewTranscript.map((entry, index) => (
                       <article
@@ -1364,105 +2092,9 @@ export default function CaseWorkspace({
                     )}
                   </div>
 
-                  <form className="mt-6 min-w-0 space-y-4" onSubmit={handleInterviewSubmit}>
-                    <textarea
-                      className="textarea textarea-bordered arena-textarea arena-field h-28 min-w-0 w-full text-slate-100"
-                      placeholder={`Ask ${playerInterviewSubjectName} about dates, records, witnesses, notice, or any proof gaps you need to pin down.`}
-                      value={question}
-                      onChange={(event) => setQuestion(event.target.value)}
-                      onKeyDown={handleChatTextareaKeyDown}
-                      disabled={transcribingQuestion}
-                    />
-                    <div className="flex items-center justify-end text-xs uppercase tracking-[0.14em] text-white/38">
-                      {question.trim().length} / 500
-                    </div>
-                    {suggestedQuestions.length > 0 ? (
-                      <div>
-                        <p className="text-sm text-white/62">Suggested open questions:</p>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {suggestedQuestions.map((item) => (
-                            <button
-                              key={item}
-                              type="button"
-                              className="arena-btn-dark min-h-0 px-3 py-2 text-sm"
-                              onClick={() => setQuestion(item)}
-                            >
-                              + {item}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    ) : null}
-                    <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-                      <button
-                        type="button"
-                        className={`w-full justify-center border sm:w-auto ${
-                          recordingQuestion ? "arena-btn-danger" : "arena-btn-dark"
-                        } inline-flex items-center gap-2 px-4 py-3`}
-                        disabled={working || transcribingQuestion}
-                        onClick={handleQuestionVoiceInput}
-                        data-tooltip-id="tooltip"
-                        data-tooltip-content={
-                          recordingQuestion
-                            ? "Stop recording and transcribe"
-                            : "Record a question with your microphone"
-                        }
-                        aria-label={
-                          recordingQuestion
-                            ? "Stop recording and transcribe"
-                            : "Record a question with your microphone"
-                        }
-                      >
-                        {transcribingQuestion ? (
-                          <span className="loading loading-spinner loading-xs" />
-                        ) : (
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            strokeWidth={1.5}
-                            stroke="currentColor"
-                            className="h-5 w-5"
-                            aria-hidden="true"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              d="M12 18.75a6 6 0 0 0 6-6v-1.5m-12 0v1.5a6 6 0 0 0 6 6Zm0 0v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V6a3 3 0 1 1 6 0v6.75a3 3 0 0 1-3 3Z"
-                            />
-                          </svg>
-                        )}
-                        {recordingQuestion ? (
-                          <VoiceWaveform level={questionAudioLevel} />
-                        ) : null}
-                        {recordingQuestion
-                          ? "Stop Voice Input"
-                          : transcribingQuestion
-                          ? "Transcribing"
-                          : "Voice Input"}
-                      </button>
-                      <button
-                        className="arena-btn-light w-full px-6 py-3 sm:w-auto"
-                        disabled={working || recordingQuestion || transcribingQuestion}
-                      >
-                        {pendingAction === "interview"
-                          ? "Continuing Intake..."
-                          : "Continue Intake"}
-                      </button>
-                      <button
-                        type="button"
-                        className="arena-btn-danger w-full px-4 py-3 sm:ml-auto sm:w-auto"
-                        disabled={working || recordingQuestion || transcribingQuestion}
-                        onClick={handleExitCase}
-                      >
-                        {pendingAction === "exit"
-                          ? apiConfig.exitPendingLabel || "Exiting..."
-                          : apiConfig.exitLabel || "Exit Case"}
-                      </button>
-                    </div>
-                  </form>
                 </div>
               </div>
+              </>
             ) : isExited ? (
               <div className="arena-surface">
                 <div className="p-4 sm:p-6">
@@ -1480,7 +2112,259 @@ export default function CaseWorkspace({
                 </div>
               </div>
             ) : (
-              <div className="arena-surface arena-round-transition">
+              <>
+              <div id="courtroom" className="space-y-4 pb-24 sm:hidden">
+                <section className="arena-surface overflow-hidden border-white/10 bg-white/[0.025]">
+                  <div className="p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-sky-300">
+                          You: <span className="text-white/72">{playerPartyName}</span>
+                        </p>
+                        <p className="mt-2 text-sm font-semibold text-rose-300">
+                          Opponent: <span className="text-white/72">{opponentPartyName}</span>
+                        </p>
+                      </div>
+                      {Number.isFinite(Number(displayedSuccessChance)) ? (
+                        <span
+                          className="shrink-0 rounded-xl border border-emerald-300/25 bg-emerald-300/10 px-3 py-2 text-sm font-semibold text-emerald-100"
+                          data-tooltip-id="success-chance-tooltip"
+                          aria-label={successChanceLabel}
+                        >
+                          Win Chance {Math.round(Number(displayedSuccessChance))}%
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="mt-4 flex items-center gap-3">
+                      <span className="inline-flex items-center gap-2 rounded-xl border border-white/12 bg-white/[0.035] px-3 py-2 text-sm font-semibold text-white">
+                        <HeroIcons.ScaleIcon className="h-5 w-5 text-white/62" aria-hidden="true" />
+                        Round {caseSession.score.roundsCompleted + 1} of {caseSession.maxCourtRounds}
+                      </span>
+                    </div>
+                  </div>
+                </section>
+
+                <section className="arena-surface border-white/10 bg-white/[0.025]">
+                  <div className="space-y-4 p-4">
+                    <div className="flex items-center gap-3">
+                      <CourtPortraitAvatar
+                        src={opponentCourtPortrait}
+                        alt={`${opponentPartyName} portrait`}
+                        className="border border-rose-300/30 bg-rose-400/12 text-rose-100"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="truncate text-lg font-semibold text-white">{opponentPartyName}</p>
+                          <p className="text-2xl font-bold text-rose-300">{Math.round(opponentPressurePct)}%</p>
+                        </div>
+                        <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/12">
+                          <div
+                            className="h-full rounded-full bg-gradient-to-r from-rose-500 to-rose-300"
+                            style={{ width: `${opponentPressurePct}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="border-t border-white/8 pt-4">
+                      <div className="flex items-center gap-3">
+                        <CourtPortraitAvatar
+                          src={playerCourtPortrait}
+                          alt="Your portrait"
+                          className="border border-sky-300/30 bg-sky-400/12 text-sky-100"
+                          fallbackIcon={HeroIcons.ShieldCheckIcon}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="truncate text-lg font-semibold text-white">You</p>
+                            <p className="text-2xl font-bold text-sky-300">{Math.round(playerPressurePct)}%</p>
+                          </div>
+                          <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/12">
+                            <div
+                              className="h-full rounded-full bg-gradient-to-r from-sky-500 to-sky-300"
+                              style={{ width: `${playerPressurePct}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-center text-sm text-white/50">
+                      More persuasive arguments increase your lead.
+                    </p>
+                  </div>
+                </section>
+
+                <section className="rounded-2xl border border-amber-300/30 bg-amber-300/[0.055] p-4">
+                  <div className="flex items-start gap-3">
+                    <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-amber-300/30 bg-amber-300/12 text-amber-100">
+                      <HeroIcons.AcademicCapIcon className="h-6 w-6" aria-hidden="true" />
+                    </span>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-xl font-semibold text-amber-100">Judge Signal</h2>
+                        <InfoDot
+                          content="The bench signal summarizes what the judge appears to value this round."
+                          label="Explain judge signal"
+                        />
+                      </div>
+                      <p className="mt-2 text-sm leading-6 text-white/76">
+                        {caseSession.score.lastBenchSignal ||
+                          "The judge is listening. Facts and law will move the bench."}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-4 border-t border-white/12 pt-4">
+                    <p className="text-sm font-semibold text-amber-200">Focus this round:</p>
+                    <ul className="mt-2 space-y-2 text-sm leading-5 text-white/72">
+                      {(courtroomFocusItems.length
+                        ? courtroomFocusItems
+                        : ["Use your strongest fact", "Challenge weak proof", "Cite the lawbook"]
+                      ).map((item) => (
+                        <li key={item} className="flex gap-2">
+                          <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-300" />
+                          <span className="min-w-0 flex-1">{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </section>
+
+                {lastOpponentCourtEntry ? (
+                  <section className="rounded-2xl border border-rose-400/35 bg-rose-950/18 p-4">
+                    <div className="flex items-start gap-3">
+                      <CourtPortraitAvatar
+                        src={opponentCourtPortrait}
+                        alt={`${opponentPartyName} portrait`}
+                        className="h-11 w-11 border border-rose-300/30 bg-rose-400/12 text-rose-100"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="text-lg font-semibold text-white">{opponentPartyName}</h3>
+                          <span className="rounded-lg border border-rose-300/25 bg-rose-400/10 px-2 py-1 text-xs font-semibold text-rose-200">
+                            Opponent Argument
+                          </span>
+                          <span className="text-xs font-semibold text-white/42">
+                            Round {lastOpponentCourtEntryDisplayRound}
+                          </span>
+                        </div>
+                        <p
+                          className={`mt-3 whitespace-pre-wrap text-sm leading-6 text-white/78 ${
+                            showFullMobileOpponentArgument ? "" : "line-clamp-4"
+                          }`}
+                        >
+                          {lastOpponentCourtEntry.text}
+                        </p>
+                        {mobileOpponentArgumentCanExpand ? (
+                          <button
+                            type="button"
+                            className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-rose-200 transition hover:text-rose-100"
+                            onClick={() =>
+                              setShowFullMobileOpponentArgument((current) => !current)
+                            }
+                            aria-expanded={showFullMobileOpponentArgument}
+                          >
+                            {showFullMobileOpponentArgument
+                              ? "Show less"
+                              : "Show full argument"}
+                            <HeroIcons.ChevronDownIcon
+                              className={`h-4 w-4 transition ${
+                                showFullMobileOpponentArgument ? "rotate-180" : ""
+                              }`}
+                              aria-hidden="true"
+                            />
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  </section>
+                ) : null}
+
+                {showCourtroomWaitingCard ? (
+                  <section className="arena-surface p-4">
+                    <p className="font-semibold text-white">{opponentPartyName} is preparing a response...</p>
+                    <TypingIndicator speaker={opponentPartyName} />
+                    <div className="mt-4">
+                      <LoadingBar label={`${opponentPartyName} is preparing a response`} />
+                    </div>
+                  </section>
+                ) : null}
+
+                {!isVerdict && !showCourtroomWaitingCard ? (
+                  <section className="rounded-2xl border border-sky-300/30 bg-sky-500/[0.055] p-4">
+                    <form className="min-w-0 space-y-4" onSubmit={handleCourtroomSubmit}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-3">
+                            <CourtPortraitAvatar
+                              src={playerCourtPortrait}
+                              alt="Your portrait"
+                              className="h-11 w-11 border border-sky-300/35 bg-sky-400/12 text-sky-100"
+                              fallbackIcon={HeroIcons.ShieldCheckIcon}
+                            />
+                            <div>
+                              <h2 className="text-xl font-semibold text-sky-200">Your Move</h2>
+                              <p className="mt-1 text-sm leading-5 text-white/68">
+                                Defend {playerPartyName}. Use facts, expose weaknesses, and cite the law.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          className="shrink-0 rounded-xl border border-sky-300/25 bg-black/16 px-3 py-2 text-xs font-semibold text-sky-100"
+                          onClick={() => openMobileFactSheetDialog(activeMobileFactSheetKey)}
+                        >
+                          Fact Sheet
+                        </button>
+                      </div>
+                      <div className="relative">
+                        <textarea
+                          className="textarea textarea-bordered arena-textarea arena-field h-32 min-w-0 w-full text-slate-100"
+                          placeholder="Your argument to the judge..."
+                          value={argument}
+                          onChange={(event) => setArgument(event.target.value)}
+                          onKeyDown={handleChatTextareaKeyDown}
+                          disabled={transcribingArgument}
+                        />
+                        <span className="absolute bottom-3 right-3 text-xs font-semibold text-white/45">
+                          {argument.trim().length} / 2500
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        className={`w-full justify-center rounded-xl border px-4 py-3 text-sm font-semibold ${
+                          recordingArgument
+                            ? "border-rose-300/35 bg-rose-400/15 text-rose-100"
+                            : "border-white/12 bg-white/[0.035] text-white/82"
+                        }`}
+                        disabled={working || transcribingArgument}
+                        onClick={handleArgumentVoiceInput}
+                      >
+                        {recordingArgument
+                          ? "Stop Voice Argument"
+                          : transcribingArgument
+                          ? "Transcribing"
+                          : "Voice Argument"}
+                      </button>
+                      <button
+                        className="w-full rounded-xl border border-white/80 bg-white px-5 py-3 text-sm font-bold text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={working || recordingArgument || transcribingArgument || !argument.trim()}
+                      >
+                        {pendingAction === "courtroom" ? "Presenting..." : "Present Argument"}
+                        <span className="mt-1 block text-xs font-medium text-blue-800">
+                          Submit your argument to the judge
+                        </span>
+                      </button>
+                    </form>
+                  </section>
+                ) : null}
+
+                <section className="arena-surface-soft flex items-start gap-3 p-4 text-sm text-white/62">
+                  <HeroIcons.LightBulbIcon className="h-5 w-5 shrink-0 text-amber-300" aria-hidden="true" />
+                  <p><span className="font-semibold text-amber-200">Tip:</span> Strong arguments are specific, calm, and backed by facts.</p>
+                </section>
+              </div>
+
+              <div className="arena-surface arena-round-transition hidden sm:block">
                 <div className="p-4 sm:p-6">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                     <div>
@@ -1783,68 +2667,162 @@ export default function CaseWorkspace({
                   )}
                 </div>
               </div>
+              </>
             )}
 
-            {(isInterview || isCourtroom) && renderLawbookPanel("hidden xl:block")}
+            {(isInterview || isCourtroom) &&
+              renderLawbookPanel("hidden xl:block", "desktop-lawbook-details")}
 
             {isVerdict && (
-              <div className={`arena-surface border ${verdictStyle.card}`}>
-                <div className="p-4 sm:p-6">
+              <div
+                className={`arena-surface overflow-hidden border ${verdictStyle.card}`}
+              >
+                <div
+                  className={`relative bg-gradient-to-b ${verdictGlowClass} to-transparent p-4 sm:p-7`}
+                >
+                  <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-white/18 to-transparent" />
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="flex flex-wrap items-center gap-3">
-                      <p className={`arena-kicker ${verdictStyle.eyebrow}`}>Final Ruling</p>
-                      <span className={`badge border arena-status ${verdictStyle.card}`}>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-3">
+                        <span className="h-px w-10 bg-white/12" />
+                        <p className={`arena-kicker ${verdictStyle.eyebrow}`}>
+                          Final Ruling
+                        </p>
+                        <span className="h-px w-10 bg-white/12" />
+                      </div>
+                      <div className={`mt-4 inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold ${verdictPillClass}`}>
+                        <HeroIcons.ScaleIcon className="h-5 w-5" aria-hidden="true" />
                         {winnerSignal[caseSession.verdict.winner] || winnerSignal.draw}
-                      </span>
+                      </div>
                     </div>
-                    <Link href="/dashboard" className="arena-btn-light inline-flex px-5 py-3 text-sm">
+                    <Link
+                      href="/dashboard"
+                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-200/35 bg-amber-200 px-5 py-3 text-sm font-bold text-black transition hover:bg-amber-100"
+                    >
                       Back to Cases
+                      <HeroIcons.ArrowRightIcon className="h-4 w-4" aria-hidden="true" />
                     </Link>
                   </div>
-                  <h2 className="arena-headline mt-2 text-3xl uppercase">
-                    {winnerLabel[caseSession.verdict.winner]}
-                  </h2>
-                  <p className="mt-3 max-w-3xl leading-7 text-white/66">
-                    {caseSession.verdict.summary}
-                  </p>
+
+                  <div className="mt-5 max-w-4xl text-center sm:mx-auto">
+                    <h2 className={`font-serif text-4xl font-semibold leading-tight sm:text-5xl ${verdictAccentClass}`}>
+                      {winnerLabel[caseSession.verdict.winner]}
+                    </h2>
+                    <p className="mx-auto mt-4 max-w-3xl text-base leading-7 text-white/68 sm:text-lg sm:leading-8">
+                      {caseSession.verdict.summary}
+                    </p>
+                  </div>
+
+                  <div className={`mt-6 flex items-center gap-3 rounded-2xl border px-4 py-3 ${verdictPillClass}`}>
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-current/25 bg-black/20">
+                      <HeroIcons.ExclamationTriangleIcon className="h-5 w-5" aria-hidden="true" />
+                    </span>
+                    <div className="min-w-0 sm:flex sm:items-center sm:gap-4">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] opacity-75">
+                        Key issue
+                      </p>
+                      <p className="mt-1 text-sm font-semibold leading-6 text-white/82 sm:mt-0">
+                        {verdictKeyIssue}
+                      </p>
+                    </div>
+                  </div>
+
                   <div className="mt-5 grid gap-4 md:grid-cols-2">
-                    <div className="arena-surface-soft p-4">
-                      <div className="flex items-center gap-2">
-                        <p className="font-semibold text-white">What helped your side</p>
-                        <InfoDot
-                          content={helpText.helpedYourSide}
-                          label="Explain what helped your side"
-                        />
+                    <div className="rounded-2xl border border-emerald-300/25 bg-emerald-300/[0.055] p-4">
+                      <div className="flex items-center gap-3">
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-emerald-300/30 bg-emerald-300/12 text-emerald-100">
+                          <HeroIcons.ShieldCheckIcon className="h-6 w-6" aria-hidden="true" />
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <p className="font-serif text-xl font-semibold text-white">
+                            What helped your side
+                          </p>
+                          <InfoDot
+                            content={helpText.helpedYourSide}
+                            label="Explain what helped your side"
+                          />
+                        </div>
                       </div>
-                      <ul className="mt-3 space-y-2 text-sm text-white/66">
-                        {caseSession.verdict.highlights.map((item) => (
-                          <li key={item}>- {item}</li>
+                      <ul className="mt-4 divide-y divide-white/8">
+                        {(caseSession.verdict.highlights || []).map((item) => (
+                          <li key={item} className="flex gap-3 py-3 text-sm leading-6 text-white/70">
+                            <HeroIcons.CheckCircleIcon
+                              className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300"
+                              aria-hidden="true"
+                            />
+                            <span>{item}</span>
+                          </li>
                         ))}
                       </ul>
                     </div>
-                    <div className="arena-surface-soft p-4">
-                      <div className="flex items-center gap-2">
-                        <p className="font-semibold text-white">What weakened your side</p>
-                        <InfoDot
-                          content={helpText.weakenedYourSide}
-                          label="Explain what weakened your side"
-                        />
+
+                    <div className="rounded-2xl border border-rose-300/25 bg-rose-300/[0.055] p-4">
+                      <div className="flex items-center gap-3">
+                        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-rose-300/30 bg-rose-300/12 text-rose-100">
+                          <HeroIcons.BoltSlashIcon className="h-6 w-6" aria-hidden="true" />
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <p className="font-serif text-xl font-semibold text-white">
+                            What weakened your side
+                          </p>
+                          <InfoDot
+                            content={helpText.weakenedYourSide}
+                            label="Explain what weakened your side"
+                          />
+                        </div>
                       </div>
-                      <ul className="mt-3 space-y-2 text-sm text-white/66">
-                        {caseSession.verdict.concerns.map((item) => (
-                          <li key={item}>- {item}</li>
+                      <ul className="mt-4 divide-y divide-white/8">
+                        {(caseSession.verdict.concerns || []).map((item) => (
+                          <li key={item} className="flex gap-3 py-3 text-sm leading-6 text-white/70">
+                            <HeroIcons.XCircleIcon
+                              className="mt-0.5 h-5 w-5 shrink-0 text-rose-300"
+                              aria-hidden="true"
+                            />
+                            <span>{item}</span>
+                          </li>
                         ))}
                       </ul>
                     </div>
                   </div>
+
+                  <details className="group mt-4 rounded-2xl border border-white/10 bg-black/18">
+                    <summary className="flex cursor-pointer items-center justify-between gap-3 p-4 text-sm font-semibold text-white/78">
+                      <span className="inline-flex items-center gap-2">
+                        <HeroIcons.DocumentTextIcon className="h-5 w-5 text-amber-200" aria-hidden="true" />
+                        See judge reasoning
+                      </span>
+                      <CollapseChevron />
+                    </summary>
+                    <div className="border-t border-white/8 p-4 text-sm leading-7 text-white/62">
+                      <p>{caseSession.score.lastBenchSignal || caseSession.verdict.summary}</p>
+                      <div className="mt-3 grid grid-cols-2 gap-2">
+                        <div className="flex min-h-[5.25rem] flex-col justify-between rounded-xl border border-sky-300/15 bg-sky-300/[0.045] p-3">
+                          <p className="whitespace-nowrap text-[0.64rem] font-semibold uppercase tracking-[0.1em] text-sky-200/70">
+                            Your score
+                          </p>
+                          <p className="text-2xl font-bold leading-none text-sky-100">
+                            {caseSession.verdict.finalScore?.player ?? caseSession.score.player}
+                          </p>
+                        </div>
+                        <div className="flex min-h-[5.25rem] flex-col justify-between rounded-xl border border-rose-300/15 bg-rose-300/[0.045] p-3">
+                          <p className="whitespace-nowrap text-[0.64rem] font-semibold uppercase tracking-[0.1em] text-rose-200/70">
+                            Opponent score
+                          </p>
+                          <p className="text-2xl font-bold leading-none text-rose-100">
+                            {caseSession.verdict.finalScore?.opponent ?? caseSession.score.opponent}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </details>
                 </div>
               </div>
             )}
           </section>
 
-          <aside className="min-w-0 space-y-6">
+          <aside className="hidden min-w-0 space-y-6 sm:block">
             {workspaceNotice}
-            <div className="arena-surface">
+            <div id="fact-sheet-details" className="arena-surface">
               <div className="p-4 sm:p-6">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                   <div>
@@ -1981,7 +2959,7 @@ export default function CaseWorkspace({
                 </div>
               </>
             ) : isCourtroom ? null : (
-              <div className="arena-surface">
+              <div id="lawbook-details" className="arena-surface">
                 <details className="group" open>
                   <summary className="list-none cursor-pointer p-6">
                     <div className="flex items-end justify-between gap-3">
@@ -2011,9 +2989,286 @@ export default function CaseWorkspace({
               </div>
             )}
           </aside>
-          {(isInterview || isCourtroom) && renderLawbookPanel("xl:hidden")}
+          {(isInterview || isCourtroom) &&
+            renderLawbookPanel("hidden sm:block xl:hidden", "tablet-lawbook-details")}
         </div>
       </section>
+      <div
+        className={`modal modal-bottom sm:hidden ${
+          showMobileBriefDialog ? "modal-open" : ""
+        }`}
+        role="dialog"
+        aria-modal="true"
+        aria-hidden={!showMobileBriefDialog}
+        aria-label="Case brief"
+      >
+        <div className="modal-box max-h-[86vh] overflow-hidden rounded-t-2xl border border-white/[0.07] bg-[#070908] p-0 text-white shadow-2xl">
+          <div className="border-b border-white/[0.06] p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-amber-200">
+                  Case brief
+                </p>
+                <h2 className="mt-1 text-xl font-semibold leading-tight text-white">
+                  {caseSession.title}
+                </h2>
+              </div>
+              <button
+                type="button"
+                className="btn btn-circle btn-ghost btn-sm shrink-0 border border-white/[0.06] text-white/65 hover:border-white/12 hover:bg-white/[0.04] hover:text-white"
+                onClick={() => setShowMobileBriefDialog(false)}
+                aria-label="Close case brief"
+              >
+                <HeroIcons.XMarkIcon className="h-5 w-5" aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+          <div className="max-h-[64vh] space-y-4 overflow-y-auto p-4">
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <div className="rounded-xl border border-sky-300/20 bg-sky-300/[0.06] p-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-sky-200">
+                  You
+                </p>
+                <p className="mt-1 font-semibold text-white">{playerPartyName}</p>
+              </div>
+              <div className="rounded-xl border border-rose-300/20 bg-rose-300/[0.06] p-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-rose-200">
+                  Opponent
+                </p>
+                <p className="mt-1 font-semibold text-white">{opponentPartyName}</p>
+              </div>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-white/[0.025] p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/45">
+                Matter
+              </p>
+              <p className="mt-2 text-sm leading-6 text-white/74">
+                {caseSession.premise?.overview || heroNarrativeExcerpt}
+              </p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-white/[0.025] p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/45">
+                Requested relief
+              </p>
+              <p className="mt-2 text-sm leading-6 text-white/74">
+                {caseSession.premise?.desiredRelief || "No requested relief is recorded yet."}
+              </p>
+            </div>
+            {caseSession.premise?.openingStatement ? (
+              <div className="rounded-xl border border-white/10 bg-white/[0.025] p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/45">
+                  Opening position
+                </p>
+                <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-white/74">
+                  {caseSession.premise.openingStatement}
+                </p>
+              </div>
+            ) : null}
+          </div>
+        </div>
+        <div className="modal-backdrop bg-black/55 backdrop-blur-[2px]">
+          <button
+            type="button"
+            aria-label="Close case brief"
+            onClick={() => setShowMobileBriefDialog(false)}
+          >
+            close
+          </button>
+        </div>
+      </div>
+      <div
+        className={`modal modal-bottom sm:hidden ${
+          showMobileLawbookDialog ? "modal-open" : ""
+        }`}
+        role="dialog"
+        aria-modal="true"
+        aria-hidden={!showMobileLawbookDialog}
+        aria-label="Lawbook reference"
+      >
+        <div className="modal-box max-h-[86vh] overflow-hidden rounded-t-2xl border border-white/[0.07] bg-[#070908] p-0 text-white shadow-2xl">
+          <div className="border-b border-white/[0.06] p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-amber-200">
+                  Lawbook
+                </p>
+                <h2 className="mt-1 text-xl font-semibold leading-tight text-white">
+                  Rules Reference
+                </h2>
+              </div>
+              <button
+                type="button"
+                className="btn btn-circle btn-ghost btn-sm shrink-0 border border-white/[0.06] text-white/65 hover:border-white/12 hover:bg-white/[0.04] hover:text-white"
+                onClick={() => setShowMobileLawbookDialog(false)}
+                aria-label="Close lawbook reference"
+              >
+                <HeroIcons.XMarkIcon className="h-5 w-5" aria-hidden="true" />
+              </button>
+            </div>
+            {renderLawbookFilters()}
+          </div>
+          <div className="max-h-[58vh] overflow-y-auto p-4">
+            <p className="mb-4 text-sm text-white/48">
+              Showing {selectedLawbookCategoryTitle.toLowerCase()} rules plus universal
+              courtroom principles.
+            </p>
+            <div className="space-y-3">
+              {visibleLawbookRules.length > 0 ? (
+                visibleLawbookRules.map((rule) => renderLawbookRuleCard(rule, true))
+              ) : (
+                <div className="rounded-xl border border-dashed border-white/10 bg-black/20 p-4 text-sm text-white/45">
+                  No matching rules.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="modal-backdrop bg-black/55 backdrop-blur-[2px]">
+          <button
+            type="button"
+            aria-label="Close lawbook reference"
+            onClick={() => setShowMobileLawbookDialog(false)}
+          >
+            close
+          </button>
+        </div>
+      </div>
+      <div
+        className={`modal modal-bottom sm:hidden ${
+          showMobileFactSheetDialog ? "modal-open" : ""
+        }`}
+        role="dialog"
+        aria-modal="true"
+        aria-hidden={!showMobileFactSheetDialog}
+        aria-label={`${activeMobileFactSheetSection?.title || "Case file"} reference`}
+      >
+        <div className="modal-box max-h-[86vh] overflow-hidden rounded-t-2xl border border-white/[0.07] bg-[#070908] p-0 text-white shadow-2xl">
+          {activeMobileFactSheetSection ? (
+            <>
+              <div className="border-b border-white/[0.06] p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-amber-200">
+                    Case file reference
+                  </p>
+                  <h2 className="mt-1 text-xl font-semibold leading-tight text-white">
+                    {activeMobileFactSheetSection.title}
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-circle btn-ghost btn-sm shrink-0 border border-white/[0.06] text-white/65 hover:border-white/12 hover:bg-white/[0.04] hover:text-white"
+                  onClick={() => setShowMobileFactSheetDialog(false)}
+                  aria-label="Close case file reference"
+                >
+                  <HeroIcons.XMarkIcon className="h-5 w-5" aria-hidden="true" />
+                </button>
+              </div>
+              <div className="mt-4 grid grid-cols-4 gap-1.5">
+                {factSheetSections.map((section) => renderMobileFactSheetButton(section))}
+              </div>
+            </div>
+
+            <div className="max-h-[48vh] overflow-y-auto p-4">
+              <p className="text-sm italic leading-6 text-white/52">
+                {activeMobileFactSheetSection.description}
+              </p>
+              {activeMobileFactSheetItems.length > 0 ? (
+                <div className="mt-4 space-y-3">
+                  {activeMobileFactSheetItems.map((item, itemIndex) => {
+                    const bulletTone = getFactSheetItemTone(
+                      activeMobileFactSheetSection.key,
+                      item
+                    );
+
+                    return (
+                      <div
+                        key={`${activeMobileFactSheetSection.key}-dialog-${itemIndex}`}
+                        className="flex gap-3 rounded-xl border border-white/10 bg-white/[0.025] p-3"
+                      >
+                        <span
+                          className={`mt-2 h-1.5 w-1.5 shrink-0 rounded-full ${
+                            factSheetBulletToneClass[bulletTone] ||
+                            factSheetBulletToneClass.secondary
+                          }`}
+                        />
+                        <p className="min-w-0 flex-1 text-sm font-semibold leading-6 text-white/80">
+                          {activeMobileFactSheetSection.key === "missingEvidence"
+                            ? formatMissingEvidenceLabel(item)
+                            : item}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="mt-4 rounded-xl border border-dashed border-white/10 bg-black/20 p-4 text-sm text-white/45">
+                  {activeMobileFactSheetSection.empty}
+                </div>
+              )}
+              {isInterview ? (
+                <div className="mt-4 rounded-2xl border border-amber-200/12 bg-amber-200/[0.045] p-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-200">
+                    Before court
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-white/62">
+                    Check each section above. When your theory, proof, risks, and requested relief
+                    match the intake record, finalize the fact sheet.
+                  </p>
+                  <button
+                    type="button"
+                    className="btn mt-3 min-h-0 w-full border-amber-200/35 bg-amber-200 px-4 py-3 text-sm font-semibold text-black hover:border-amber-100 hover:bg-amber-100 disabled:opacity-60"
+                    onClick={handleFinalize}
+                    disabled={working || isIntakeLocked}
+                  >
+                    {isIntakeLocked
+                      ? "Waiting for Opponent"
+                      : pendingAction === "finalize"
+                      ? "Finalizing Fact Sheet..."
+                      : "Finalize Fact Sheet"}
+                  </button>
+                  {pendingAction === "finalize" ? (
+                    <div className="mt-3">
+                      <LoadingBar label="Finalizing fact sheet" />
+                    </div>
+                  ) : null}
+                  {finalizeFeedback?.text ? (
+                    <p
+                      className={`mt-3 text-xs leading-5 ${
+                        finalizeFeedback.tone === "error"
+                          ? "text-rose-200"
+                          : "text-emerald-200"
+                      }`}
+                    >
+                      {finalizeFeedback.text}
+                    </p>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="mt-4 rounded-2xl border border-sky-200/12 bg-sky-200/[0.045] p-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-200">
+                    Court reference
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-white/62">
+                    Use these points to ground your next argument in facts, proof, risks, and
+                    requested relief.
+                  </p>
+                </div>
+              )}
+            </div>
+            </>
+          ) : null}
+        </div>
+        <div className="modal-backdrop bg-black/55 backdrop-blur-[2px]">
+          <button
+            type="button"
+            aria-label="Close case file reference"
+            onClick={() => setShowMobileFactSheetDialog(false)}
+          >
+            close
+          </button>
+        </div>
+      </div>
       {Number.isFinite(Number(displayedSuccessChance)) ? (
         <Tooltip
           id="success-chance-tooltip"

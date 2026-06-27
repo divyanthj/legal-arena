@@ -896,6 +896,7 @@ export const createCaseSession = async ({
     complexity: template.complexity,
     playerSide,
     status: "interview",
+    playerImage: user?.image || "",
     freeGameplayCampaignAccess: freeGameplayCampaignAccess || undefined,
     lawbookVersion: LAWBOOK_VERSION,
     maxCourtRounds: Math.max(3, template.complexity + 1),
@@ -1049,6 +1050,14 @@ export const getCaseSessionForUser = async ({ userId, caseId }) => {
     await persistCaseSessionSlug(caseSession);
   }
 
+  if (caseSession && !String(caseSession.playerImage || "").trim()) {
+    const user = await User.findById(userId).select("image");
+    if (user?.image) {
+      caseSession.playerImage = user.image;
+      await caseSession.save();
+    }
+  }
+
   return caseSession
     ? buildCasePayload(
         caseSession,
@@ -1069,6 +1078,15 @@ export const getCaseSessionDocumentForUser = async ({ userId, caseId }) => {
   }
 
   const slugChanged = ensureCaseSessionSlug(caseSession);
+  let playerImageChanged = false;
+
+  if (!String(caseSession.playerImage || "").trim()) {
+    const user = await User.findById(userId).select("image");
+    if (user?.image) {
+      caseSession.playerImage = user.image;
+      playerImageChanged = true;
+    }
+  }
 
   if (!caseSession.caseTemplateId) {
     const fallbackTemplate = await CaseTemplate.findOne({
@@ -1099,6 +1117,10 @@ export const getCaseSessionDocumentForUser = async ({ userId, caseId }) => {
 
   if (slugChanged) {
     await persistCaseSessionSlug(caseSession);
+  }
+
+  if (playerImageChanged) {
+    await caseSession.save();
   }
 
   return caseSession;
