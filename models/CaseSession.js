@@ -291,6 +291,53 @@ const caseSessionSchema = mongoose.Schema(
       default: "",
       trim: true,
     },
+    clientPortrait: {
+      image: {
+        type: String,
+        default: "",
+        trim: true,
+      },
+      generatedAt: {
+        type: Date,
+        default: null,
+      },
+      prompt: {
+        type: String,
+        default: "",
+        trim: true,
+        private: true,
+      },
+      promptVersion: {
+        type: Number,
+        default: 0,
+      },
+    },
+    opponentPortrait: {
+      image: {
+        type: String,
+        default: "",
+        trim: true,
+      },
+      generatedAt: {
+        type: Date,
+        default: null,
+      },
+      prompt: {
+        type: String,
+        default: "",
+        trim: true,
+        private: true,
+      },
+      promptVersion: {
+        type: Number,
+        default: 0,
+      },
+    },
+    playerImage: {
+      type: String,
+      default: "",
+      trim: true,
+    },
     judgeProfile: {
       type: mongoose.Schema.Types.Mixed,
       default: null,
