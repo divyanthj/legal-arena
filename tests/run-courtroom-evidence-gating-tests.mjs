@@ -12,11 +12,7 @@ const engineSource = readFileSync(
 
 const buildContextSource =
   courtroomSource.match(
-    /export const buildCourtroomAgentContext = \(\{[\s\S]*?\n\};\nexport const pickFactMentions/
-  )?.[0] || "";
-const fallbackSource =
-  courtroomSource.match(
-    /export const buildCourtroomFallback = \(\{[\s\S]*?\n\};\n\nexport const buildVerdictFallback/
+    /export const buildCourtroomAgentContext = \(\{[\s\S]*?\n\};\nexport const normalizeCourtResult/
   )?.[0] || "";
 const normalizeCourtResultSource =
   courtroomSource.match(
@@ -24,7 +20,6 @@ const normalizeCourtResultSource =
   )?.[0] || "";
 
 assert.ok(buildContextSource, "buildCourtroomAgentContext source should be found");
-assert.ok(fallbackSource, "buildCourtroomFallback source should be found");
 assert.ok(normalizeCourtResultSource, "normalizeCourtResult source should be found");
 
 assert.doesNotMatch(buildContextSource, /canonicalWorld/);
@@ -46,18 +41,24 @@ assert.match(courtroomSource, /holderSide === "third-party"[\s\S]*return false/)
 assert.match(courtroomSource, /preparedEvidenceIds: proofEvidenceIds/);
 assert.match(courtroomSource, /evidenceLeads/);
 
-assert.doesNotMatch(fallbackSource, /safeTemplate\.canonicalFacts/);
-assert.match(fallbackSource, /buildOpponentCourtroomPortfolio/);
-assert.match(fallbackSource, /opponentPortfolio\.knownClaims/);
-assert.match(fallbackSource, /opponentPortfolio\.corroboratedFacts/);
+assert.doesNotMatch(courtroomSource, /buildCourtroomFallback/);
+assert.doesNotMatch(courtroomSource, /buildVerdictFallback/);
+assert.doesNotMatch(courtroomSource, /pickFactMentions/);
+assert.doesNotMatch(courtroomSource, /pickClaimMentions/);
+assert.doesNotMatch(courtroomSource, /fallback\.opponentResponse/);
 
 assert.match(normalizeCourtResultSource, /sanitizeCourtFacts/);
 assert.match(normalizeCourtResultSource, /validFactText\.has/);
 assert.match(normalizeCourtResultSource, /sanitizeCourtClaims/);
 assert.match(normalizeCourtResultSource, /sanitizeCourtRules/);
 assert.match(normalizeCourtResultSource, /caseSession\.factSheet\.discoveredClaimIds/);
+assert.match(normalizeCourtResultSource, /Courtroom response generation returned no opponent response/);
+assert.match(normalizeCourtResultSource, /Courtroom response generation returned no score deltas/);
+assert.match(normalizeCourtResultSource, /Courtroom response generation returned no final verdict/);
 
 assert.match(engineSource, /The courtroom is fully record-bound/);
+assert.match(engineSource, /usageLabel:\s*"courtroom\.opening"/);
+assert.match(engineSource, /generatePlaintiffCourtOpeningStatement/);
 assert.match(engineSource, /opposingCounsel\.preparedCaseFile/);
 assert.match(engineSource, /Do not infer, cite, or credit any fact/);
 assert.match(engineSource, /Do not cite or imply hidden canonical story facts/);

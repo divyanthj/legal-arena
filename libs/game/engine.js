@@ -26,7 +26,6 @@ import { normalizeInterviewResult } from "./engine/interview";
 import {
   buildCounselContext,
   buildCourtroomAgentContext,
-  buildCourtroomFallback,
   normalizeCounselAnalysis,
   normalizeCourtResult,
 } from "./engine/courtroom";
@@ -563,22 +562,65 @@ export const rebuildFactSheetFromTranscript = ({ caseSession, template }) => {
   return blankConversationFactSheet();
 };
 
+export const generatePlaintiffCourtOpeningStatement = async ({
+  caseSession,
+  userId,
+  onUsage,
+}) => {
+  const template = ensureTemplate(getTemplate(caseSession));
+  const rules = getLawbookRules();
+  const playerSide = getPlayerSide(caseSession);
+  const plaintiffSide = getOpposingSide(playerSide);
+  const aiResult = await requestStructuredCompletion({
+    userId,
+    model: GAMEPLAY_MODEL,
+    temperature: 0.65,
+    maxTokens: 700,
+    retryAttempts: 1,
+    usageLabel: "courtroom.opening",
+    onUsage,
+    systemPrompt:
+      "You are simulating opposing counsel's opening statement in a legal strategy game. The player represents the defense/opposing side, so you speak for the plaintiff/client side. Use only the supplied courtroom architecture, lawbook rules, and side file. Write courtroom advocacy, not a template, product explanation, coaching note, dossier summary, or deterministic script. Do not mention the fact sheet, prepared case file, game, score, pressure, schemas, hidden data, or internal records. Output JSON only.",
+    userPrompt: JSON.stringify({
+      task: "Generate the plaintiff-side opening statement that starts court before the defense/player responds.",
+      representedOpeningParty: getPartyName(template, plaintiffSide),
+      defenseParty: getPartyName(template, playerSide),
+      courtroomArchitecture: buildCourtroomAgentContext({
+        caseSession,
+        template,
+        rules,
+        counselAnalysis: {},
+        shouldReturnVerdict: false,
+      }),
+      styleRules: [
+        "Write as plaintiff-side counsel speaking aloud to the judge.",
+        "Keep it concise: 2 to 5 short paragraphs.",
+        "Sound human and adversarial, not like a generated checklist.",
+        "Argue from the plaintiff-side record and requested relief.",
+        "Do not use repeated formula lines like 'The evidence will show' for every point.",
+        "Do not compliment, coach, or address the player.",
+      ],
+      outputSchema: {
+        openingStatement: "string",
+      },
+    }),
+  });
+  const openingStatement = coerceString(aiResult?.openingStatement);
+
+  if (!openingStatement) {
+    throw new Error("Courtroom opening generation returned no statement.");
+  }
+
+  return openingStatement;
+};
+
 export const runCourtroomRound = async ({ caseSession, argument, userId }) => {
   const usageCollector = createUsageCollector("courtroom");
   const template = ensureTemplate(getTemplate(caseSession));
   const rules = getLawbookRules();
-  const playerSide = getPlayerSide(caseSession);
-  const opponentSide = getOpposingSide(playerSide);
   const shouldReturnVerdict =
     caseSession.score.roundsCompleted + 1 >= caseSession.maxCourtRounds;
   const difficultyProfile = getCourtroomDifficultyProfile(caseSession.complexity);
-
-  const fallback = buildCourtroomFallback({
-    caseSession,
-    argument,
-    rules,
-    template,
-  });
 
   const counselAnalysisResult = await requestStructuredCompletion({
     userId,
@@ -684,13 +726,11 @@ export const runCourtroomRound = async ({ caseSession, argument, userId }) => {
 
   return {
     ...normalizeCourtResult({
-    aiResult,
-    fallback,
-    counselAnalysis,
-    shouldReturnVerdict,
-    caseSession,
-    rules,
-    template,
+      aiResult,
+      counselAnalysis,
+      shouldReturnVerdict,
+      caseSession,
+      rules,
     }),
     usageEntries: usageCollector.entries,
   };

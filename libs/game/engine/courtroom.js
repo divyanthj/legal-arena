@@ -2,18 +2,9 @@ import "server-only";
 
 import {
   uniqueList,
-  clamp,
-  lowerFirst,
-  LOW_SIGNAL_TOKENS,
   DEFAULT_PLAYER_SIDE,
-  OPPOSING_SIDE,
-  tokenize,
-  countSharedTokens,
   hashString,
   humanizeClaimText,
-  stripClaimScaffolding,
-  isMetaResponse,
-  toSpokenSentence,
   getTemplate,
   ensureTemplate,
   getClaimId,
@@ -40,18 +31,12 @@ import {
   coerceString,
   coerceStringList,
   sanitizeIdList,
-  hasOpponentPraise,
-  normalizeOpponentResponse,
 } from "./shared.js";
 import {
   getCourtroomDifficultyProfile,
   limitOpponentResponseForDifficulty,
   normalizeCourtroomDeltasForDifficulty,
-  normalizePlayerPerspectiveVerdictLists,
-  normalizeVerdictForDifficulty,
-  rewriteVerdictForPlayerAddress,
 } from "../courtroomDifficulty.js";
-import { pickRuleMentions } from "../lawbookCitation.js";
 
 export { pickRuleMentions } from "../lawbookCitation.js";
 
@@ -65,38 +50,6 @@ const DISCRETE_DAMAGE_PATTERN =
   /\b(broken|replacement|replace|fixture|blind|window latch|lock|door|cracked|hole|missing|damaged)\b/i;
 const SUBJECTIVE_CHARGE_PATTERN =
   /\b(cleaning|carpet|stain|wall marks?|paint|scuff|turnover|ordinary wear|routine)\b/i;
-
-const hasMeaningfulAdvocacyMove = ({
-  citedFacts = [],
-  citedRules = [],
-  citedClaims = [],
-  addressesRisk = false,
-  addressesDispute = false,
-  argument = "",
-}) =>
-  citedFacts.length > 0 ||
-  citedRules.length > 0 ||
-  citedClaims.length > 0 ||
-  addressesRisk ||
-  addressesDispute ||
-  String(argument || "").trim().length >= 180;
-
-const cleanCourtroomSpeechFragment = (value = "") =>
-  stripClaimScaffolding(humanizeClaimText(value))
-    .replace(/^the\s+evidence\s+will\s+show\s+that\s+/i, "")
-    .replace(/^(the\s+)?(plaintiff|tenant|claimant|client|defendant|landlord)\s+will\s+(argue|claim|contend)\s+that\s+/i, "")
-    .replace(/^[a-z][a-z\s.'-]*'s\s+(view|position)\s+is\s+that\s+/i, "")
-    .replace(/\bprepared\s+(case\s+)?file\b/gi, "evidence")
-    .replace(/\bplayer'?s\s+presentation\b/gi, "opposing counsel's argument")
-    .replace(/\s{2,}/g, " ")
-    .trim();
-
-const lowerCourtroomFragment = (value = "") => {
-  const text = cleanCourtroomSpeechFragment(value);
-  if (!text) return "";
-  if (/^[A-Z]\b/.test(text)) return text;
-  return `${text.charAt(0).toLowerCase()}${text.slice(1)}`;
-};
 
 const proofTextCorpus = (factSheet = {}) =>
   [
@@ -463,287 +416,12 @@ export const buildCourtroomAgentContext = ({
     },
   };
 };
-export const pickFactMentions = (argument, factSheet) => {
-  const lowerArgument = argument.toLowerCase();
-
-  return uniqueList(
-    [
-      ...(factSheet.supportingFacts || []),
-      ...(factSheet.timeline || []),
-      ...(factSheet.corroboratedFacts || []),
-      ...(factSheet.knownFacts || []),
-    ].filter((fact) => {
-      const tokens = fact
-        .toLowerCase()
-        .replace(/[^a-z0-9\s]/g, " ")
-        .split(/\s+/)
-        .filter((token) => token.length > 4);
-
-      return tokens.some((token) => lowerArgument.includes(token));
-    })
-  ).slice(0, 4);
-};
-
-export const pickClaimMentions = (argument, factSheet) => {
-  const lowerArgument = argument.toLowerCase();
-
-  return uniqueList(
-    (factSheet.knownClaims || []).filter((claim) => {
-      const tokens = claim
-        .toLowerCase()
-        .replace(/[^a-z0-9\s]/g, " ")
-        .split(/\s+/)
-        .filter((token) => token.length > 4);
-
-      return tokens.some((token) => lowerArgument.includes(token));
-    })
-  ).slice(0, 3);
-};
-
-export const buildCourtroomFallback = ({ caseSession, argument, rules, template }) => {
-  const safeTemplate = ensureTemplate(template);
-  const playerSide = getPlayerSide(caseSession);
-  const opponentSide = getOpposingSide(playerSide);
-  const opponentPortfolio = buildOpponentCourtroomPortfolio({
-    template: safeTemplate,
-    opponentSide,
-    complexity: caseSession.complexity,
-  });
-  const citedFacts = pickFactMentions(argument, caseSession.factSheet);
-  const citedRules = pickRuleMentions(argument, rules);
-  const citedClaims = pickClaimMentions(argument, caseSession.factSheet);
-  const lowerArgument = argument.toLowerCase();
-  const judgeProfile = caseSession.judgeProfile || {};
-  const judgeVariance =
-    typeof judgeProfile.varianceSeed === "number"
-      ? ((judgeProfile.varianceSeed + caseSession.score.roundsCompleted) % 5) - 2
-      : 0;
-  const proofStrictness =
-    typeof judgeProfile.proofStrictness === "number" ? judgeProfile.proofStrictness : 0.6;
-  const proofStrategy = buildProofStrategyContext({ caseSession });
-  const difficultyProfile = getCourtroomDifficultyProfile(caseSession.complexity);
-  const adjustedProofStrictness = clamp(
-    proofStrictness + difficultyProfile.proofStrictnessOffset,
-    0.25,
-    0.95
-  );
-
-  const addressesRisk = (caseSession.factSheet.risks || []).some((risk) =>
-    risk
-      .toLowerCase()
-      .split(/\s+/)
-      .filter((token) => token.length > 4)
-      .some((token) => lowerArgument.includes(token))
-  );
-
-  const addressesDispute = (caseSession.factSheet.disputedFacts || []).some((dispute) =>
-    dispute
-      .toLowerCase()
-      .split(/\s+/)
-      .filter((token) => token.length > 4)
-      .some((token) => lowerArgument.includes(token))
-  );
-
-  const corroboratedHits = (caseSession.factSheet.corroboratedFacts || []).filter(
-    (fact) => citedFacts.includes(fact)
-  ).length;
-
-  const playerDelta = clamp(
-    4 +
-      corroboratedHits * 4 +
-      (citedFacts.length - corroboratedHits) * 2 +
-      citedRules.length * 4 +
-      citedClaims.length * 1 +
-      (addressesRisk ? 2 : 0) +
-      (addressesDispute ? 3 : 0) +
-      (argument.length > 240 ? 2 : 0) +
-      (corroboratedHits > 0 ? Math.round(adjustedProofStrictness * 2) : 0) +
-      judgeVariance,
-    4,
-    20
-  );
-
-  const unresolvedDisputes = clamp(
-    (caseSession.factSheet.disputedFacts || []).length - (addressesDispute ? 1 : 0),
-    0,
-    3
-  );
-  const unresolvedRisks = clamp(
-    (caseSession.factSheet.risks || []).length - (addressesRisk ? 1 : 0),
-    0,
-    3
-  );
-  const opponentDelta = clamp(
-    5 +
-      unresolvedDisputes * 3 +
-      unresolvedRisks * 2 +
-      (citedRules.length === 0 ? 2 : 0) +
-      (corroboratedHits === 0 ? Math.round(adjustedProofStrictness * 2) : 0) -
-      judgeVariance,
-    4,
-    18
-  );
-  const normalizedDeltas = normalizeCourtroomDeltasForDifficulty({
-    playerDelta,
-    opponentDelta,
-    difficultyProfile,
-    hasPartialCredit: hasMeaningfulAdvocacyMove({
-      citedFacts,
-      citedRules,
-      citedClaims,
-      addressesRisk,
-      addressesDispute,
-      argument,
-    }),
-  });
-
-  const opponentClaims = opponentPortfolio.knownClaims || [];
-  const opponentClaim =
-    opponentClaims[caseSession.score.roundsCompleted % Math.max(opponentClaims.length, 1)] || "";
-  const opponentProof = opponentPortfolio.corroboratedFacts?.[0] || "";
-  const opponentPartyName = getPartyName(safeTemplate, opponentSide);
-
-  const opponentResponse = opponentClaim
-    ? `Your Honor, ${opponentPartyName}'s answer is that ${lowerCourtroomFragment(
-        opponentClaim
-      )}. ${
-        opponentProof
-          ? `The evidence also supports ${lowerCourtroomFragment(opponentProof)}.`
-          : "The opposing argument asks the Court to accept one side's account without enough reliable proof."
-      }`
-    : `Your Honor, ${opponentPartyName} submits that the proof is too thin and the disputed facts cut against relief.`;
-
-  const strengths = uniqueList([
-    corroboratedHits > 0
-      ? `You leaned on corroborated proof, not only unsupported narrative.`
-      : "",
-    citedFacts[0] ? `You grounded the argument in a concrete fact: ${citedFacts[0]}` : "",
-    citedRules[0] ? `You tied the argument to ${citedRules[0]}.` : "",
-    addressesDispute ? "You directly confronted the opposing side's framing." : "",
-  ]).slice(0, 3);
-
-  const weaknesses = uniqueList([
-    proofStrategy.mode === "salvage" &&
-    proofStrategy.salvageableItems.length === 0
-      ? "The record has documentation gaps and the argument did not isolate a provable minimum item."
-      : "",
-    proofStrategy.mode === "salvage" &&
-    proofStrategy.salvageableItems.length > 0 &&
-    !proofStrategy.salvageableItems.some((item) =>
-      item
-        .toLowerCase()
-        .split(/\s+/)
-        .filter((token) => token.length > 4)
-        .some((token) => lowerArgument.includes(token))
-    )
-      ? `The argument should narrow to a verifiable item such as: ${proofStrategy.salvageableItems[0]}`
-      : "",
-    citedRules.length === 0 ? "The argument did not clearly anchor itself to a lawbook rule." : "",
-    !addressesRisk && caseSession.factSheet.risks[0]
-      ? `A visible weakness remains unaddressed: ${caseSession.factSheet.risks[0]}`
-      : "",
-    !addressesDispute && caseSession.factSheet.disputedFacts[0]
-      ? `You did not directly answer a live dispute: ${caseSession.factSheet.disputedFacts[0]}`
-      : "",
-    citedFacts.length === 0 ? "The bench still needs a more specific fact from the case file." : "",
-  ]).slice(0, 3);
-
-  const benchSignal =
-    proofStrategy.mode === "salvage"
-      ? `The ${judgeProfile.label || "judge"} judge needs a decision-ready partial remedy tied to the strongest documented item, not repeated broad damage categories.`
-      : 
-    normalizedDeltas.playerDelta >= normalizedDeltas.opponentDelta
-      ? `The ${judgeProfile.label || "judge"} judge seems to trust arguments more when they rest on facts that were actually gathered and presented.`
-      : `The ${judgeProfile.label || "judge"} judge appears concerned that the opposing side still has room to reframe the disputed record.`;
-
-  return {
-    opponentResponse,
-    playerDelta: normalizedDeltas.playerDelta,
-    opponentDelta: normalizedDeltas.opponentDelta,
-    citedFacts,
-    citedRules,
-    citedClaimIds: citedClaims.slice(0, 3),
-    strengths,
-    weaknesses,
-    benchSignal,
-  };
-};
-
-export const buildVerdictFallback = ({ updatedScore, rules, factSheet, template, playerSide }) => {
-  const safeTemplate = ensureTemplate(template);
-  const opponentSide = getOpposingSide(playerSide);
-  const playerPartyName = getPartyName(safeTemplate, playerSide);
-  const opponentPartyName = getPartyName(safeTemplate, opponentSide);
-  const winner =
-    updatedScore.player === updatedScore.opponent
-      ? "draw"
-      : updatedScore.player > updatedScore.opponent
-      ? "player"
-      : "opponent";
-
-  const ruleLabel = rules[0]?.title || "the lawbook";
-  const summary =
-    winner === "player"
-      ? `The court finds for ${playerPartyName}, concluding that the stronger corroborated record and better handling of disputed facts carried the day.`
-      : winner === "opponent"
-      ? `The court finds for ${opponentPartyName}, concluding that the player's showing relied too heavily on unresolved side-specific claims.`
-      : "The court finds the record too closely balanced and declines to separate the parties decisively.";
-
-  return {
-    winner,
-    summary,
-    highlights: uniqueList([
-      factSheet.corroboratedFacts[0] || factSheet.supportingFacts[0] || "",
-      `The court relied heavily on ${ruleLabel}.`,
-      updatedScore.highlights?.[0] || "",
-    ]).slice(0, 3),
-    concerns: uniqueList([
-      factSheet.risks[0] || "",
-      factSheet.disputedFacts[0] || "",
-      updatedScore.weaknesses?.[0] || "",
-    ]).slice(0, 3),
-  };
-};
-
-const normalizeVerdictForPlayerPerspective = ({
-  verdict,
-  playerStrengths,
-  playerWeaknesses,
-  fallbackVerdict,
-  playerSide,
-  playerPartyName,
-  opponentPartyName,
-}) => {
-  const lists = normalizePlayerPerspectiveVerdictLists({
-    verdict,
-    playerStrengths,
-    playerWeaknesses,
-    fallbackVerdict,
-    playerSide,
-    playerPartyName,
-    opponentPartyName,
-  });
-
-  return {
-    ...verdict,
-    summary: rewriteVerdictForPlayerAddress(verdict.summary, {
-      playerSide,
-      playerPartyName,
-      opponentPartyName,
-    }),
-    highlights: lists.highlights,
-    concerns: lists.concerns,
-  };
-};
-
 export const normalizeCourtResult = ({
   aiResult,
-  fallback,
   counselAnalysis,
   shouldReturnVerdict,
   caseSession,
   rules,
-  template,
 }) => {
   const normalizedCounsel = normalizeCounselAnalysis({
     aiResult: counselAnalysis,
@@ -766,89 +444,63 @@ export const normalizeCourtResult = ({
   const sanitizeCourtClaims = (items = []) => sanitizeIdList(items, validClaimIds, 4);
   const sanitizeCourtRules = (items = []) =>
     coerceStringList(items, 4).filter((item) => validRuleIds.has(item));
-  const aiReturnedPlayerDelta = typeof aiResult?.playerDelta === "number";
-  const aiReturnedOpponentDelta = typeof aiResult?.opponentDelta === "number";
-  const hasPartialCredit = aiReturnedPlayerDelta && hasMeaningfulAdvocacyMove({
-    citedFacts: fallback.citedFacts,
-    citedRules: fallback.citedRules,
-    citedClaims: fallback.citedClaimIds,
-  });
-  const fallbackVerdict = shouldReturnVerdict
-      ? buildVerdictFallback({
-        updatedScore: {
-          player: caseSession.score.player + fallback.playerDelta,
-          opponent: caseSession.score.opponent + fallback.opponentDelta,
-          highlights: fallback.strengths,
-          weaknesses: fallback.weaknesses,
-        },
-        rules,
-        factSheet: caseSession.factSheet,
-        template,
-        playerSide: getPlayerSide(caseSession),
-      })
-    : null;
 
   if (!aiResult || typeof aiResult !== "object") {
-    return {
-      ...fallback,
-      citedFacts: normalizedCounsel.citedFacts.length
-        ? normalizedCounsel.citedFacts
-        : fallback.citedFacts,
-      citedRules: normalizedCounsel.citedRules.length
-        ? normalizedCounsel.citedRules
-        : fallback.citedRules,
-      citedClaimIds: normalizedCounsel.citedClaimIds.length
-        ? normalizedCounsel.citedClaimIds
-        : fallback.citedClaimIds,
-      strengths: normalizedCounsel.strengths.length
-        ? normalizedCounsel.strengths
-        : fallback.strengths,
-      weaknesses: normalizedCounsel.weaknesses.length
-        ? normalizedCounsel.weaknesses
-        : fallback.weaknesses,
-      verdict: fallbackVerdict,
-    };
+    throw new Error("Courtroom response generation failed.");
+  }
+
+  const opponentResponse = coerceString(aiResult.opponentResponse);
+  if (!opponentResponse) {
+    throw new Error("Courtroom response generation returned no opponent response.");
+  }
+  if (typeof aiResult.playerDelta !== "number" || typeof aiResult.opponentDelta !== "number") {
+    throw new Error("Courtroom response generation returned no score deltas.");
+  }
+  const benchSignal = coerceString(aiResult.benchSignal);
+  if (!benchSignal) {
+    throw new Error("Courtroom response generation returned no bench signal.");
   }
 
   const normalized = {
     opponentResponse: limitOpponentResponseForDifficulty(
-      normalizeOpponentResponse(aiResult.opponentResponse, fallback.opponentResponse),
+      opponentResponse,
       difficultyProfile
     ),
     ...normalizeCourtroomDeltasForDifficulty({
-      playerDelta:
-        aiReturnedPlayerDelta ? aiResult.playerDelta : fallback.playerDelta,
-      opponentDelta:
-        aiReturnedOpponentDelta ? aiResult.opponentDelta : fallback.opponentDelta,
+      playerDelta: aiResult.playerDelta,
+      opponentDelta: aiResult.opponentDelta,
       difficultyProfile,
-      hasPartialCredit,
+      hasPartialCredit:
+        normalizedCounsel.citedFacts.length > 0 ||
+        normalizedCounsel.citedRules.length > 0 ||
+        normalizedCounsel.citedClaimIds.length > 0,
     }),
     citedFacts: Array.isArray(aiResult.citedFacts)
       ? sanitizeCourtFacts(aiResult.citedFacts)
       : normalizedCounsel.citedFacts.length
       ? normalizedCounsel.citedFacts
-      : fallback.citedFacts,
+      : [],
     citedRules: Array.isArray(aiResult.citedRules)
       ? sanitizeCourtRules(aiResult.citedRules)
       : normalizedCounsel.citedRules.length
       ? normalizedCounsel.citedRules
-      : fallback.citedRules,
+      : [],
     citedClaimIds: Array.isArray(aiResult.citedClaimIds)
       ? sanitizeCourtClaims(aiResult.citedClaimIds)
       : normalizedCounsel.citedClaimIds.length
       ? normalizedCounsel.citedClaimIds
-      : fallback.citedClaimIds,
+      : [],
     strengths: Array.isArray(aiResult.strengths)
       ? aiResult.strengths
       : normalizedCounsel.strengths.length
       ? normalizedCounsel.strengths
-      : fallback.strengths,
+      : [],
     weaknesses: Array.isArray(aiResult.weaknesses)
       ? aiResult.weaknesses
       : normalizedCounsel.weaknesses.length
       ? normalizedCounsel.weaknesses
-      : fallback.weaknesses,
-    benchSignal: aiResult.benchSignal || fallback.benchSignal,
+      : [],
+    benchSignal,
   };
 
   if (!shouldReturnVerdict) {
@@ -858,39 +510,21 @@ export const normalizeCourtResult = ({
     };
   }
 
-  const normalizedUpdatedScore = {
-    player: caseSession.score.player + normalized.playerDelta,
-    opponent: caseSession.score.opponent + normalized.opponentDelta,
-    highlights: normalized.strengths,
-    weaknesses: normalized.weaknesses,
-  };
-  const playerSide = getPlayerSide(caseSession);
-  const opponentSide = getOpposingSide(playerSide);
-  const normalizedFallbackVerdict = buildVerdictFallback({
-    updatedScore: normalizedUpdatedScore,
-    rules,
-    factSheet: caseSession.factSheet,
-    template,
-    playerSide,
-  });
+  const verdict = aiResult.verdict;
+  const winner = coerceString(verdict?.winner);
+  const summary = coerceString(verdict?.summary);
+
+  if (!["player", "opponent", "draw"].includes(winner) || !summary) {
+    throw new Error("Courtroom response generation returned no final verdict.");
+  }
 
   return {
     ...normalized,
-    verdict: normalizeVerdictForPlayerPerspective({
-      verdict: normalizeVerdictForDifficulty({
-        verdict: aiResult.verdict,
-        updatedScore: normalizedUpdatedScore,
-        fallbackVerdict: normalizedFallbackVerdict,
-        difficultyProfile,
-        playerPartyName: getPartyName(template, playerSide),
-        opponentPartyName: getPartyName(template, opponentSide),
-      }),
-      playerStrengths: normalized.strengths,
-      playerWeaknesses: normalized.weaknesses,
-      fallbackVerdict: normalizedFallbackVerdict,
-      playerSide,
-      playerPartyName: getPartyName(template, playerSide),
-      opponentPartyName: getPartyName(template, opponentSide),
-    }),
+    verdict: {
+      winner,
+      summary,
+      highlights: coerceStringList(verdict?.highlights, 3),
+      concerns: coerceStringList(verdict?.concerns, 3),
+    },
   };
 };

@@ -4,10 +4,10 @@ import { authOptions } from "@/libs/next-auth";
 import {
   assessCaseSuccessChance,
   finalizeFactSheetInput,
+  generatePlaintiffCourtOpeningStatement,
   lockAssessmentForCourt,
 } from "@/libs/game/engine";
 import {
-  buildPlaintiffCourtOpeningStatement,
   buildCasePayload,
   getCaseSessionDocumentForUser,
 } from "@/libs/game/store";
@@ -94,10 +94,15 @@ export async function POST(req, { params }) {
       caseSession.playerSide === "opponent" &&
       !caseSession.courtroomTranscript?.length
     ) {
+      const openingStatement = await generatePlaintiffCourtOpeningStatement({
+        caseSession,
+        userId: session.user.id,
+        onUsage: usageCollector.record,
+      });
       caseSession.courtroomTranscript.push({
         round: 1,
         speaker: "opponent",
-        text: buildPlaintiffCourtOpeningStatement(caseSession.caseTemplateId),
+        text: openingStatement,
         citedFacts: [],
         citedClaimIds: [],
         citedRules: [],

@@ -617,33 +617,6 @@ export const hasOpponentPraise = (value = "") =>
     /\bopposing counsel(?:'s)?\s+(?:argument|point|position)\s+is\s+(?:good|great|strong|solid|fair|valid|compelling|persuasive)\b/i,
   ].some((pattern) => pattern.test(String(value || "")));
 
-export const hasCourtroomMetaLanguage = (value = "") =>
-  [
-    /\bprepared\s+(case\s+)?file\b/i,
-    /\bpublic\s+case\s+file\b/i,
-    /\bfact\s+sheet\b/i,
-    /\bproof\s+gaps?\b/i,
-    /\bplayer'?s?\s+(argument|presentation|side|record)\b/i,
-    /\bgame\b/i,
-    /\bscor(?:e|ing)\b/i,
-    /\bpressure\b/i,
-    /\bstrengths?\b/i,
-    /\bweakness(?:es)?\b/i,
-    /\bhidden\b/i,
-    /\binternal\b/i,
-    /\bmetadata\b/i,
-  ].some((pattern) => pattern.test(String(value || "")));
-
-export const normalizeOpponentResponse = (value, fallback = "") => {
-  const response = coerceString(value);
-
-  if (!response || hasOpponentPraise(response) || hasCourtroomMetaLanguage(response)) {
-    return fallback;
-  }
-
-  return response;
-};
-
 export const buildEvidencePromptPacket = (item = {}, discoveredEvidenceIds = []) => ({
   id: item.id,
   label: item.label,
