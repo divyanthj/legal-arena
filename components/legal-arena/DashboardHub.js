@@ -725,6 +725,8 @@ export default function DashboardHub({
 
       startNavigationLoading("Creating courtroom portraits", { failsafeMs: 60000 });
       const caseRef = caseSession.slug || caseSession.id;
+      const caseHref = `/dashboard/cases/${caseRef}`;
+      router.prefetch(caseHref);
       const portraitResults = await Promise.allSettled([
         apiClient.post(`/cases/${caseRef}/client-portrait`),
         apiClient.post(`/cases/${caseRef}/client-portrait?target=opponent`),
@@ -734,7 +736,7 @@ export default function DashboardHub({
         .forEach((result) => console.error(result.reason));
 
       startNavigationLoading("Opening the matter", { failsafeMs: 60000 });
-      router.push(`/dashboard/cases/${caseRef}`);
+      router.push(caseHref);
     } catch (error) {
       stopNavigationLoading();
       console.error(error);

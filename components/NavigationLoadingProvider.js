@@ -29,6 +29,7 @@ const navigationTips = [
 
 const DEFAULT_LOADING_LABEL = "Setting the stage";
 const FAILSAFE_TIMEOUT_MS = 10000;
+const LOADING_INDICATOR_DELAY_MS = 450;
 
 const getNavigableInternalUrl = (anchor) => {
   const href = anchor?.getAttribute("href");
@@ -145,7 +146,9 @@ export const NavigationLoadingProvider = ({ children }) => {
   });
   const [tipIndex, setTipIndex] = useState(0);
   const timeoutRef = useRef(null);
+  const showDelayRef = useRef(null);
   const routeKeyRef = useRef("");
+  const loadingVisibleRef = useRef(false);
 
   const clearFailsafe = useCallback(() => {
     if (timeoutRef.current) {
@@ -154,14 +157,23 @@ export const NavigationLoadingProvider = ({ children }) => {
     }
   }, []);
 
+  const clearShowDelay = useCallback(() => {
+    if (showDelayRef.current) {
+      window.clearTimeout(showDelayRef.current);
+      showDelayRef.current = null;
+    }
+  }, []);
+
   const stopNavigationLoading = useCallback(() => {
+    clearShowDelay();
     clearFailsafe();
+    loadingVisibleRef.current = false;
     setLoadingState((current) =>
       current.isLoading
         ? { isLoading: false, label: DEFAULT_LOADING_LABEL }
         : current
     );
-  }, [clearFailsafe]);
+  }, [clearFailsafe, clearShowDelay]);
 
   const startNavigationLoading = useCallback(
     (label = DEFAULT_LOADING_LABEL, options = {}) => {
@@ -169,14 +181,34 @@ export const NavigationLoadingProvider = ({ children }) => {
         1000,
         Number(options?.failsafeMs || FAILSAFE_TIMEOUT_MS)
       );
+      const delayMs = Math.max(
+        0,
+        Number(
+          options?.delayMs === undefined
+            ? LOADING_INDICATOR_DELAY_MS
+            : options.delayMs
+        )
+      );
       clearFailsafe();
-      setLoadingState({ isLoading: true, label });
+      clearShowDelay();
+
+      if (loadingVisibleRef.current || delayMs === 0) {
+        loadingVisibleRef.current = true;
+        setLoadingState({ isLoading: true, label });
+      } else {
+        showDelayRef.current = window.setTimeout(() => {
+          showDelayRef.current = null;
+          loadingVisibleRef.current = true;
+          setLoadingState({ isLoading: true, label });
+        }, delayMs);
+      }
+
       timeoutRef.current = window.setTimeout(
         stopNavigationLoading,
         failsafeMs
       );
     },
-    [clearFailsafe, stopNavigationLoading]
+    [clearFailsafe, clearShowDelay, stopNavigationLoading]
   );
 
   const handleRouteSettled = useCallback(
@@ -222,9 +254,10 @@ export const NavigationLoadingProvider = ({ children }) => {
     return () => {
       document.removeEventListener("click", handleClick, true);
       window.removeEventListener("popstate", handlePopState);
+      clearShowDelay();
       clearFailsafe();
     };
-  }, [clearFailsafe, startNavigationLoading]);
+  }, [clearFailsafe, clearShowDelay, startNavigationLoading]);
 
   useEffect(() => {
     if (!loadingState.isLoading) {

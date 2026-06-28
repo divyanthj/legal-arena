@@ -402,20 +402,8 @@ const fuzzyLeaderboardNameMatch = (name = "", query = "") => {
   return false;
 };
 
-export const listOverallLeaderboard = async ({
-  search = "",
-  limit = null,
-  includeUserId = "",
-} = {}) => {
-  await connectMongo();
-
-  const refreshedUsers = await User.find({}).sort({
-    "progression.overallRating": -1,
-    "progression.completedCases": -1,
-    updatedAt: -1,
-  });
-
-  const rankedEntries = refreshedUsers
+const rankOverallLeaderboardEntries = (users = []) =>
+  users
     .map((user) => buildPublicLeaderboardEntry(user))
     .sort((left, right) => {
       if ((right.overallRating || 0) !== (left.overallRating || 0)) {
@@ -430,6 +418,36 @@ export const listOverallLeaderboard = async ({
       rank: index + 1,
       ...entry,
     }));
+
+const rankCategoryLeaderboardEntries = (users = [], categorySlug) =>
+  users
+    .map((user) => buildPublicLeaderboardEntry(user, categorySlug))
+    .sort((left, right) => {
+      const leftCategory = left.category || {};
+      const rightCategory = right.category || {};
+
+      if ((rightCategory.rating || 0) !== (leftCategory.rating || 0)) {
+        return (rightCategory.rating || 0) - (leftCategory.rating || 0);
+      }
+      if (
+        (rightCategory.completedCases || 0) !== (leftCategory.completedCases || 0)
+      ) {
+        return (rightCategory.completedCases || 0) - (leftCategory.completedCases || 0);
+      }
+
+      return (rightCategory.xp || 0) - (leftCategory.xp || 0);
+    })
+    .map((entry, index) => ({
+      rank: index + 1,
+      ...entry,
+    }));
+
+const applyLeaderboardLimit = ({
+  rankedEntries = [],
+  search = "",
+  limit = null,
+  includeUserId = "",
+}) => {
   const searchedEntries = search
     ? rankedEntries.filter((entry) => fuzzyLeaderboardNameMatch(entry.name, search))
     : rankedEntries;
@@ -454,31 +472,58 @@ export const listOverallLeaderboard = async ({
   return limitedEntries;
 };
 
+export const listOverallLeaderboard = async ({
+  search = "",
+  limit = null,
+  includeUserId = "",
+} = {}) => {
+  await connectMongo();
+
+  const refreshedUsers = await User.find({}).sort({
+    "progression.overallRating": -1,
+    "progression.completedCases": -1,
+    updatedAt: -1,
+  });
+
+  return applyLeaderboardLimit({
+    rankedEntries: rankOverallLeaderboardEntries(refreshedUsers),
+    search,
+    limit,
+    includeUserId,
+  });
+};
+
 export const listPlayerDirectory = async ({ search = "", limit = null } = {}) =>
   listOverallLeaderboard({ search, limit });
 
 export const listCategoryLeaderboard = async (categorySlug) => {
   await connectMongo();
 
-  return (await User.find({}))
-    .map((user) => buildPublicLeaderboardEntry(user, categorySlug))
-    .sort((left, right) => {
-      const leftCategory = left.category || {};
-      const rightCategory = right.category || {};
+  return rankCategoryLeaderboardEntries(await User.find({}), categorySlug);
+};
 
-      if ((rightCategory.rating || 0) !== (leftCategory.rating || 0)) {
-        return (rightCategory.rating || 0) - (leftCategory.rating || 0);
-      }
-      if (
-        (rightCategory.completedCases || 0) !== (leftCategory.completedCases || 0)
-      ) {
-        return (rightCategory.completedCases || 0) - (leftCategory.completedCases || 0);
-      }
+export const listDashboardLeaderboards = async ({
+  categorySlugs = [],
+  overallLimit = 8,
+  includeUserId = "",
+} = {}) => {
+  await connectMongo();
 
-      return (rightCategory.xp || 0) - (leftCategory.xp || 0);
-    })
-    .map((entry, index) => ({
-      rank: index + 1,
-      ...entry,
-    }));
+  const users = await User.find({});
+  const overallLeaderboard = applyLeaderboardLimit({
+    rankedEntries: rankOverallLeaderboardEntries(users),
+    limit: overallLimit,
+    includeUserId,
+  });
+  const categoryLeaderboards = Object.fromEntries(
+    categorySlugs.map((categorySlug) => [
+      categorySlug,
+      rankCategoryLeaderboardEntries(users, categorySlug),
+    ])
+  );
+
+  return {
+    overallLeaderboard,
+    categoryLeaderboards,
+  };
 };
