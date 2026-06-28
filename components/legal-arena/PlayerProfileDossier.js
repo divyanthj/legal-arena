@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { toast } from "react-hot-toast";
 import * as HeroIcons from "@heroicons/react/24/outline";
 import apiClient from "@/libs/api";
@@ -42,6 +42,15 @@ const isArenaHeadshot = (value = "") => {
 const getArenaHeadshot = (value = "") =>
   isArenaHeadshot(value) ? String(value || "").trim() : "";
 
+const getCategoryWinRate = (category) => {
+  const decidedMatters =
+    (category.wins || 0) + (category.losses || 0) + (category.draws || 0);
+
+  return decidedMatters > 0
+    ? Math.round(((category.wins || 0) / decidedMatters) * 100)
+    : 0;
+};
+
 const formatResetDateTime = (value) => {
   if (!isValidDate(value)) {
     return "";
@@ -61,10 +70,12 @@ export default function PlayerProfileDossier({
   viewerUserId = "",
   challengeTemplates = [],
   hasArenaAccess = false,
+  isAdmin = false,
 }) {
   const router = useRouter();
   const { player, cases = [] } = profile;
   const normalizedCases = useMemo(() => cases.map(normalizeMatter), [cases]);
+  const archiveDetailsRef = useRef(null);
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [outcomeFilter, setOutcomeFilter] = useState("all");
@@ -74,31 +85,40 @@ export default function PlayerProfileDossier({
   const [showResetDialog, setShowResetDialog] = useState(false);
   const [resetting, setResetting] = useState(false);
 
+  const canEditAvatar = String(viewerUserId || "") === String(player.id || "");
+  const canViewFullArchive = canEditAvatar || isAdmin;
+  const archiveCases = useMemo(
+    () =>
+      canViewFullArchive
+        ? normalizedCases
+        : normalizedCases.filter((caseSession) => caseSession.status === "verdict"),
+    [canViewFullArchive, normalizedCases]
+  );
   const categoryOptions = useMemo(
-    () => getUniqueOptions(normalizedCases.map((caseSession) => caseSession.primaryCategory)),
-    [normalizedCases]
+    () => getUniqueOptions(archiveCases.map((caseSession) => caseSession.primaryCategory)),
+    [archiveCases]
   );
   const statusOptions = useMemo(
-    () => getUniqueOptions(normalizedCases.map((caseSession) => caseSession.status)),
-    [normalizedCases]
+    () => getUniqueOptions(archiveCases.map((caseSession) => caseSession.status)),
+    [archiveCases]
   );
   const outcomeOptions = useMemo(
-    () => getUniqueOptions(normalizedCases.map((caseSession) => caseSession.outcome || "open")),
-    [normalizedCases]
+    () => getUniqueOptions(archiveCases.map((caseSession) => caseSession.outcome || "open")),
+    [archiveCases]
   );
 
   const filteredCases = useMemo(
     () =>
-      normalizedCases.filter((caseSession) => {
+      archiveCases.filter((caseSession) => {
         const outcome = caseSession.outcome || "open";
 
         return (
           (categoryFilter === "all" || caseSession.primaryCategory === categoryFilter) &&
-          (statusFilter === "all" || caseSession.status === statusFilter) &&
+          (!canViewFullArchive || statusFilter === "all" || caseSession.status === statusFilter) &&
           (outcomeFilter === "all" || outcome === outcomeFilter)
         );
       }),
-    [categoryFilter, normalizedCases, outcomeFilter, statusFilter]
+    [archiveCases, canViewFullArchive, categoryFilter, outcomeFilter, statusFilter]
   );
 
   const sortedCategories = useMemo(
@@ -138,13 +158,16 @@ export default function PlayerProfileDossier({
   const completedCategories = activeCategories.length;
   const topCategory = activeCategories[0] || null;
   const topSpecialties = activeCategories.slice(0, 3);
+  const topSpecialtyMaxCases = Math.max(
+    1,
+    ...topSpecialties.map((category) => category.completedCases || 0)
+  );
   const totalDecidedMatters =
     (player.wins || 0) + (player.losses || 0) + (player.draws || 0);
   const winRate =
     totalDecidedMatters > 0
       ? Math.round(((player.wins || 0) / totalDecidedMatters) * 100)
       : 0;
-  const canEditAvatar = String(viewerUserId || "") === String(player.id || "");
   const resetAvailableAt = isValidDate(player.gameplayResetAvailableAt)
     ? new Date(player.gameplayResetAvailableAt)
     : null;
@@ -180,6 +203,17 @@ export default function PlayerProfileDossier({
     } finally {
       setResetting(false);
     }
+  };
+
+  const focusArchiveCategory = (categorySlug = "all") => {
+    setCategoryFilter(categorySlug);
+    setStatusFilter("all");
+    setOutcomeFilter("all");
+    archiveDetailsRef.current?.setAttribute("open", "");
+    document.getElementById("case-archive")?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
   };
 
   const handleAvatarChange = async (event) => {
@@ -502,58 +536,67 @@ export default function PlayerProfileDossier({
                     <p className="arena-kicker">Top Specialties</p>
                     <h2 className="arena-headline mt-2 text-2xl">Category progression</h2>
                   </div>
-                  <span className="text-xs text-white/48">View all</span>
+                  <button
+                    type="button"
+                    className="text-xs font-semibold text-white/58 transition hover:text-white"
+                    onClick={() => focusArchiveCategory("all")}
+                  >
+                    View all
+                  </button>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-3 text-sm text-white/52">
                   <span>{completedCategories}/{sortedCategories.length} categories active</span>
                   <span>{player.completedCases} matters completed</span>
                 </div>
-                <div className="mt-5 grid gap-3 sm:grid-cols-3 xl:grid-cols-1 2xl:grid-cols-3">
+                <div className="mt-5 space-y-3">
                   {topSpecialties.length > 0 ? (
-                    topSpecialties.map((category, index) => (
-                      <article
-                        key={category.categorySlug}
-                        className={`arena-surface-soft flex min-h-[13rem] flex-col p-4 ${
-                          index === 0 ? "border-amber-200/40" : ""
-                        }`}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <HeroIcons.TrophyIcon
-                              className={`mb-4 h-7 w-7 ${
-                                index === 0 ? "text-amber-200" : "text-white/50"
-                              }`}
-                              aria-hidden="true"
+                    topSpecialties.map((category, index) => {
+                      const progressPercent = Math.max(
+                        12,
+                        Math.round(
+                          ((category.completedCases || 0) / topSpecialtyMaxCases) * 100
+                        )
+                      );
+                      const isTopCategory = index === 0;
+
+                      return (
+                        <button
+                          key={category.categorySlug}
+                          type="button"
+                          className="block w-full space-y-2 text-left"
+                          onClick={() => focusArchiveCategory(category.categorySlug)}
+                        >
+                          <div
+                            className={`relative min-h-[4.75rem] overflow-hidden rounded-2xl border bg-white/[0.035] ${
+                              isTopCategory ? "border-amber-200/40" : "border-white/10"
+                            } transition hover:-translate-y-0.5 hover:border-white/25`}
+                          >
+                            <div
+                              className="absolute inset-y-0 left-0 rounded-2xl bg-gradient-to-r from-emerald-400/42 to-amber-300/34"
+                              style={{ width: `${progressPercent}%` }}
                             />
-                            <p className="font-semibold text-white">
-                              {getCategoryTitle(category.categorySlug)}
-                            </p>
-                            <p className="mt-2 text-sm text-white/64">
-                              {category.completedCases} completed matters
-                            </p>
-                            <p className="mt-1 text-sm text-white/42">
-                              Record {category.wins}-{category.losses}-{category.draws}
-                            </p>
+                            <div className="relative flex min-h-[4.75rem] items-center justify-between gap-4 px-4 py-3">
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold text-white">
+                                  {getCategoryTitle(category.categorySlug)}
+                                </p>
+                                <p className="mt-1 text-xs font-medium text-white/62">
+                                  {`${category.completedCases} matters | Record ${category.wins}-${category.losses}-${category.draws}`}
+                                </p>
+                              </div>
+                              <div className="shrink-0 text-right">
+                                <p className="text-sm font-semibold text-white">
+                                  {category.rating}
+                                </p>
+                                <p className="mt-1 text-xs font-semibold text-emerald-200">
+                                  {getCategoryWinRate(category)}% win
+                                </p>
+                              </div>
+                            </div>
                           </div>
-                          <span className="badge border arena-status arena-status-neutral">
-                            {category.rating}
-                          </span>
-                        </div>
-                        <p className="mt-auto pt-4 text-sm font-semibold text-emerald-300">
-                          {Math.round(
-                            ((category.wins || 0) /
-                              Math.max(
-                                1,
-                                (category.wins || 0) +
-                                  (category.losses || 0) +
-                                  (category.draws || 0)
-                              )) *
-                              100
-                          )}
-                          % win rate
-                        </p>
-                      </article>
-                    ))
+                        </button>
+                      );
+                    })
                   ) : (
                     <EmptyPanel
                       title="No category record yet"
@@ -604,7 +647,7 @@ export default function PlayerProfileDossier({
             </div>
 
             <div id="case-archive" className="arena-surface">
-              <details className="group" open>
+              <details ref={archiveDetailsRef} className="group" open>
                 <summary className="list-none cursor-pointer p-5 md:p-6">
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                     <div>
@@ -613,7 +656,7 @@ export default function PlayerProfileDossier({
                     </div>
                     <div className="flex items-center gap-3">
                       <p className="text-sm text-white/42">
-                        {filteredCases.length} of {cases.length} visible matters
+                        {filteredCases.length} of {archiveCases.length} visible matters
                       </p>
                       <CollapseChevron />
                     </div>
@@ -621,7 +664,11 @@ export default function PlayerProfileDossier({
                 </summary>
 
                 <div className="px-5 pb-5 md:px-6 md:pb-6">
-                  <div className="grid gap-3 md:grid-cols-3">
+                  <div
+                    className={`grid gap-3 ${
+                      canViewFullArchive ? "md:grid-cols-3" : "md:grid-cols-2"
+                    }`}
+                  >
                     <label className="form-control">
                       <span className="label-text text-xs uppercase tracking-[0.14em] text-white/62">
                         Category
@@ -639,23 +686,25 @@ export default function PlayerProfileDossier({
                         ))}
                       </select>
                     </label>
-                    <label className="form-control">
-                      <span className="label-text text-xs uppercase tracking-[0.14em] text-white/62">
-                        Status
-                      </span>
-                      <select
-                        className="arena-select select select-bordered min-h-0 text-sm text-slate-100"
-                        value={statusFilter}
-                        onChange={(event) => setStatusFilter(event.target.value)}
-                      >
-                        <option value="all">All statuses</option>
-                        {statusOptions.map((status) => (
-                          <option key={status} value={status}>
-                            {getStatusFilterLabel(status)}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
+                    {canViewFullArchive ? (
+                      <label className="form-control">
+                        <span className="label-text text-xs uppercase tracking-[0.14em] text-white/62">
+                          Status
+                        </span>
+                        <select
+                          className="arena-select select select-bordered min-h-0 text-sm text-slate-100"
+                          value={statusFilter}
+                          onChange={(event) => setStatusFilter(event.target.value)}
+                        >
+                          <option value="all">All statuses</option>
+                          {statusOptions.map((status) => (
+                            <option key={status} value={status}>
+                              {getStatusFilterLabel(status)}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ) : null}
                     <label className="form-control">
                       <span className="label-text text-xs uppercase tracking-[0.14em] text-white/62">
                         Outcome
@@ -678,10 +727,14 @@ export default function PlayerProfileDossier({
                   </div>
 
                   <div className="mt-5 space-y-3">
-                    {cases.length === 0 ? (
+                    {archiveCases.length === 0 ? (
                       <EmptyPanel
                         title="No visible matters yet"
-                        detail="This lawyer has not opened a public case record yet."
+                        detail={
+                          canViewFullArchive
+                            ? "This lawyer has not opened a case record yet."
+                            : "This lawyer has not completed a public verdict-ready matter yet."
+                        }
                       />
                     ) : filteredCases.length === 0 ? (
                       <EmptyPanel
@@ -691,11 +744,16 @@ export default function PlayerProfileDossier({
                     ) : (
                       filteredCases.map((caseSession) => {
                         const matterId = getMatterId(caseSession);
+                        const shouldResumePlayableMatter =
+                          canEditAvatar && caseSession.status === "interview";
+                        const matterHref = shouldResumePlayableMatter
+                          ? `/dashboard/cases/${matterId}`
+                          : `/dashboard/players/${player.id}/matters/${matterId}`;
 
                         return (
                           <Link
                             key={matterId}
-                            href={`/dashboard/players/${player.id}/matters/${matterId}`}
+                            href={matterHref}
                             className="arena-surface-soft block p-4 transition hover:-translate-y-0.5 hover:border-white/20"
                           >
                             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -734,7 +792,9 @@ export default function PlayerProfileDossier({
                                 <span>Complexity {caseSession.complexity}</span>
                                 <span>{summarizeCount(caseSession.interviewCount, "intake")}</span>
                                 <span>{summarizeCount(caseSession.courtroomCount, "round")}</span>
-                                <span className="font-semibold text-white">View matter</span>
+                                <span className="font-semibold text-white">
+                                  {shouldResumePlayableMatter ? "Resume intake" : "View matter"}
+                                </span>
                               </div>
                             </div>
                           </Link>

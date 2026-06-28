@@ -1051,7 +1051,10 @@ export const listDashboardDataForUser = async (userId, userProfile = null) => {
   };
 };
 
-export const getPublicPlayerProfile = async (playerId) => {
+export const getPublicPlayerProfile = async (
+  playerId,
+  { canViewFullArchive = false } = {}
+) => {
   await connectMongo();
 
   const user = await User.findById(playerId);
@@ -1063,7 +1066,7 @@ export const getPublicPlayerProfile = async (playerId) => {
   const hydratedUser = await ensureUserProfile(playerId);
   const cases = await CaseSession.find({
     userId: playerId,
-    status: { $ne: "exited" },
+    status: canViewFullArchive ? { $ne: "exited" } : "verdict",
   })
     .populate("caseTemplateId")
     .sort({ updatedAt: -1 });

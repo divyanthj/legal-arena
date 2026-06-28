@@ -2843,7 +2843,10 @@ export default function CaseWorkspace({
                   </p>
                   <div className="mt-3 grid grid-cols-4 gap-1.5">
                     {factSheetSections.map((section) => {
-                      const Icon = section.icon;
+                      const Icon =
+                        section.icon ||
+                        factSheetSectionIconMap[section.key] ||
+                        HeroIcons.DocumentTextIcon;
                       const items = ensureDraftList(factSheetDraft[section.key]);
                       const isSelected = activeMobileFactSheetKey === section.key;
 

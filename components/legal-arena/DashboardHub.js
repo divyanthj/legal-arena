@@ -547,6 +547,7 @@ export default function DashboardHub({
   const [creating, setCreating] = useState(false);
   const [caseLibrarySearch, setCaseLibrarySearch] = useState("");
   const [selectedDifficulty, setSelectedDifficulty] = useState("all");
+  const [caseArchiveTab, setCaseArchiveTab] = useState("ongoing");
   const [showAllCaseCategories, setShowAllCaseCategories] = useState(false);
   const [lawyerSearch, setLawyerSearch] = useState("");
   const [searchedLawyers, setSearchedLawyers] = useState(null);
@@ -565,6 +566,15 @@ export default function DashboardHub({
       ),
     [selectedCategory, showPlayableOnly, templates]
   );
+  const finishedCases = useMemo(
+    () => initialCases.filter((caseSession) => caseSession.status === "verdict"),
+    [initialCases]
+  );
+  const ongoingCases = useMemo(
+    () => initialCases.filter((caseSession) => caseSession.status !== "verdict"),
+    [initialCases]
+  );
+  const selectedArchiveCases = caseArchiveTab === "finished" ? finishedCases : ongoingCases;
 
   const selectedLeaderboard = categoryLeaderboards[selectedCategory] || [];
   const categoryProgress =
@@ -773,7 +783,7 @@ export default function DashboardHub({
     null;
   const moreLibraryTemplates = searchedLibraryTemplates
     .filter((template) => template.id !== featuredLibraryTemplate?.id)
-    .slice(0, 4);
+    .slice(0, 3);
   const firstUnlockedTemplate =
     visibleTemplates.find((template) => template.unlocked) ||
     templates.find((template) => template.unlocked) ||
@@ -837,6 +847,9 @@ export default function DashboardHub({
   const isNewUser = (progression.completedCases || 0) === 0;
   const shouldSellLifetimeAccess = !hasArenaAccess;
   const lastCaseProgress = getCaseProgress(lastActiveCase);
+  const desktopHeroCase = ongoingCases[0] || null;
+  const desktopHeroCaseProgress = getCaseProgress(desktopHeroCase);
+  const canContinueDesktopHeroCase = Boolean(desktopHeroCase) && !shouldSellLifetimeAccess;
   const primaryTemplateId =
     (activeTemplate?.unlocked ? activeTemplate : firstUnlockedTemplate)?.id || "";
   const primaryCtaLabel = shouldSellLifetimeAccess
@@ -847,42 +860,42 @@ export default function DashboardHub({
       ? "Start Your First Case"
       : "Start New Case";
   const desktopFeaturedTemplate = activeTemplate || firstUnlockedTemplate;
-  const desktopFeatureTitle = canResumeLastCase
-    ? lastActiveCase.title
+  const desktopFeatureTitle = canContinueDesktopHeroCase
+    ? desktopHeroCase.title
     : shouldSellLifetimeAccess
     ? "Unlock Legal Arena"
     : desktopFeaturedTemplate?.title || "Start a new case";
-  const desktopFeatureKicker = canResumeLastCase
+  const desktopFeatureKicker = canContinueDesktopHeroCase
     ? "Continue Your Case"
     : shouldSellLifetimeAccess
     ? "Unlock Your Arena"
     : isNewUser
     ? "Start Your First Case"
     : "Start New Case";
-  const desktopFeatureProgress = canResumeLastCase ? lastCaseProgress.percent : 12;
-  const desktopFeatureStage = canResumeLastCase
-    ? lastCaseProgress.label
+  const desktopFeatureProgress = canContinueDesktopHeroCase ? desktopHeroCaseProgress.percent : 12;
+  const desktopFeatureStage = canContinueDesktopHeroCase
+    ? desktopHeroCaseProgress.label
     : shouldSellLifetimeAccess
     ? "Lifetime Access"
     : "Client Intake";
-  const desktopFeatureBody = canResumeLastCase
-    ? `${lastCaseProgress.nextStep}. ${lastActiveCase.primaryCategory || "Your case"} is ready.`
+  const desktopFeatureBody = canContinueDesktopHeroCase
+    ? `${desktopHeroCaseProgress.nextStep}. ${desktopHeroCase.primaryCategory || "Your case"} is ready.`
     : shouldSellLifetimeAccess
     ? "Get permanent access to the case library, player challenges, and future updates."
     : desktopFeaturedTemplate?.overview ||
       "Choose a dispute, interview your client, and prepare for court.";
   const desktopPlaintiffName =
-    (canResumeLastCase
-      ? lastActiveCase?.plaintiffName || lastActiveCase?.premise?.clientName
+    (canContinueDesktopHeroCase
+      ? desktopHeroCase?.plaintiffName || desktopHeroCase?.premise?.clientName
       : desktopFeaturedTemplate?.plaintiffName || desktopFeaturedTemplate?.clientName) ||
     "Plaintiff";
   const desktopDefendantName =
-    (canResumeLastCase
-      ? lastActiveCase?.defendantName || lastActiveCase?.premise?.opponentName
+    (canContinueDesktopHeroCase
+      ? desktopHeroCase?.defendantName || desktopHeroCase?.premise?.opponentName
       : desktopFeaturedTemplate?.defendantName || desktopFeaturedTemplate?.opponentName) ||
     "Defendant";
-  const desktopRepresentsPlaintiff = canResumeLastCase
-    ? lastActiveCase?.playerSide !== "opponent"
+  const desktopRepresentsPlaintiff = canContinueDesktopHeroCase
+    ? desktopHeroCase?.playerSide !== "opponent"
     : true;
   const unlockCards = [
     {
@@ -1215,7 +1228,7 @@ export default function DashboardHub({
                             {desktopFeatureStage}
                           </span>
                           <span className="text-sm text-white/62">
-                            {canResumeLastCase
+                            {canContinueDesktopHeroCase
                               ? `Stage ${Math.max(1, Math.round(desktopFeatureProgress / 12.5))} of 8`
                               : "Stage 1 of 8"}
                           </span>
@@ -1240,27 +1253,27 @@ export default function DashboardHub({
                         <div className="mt-6 flex flex-wrap gap-3">
                           <span className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.035] px-4 py-2 text-sm text-white/74">
                             <HeroIcons.UserIcon className="h-5 w-5 text-white/52" aria-hidden="true" />
-                            {lastActiveCase?.playerSide === "opponent" ? "Defendant Side" : "Plaintiff Side"}
+                            {desktopHeroCase?.playerSide === "opponent" ? "Defendant Side" : "Plaintiff Side"}
                           </span>
                           <span className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.035] px-4 py-2 text-sm text-white/74">
                             <HeroIcons.BriefcaseIcon className="h-5 w-5 text-white/52" aria-hidden="true" />
-                            {lastActiveCase?.primaryCategory ||
+                            {desktopHeroCase?.primaryCategory ||
                               desktopFeaturedTemplate?.primaryCategory ||
                               "Case Library"}
                           </span>
                           <span className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.035] px-4 py-2 text-sm text-white/74">
                             <HeroIcons.ScaleIcon className="h-5 w-5 text-white/52" aria-hidden="true" />
-                            {lastActiveCase?.premise?.courtName || "County Civil Court"}
+                            {desktopHeroCase?.premise?.courtName || "County Civil Court"}
                           </span>
                         </div>
                         <div className="mt-8 flex flex-col items-start gap-4">
-                          {canResumeLastCase && !shouldSellLifetimeAccess ? (
+                          {canContinueDesktopHeroCase ? (
                             <Link
-                              href={`/dashboard/cases/${lastActiveCase.slug || lastActiveCase.id}`}
+                              href={`/dashboard/cases/${desktopHeroCase.slug || desktopHeroCase.id}`}
                               data-onboarding-target="quick-start-case"
                               className="inline-flex min-h-[4rem] w-full max-w-md items-center justify-center gap-4 rounded-xl border border-amber-200/45 bg-amber-200 px-6 text-lg font-bold text-black shadow-[0_18px_40px_rgba(251,191,36,0.22)] transition hover:bg-amber-100"
                             >
-                              Continue Case
+                              Continue This Case
                               <HeroIcons.ChevronRightIcon className="h-6 w-6" aria-hidden="true" />
                             </Link>
                           ) : (
@@ -1457,7 +1470,7 @@ export default function DashboardHub({
                 </div>
               </section>
 
-              <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.55fr)_minmax(300px,0.68fr)]">
+              <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.65fr)]">
                 <section id="case-library" data-onboarding-target="case-library" className="arena-surface min-w-0 overflow-hidden">
                   <div className="md:hidden">
                     <div className="border-b border-white/10 px-4 py-4">
@@ -2067,57 +2080,6 @@ export default function DashboardHub({
                   </div>
                 </section>
 
-                <section className="arena-surface hidden min-w-0 md:block">
-                  <div className="p-4 md:p-6">
-                    <p className="arena-kicker">Continue where you left off</p>
-                    {lastActiveCase ? (
-                      <div className="mt-5 arena-surface-soft p-4">
-                        <div className="flex flex-col items-start justify-between gap-4 sm:flex-row">
-                          <div className="min-w-0">
-                            <span className={`badge border arena-status ${severityClass[statusSeverity[lastActiveCase.status] || "neutral"]}`}>
-                              {lastCaseProgress.label}
-                            </span>
-                            <h3 className="mt-4 text-lg font-semibold leading-tight text-white">
-                              {lastActiveCase.title}
-                            </h3>
-                            <p className="mt-2 text-sm text-white/52">
-                              Updated {formatDate(lastActiveCase.updatedAt)}
-                            </p>
-                          </div>
-                          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border border-white/12 bg-white/[0.03] text-sm font-semibold text-white">
-                            {lastCaseProgress.percent}%
-                          </div>
-                        </div>
-                        <div className="mt-5 arena-progress-track">
-                          <div
-                            className="arena-progress-fill"
-                            style={{ width: `${Math.max(8, lastCaseProgress.percent)}%` }}
-                          />
-                        </div>
-                        <Link
-                          href={`/dashboard/cases/${lastActiveCase.slug || lastActiveCase.id}`}
-                          className="arena-btn-dark mt-5 inline-flex w-full items-center justify-center gap-3 px-5 py-3"
-                        >
-                          <span>{canResumeLastCase ? "Continue Case" : "View Case"}</span>
-                          <HeroIcons.ChevronRightIcon className="h-5 w-5" aria-hidden="true" />
-                        </Link>
-                      </div>
-                    ) : (
-                      <div className="mt-5 arena-surface-soft border-dashed p-5 text-sm leading-7 text-white/62">
-                        Your first case will appear here as soon as you begin.
-                      </div>
-                    )}
-
-                    <button
-                      type="button"
-                      className="mt-4 block w-full overflow-hidden rounded-[1.35rem] border border-white/10 bg-white/[0.025] p-4 text-left transition hover:border-white/20"
-                      onClick={() => setDashboardTutorialCompleted(false)}
-                    >
-                      <p className="text-sm font-semibold text-white">New to Legal Arena?</p>
-                      <p className="mt-1 text-sm text-white/58">Take the quick tour.</p>
-                    </button>
-                  </div>
-                </section>
               </div>
 
               <section
@@ -2140,51 +2102,80 @@ export default function DashboardHub({
                         {initialCases.length} total
                       </span>
                     </div>
+                    <div className="mt-4 grid grid-cols-2 gap-1 rounded-xl border border-white/[0.055] bg-white/[0.025] p-1">
+                      {[
+                        { value: "ongoing", label: "Ongoing", count: ongoingCases.length },
+                        { value: "finished", label: "Finished", count: finishedCases.length },
+                      ].map((tab) => (
+                        <button
+                          key={`mobile-case-tab-${tab.value}`}
+                          type="button"
+                          className={`rounded-lg px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] transition ${
+                            caseArchiveTab === tab.value
+                              ? "bg-amber-200/[0.09] text-amber-100 shadow-[inset_0_0_0_1px_rgba(251,191,36,0.08)]"
+                              : "text-white/42 hover:bg-white/[0.035] hover:text-white/74"
+                          }`}
+                          onClick={() => setCaseArchiveTab(tab.value)}
+                        >
+                          {tab.label} {tab.count}
+                        </button>
+                      ))}
+                    </div>
                   </div>
 
                   <div className="px-4 py-4">
-                    {lastActiveCase ? (
+                    {selectedArchiveCases.length > 0 ? (
                       <Link
-                        href={`/dashboard/cases/${lastActiveCase.slug || lastActiveCase.id}`}
+                        href={`/dashboard/cases/${selectedArchiveCases[0].slug || selectedArchiveCases[0].id}`}
                         className="block overflow-hidden rounded-2xl border border-white/10 bg-white/[0.035] text-white shadow-[0_18px_55px_rgba(0,0,0,0.34)] transition hover:border-white/20"
                       >
                         <div className="relative min-h-[10.75rem] p-4">
                           <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_8%,rgba(251,191,36,0.16),transparent_28%),radial-gradient(circle_at_82%_18%,rgba(52,211,153,0.12),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.06),rgba(0,0,0,0.64))]" />
                           <div className="relative z-10">
+                            {(() => {
+                              const featuredCase = selectedArchiveCases[0];
+                              const featuredProgress = getCaseProgress(featuredCase);
+                              const featuredSeverity = statusSeverity[featuredCase.status] || "neutral";
+
+                              return (
+                                <>
                             <div className="flex items-start justify-between gap-3">
                               <span
                                 className={`rounded-full border px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.08em] arena-status ${
-                                  severityClass[statusSeverity[lastActiveCase.status] || "neutral"]
+                                  severityClass[featuredSeverity]
                                 }`}
                               >
-                                {lastCaseProgress.label}
+                                {statusLabel[featuredCase.status] || featuredProgress.label}
                               </span>
                               <span className="flex h-10 w-10 items-center justify-center rounded-full border border-emerald-300/30 bg-emerald-300/10 text-xs font-semibold text-emerald-200">
-                                {lastCaseProgress.percent}%
+                                {featuredProgress.percent}%
                               </span>
                             </div>
                             <h3 className="mt-7 line-clamp-2 text-xl font-semibold leading-tight">
-                              {lastActiveCase.title}
+                              {featuredCase.title}
                             </h3>
                             <p className="mt-2 text-sm leading-6 text-white/62">
-                              {lastActiveCase.primaryCategory} | Updated {formatDate(lastActiveCase.updatedAt)}
+                              {featuredCase.primaryCategory} | Updated {formatDate(featuredCase.updatedAt)}
                             </p>
+                                </>
+                              );
+                            })()}
                           </div>
                         </div>
                         <div className="flex items-center gap-3 border-t border-white/10 px-4 py-3">
                           <div className="min-w-0 flex-1">
                             <p className="text-xs font-semibold text-white/58">
-                              {canResumeLastCase ? lastCaseProgress.nextStep : "Review the file"}
+                              {caseArchiveTab === "finished" ? "Review the ruling" : "Continue the file"}
                             </p>
                             <div className="mt-2 arena-progress-track">
                               <div
                                 className="arena-progress-fill"
-                                style={{ width: `${Math.max(8, lastCaseProgress.percent)}%` }}
+                                style={{ width: `${Math.max(8, getCaseProgress(selectedArchiveCases[0]).percent)}%` }}
                               />
                             </div>
                           </div>
                           <span className="inline-flex items-center gap-2 rounded-xl border border-amber-200/25 bg-amber-300/14 px-3 py-2.5 text-xs font-semibold text-amber-100">
-                            {canResumeLastCase ? "Continue" : "View"}
+                            {caseArchiveTab === "finished" ? "View" : "Continue"}
                             <HeroIcons.ChevronRightIcon className="h-4 w-4" aria-hidden="true" />
                           </span>
                         </div>
@@ -2193,19 +2184,19 @@ export default function DashboardHub({
                       <div className="rounded-2xl border border-dashed border-white/12 bg-white/[0.025] p-6 text-center">
                         <p className="text-sm font-semibold text-white">No cases opened yet</p>
                         <p className="mt-2 text-sm text-white/54">
-                          Start from the case library and your docket will appear here.
+                          No {caseArchiveTab} cases yet.
                         </p>
                       </div>
                     )}
 
-                    {initialCases.length > 1 ? (
+                    {selectedArchiveCases.length > 1 ? (
                       <div className="mt-6">
                         <p className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-white/42">
                           Recent files
                         </p>
                         <div className="mt-3 space-y-2.5">
-                          {initialCases
-                            .filter((item) => item.id !== lastActiveCase?.id)
+                          {selectedArchiveCases
+                            .slice(1)
                             .slice(0, 5)
                             .map((item) => {
                               const caseProgress = getCaseProgress(item);
@@ -2270,6 +2261,26 @@ export default function DashboardHub({
                     </span>
                   </div>
 
+                  <div className="mt-5 inline-grid grid-cols-2 gap-1 rounded-xl border border-white/[0.055] bg-white/[0.025] p-1">
+                    {[
+                      { value: "ongoing", label: "Ongoing", count: ongoingCases.length },
+                      { value: "finished", label: "Finished", count: finishedCases.length },
+                    ].map((tab) => (
+                      <button
+                        key={`desktop-case-tab-${tab.value}`}
+                        type="button"
+                        className={`rounded-lg px-4 py-2 text-xs font-semibold uppercase tracking-[0.1em] transition ${
+                          caseArchiveTab === tab.value
+                            ? "bg-amber-200/[0.09] text-amber-100 shadow-[inset_0_0_0_1px_rgba(251,191,36,0.08)]"
+                            : "text-white/42 hover:bg-white/[0.035] hover:text-white/74"
+                        }`}
+                        onClick={() => setCaseArchiveTab(tab.value)}
+                      >
+                        {tab.label} <span className="text-white/45">{tab.count}</span>
+                      </button>
+                    ))}
+                  </div>
+
                   <div className="mt-5 grid gap-3 lg:grid-cols-2">
                     {initialCases.length === 0 ? (
                       <div className="arena-surface-soft border-dashed p-8 text-center lg:col-span-2">
@@ -2278,8 +2289,19 @@ export default function DashboardHub({
                           Start with the recommended case and the client interview will open.
                         </p>
                       </div>
+                    ) : selectedArchiveCases.length === 0 ? (
+                      <div className="arena-surface-soft border-dashed p-8 text-center lg:col-span-2">
+                        <p className="text-lg font-semibold text-white">
+                          No {caseArchiveTab} cases yet
+                        </p>
+                        <p className="mt-2 text-sm text-white/62">
+                          {caseArchiveTab === "finished"
+                            ? "Completed rulings will appear here after verdict."
+                            : "Active intake and courtroom matters will appear here."}
+                        </p>
+                      </div>
                     ) : (
-                      initialCases.slice(0, 6).map((item) => {
+                      selectedArchiveCases.slice(0, 6).map((item) => {
                         const caseProgress = getCaseProgress(item);
                         const caseSeverity = statusSeverity[item.status] || "neutral";
 
