@@ -721,6 +721,17 @@ export default function CaseWorkspace({
   );
   const lastCourtroomEntry =
     normalizedCourtroomTranscript[normalizedCourtroomTranscript.length - 1] || null;
+  const latestCourtroomRound = Math.max(
+    0,
+    ...normalizedCourtroomTranscript.map((entry) => Number(entry.round) || 0)
+  );
+  const displayedCourtroomRound = Math.max(
+    1,
+    Math.min(
+      caseSession.maxCourtRounds || 1,
+      latestCourtroomRound || caseSession.score.roundsCompleted || 1
+    )
+  );
   const waitingForOpponentResponse = Boolean(
     apiConfig.turnBasedCourtroom && lastCourtroomEntry?.speaker === "player"
   );
@@ -802,8 +813,8 @@ export default function CaseWorkspace({
     if (isExited) return "Exited";
     if (isInterview) return "Party Intake";
     if (isVerdict) return "Verdict";
-    return `Courtroom Round ${caseSession.score.roundsCompleted + 1}`;
-  }, [caseSession.score.roundsCompleted, isExited, isInterview, isVerdict]);
+    return `Courtroom Round ${displayedCourtroomRound}`;
+  }, [displayedCourtroomRound, isExited, isInterview, isVerdict]);
 
   const suggestedQuestions = (caseSession.factSheet.openQuestions || []).slice(0, 4);
   const factSheetCompletionItems = [
@@ -833,7 +844,7 @@ export default function CaseWorkspace({
     (!cleanDraftList(factSheetDraft.desiredRelief).length && "Add requested relief") ||
     "Review and finalize fact sheet";
   const isCourtroom = !isInterview && !isExited && !isVerdict;
-  const courtroomRoundLabel = `Courtroom Round ${caseSession.score.roundsCompleted + 1}`;
+  const courtroomRoundLabel = `Courtroom Round ${displayedCourtroomRound}`;
   const assessment = caseSession.caseAssessment || {};
   const displayedSuccessChance = isInterview
     ? assessment.currentSuccessChance
@@ -1021,7 +1032,7 @@ export default function CaseWorkspace({
     : "";
   const lastOpponentCourtEntryDisplayRound = Math.max(
     Number(lastOpponentCourtEntry?.round || 0),
-    Math.min(caseSession.score.roundsCompleted + 1, caseSession.maxCourtRounds || 1)
+    displayedCourtroomRound
   );
   const mobileOpponentArgumentCanExpand =
     String(lastOpponentCourtEntry?.text || "").length > 160 ||
@@ -1860,28 +1871,6 @@ export default function CaseWorkspace({
                   </div>
                 </section>
 
-                {visibleLawbookRules[0] ? (
-                  <section id="lawbook" className="rounded-2xl border border-emerald-300/20 bg-emerald-300/10 p-4">
-                    <div className="flex items-center gap-3">
-                      <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-emerald-300/25 bg-emerald-300/12 text-emerald-200">
-                        <LawbookRuleIcon icon={visibleLawbookRules[0].icon} className="h-6 w-6" />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-semibold text-emerald-200">Relevant rule unlocked</p>
-                        <p className="mt-1 line-clamp-2 text-sm font-semibold leading-5 text-emerald-50">
-                          {visibleLawbookRules[0].title}
-                        </p>
-                      </div>
-                      <a
-                        href="#mobile-lawbook-details"
-                        className="shrink-0 rounded-xl border border-white/15 bg-black/18 px-3 py-2 text-xs font-semibold text-white/82"
-                      >
-                        View
-                      </a>
-                    </div>
-                  </section>
-                ) : null}
-
                 {renderLawbookPanel("sm:hidden", "mobile-lawbook-details")}
 
                 <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-black/92 px-3 pb-[calc(env(safe-area-inset-bottom)+0.45rem)] pt-2 shadow-[0_-18px_50px_rgba(0,0,0,0.45)] backdrop-blur-xl">
@@ -2163,7 +2152,7 @@ export default function CaseWorkspace({
                     <div className="mt-4 flex items-center gap-3">
                       <span className="inline-flex items-center gap-2 rounded-xl border border-white/12 bg-white/[0.035] px-3 py-2 text-sm font-semibold text-white">
                         <HeroIcons.ScaleIcon className="h-5 w-5 text-white/62" aria-hidden="true" />
-                        Round {caseSession.score.roundsCompleted + 1} of {caseSession.maxCourtRounds}
+                        Round {displayedCourtroomRound} of {caseSession.maxCourtRounds}
                       </span>
                     </div>
                   </div>
@@ -3010,29 +2999,6 @@ export default function CaseWorkspace({
                   </div>
                 </section>
 
-                {visibleLawbookRules[0] ? (
-                  <section className="rounded-2xl border border-emerald-300/20 bg-emerald-300/10 p-4">
-                    <div className="flex items-center gap-3">
-                      <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-emerald-300/25 bg-emerald-300/12 text-emerald-200">
-                        <LawbookRuleIcon icon={visibleLawbookRules[0].icon} className="h-6 w-6" />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-semibold text-emerald-200">
-                          Relevant rule unlocked
-                        </p>
-                        <p className="mt-1 line-clamp-2 text-sm font-semibold leading-5 text-emerald-50">
-                          {visibleLawbookRules[0].title}
-                        </p>
-                      </div>
-                      <a
-                        href="#desktop-lawbook-details"
-                        className="shrink-0 rounded-xl border border-white/15 bg-black/18 px-3 py-2 text-xs font-semibold text-white/82"
-                      >
-                        View
-                      </a>
-                    </div>
-                  </section>
-                ) : null}
               </>
             ) : (
               <>
