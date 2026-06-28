@@ -1516,34 +1516,36 @@ export default function CaseWorkspace({
               </a>
             </div>
 
-            <div className="mt-4 grid gap-3 text-sm text-white/62 lg:grid-cols-[minmax(0,1fr)_minmax(260px,0.5fr)]">
-              <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-4">
-                <p className="text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-white/42">
-                  Matter
-                </p>
-                <p className="mt-2 line-clamp-2 leading-6 text-white/72">
-                  {heroNarrativeExcerpt}
-                </p>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="rounded-xl border border-sky-300/20 bg-sky-300/[0.06] p-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-sky-200">
-                    You
+            {!isInterview ? (
+              <div className="mt-4 grid gap-3 text-sm text-white/62 lg:grid-cols-[minmax(0,1fr)_minmax(260px,0.5fr)]">
+                <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-4">
+                  <p className="text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-white/42">
+                    Matter
                   </p>
-                  <p className="mt-1 truncate font-semibold text-white">{playerPartyName}</p>
-                </div>
-                <div className="rounded-xl border border-rose-300/20 bg-rose-300/[0.06] p-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-rose-200">
-                    Opponent
+                  <p className="mt-2 line-clamp-2 leading-6 text-white/72">
+                    {heroNarrativeExcerpt}
                   </p>
-                  <p className="mt-1 truncate font-semibold text-white">{opponentPartyName}</p>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="rounded-xl border border-sky-300/20 bg-sky-300/[0.06] p-3">
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-sky-200">
+                      You
+                    </p>
+                    <p className="mt-1 truncate font-semibold text-white">{playerPartyName}</p>
+                  </div>
+                  <div className="rounded-xl border border-rose-300/20 bg-rose-300/[0.06] p-3">
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-rose-200">
+                      Opponent
+                    </p>
+                    <p className="mt-1 truncate font-semibold text-white">{opponentPartyName}</p>
+                  </div>
                 </div>
               </div>
-            </div>
+            ) : null}
           </div>
         </div>
 
-        <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+        <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(360px,0.75fr)]">
           <section className="min-w-0 space-y-6">
             {isInterview ? (
               <>
@@ -1641,23 +1643,33 @@ export default function CaseWorkspace({
                       )}
 
                       {showMobileExchangeHistory && mobileInterviewExchangeHistory.length > 0 ? (
-                        <div className="mt-3 space-y-2 border-t border-white/10 pt-3">
+                        <div className="mt-3 space-y-4 border-t border-white/10 pt-3">
                           {mobileInterviewExchangeHistory.map((exchange) => (
                             <article
                               key={exchange.id}
-                              className="rounded-xl border border-white/10 bg-black/18 p-3"
+                              className="space-y-2"
                             >
-                              <p className="break-words text-xs font-semibold leading-5 text-white/82">
-                                <span className="text-white/44">You: </span>
-                                {exchange.question.text}
-                              </p>
+                              <div className="flex justify-end">
+                                <div className="max-w-[88%] rounded-2xl rounded-br-md border border-white/[0.06] bg-sky-300/[0.075] px-3 py-2 text-right">
+                                  <p className="text-[0.62rem] font-semibold uppercase tracking-[0.12em] text-sky-200/72">
+                                    You
+                                  </p>
+                                  <p className="mt-1 break-words text-xs font-semibold leading-5 text-white/84">
+                                    {exchange.question.text}
+                                  </p>
+                                </div>
+                              </div>
                               {exchange.response ? (
-                                <p className="mt-2 break-words text-xs font-semibold leading-5 text-white/68">
-                                  <span className="text-amber-200/72">
-                                    {getInterviewEntrySpeaker(exchange.response)}:{" "}
-                                  </span>
-                                  {exchange.response.text}
-                                </p>
+                                <div className="flex justify-start">
+                                  <div className="max-w-[88%] rounded-2xl rounded-bl-md border border-white/[0.055] bg-amber-200/[0.055] px-3 py-2">
+                                    <p className="text-[0.62rem] font-semibold uppercase tracking-[0.12em] text-amber-200/72">
+                                      {getInterviewEntrySpeaker(exchange.response)}
+                                    </p>
+                                    <p className="mt-1 break-words text-xs font-semibold leading-5 text-white/72">
+                                      {exchange.response.text}
+                                    </p>
+                                  </div>
+                                </div>
                               ) : null}
                             </article>
                           ))}
@@ -1902,7 +1914,7 @@ export default function CaseWorkspace({
               </div>
 
               <div className="hidden space-y-4 sm:block">
-                <section className="arena-surface border-amber-200/20 bg-amber-200/[0.045]">
+                <section className="arena-surface border-white/10 bg-white/[0.025]">
                   <form className="p-4 sm:p-6" onSubmit={handleInterviewSubmit}>
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                       <div>
@@ -1998,23 +2010,33 @@ export default function CaseWorkspace({
                       )}
 
                       {showMobileExchangeHistory && mobileInterviewExchangeHistory.length > 0 ? (
-                        <div className="arena-scroll mt-3 max-h-60 space-y-2 overflow-y-auto border-t border-white/10 pt-3">
+                        <div className="arena-scroll mt-3 max-h-60 space-y-4 overflow-y-auto border-t border-white/10 pt-3">
                           {mobileInterviewExchangeHistory.map((exchange) => (
                             <article
                               key={exchange.id}
-                              className="rounded-xl border border-white/10 bg-black/18 p-3"
+                              className="space-y-2"
                             >
-                              <p className="break-words text-xs font-semibold leading-5 text-white/82">
-                                <span className="text-white/44">You: </span>
-                                {exchange.question.text}
-                              </p>
+                              <div className="flex justify-end">
+                                <div className="max-w-[74%] rounded-2xl rounded-br-md border border-white/[0.06] bg-sky-300/[0.075] px-4 py-3 text-right">
+                                  <p className="text-[0.64rem] font-semibold uppercase tracking-[0.13em] text-sky-200/72">
+                                    You
+                                  </p>
+                                  <p className="mt-1 break-words text-sm font-semibold leading-6 text-white/84">
+                                    {exchange.question.text}
+                                  </p>
+                                </div>
+                              </div>
                               {exchange.response ? (
-                                <p className="mt-2 break-words text-xs font-semibold leading-5 text-white/68">
-                                  <span className="text-amber-200/72">
-                                    {getInterviewEntrySpeaker(exchange.response)}:{" "}
-                                  </span>
-                                  {exchange.response.text}
-                                </p>
+                                <div className="flex justify-start">
+                                  <div className="max-w-[74%] rounded-2xl rounded-bl-md border border-white/[0.055] bg-amber-200/[0.055] px-4 py-3">
+                                    <p className="text-[0.64rem] font-semibold uppercase tracking-[0.13em] text-amber-200/72">
+                                      {getInterviewEntrySpeaker(exchange.response)}
+                                    </p>
+                                    <p className="mt-1 break-words text-sm font-semibold leading-6 text-white/72">
+                                      {exchange.response.text}
+                                    </p>
+                                  </div>
+                                </div>
                               ) : null}
                             </article>
                           ))}
@@ -2024,7 +2046,7 @@ export default function CaseWorkspace({
 
                     <div className="relative mt-4">
                       <textarea
-                        className="textarea textarea-bordered arena-textarea arena-field h-28 min-w-0 w-full pr-12 text-slate-100"
+                        className="textarea textarea-bordered arena-textarea arena-field h-24 min-w-0 w-full pr-12 text-slate-100"
                         placeholder={`Type your question to ${playerInterviewSubjectName}...`}
                         value={question}
                         onChange={(event) => setQuestion(event.target.value)}
@@ -2060,9 +2082,9 @@ export default function CaseWorkspace({
                       </button>
                     </div>
 
-                    <div className="mt-3 flex flex-col gap-3 lg:flex-row lg:items-center">
+                    <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center">
                       <button
-                        className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-amber-200/35 bg-amber-200 px-4 py-3 text-sm font-semibold text-black transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60 lg:w-auto"
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-amber-200/35 bg-amber-200 px-6 py-3 text-sm font-semibold text-black transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60 lg:w-56"
                         disabled={working || recordingQuestion || transcribingQuestion || !question.trim()}
                       >
                         {pendingAction === "interview" ? "Sending..." : "Send Question"}
@@ -2802,6 +2824,218 @@ export default function CaseWorkspace({
           </section>
 
           <aside className="hidden min-w-0 space-y-6 sm:block">
+            {isInterview ? (
+              <>
+                {workspaceNotice}
+                <section id="desktop-client-brief" className="arena-surface overflow-hidden">
+                  <div className="relative min-h-[17rem] p-6">
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_78%_20%,rgba(251,191,36,0.14),transparent_28%),linear-gradient(135deg,rgba(255,255,255,0.045),transparent_38%),linear-gradient(180deg,rgba(0,0,0,0.04),rgba(0,0,0,0.54))]" />
+                    <div className="absolute right-5 top-5 h-36 w-32 overflow-hidden rounded-2xl border border-white/10 bg-black/28 shadow-[0_18px_45px_rgba(0,0,0,0.35)]">
+                      {caseSession.clientPortrait?.image ? (
+                        <img
+                          src={caseSession.clientPortrait.image}
+                          alt={`${playerInterviewSubjectName} portrait`}
+                          width={640}
+                          height={720}
+                          className="h-full w-full rounded-[inherit] object-cover object-top"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-white/42">
+                          <HeroIcons.UserCircleIcon className="h-10 w-10" aria-hidden="true" />
+                          <span className="text-[0.58rem] font-semibold uppercase tracking-[0.08em]">
+                            Portrait
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="relative z-10 max-w-[13.5rem]">
+                      <p className="text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-amber-200">
+                        Interview your client
+                      </p>
+                      <h2 className="mt-3 text-2xl font-semibold leading-tight text-white">
+                        {playerInterviewSubjectName} is waiting.
+                      </h2>
+                      <p className="mt-3 text-sm leading-6 text-white/64">
+                        Ask the right questions to uncover facts and build your case.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="relative z-10 mt-5 w-full rounded-2xl border border-white/10 bg-black/36 p-3 text-left backdrop-blur transition hover:border-white/20"
+                      onClick={() => setShowFullMobileBrief((current) => !current)}
+                      aria-expanded={showFullMobileBrief}
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-emerald-300/30 bg-emerald-300/10 text-emerald-200">
+                          <HeroIcons.BuildingOffice2Icon className="h-6 w-6" aria-hidden="true" />
+                        </span>
+                        <div className="min-w-0">
+                          <p className="line-clamp-1 text-sm font-semibold text-white">
+                            {playerPartyName}
+                          </p>
+                          <p
+                            className={`mt-1 text-xs leading-5 text-white/58 ${
+                              showFullMobileBrief ? "" : "line-clamp-2"
+                            }`}
+                          >
+                            {heroNarrativeExcerpt}
+                          </p>
+                        </div>
+                        <HeroIcons.ChevronDownIcon
+                          className={`h-4 w-4 shrink-0 text-white/42 transition ${
+                            showFullMobileBrief ? "rotate-180" : ""
+                          }`}
+                          aria-hidden="true"
+                        />
+                      </div>
+                    </button>
+                  </div>
+                </section>
+
+                <section id="fact-sheet-details" className="arena-surface">
+                  <div className="p-4 sm:p-6">
+                    <p className="arena-kicker">Case File Progress</p>
+                    <p className="mt-3 text-sm font-semibold text-white">
+                      {completedFactSheetItems} / {factSheetCompletionItems.length} sections discovered
+                    </p>
+                    <div className="mt-5 grid grid-cols-4 gap-2">
+                      {factSheetSections.map((section) => {
+                        const Icon =
+                          section.icon ||
+                          factSheetSectionIconMap[section.key] ||
+                          HeroIcons.DocumentTextIcon;
+                        const sectionCount = cleanDraftList(factSheetDraft[section.key]).length;
+                        const isComplete = sectionCount > 0;
+                        const isSelected = activeMobileFactSheetKey === section.key;
+
+                        return (
+                          <button
+                            key={`desktop-intake-${section.key}`}
+                            type="button"
+                            className={`flex min-h-[4.85rem] min-w-0 flex-col items-center justify-center gap-1 rounded-xl border px-1.5 text-center transition ${
+                              isSelected
+                                ? "border-amber-200/45 bg-amber-300/12 text-amber-100"
+                                : isComplete
+                                ? "border-emerald-300/25 bg-emerald-300/8 text-emerald-100"
+                                : "border-white/10 bg-black/18 text-white/48"
+                            }`}
+                            onClick={() => openMobileFactSheetDialog(section.key)}
+                          >
+                            <Icon
+                              className={`h-4 w-4 ${
+                                isSelected
+                                  ? "text-amber-100"
+                                  : isComplete
+                                  ? "text-emerald-200"
+                                  : "text-amber-200"
+                              }`}
+                              aria-hidden="true"
+                            />
+                            <span className="line-clamp-1 text-[0.58rem] font-semibold leading-tight">
+                              {factSheetSectionCompactLabel[section.key] || section.title}
+                            </span>
+                            <span className="text-[0.58rem] text-white/42">
+                              {sectionCount}/{Math.max(sectionCount, 1)}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="mt-4 arena-progress-track">
+                      <div
+                        className="arena-progress-fill"
+                        style={{ width: `${roundedFactSheetProgressPercent}%` }}
+                      />
+                    </div>
+                    <div className="mt-5 rounded-2xl border border-amber-200/15 bg-amber-200/[0.055] p-4">
+                      <p className="text-sm font-semibold leading-6 text-white">
+                        Cross-check your fact sheet before court.
+                      </p>
+                      <p className="mt-1 text-xs leading-5 text-white/55">
+                        Tap each section to review the points your client has given you. Once the
+                        file looks right, finalize it to take the case to court.
+                      </p>
+                      {activeMobileFactSheetSection ? (
+                        <div className="mt-3 rounded-xl border border-white/10 bg-black/18 p-3">
+                          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/45">
+                            {activeMobileFactSheetSection.title}
+                          </p>
+                          {activeMobileFactSheetItems.length > 0 ? (
+                            <p className="mt-2 line-clamp-3 text-sm font-semibold leading-6 text-white/78">
+                              {activeMobileFactSheetItems[0]}
+                            </p>
+                          ) : (
+                            <p className="mt-2 text-sm text-white/45">
+                              {activeMobileFactSheetSection.empty}
+                            </p>
+                          )}
+                        </div>
+                      ) : null}
+                      {isIntakeLocked ? (
+                        <div className="mt-3 rounded-xl border border-white/10 bg-black/18 p-3 text-xs leading-5 text-white/60">
+                          {apiConfig.intakeLockedMessage ||
+                            "Your fact sheet is finalized. Waiting for the other side."}
+                        </div>
+                      ) : null}
+                      <button
+                        type="button"
+                        className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-amber-200/35 bg-amber-200 px-5 py-3 text-sm font-semibold text-black transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                        onClick={handleFinalize}
+                        disabled={working || isIntakeLocked}
+                      >
+                        {isIntakeLocked
+                          ? "Waiting for Opponent"
+                          : pendingAction === "finalize"
+                          ? "Finalizing Fact Sheet..."
+                          : "Finalize Fact Sheet"}
+                        <HeroIcons.ArrowRightIcon className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                      {pendingAction === "finalize" ? (
+                        <div className="mt-3">
+                          <LoadingBar label="Finalizing fact sheet" />
+                        </div>
+                      ) : null}
+                      {finalizeFeedback?.text ? (
+                        <p
+                          className={`mt-3 text-sm leading-6 ${
+                            finalizeFeedback.tone === "error"
+                              ? "text-rose-200"
+                              : "text-emerald-200"
+                          }`}
+                        >
+                          {finalizeFeedback.text}
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
+                </section>
+
+                {visibleLawbookRules[0] ? (
+                  <section className="rounded-2xl border border-emerald-300/20 bg-emerald-300/10 p-4">
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-emerald-300/25 bg-emerald-300/12 text-emerald-200">
+                        <LawbookRuleIcon icon={visibleLawbookRules[0].icon} className="h-6 w-6" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-semibold text-emerald-200">
+                          Relevant rule unlocked
+                        </p>
+                        <p className="mt-1 line-clamp-2 text-sm font-semibold leading-5 text-emerald-50">
+                          {visibleLawbookRules[0].title}
+                        </p>
+                      </div>
+                      <a
+                        href="#desktop-lawbook-details"
+                        className="shrink-0 rounded-xl border border-white/15 bg-black/18 px-3 py-2 text-xs font-semibold text-white/82"
+                      >
+                        View
+                      </a>
+                    </div>
+                  </section>
+                ) : null}
+              </>
+            ) : (
+              <>
             {workspaceNotice}
             <div id="fact-sheet-details" className="arena-surface">
               <div className="p-4 sm:p-6">
@@ -2861,7 +3095,7 @@ export default function CaseWorkspace({
                               ? "border-emerald-300/25 bg-emerald-300/8 text-emerald-100"
                               : "border-white/10 bg-black/18 text-white/48"
                           }`}
-                          onClick={() => setActiveMobileFactSheetKey(section.key)}
+                          onClick={() => openMobileFactSheetDialog(section.key)}
                         >
                           <Icon className="h-4 w-4" aria-hidden="true" />
                           <span className="line-clamp-1 text-[0.58rem] font-semibold leading-tight">
@@ -3032,6 +3266,8 @@ export default function CaseWorkspace({
                 </details>
               </div>
             )}
+              </>
+            )}
           </aside>
           {(isInterview || isCourtroom) &&
             renderLawbookPanel("hidden sm:block xl:hidden", "tablet-lawbook-details")}
@@ -3178,7 +3414,7 @@ export default function CaseWorkspace({
         </div>
       </div>
       <div
-        className={`modal modal-bottom sm:hidden ${
+        className={`modal modal-bottom sm:modal-middle ${
           showMobileFactSheetDialog ? "modal-open" : ""
         }`}
         role="dialog"
@@ -3186,7 +3422,7 @@ export default function CaseWorkspace({
         aria-hidden={!showMobileFactSheetDialog}
         aria-label={`${activeMobileFactSheetSection?.title || "Case file"} reference`}
       >
-        <div className="modal-box max-h-[86vh] overflow-hidden rounded-t-2xl border border-white/[0.07] bg-[#070908] p-0 text-white shadow-2xl">
+        <div className="modal-box flex max-h-[92vh] overflow-hidden rounded-t-2xl border border-white/[0.07] bg-[#070908] p-0 text-white shadow-2xl sm:h-[min(54rem,calc(100vh-2rem))] sm:w-[min(46rem,calc(100vw-3rem))] sm:max-w-none sm:flex-col sm:rounded-2xl">
           {activeMobileFactSheetSection ? (
             <>
               <div className="border-b border-white/[0.06] p-4">
@@ -3208,17 +3444,17 @@ export default function CaseWorkspace({
                   <HeroIcons.XMarkIcon className="h-5 w-5" aria-hidden="true" />
                 </button>
               </div>
-              <div className="mt-4 grid grid-cols-4 gap-1.5">
+              <div className="mt-4 grid grid-cols-4 gap-1.5 sm:gap-2">
                 {factSheetSections.map((section) => renderMobileFactSheetButton(section))}
               </div>
             </div>
 
-            <div className="max-h-[48vh] overflow-y-auto p-4">
+            <div className="flex max-h-[48vh] flex-col p-4 sm:min-h-0 sm:flex-1 sm:max-h-none sm:p-5">
               <p className="text-sm italic leading-6 text-white/52">
                 {activeMobileFactSheetSection.description}
               </p>
               {activeMobileFactSheetItems.length > 0 ? (
-                <div className="mt-4 space-y-3">
+                <div className="arena-scroll mt-4 min-h-[21.25rem] space-y-3 overflow-y-auto pr-1 sm:h-[24rem] sm:min-h-0 sm:flex-none">
                   {activeMobileFactSheetItems.map((item, itemIndex) => {
                     const bulletTone = getFactSheetItemTone(
                       activeMobileFactSheetSection.key,
@@ -3228,7 +3464,7 @@ export default function CaseWorkspace({
                     return (
                       <div
                         key={`${activeMobileFactSheetSection.key}-dialog-${itemIndex}`}
-                        className="flex gap-3 rounded-xl border border-white/10 bg-white/[0.025] p-3"
+                        className="flex min-h-[3.85rem] gap-3 rounded-xl border border-white/10 bg-white/[0.025] p-3"
                       >
                         <span
                           className={`mt-2 h-1.5 w-1.5 shrink-0 rounded-full ${
@@ -3251,7 +3487,7 @@ export default function CaseWorkspace({
                 </div>
               )}
               {isInterview ? (
-                <div className="mt-4 rounded-2xl border border-amber-200/12 bg-amber-200/[0.045] p-3">
+                <div className="mt-4 rounded-2xl border border-white/[0.07] bg-amber-200/[0.045] p-3">
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-200">
                     Before court
                   </p>
