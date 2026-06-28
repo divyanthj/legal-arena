@@ -18,7 +18,6 @@ import { sanitizeFactSheet } from "@/libs/game/factSheetSanitizer";
 import { useCaseVoiceRecorder } from "./useCaseVoiceRecorder";
 
 import {
-  formatDateTime,
   normalizeCourtroomEntry,
   winnerLabel,
   winnerSignal,
@@ -27,14 +26,10 @@ import {
   helpText,
   InfoDot,
   CollapseChevron,
-  getRuleTooltip,
-  buildCanonicalFactLookup,
-  resolveFactReference,
   getPlayerPartyName,
   getPlayerInterviewSubjectName,
   isGenericInterviewSubjectName,
   getOpponentPartyName,
-  getPlaintiffName,
   getDefendantName,
   getCaseRouteRef,
   clampPercent,
@@ -175,17 +170,6 @@ const TypingIndicator = ({ speaker }) => (
     <span className="h-2 w-2 rounded-full bg-amber-200/80 arena-typing-dot" />
     <span className="h-2 w-2 rounded-full bg-amber-200/80 arena-typing-dot [animation-delay:140ms]" />
     <span className="h-2 w-2 rounded-full bg-amber-200/80 arena-typing-dot [animation-delay:280ms]" />
-  </div>
-);
-
-const CounselIdentity = ({ title, representedBy, metaClassName = "text-white/55" }) => (
-  <div className="min-w-0">
-    <p className="font-semibold text-white">{title}</p>
-    {representedBy ? (
-      <p className={`mt-0.5 text-xs uppercase tracking-[0.14em] ${metaClassName}`}>
-        Represented by {representedBy}
-      </p>
-    ) : null}
   </div>
 );
 
@@ -725,20 +709,6 @@ export default function CaseWorkspace({
     .slice(0, -1)
     .reverse();
   const opponentPartyName = getOpponentPartyName(caseSession);
-  const useCounselLabels = Boolean(apiConfig.counselLabels);
-  const playerCounselTitle = useCounselLabels
-    ? `Counsel for ${playerPartyName}`
-    : "You";
-  const opponentCounselTitle = useCounselLabels
-    ? `Counsel for ${opponentPartyName}`
-    : opponentPartyName;
-  const playerRepresentedBy = useCounselLabels
-    ? caseSession.playerCounselName || "You"
-    : "";
-  const opponentRepresentedBy = useCounselLabels
-    ? caseSession.opponentCounselName || ""
-    : "";
-  const plaintiffName = getPlaintiffName(caseSession);
   const defendantName = getDefendantName(caseSession);
   const isDefendantSide =
     caseSession.playerSide === "opponent" ||
@@ -786,7 +756,6 @@ export default function CaseWorkspace({
     caseSession.verdict?.highlights?.[0] ||
     caseSession.score.lastBenchSignal ||
     "The record was close on the decisive issue.";
-  const canonicalFactLookup = buildCanonicalFactLookup(caseSession);
   const lawbookRules =
     Array.isArray(caseSession.lawbook) && caseSession.lawbook.length >= legalArenaLawbook.length
       ? caseSession.lawbook
@@ -884,17 +853,6 @@ export default function CaseWorkspace({
     String(caseSession.clientMemoryExcerpt || "").trim() ||
     String(caseSession.premise?.openingStatement || "").trim() ||
     String(caseSession.premise?.overview || "").trim();
-  const heroPanelStyle = {
-    backgroundImage: [
-      "linear-gradient(90deg, rgba(4,4,4,0.96) 0%, rgba(4,4,4,0.88) 42%, rgba(4,4,4,0.5) 68%, rgba(4,4,4,0.9) 100%)",
-      "linear-gradient(180deg, rgba(18,12,6,0.18), rgba(0,0,0,0.1))",
-      `url('${isInterview ? "/images/office.jpg" : "/images/court.jpg"}')`,
-    ].join(", "),
-    backgroundPosition: "center, center, 72% center",
-    backgroundRepeat: "no-repeat, no-repeat, no-repeat",
-    backgroundSize: "cover, cover, auto 108%",
-  };
-
   const firstDraftItem = (...lists) =>
     lists.flatMap((list) => cleanDraftList(list)).find(Boolean) || "";
 
@@ -1469,118 +1427,116 @@ export default function CaseWorkspace({
 
         <div
           id="case-brief-desktop"
-          className="arena-surface arena-scanline arena-column-bg hidden sm:block"
-          style={heroPanelStyle}
+          className="arena-surface hidden overflow-hidden sm:block"
         >
-          <div className="p-4 sm:p-6 md:p-8">
-            <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
-              <div className="min-w-0">
-                <p className="arena-kicker mb-4">LEGAL ARENA</p>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Link
-                    href="/dashboard"
-                    className="arena-btn-dark inline-flex px-4 py-2 text-sm"
-                  >
-                    Back to Cases
-                  </Link>
-                  {isInterview ? (
-                    <button
-                      type="button"
-                      className="arena-btn-danger inline-flex items-center gap-2 px-4 py-2 text-sm"
-                      onClick={handleExitCase}
-                      disabled={working}
-                    >
-                      <HeroIcons.XMarkIcon className="h-4 w-4" aria-hidden="true" />
-                      {pendingAction === "exit"
-                        ? apiConfig.exitPendingLabel || "Exiting..."
-                        : apiConfig.exitLabel || "Exit Case"}
-                    </button>
-                  ) : null}
-                  <span className="badge badge-outline border-white/15 text-white/80">
-                    {caseSession.practiceArea}
-                  </span>
-                  <span className="badge badge-outline border-white/15 text-white/80">
-                    {caseSession.primaryCategory}
-                  </span>
-                  <span className="badge badge-outline border-white/15 text-white/80">
-                    Complexity {caseSession.complexity}
-                  </span>
-                  <span className="badge badge-outline border-white/15 text-white/80">
-                    {sideBadgeLabel}
-                  </span>
-                </div>
-                <h1 className="arena-headline mt-5 max-w-5xl text-[2.35rem] uppercase leading-[0.95] sm:text-4xl md:text-6xl">
-                  {caseSession.title}
-                </h1>
-                <p className="mt-4 max-w-3xl text-white/66">
-                  {heroNarrativeExcerpt}
-                </p>
-                <div className="mt-6 grid gap-4 text-sm text-white/58 md:grid-cols-3">
-                  <div>
-                    <p className="arena-kicker">Plaintiff</p>
-                    <p className="mt-2 text-base font-semibold text-white">{plaintiffName}</p>
-                  </div>
-                  <div>
-                    <p className="arena-kicker">Defendant</p>
-                    <p className="mt-2 text-base font-semibold text-white">{defendantName}</p>
-                  </div>
-                  <div>
-                    <p className="arena-kicker">Court</p>
-                    <p className="mt-2 text-base font-semibold text-white">
-                      {caseSession.premise.courtName}
-                    </p>
-                  </div>
+          <div className="border-b border-white/10 p-4 sm:p-5">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex min-w-0 items-center gap-3">
+                <Link
+                  href="/dashboard"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.035] text-white/72 transition hover:border-white/20 hover:text-white"
+                  aria-label="Back to cases"
+                >
+                  <HeroIcons.ArrowLeftIcon className="h-5 w-5" aria-hidden="true" />
+                </Link>
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-amber-200">
+                    Legal Arena
+                  </p>
+                  <h1 className="mt-1 truncate text-2xl font-semibold leading-tight text-white">
+                    {caseSession.title}
+                  </h1>
                 </div>
               </div>
 
-              <div className="flex flex-col items-start gap-3 xl:items-end">
+              <div className="flex flex-wrap items-center gap-2 lg:justify-end">
                 <span
-                  className={`badge border px-3 py-3 arena-status ${
+                  className={`shrink-0 rounded-lg border px-2.5 py-1 text-xs font-semibold ${
+                    caseSession.playerSide === "opponent"
+                      ? "border-sky-300/25 bg-sky-300/10 text-sky-100"
+                      : "border-emerald-300/25 bg-emerald-300/10 text-emerald-100"
+                  }`}
+                >
+                  {sideBadgeLabel}
+                </span>
+                <span
+                  className={`shrink-0 rounded-lg border px-2.5 py-1 text-xs font-semibold arena-status ${
                     statusTone[caseSession.status] || "arena-status-neutral"
                   }`}
                 >
                   {isCourtroom ? courtroomRoundLabel : courtroomStageLabel}
                 </span>
+                {Number.isFinite(Number(displayedSuccessChance)) ? (
+                  <span
+                    className="shrink-0 rounded-lg border border-emerald-300/25 bg-emerald-300/10 px-2.5 py-1 text-xs font-semibold text-emerald-100"
+                    data-tooltip-id="success-chance-tooltip"
+                    aria-label={successChanceLabel}
+                  >
+                    Win chance {Math.round(Number(displayedSuccessChance))}%
+                  </span>
+                ) : null}
+                {isInterview ? (
+                  <button
+                    type="button"
+                    className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-rose-300/22 bg-rose-500/10 px-3 text-xs font-semibold text-rose-100 transition hover:border-rose-200/45 hover:bg-rose-500/18 disabled:cursor-not-allowed disabled:opacity-55"
+                    onClick={handleExitCase}
+                    disabled={working}
+                  >
+                    <HeroIcons.XMarkIcon className="h-4 w-4" aria-hidden="true" />
+                    {pendingAction === "exit"
+                      ? apiConfig.exitPendingLabel || "Exiting..."
+                      : apiConfig.exitLabel || "Exit Case"}
+                  </button>
+                ) : null}
                 <ButtonAccount />
-                <div className="arena-surface-soft w-full p-4 text-sm text-white/60 xl:max-w-[18rem]">
-                  {isCourtroom ? (
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-11 w-11 items-center justify-center rounded-full border border-white/12 bg-white/5 text-white">
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          strokeWidth={1.5}
-                          stroke="currentColor"
-                          className="h-5 w-5"
-                          aria-hidden="true"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M12 3v18m0-18 7.5 4.5M12 3 4.5 7.5M19.5 7.5v9L12 21m7.5-13.5L12 12m0 9-7.5-4.5v-9M12 12 4.5 7.5"
-                          />
-                        </svg>
-                      </div>
-                      <div>
-                        <p className="arena-kicker">You Represent</p>
-                        <p className="mt-1 font-semibold text-white">
-                          {useCounselLabels ? playerCounselTitle : playerPartyName}
-                        </p>
-                        <p className="text-sm text-white/55">{sideBadgeLabel.replace(" Side", "")}</p>
-                        {useCounselLabels && playerRepresentedBy ? (
-                          <p className="mt-1 text-xs uppercase tracking-[0.14em] text-white/45">
-                            Represented by {playerRepresentedBy}
-                          </p>
-                        ) : null}
-                      </div>
-                    </div>
-                  ) : (
-                    <p>
-                      You represent <span className="text-white">{playerPartyName}</span> against{" "}
-                      <span className="text-white">{opponentPartyName}</span>.
-                    </p>
-                  )}
+              </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-3 border-y border-white/10 text-xs font-semibold text-white/62">
+              <a
+                href="#case-brief-desktop"
+                className="flex items-center justify-center gap-1.5 py-3 transition hover:text-white"
+              >
+                <HeroIcons.DocumentTextIcon className="h-4 w-4" aria-hidden="true" />
+                Brief
+              </a>
+              <a
+                href="#fact-sheet-details"
+                className="flex items-center justify-center gap-1.5 py-3 transition hover:text-white"
+              >
+                <HeroIcons.ClipboardDocumentListIcon className="h-4 w-4" aria-hidden="true" />
+                Fact Sheet
+              </a>
+              <a
+                href="#desktop-lawbook-details"
+                className="flex items-center justify-center gap-1.5 py-3 transition hover:text-white"
+              >
+                <HeroIcons.BookOpenIcon className="h-4 w-4" aria-hidden="true" />
+                Lawbook
+              </a>
+            </div>
+
+            <div className="mt-4 grid gap-3 text-sm text-white/62 lg:grid-cols-[minmax(0,1fr)_minmax(260px,0.5fr)]">
+              <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-4">
+                <p className="text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-white/42">
+                  Matter
+                </p>
+                <p className="mt-2 line-clamp-2 leading-6 text-white/72">
+                  {heroNarrativeExcerpt}
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-xl border border-sky-300/20 bg-sky-300/[0.06] p-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-sky-200">
+                    You
+                  </p>
+                  <p className="mt-1 truncate font-semibold text-white">{playerPartyName}</p>
+                </div>
+                <div className="rounded-xl border border-rose-300/20 bg-rose-300/[0.06] p-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-rose-200">
+                    Opponent
+                  </p>
+                  <p className="mt-1 truncate font-semibold text-white">{opponentPartyName}</p>
                 </div>
               </div>
             </div>
@@ -1945,154 +1901,201 @@ export default function CaseWorkspace({
                 </nav>
               </div>
 
-              <div className="arena-surface hidden sm:block">
-                <div className="p-4 sm:p-6">
-                  <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_240px]">
-                    <div>
-                      <p className="arena-kicker">Step 1</p>
-                      <h2 className="arena-headline mt-2 text-2xl">
-                        Collect your side&apos;s facts
-                      </h2>
-                      <p className="mt-3 text-sm text-white/62">
-                        Interview {playerInterviewSubjectName} and tighten the record.
-                      </p>
+              <div className="hidden space-y-4 sm:block">
+                <section className="arena-surface border-amber-200/20 bg-amber-200/[0.045]">
+                  <form className="p-4 sm:p-6" onSubmit={handleInterviewSubmit}>
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div>
+                        <p className="text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-amber-200">
+                          Ask a question
+                        </p>
+                        <h2 className="mt-2 text-2xl font-semibold leading-tight text-white">
+                          Interview {playerInterviewSubjectName}
+                        </h2>
+                        <p className="mt-1 text-sm font-semibold text-white/48">
+                          {mobileInterviewExchangePairs.length
+                            ? `${mobileInterviewExchangePairs.length} exchange${
+                                mobileInterviewExchangePairs.length === 1 ? "" : "s"
+                              } so far`
+                            : "Start building the record."}
+                        </p>
+                      </div>
+                      <span className="rounded-full border border-white/10 bg-black/24 px-3 py-1.5 text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-white/48">
+                        {question.trim().length}/500
+                      </span>
                     </div>
-                    <div className="arena-surface-soft min-w-0 p-4">
-                      <p className="arena-kicker">Tip</p>
-                      <p className="mt-3 break-words text-sm leading-7 text-white/68">
-                        Ask clear, open-ended questions about dates, records, witnesses, notice,
-                        and any gaps in proof.
-                      </p>
-                    </div>
-                  </div>
 
-                  <form className="mt-6 min-w-0 rounded-2xl border border-amber-200/18 bg-amber-200/[0.04] p-4" onSubmit={handleInterviewSubmit}>
-                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
-                      <div className="relative min-w-0 flex-1">
-                        <textarea
-                          className="textarea textarea-bordered arena-textarea arena-field h-24 min-w-0 w-full pr-12 text-slate-100"
-                          placeholder={`Ask ${playerInterviewSubjectName} about dates, records, witnesses, notice, or any proof gaps you need to pin down.`}
-                          value={question}
-                          onChange={(event) => setQuestion(event.target.value)}
-                          onKeyDown={handleChatTextareaKeyDown}
-                          disabled={transcribingQuestion}
-                        />
-                        <button
-                          type="button"
-                          className={`absolute bottom-3 right-3 flex h-9 w-9 items-center justify-center rounded-full border ${
-                            recordingQuestion
-                              ? "border-rose-300/35 bg-rose-400/15 text-rose-100"
-                              : "border-white/10 bg-black/24 text-white/58"
-                          }`}
-                          disabled={working || transcribingQuestion}
-                          onClick={handleQuestionVoiceInput}
-                          data-tooltip-id="tooltip"
-                          data-tooltip-content={
-                            recordingQuestion
-                              ? "Stop recording and transcribe"
-                              : "Record a question with your microphone"
-                          }
-                          aria-label={
-                            recordingQuestion
-                              ? "Stop recording and transcribe"
-                              : "Record a question with your microphone"
-                          }
-                        >
-                          {transcribingQuestion ? (
-                            <span className="loading loading-spinner loading-xs" />
-                          ) : (
-                            <HeroIcons.MicrophoneIcon className="h-5 w-5" aria-hidden="true" />
-                          )}
-                        </button>
-                      </div>
-                      <div className="flex shrink-0 flex-col gap-2 lg:w-44">
-                        <button
-                          className="arena-btn-light w-full px-5 py-3"
-                          disabled={working || recordingQuestion || transcribingQuestion || !question.trim()}
-                        >
-                          {pendingAction === "interview"
-                            ? "Sending..."
-                            : "Send Question"}
-                        </button>
-                        <button
-                          type="button"
-                          className="arena-btn-danger w-full px-4 py-3"
-                          disabled={working || recordingQuestion || transcribingQuestion}
-                          onClick={handleExitCase}
-                        >
-                          {pendingAction === "exit"
-                            ? apiConfig.exitPendingLabel || "Exiting..."
-                            : apiConfig.exitLabel || "Exit Case"}
-                        </button>
-                        <span className="text-right text-xs uppercase tracking-[0.14em] text-white/38">
-                          {question.trim().length} / 500
-                        </span>
-                      </div>
-                    </div>
-                    {suggestedQuestions.length > 0 ? (
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {suggestedQuestions.map((item) => (
+                    <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-white/42">
+                            Latest exchange
+                          </p>
+                          <p className="mt-1 text-xs text-white/45">
+                            {mobileInterviewExchangePairs.length
+                              ? `${mobileInterviewExchangePairs.length} total`
+                              : "No questions yet"}
+                          </p>
+                        </div>
+                        {mobileInterviewExchangeHistory.length > 0 ? (
                           <button
-                            key={item}
                             type="button"
-                            className="arena-btn-dark min-h-0 px-3 py-2 text-sm"
-                            onClick={() => setQuestion(item)}
+                            className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-black/20 px-3 py-2 text-xs font-semibold text-white/68 transition hover:border-white/20 hover:text-white"
+                            onClick={() =>
+                              setShowMobileExchangeHistory((current) => !current)
+                            }
+                            aria-expanded={showMobileExchangeHistory}
                           >
-                            + {item}
+                            History
+                            <HeroIcons.ChevronDownIcon
+                              className={`h-3.5 w-3.5 transition ${
+                                showMobileExchangeHistory ? "rotate-180" : ""
+                              }`}
+                              aria-hidden="true"
+                            />
                           </button>
-                        ))}
+                        ) : null}
                       </div>
-                    ) : null}
-                  </form>
 
-                  <div
-                    ref={interviewTranscriptRef}
-                    className="arena-scroll mt-5 max-h-[20rem] space-y-4 overflow-y-auto pr-1 sm:max-h-[22rem] sm:pr-2"
-                  >
-                    {visibleInterviewTranscript.map((entry, index) => (
-                      <article
-                        key={`${entry.createdAt}-${index}`}
-                        className={`min-w-0 max-w-full rounded-xl border p-4 ${
-                          entry.role !== "player"
-                            ? "arena-transcript-opponent border-amber-500/30"
-                            : "arena-transcript-player sm:ml-auto sm:max-w-[90%] border-white/10"
-                          }`}
+                      {latestMobileInterviewExchange ? (
+                        <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                          <div className="rounded-xl border border-white/10 bg-black/24 p-3">
+                            <p className="text-[0.68rem] font-semibold uppercase tracking-[0.13em] text-white/44">
+                              You
+                            </p>
+                            <p className="mt-1 break-words text-sm font-semibold leading-5 text-white/88">
+                              {latestMobileInterviewExchange.question.text}
+                            </p>
+                          </div>
+                          <div className="rounded-xl border border-amber-200/15 bg-amber-200/8 p-3">
+                            <p className="text-[0.68rem] font-semibold uppercase tracking-[0.13em] text-amber-200/78">
+                              {latestMobileInterviewExchange.response
+                                ? getInterviewEntrySpeaker(latestMobileInterviewExchange.response)
+                                : playerInterviewSubjectName}
+                            </p>
+                            {latestMobileInterviewExchange.response ? (
+                              <p className="mt-1 break-words text-sm font-semibold leading-5 text-white/88">
+                                {latestMobileInterviewExchange.response.text}
+                              </p>
+                            ) : (
+                              <div className="mt-1">
+                                <p className="text-sm font-semibold leading-5 text-white/72">
+                                  {pendingSpeaker || playerInterviewSubjectName} is answering...
+                                </p>
+                                <TypingIndicator
+                                  speaker={pendingSpeaker || playerInterviewSubjectName}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="mt-3 rounded-xl border border-white/10 bg-black/20 p-3">
+                          <p className="text-sm font-semibold leading-5 text-white/78">
+                            Ask your first question to start building the record.
+                          </p>
+                        </div>
+                      )}
+
+                      {showMobileExchangeHistory && mobileInterviewExchangeHistory.length > 0 ? (
+                        <div className="arena-scroll mt-3 max-h-60 space-y-2 overflow-y-auto border-t border-white/10 pt-3">
+                          {mobileInterviewExchangeHistory.map((exchange) => (
+                            <article
+                              key={exchange.id}
+                              className="rounded-xl border border-white/10 bg-black/18 p-3"
+                            >
+                              <p className="break-words text-xs font-semibold leading-5 text-white/82">
+                                <span className="text-white/44">You: </span>
+                                {exchange.question.text}
+                              </p>
+                              {exchange.response ? (
+                                <p className="mt-2 break-words text-xs font-semibold leading-5 text-white/68">
+                                  <span className="text-amber-200/72">
+                                    {getInterviewEntrySpeaker(exchange.response)}:{" "}
+                                  </span>
+                                  {exchange.response.text}
+                                </p>
+                              ) : null}
+                            </article>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div className="relative mt-4">
+                      <textarea
+                        className="textarea textarea-bordered arena-textarea arena-field h-28 min-w-0 w-full pr-12 text-slate-100"
+                        placeholder={`Type your question to ${playerInterviewSubjectName}...`}
+                        value={question}
+                        onChange={(event) => setQuestion(event.target.value)}
+                        onKeyDown={handleChatTextareaKeyDown}
+                        disabled={transcribingQuestion}
+                      />
+                      <button
+                        type="button"
+                        className={`absolute bottom-3 right-3 flex h-9 w-9 items-center justify-center rounded-full border ${
+                          recordingQuestion
+                            ? "border-rose-300/35 bg-rose-400/15 text-rose-100"
+                            : "border-white/10 bg-black/24 text-white/58"
+                        }`}
+                        disabled={working || transcribingQuestion}
+                        onClick={handleQuestionVoiceInput}
+                        data-tooltip-id="tooltip"
+                        data-tooltip-content={
+                          recordingQuestion
+                            ? "Stop recording and transcribe"
+                            : "Record a question with your microphone"
+                        }
+                        aria-label={
+                          recordingQuestion
+                            ? "Stop recording and transcribe"
+                            : "Record a question with your microphone"
+                        }
                       >
-                        {(() => {
-                          const speaker = getInterviewEntrySpeaker(entry);
-                          return (
-                        <div className="flex items-center justify-between gap-3">
-                          <p className="font-semibold text-white">
-                            {entry.role !== "player"
-                              ? `Interview: ${speaker}`
-                              : speaker}
-                          </p>
-                          <p className="text-xs text-white/40">
-                            {formatDateTime(entry.createdAt)}
-                          </p>
-                        </div>
-                          );
-                        })()}
-                        <p className="mt-2 whitespace-pre-wrap break-words leading-7 text-white">
-                          {entry.text}
-                        </p>
-                      </article>
-                    ))}
-                    {working && pendingSpeaker && (
-                      <article className="arena-transcript-opponent arena-reveal max-w-[90%] rounded-xl border border-amber-500/30 p-4">
-                        <div className="flex items-center justify-between gap-3">
-                          <p className="font-semibold text-white">{pendingSpeaker}</p>
-                          <p className="text-xs text-white/40">typing</p>
-                        </div>
-                        <p className="mt-2 leading-7 text-white/88">
-                          {pendingSpeaker} is answering...
-                        </p>
-                        <TypingIndicator speaker={pendingSpeaker} />
-                      </article>
-                    )}
-                  </div>
+                        {transcribingQuestion ? (
+                          <span className="loading loading-spinner loading-xs" />
+                        ) : (
+                          <HeroIcons.MicrophoneIcon className="h-5 w-5" aria-hidden="true" />
+                        )}
+                      </button>
+                    </div>
 
-                </div>
+                    <div className="mt-3 flex flex-col gap-3 lg:flex-row lg:items-center">
+                      <button
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-amber-200/35 bg-amber-200 px-4 py-3 text-sm font-semibold text-black transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60 lg:w-auto"
+                        disabled={working || recordingQuestion || transcribingQuestion || !question.trim()}
+                      >
+                        {pendingAction === "interview" ? "Sending..." : "Send Question"}
+                        <HeroIcons.PaperAirplaneIcon className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                      {suggestedQuestions.length > 0 ? (
+                        <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1 lg:flex-wrap lg:overflow-visible lg:pb-0">
+                          {suggestedQuestions.slice(0, 4).map((item) => (
+                            <button
+                              key={item}
+                              type="button"
+                              className="shrink-0 rounded-full border border-white/10 bg-black/24 px-3 py-2 text-xs font-semibold text-white/74"
+                              onClick={() => setQuestion(item)}
+                            >
+                              + {item}
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  </form>
+                </section>
+
+                <section className="arena-surface-soft flex items-start gap-3 p-4 text-sm text-white/62">
+                  <HeroIcons.LightBulbIcon
+                    className="h-5 w-5 shrink-0 text-amber-300"
+                    aria-hidden="true"
+                  />
+                  <p>
+                    <span className="font-semibold text-amber-200">Tip:</span> Ask clear,
+                    open-ended questions about dates, records, witnesses, notice, and proof gaps.
+                  </p>
+                </section>
               </div>
               </>
             ) : isExited ? (
@@ -2364,250 +2367,237 @@ export default function CaseWorkspace({
                 </section>
               </div>
 
-              <div className="arena-surface arena-round-transition hidden sm:block">
-                <div className="p-4 sm:p-6">
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                    <div>
-                      <p className="arena-kicker">Step 2</p>
-                      <h2 className="arena-headline mt-2 text-2xl">
-                        Freeform courtroom duel
-                      </h2>
-                      <p className="mt-3 text-sm text-white/62">
-                        Deliver your argument to the court.
+              <div className="hidden space-y-4 sm:block">
+                <section className="arena-surface overflow-hidden border-white/10 bg-white/[0.025]">
+                  <div className="grid gap-0 lg:grid-cols-2">
+                    <div className="space-y-4 p-4 sm:p-6">
+                      <div className="flex items-center gap-3">
+                        <CourtPortraitAvatar
+                          src={opponentCourtPortrait}
+                          alt={`${opponentPartyName} portrait`}
+                          className="border border-rose-300/30 bg-rose-400/12 text-rose-100"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="truncate text-lg font-semibold text-white">
+                              {opponentPartyName}
+                            </p>
+                            <p className="text-2xl font-bold text-rose-300">
+                              {Math.round(opponentPressurePct)}%
+                            </p>
+                          </div>
+                          <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/12">
+                            <div
+                              className="h-full rounded-full bg-gradient-to-r from-rose-500 to-rose-300"
+                              style={{ width: `${opponentPressurePct}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="border-t border-white/8 pt-4">
+                        <div className="flex items-center gap-3">
+                          <CourtPortraitAvatar
+                            src={playerCourtPortrait}
+                            alt="Your portrait"
+                            className="border border-sky-300/30 bg-sky-400/12 text-sky-100"
+                            fallbackIcon={HeroIcons.ShieldCheckIcon}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between gap-3">
+                              <p className="truncate text-lg font-semibold text-white">You</p>
+                              <p className="text-2xl font-bold text-sky-300">
+                                {Math.round(playerPressurePct)}%
+                              </p>
+                            </div>
+                            <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/12">
+                              <div
+                                className="h-full rounded-full bg-gradient-to-r from-sky-500 to-sky-300"
+                                style={{ width: `${playerPressurePct}%` }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      <p className="text-center text-sm text-white/50">
+                        More persuasive arguments increase your lead.
                       </p>
                     </div>
-                    <span className="text-xs uppercase tracking-[0.14em] text-white/42">
-                      Round {caseSession.score.roundsCompleted + 1} of {caseSession.maxCourtRounds}
-                    </span>
-                  </div>
 
-                  <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    <div className="arena-stat-card">
-                      <div className="flex items-center gap-2">
-                        <p className="arena-kicker">Your Pressure</p>
-                        <InfoDot
-                          content={helpText.playerPressure}
-                          label="Explain your pressure"
-                        />
+                    <div className="border-t border-white/10 p-4 sm:p-6 lg:border-l lg:border-t-0">
+                      <div className="flex items-start gap-3">
+                        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-amber-300/30 bg-amber-300/12 text-amber-100">
+                          <HeroIcons.AcademicCapIcon className="h-6 w-6" aria-hidden="true" />
+                        </span>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <h2 className="text-xl font-semibold text-amber-100">
+                              Judge Signal
+                            </h2>
+                            <InfoDot
+                              content="The bench signal summarizes what the judge appears to value this round."
+                              label="Explain judge signal"
+                            />
+                          </div>
+                          <p className="mt-2 text-sm leading-6 text-white/76">
+                            {caseSession.score.lastBenchSignal ||
+                              "The judge is listening. Facts and law will move the bench."}
+                          </p>
+                        </div>
                       </div>
-                      <p className="mt-2 text-3xl font-bold text-white">
-                        {caseSession.score.player}
-                        <span className="ml-1 text-sm font-medium text-white/42">/ 100</span>
-                      </p>
-                      <div className="mt-3 arena-progress-track" aria-hidden="true">
-                        <div
-                          className="h-full rounded-full bg-gradient-to-r from-sky-500 to-sky-300"
-                          style={{ width: `${playerPressurePct}%` }}
-                        />
-                      </div>
-                      <p className="mt-3 text-sm text-white/62">
-                        Build pressure with strong facts and clear arguments.
-                      </p>
-                    </div>
-                    <div className="arena-stat-card">
-                      <div className="flex items-center gap-2">
-                        <p className="arena-kicker">Opponent Pressure</p>
-                        <InfoDot
-                          content={helpText.opponentPressure}
-                          label="Explain opponent pressure"
-                        />
-                      </div>
-                      <p className="mt-2 text-3xl font-bold text-white">
-                        {caseSession.score.opponent}
-                        <span className="ml-1 text-sm font-medium text-white/42">/ 100</span>
-                      </p>
-                      <div className="mt-3 arena-progress-track" aria-hidden="true">
-                        <div
-                          className="h-full rounded-full bg-gradient-to-r from-amber-500 to-amber-300"
-                          style={{ width: `${opponentPressurePct}%` }}
-                        />
-                      </div>
-                      <p className="mt-3 text-sm text-white/62">
-                        Weaker arguments increase opponent pressure.
-                      </p>
-                    </div>
-                    <div className="arena-stat-card">
-                      <p className="arena-kicker">Bench Signal</p>
-                      <p className="mt-2 text-sm leading-7 text-white/76">
-                        {caseSession.score.lastBenchSignal ||
-                          "The bench is listening. Build the record carefully."}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div
-                    ref={courtroomTranscriptRef}
-                    className="arena-scroll mt-5 max-h-[26rem] space-y-4 overflow-y-auto pr-1 sm:max-h-[30rem] sm:pr-2"
-                  >
-                    {normalizedCourtroomTranscript.length === 0 ? (
-                      <div className="arena-surface-soft min-w-0 p-5">
-                        <p className="font-semibold text-white">Court is now in session.</p>
-                        <p className="mt-2 text-sm text-white/62">
-                          Open with your strongest theory and anchor it to lawbook and fact
-                          sheet.
+                      <div className="mt-4 border-t border-white/12 pt-4">
+                        <p className="text-sm font-semibold text-amber-200">
+                          Focus this round:
                         </p>
+                        <ul className="mt-2 space-y-2 text-sm leading-5 text-white/72">
+                          {(courtroomFocusItems.length
+                            ? courtroomFocusItems
+                            : ["Use your strongest fact", "Challenge weak proof", "Cite the lawbook"]
+                          ).map((item) => (
+                            <li key={item} className="flex gap-2">
+                              <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-300" />
+                              <span className="min-w-0 flex-1">{item}</span>
+                            </li>
+                          ))}
+                        </ul>
                       </div>
-                    ) : (
-                      normalizedCourtroomTranscript.map((entry, index) => (
-                        <article
-                          key={`${entry.round}-${entry.speaker}-${index}`}
-                          className={`min-w-0 max-w-full rounded-xl p-4 ${
-                            entry.speaker === "player"
-                              ? "arena-transcript-player sm:ml-auto sm:max-w-[95%]"
-                              : "arena-transcript-opponent"
+                    </div>
+                  </div>
+                </section>
+
+                {lastOpponentCourtEntry ? (
+                  <section className="rounded-2xl border border-rose-400/35 bg-rose-950/18 p-4 sm:p-5">
+                    <div className="flex items-start gap-3">
+                      <CourtPortraitAvatar
+                        src={opponentCourtPortrait}
+                        alt={`${opponentPartyName} portrait`}
+                        className="h-11 w-11 border border-rose-300/30 bg-rose-400/12 text-rose-100"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="text-lg font-semibold text-white">{opponentPartyName}</h3>
+                          <span className="rounded-lg border border-rose-300/25 bg-rose-400/10 px-2 py-1 text-xs font-semibold text-rose-200">
+                            Opponent Argument
+                          </span>
+                          <span className="text-xs font-semibold text-white/42">
+                            Round {lastOpponentCourtEntryDisplayRound}
+                          </span>
+                        </div>
+                        <p
+                          className={`mt-3 whitespace-pre-wrap text-sm leading-6 text-white/78 ${
+                            showFullMobileOpponentArgument ? "" : "line-clamp-4"
                           }`}
                         >
-                          <div className="flex items-center justify-between gap-3">
-                            <CounselIdentity
-                              title={
-                                entry.speaker === "player"
-                                  ? playerCounselTitle
-                                  : opponentCounselTitle
-                              }
-                              representedBy={
-                                entry.speaker === "player"
-                                  ? playerRepresentedBy
-                                  : opponentRepresentedBy
-                              }
+                          {lastOpponentCourtEntry.text}
+                        </p>
+                        {mobileOpponentArgumentCanExpand ? (
+                          <button
+                            type="button"
+                            className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-rose-200 transition hover:text-rose-100"
+                            onClick={() =>
+                              setShowFullMobileOpponentArgument((current) => !current)
+                            }
+                            aria-expanded={showFullMobileOpponentArgument}
+                          >
+                            {showFullMobileOpponentArgument
+                              ? "Show less"
+                              : "Show full argument"}
+                            <HeroIcons.ChevronDownIcon
+                              className={`h-4 w-4 transition ${
+                                showFullMobileOpponentArgument ? "rotate-180" : ""
+                              }`}
+                              aria-hidden="true"
                             />
-                            <p className="text-xs text-white/40">Round {entry.round}</p>
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  </section>
+                ) : null}
+
+                {showCourtroomWaitingCard ? (
+                  <section className="arena-surface p-4">
+                    <p className="font-semibold text-white">
+                      {opponentPartyName} is preparing a response...
+                    </p>
+                    <TypingIndicator speaker={opponentPartyName} />
+                    <div className="mt-4">
+                      <LoadingBar label={`${opponentPartyName} is preparing a response`} />
+                    </div>
+                  </section>
+                ) : null}
+
+                {!isVerdict && !showCourtroomWaitingCard ? (
+                  <section className="rounded-2xl border border-sky-300/30 bg-sky-500/[0.055] p-4 sm:p-5">
+                    <form className="min-w-0 space-y-4" onSubmit={handleCourtroomSubmit}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-3">
+                            <CourtPortraitAvatar
+                              src={playerCourtPortrait}
+                              alt="Your portrait"
+                              className="h-11 w-11 border border-sky-300/35 bg-sky-400/12 text-sky-100"
+                              fallbackIcon={HeroIcons.ShieldCheckIcon}
+                            />
+                            <div>
+                              <h2 className="text-xl font-semibold text-sky-200">Your Move</h2>
+                              <p className="mt-1 text-sm leading-5 text-white/68">
+                                Defend {playerPartyName}. Use facts, expose weaknesses, and cite
+                                the law.
+                              </p>
+                            </div>
                           </div>
-                          <p className="mt-2 whitespace-pre-wrap break-words leading-7 text-white">
-                            {entry.text}
-                          </p>
-                          {entry.speaker === "player" &&
-                            (entry.citedFacts.length > 0 ||
-                              entry.citedRules.length > 0) && (
-                              <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                                {entry.citedFacts.map((fact, factIndex) => {
-                                  const resolvedFact = resolveFactReference(
-                                    fact,
-                                    canonicalFactLookup
-                                  );
-
-                                  return (
-                                    <span
-                                      key={`${fact}-${factIndex}`}
-                                      className="badge badge-outline badge-sm max-w-[18rem] truncate border-white/15 text-white/82"
-                                      data-tooltip-id="tooltip"
-                                      data-tooltip-content={resolvedFact.tooltip}
-                                    >
-                                      {resolvedFact.badge}
-                                    </span>
-                                  );
-                                })}
-                                {entry.citedRules.map((rule) => (
-                                  <span
-                                    key={rule}
-                                    className="badge badge-sm arena-status arena-status-caution border"
-                                    data-tooltip-id="tooltip"
-                                    data-tooltip-content={getRuleTooltip(rule)}
-                                  >
-                                    {rule}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                        </article>
-                      ))
-                    )}
-                    {working && pendingSpeaker === opponentPartyName && (
-                      <article className="arena-transcript-opponent rounded-xl p-4">
-                        <div className="flex items-center justify-between gap-3">
-                          <CounselIdentity
-                            title={opponentCounselTitle}
-                            representedBy={opponentRepresentedBy}
-                          />
-                          <p className="text-xs uppercase tracking-[0.14em] text-amber-100/46">
-                            Preparing
-                          </p>
                         </div>
-                        <p className="mt-2 leading-7 text-white">
-                          {opponentPartyName} is preparing a response...
-                        </p>
-                        <div className="mt-4">
-                          <LoadingBar label={`${opponentPartyName} is preparing a response`} />
-                        </div>
-                      </article>
-                    )}
-                  </div>
-
-                  {showCourtroomWaitingCard ? (
-                    <article className="arena-transcript-opponent mt-6 rounded-xl p-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <CounselIdentity
-                          title={opponentCounselTitle}
-                          representedBy={opponentRepresentedBy}
+                        <a
+                          href="#fact-sheet-details"
+                          className="shrink-0 rounded-xl border border-sky-300/25 bg-black/16 px-3 py-2 text-xs font-semibold text-sky-100"
+                        >
+                          Fact Sheet
+                        </a>
+                      </div>
+                      <div className="relative">
+                        <textarea
+                          className="textarea textarea-bordered arena-textarea arena-field h-36 min-w-0 w-full text-slate-100"
+                          placeholder="Your argument to the judge..."
+                          value={argument}
+                          onChange={(event) => setArgument(event.target.value)}
+                          onKeyDown={handleChatTextareaKeyDown}
+                          disabled={transcribingArgument}
                         />
-                        <p className="text-xs uppercase tracking-[0.14em] text-amber-100/46">
-                          Preparing
-                        </p>
-                      </div>
-                      <p className="mt-2 leading-7 text-white">
-                        {opponentPartyName} is preparing a response...
-                      </p>
-                      <TypingIndicator speaker={opponentPartyName} />
-                      <div className="mt-4">
-                        <LoadingBar label={`${opponentPartyName} is preparing a response`} />
-                      </div>
-                    </article>
-                  ) : null}
-
-                  {!isVerdict && !showCourtroomWaitingCard && (
-                    <form className="mt-6 min-w-0 space-y-4" onSubmit={handleCourtroomSubmit}>
-                      <div>
-                        <p className="arena-kicker">Your Argument</p>
-                        <p className="mt-2 text-sm text-white/52">
-                          Deliver your argument for {playerPartyName}. Cite the fact sheet,
-                          confront the weakest point on {opponentPartyName}&apos;s side, and tie
-                          your position to the law.
-                        </p>
-                      </div>
-                      <textarea
-                        className="textarea textarea-bordered arena-textarea arena-field h-40 min-w-0 w-full text-slate-100"
-                        placeholder={`Deliver your argument for ${playerPartyName}. Cite the fact sheet, confront the weakest point on ${opponentPartyName}'s side, and tie your position to the lawbook.`}
-                        value={argument}
-                        onChange={(event) => setArgument(event.target.value)}
-                        onKeyDown={handleChatTextareaKeyDown}
-                        disabled={transcribingArgument}
-                      />
-                      <div className="flex items-center justify-end text-xs uppercase tracking-[0.14em] text-white/38">
-                        {argument.trim().length} / 2500
+                        <span className="absolute bottom-3 right-3 text-xs font-semibold text-white/45">
+                          {argument.trim().length} / 2500
+                        </span>
                       </div>
                       {argumentQuickTools.length ? (
-                        <div>
-                          <p className="arena-kicker">Quick Tools</p>
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            {argumentQuickTools.map(([label, snippet]) => (
-                              <button
-                                key={label}
-                                type="button"
-                                className="arena-btn-dark min-h-0 px-3 py-2 text-sm"
-                                onClick={() => appendArgumentSnippet(snippet)}
-                              >
-                                {label}
-                              </button>
-                            ))}
-                            {argument.trim() ? (
-                              <button
-                                type="button"
-                                className="arena-btn-dark min-h-0 px-3 py-2 text-sm"
-                                onClick={() => setArgument("")}
-                              >
-                                Clear draft
-                              </button>
-                            ) : null}
-                          </div>
+                        <div className="flex flex-wrap gap-2">
+                          {argumentQuickTools.map(([label, snippet]) => (
+                            <button
+                              key={label}
+                              type="button"
+                              className="rounded-full border border-white/10 bg-black/24 px-3 py-2 text-xs font-semibold text-white/74"
+                              onClick={() => appendArgumentSnippet(snippet)}
+                            >
+                              + {label}
+                            </button>
+                          ))}
+                          {argument.trim() ? (
+                            <button
+                              type="button"
+                              className="rounded-full border border-white/10 bg-black/24 px-3 py-2 text-xs font-semibold text-white/74"
+                              onClick={() => setArgument("")}
+                            >
+                              Clear draft
+                            </button>
+                          ) : null}
                         </div>
                       ) : null}
-                      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+                      <div className="grid gap-3 lg:grid-cols-[minmax(0,0.45fr)_minmax(0,0.55fr)]">
                         <button
                           type="button"
-                          className={`w-full justify-center border sm:w-auto ${
+                          className={`w-full justify-center rounded-xl border px-4 py-3 text-sm font-semibold ${
                             recordingArgument
-                              ? "arena-btn-danger"
-                              : "arena-btn-dark"
-                          } inline-flex items-center gap-2 px-4 py-3`}
+                              ? "border-rose-300/35 bg-rose-400/15 text-rose-100"
+                              : "border-white/12 bg-white/[0.035] text-white/82"
+                          }`}
                           disabled={working || transcribingArgument}
                           onClick={handleArgumentVoiceInput}
                           data-tooltip-id="tooltip"
@@ -2622,50 +2612,41 @@ export default function CaseWorkspace({
                               : "Record an argument with your microphone"
                           }
                         >
-                          {transcribingArgument ? (
-                            <span className="loading loading-spinner loading-xs" />
-                          ) : (
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              strokeWidth={1.5}
-                              stroke="currentColor"
-                              className="h-5 w-5"
-                              aria-hidden="true"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                d="M12 18.75a6 6 0 0 0 6-6v-1.5m-12 0v1.5a6 6 0 0 0 6 6Zm0 0v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V6a3 3 0 1 1 6 0v6.75a3 3 0 0 1-3 3Z"
-                              />
-                            </svg>
-                          )}
                           {recordingArgument ? (
-                            <VoiceWaveform level={argumentAudioLevel} />
-                          ) : null}
-                          {recordingArgument
-                            ? "Stop"
-                            : transcribingArgument
-                            ? "Transcribing"
-                            : "Voice Argument"}
+                            <span className="inline-flex items-center gap-2">
+                              Stop Voice Argument
+                              <VoiceWaveform level={argumentAudioLevel} />
+                            </span>
+                          ) : transcribingArgument ? (
+                            "Transcribing"
+                          ) : (
+                            "Voice Argument"
+                          )}
                         </button>
                         <button
-                          className="arena-btn-light w-full px-5 py-3 sm:ml-auto sm:w-auto"
-                          disabled={working || recordingArgument || transcribingArgument}
+                          className="w-full rounded-xl border border-amber-200/35 bg-amber-200 px-5 py-3 text-sm font-bold text-black transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                          disabled={working || recordingArgument || transcribingArgument || !argument.trim()}
                         >
-                          {pendingAction === "courtroom"
-                            ? "Submitting..."
-                            : "Submit Argument"}
+                          {pendingAction === "courtroom" ? "Presenting..." : "Present Argument"}
+                          <span className="mt-1 block text-xs font-medium text-black/62">
+                            Submit your argument to the judge
+                          </span>
                         </button>
                       </div>
-                      <div className="arena-surface-soft flex items-start gap-3 p-4 text-sm text-white/62">
-                        <span className="text-amber-300">Tip:</span>
-                        <p>Strong arguments are clear, concise, and backed by facts.</p>
-                      </div>
                     </form>
-                  )}
-                </div>
+                  </section>
+                ) : null}
+
+                <section className="arena-surface-soft flex items-start gap-3 p-4 text-sm text-white/62">
+                  <HeroIcons.LightBulbIcon
+                    className="h-5 w-5 shrink-0 text-amber-300"
+                    aria-hidden="true"
+                  />
+                  <p>
+                    <span className="font-semibold text-amber-200">Tip:</span> Strong arguments
+                    are specific, calm, and backed by facts.
+                  </p>
+                </section>
               </div>
               </>
             )}
@@ -2849,6 +2830,66 @@ export default function CaseWorkspace({
                       </span>
                     ) : null}
                   </div>
+                </div>
+
+                <div className="mt-5 rounded-2xl border border-amber-200/15 bg-amber-200/[0.055] p-3">
+                  <p className="text-sm font-semibold text-white">
+                    {completedFactSheetItems} / {factSheetCompletionItems.length} sections discovered
+                  </p>
+                  <p className="mt-1 text-xs leading-5 text-white/55">
+                    {isInterview
+                      ? "Cross-check each section before taking the case to court."
+                      : "Use these sections as your courtroom reference."}
+                  </p>
+                  <div className="mt-3 grid grid-cols-4 gap-1.5">
+                    {factSheetSections.map((section) => {
+                      const Icon = section.icon;
+                      const items = ensureDraftList(factSheetDraft[section.key]);
+                      const isSelected = activeMobileFactSheetKey === section.key;
+
+                      return (
+                        <button
+                          key={`desktop-${section.key}`}
+                          type="button"
+                          className={`flex min-h-[3.85rem] min-w-0 flex-col items-center justify-center gap-1 rounded-xl border px-1.5 text-center transition ${
+                            isSelected
+                              ? "border-amber-200/45 bg-amber-200/12 text-amber-100"
+                              : items.length
+                              ? "border-emerald-300/25 bg-emerald-300/8 text-emerald-100"
+                              : "border-white/10 bg-black/18 text-white/48"
+                          }`}
+                          onClick={() => setActiveMobileFactSheetKey(section.key)}
+                        >
+                          <Icon className="h-4 w-4" aria-hidden="true" />
+                          <span className="line-clamp-1 text-[0.58rem] font-semibold leading-tight">
+                            {factSheetSectionCompactLabel[section.key] || section.title}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-3 arena-progress-track">
+                    <div
+                      className="arena-progress-fill"
+                      style={{ width: `${roundedFactSheetProgressPercent}%` }}
+                    />
+                  </div>
+                  {activeMobileFactSheetSection ? (
+                    <div className="mt-3 rounded-xl border border-white/10 bg-black/18 p-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/45">
+                        {activeMobileFactSheetSection.title}
+                      </p>
+                      {activeMobileFactSheetItems.length > 0 ? (
+                        <p className="mt-2 line-clamp-3 text-sm font-semibold leading-6 text-white/78">
+                          {activeMobileFactSheetItems[0]}
+                        </p>
+                      ) : (
+                        <p className="mt-2 text-sm text-white/45">
+                          {activeMobileFactSheetSection.empty}
+                        </p>
+                      )}
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="mt-5 space-y-3">
