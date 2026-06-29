@@ -352,6 +352,15 @@ const plausibilityReviewOutputSchema = {
   correctedDetailedStory: detailedBranchOutputSchema,
 };
 
+const getCategoryStoryRules = (category = {}) =>
+  category.slug === "rental-dispute"
+    ? [
+        "For security-deposit disputes, include the original deposit amount and the amount withheld, returned, or deducted as concrete dollar figures.",
+        "Tie each deduction amount to a plain-language category such as cleaning, wall repair, lock replacement, unpaid rent, or ordinary wear.",
+        "If the exact item-by-item split is disputed, still include the total deposit and total withheld/refunded amount as settled or claimed numbers so the remedy is playable.",
+      ]
+    : [];
+
 const buildCanonicalStoryPrompt = ({
   category,
   complexity,
@@ -372,6 +381,7 @@ const buildCanonicalStoryPrompt = ({
       "Focus on events, communications, records, omissions, and motives rather than abstract legal conclusions.",
       "Make the opening statement sound like a real plaintiff talking to counsel during intake.",
       "Distinguish clearly between settled facts, disputed issues, and proof gaps.",
+      ...getCategoryStoryRules(category),
       "Do not output canonicalFacts, evidenceItems, or interviewBlueprint.",
     ],
   },

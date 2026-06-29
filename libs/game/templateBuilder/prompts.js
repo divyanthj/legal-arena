@@ -105,6 +105,12 @@ export const buildFactInventoryPrompt = ({ storyContext, category, complexity, p
       "Keep follow-up questions brief and practical.",
       "Classify supporting, dispute, risk, and evidence-oriented proof-gap points carefully.",
       "If a point is a missing receipt, missing itemization, missing notice, or similar gap, model it as supporting or evidence-related proof-gap rather than automatic corroboration.",
+      ...(category.slug === "rental-dispute"
+        ? [
+            "For security-deposit disputes, preserve the concrete deposit amount and the amount withheld, refunded, or deducted as canonical facts when those numbers appear in the story.",
+            "Do not collapse deposit and deduction amounts into vague phrases like 'most of the deposit' if the source story gives dollar figures.",
+          ]
+        : []),
     ],
   },
   storyContext,
@@ -366,6 +372,12 @@ export const buildInterviewPlanningPrompt = ({ basePayload, category, complexity
       "Use confirmed only when the record is realistically in hand or clearly available.",
       "Use mentioned when a party plausibly thinks a record exists but cannot confidently prove that yet.",
       "Use unknown or missing when the interview should surface a proof gap.",
+      ...(category.slug === "rental-dispute"
+        ? [
+            "For security-deposit disputes, keep the total deposit amount and withheld/refunded/deducted amount answerable during intake unless the generated story truly omitted them.",
+            "Ask follow-up questions about itemization, invoices, photos, and ordinary wear without making the basic deposit total unknowable.",
+          ]
+        : []),
       "Write follow-up questions that a lawyer would naturally ask during intake.",
       "Write a natural opening for both sides so the interview works whether the player draws claimant-side or defense-side.",
       "Add partyProfiles for plaintiff and defendant so speech, recall quality, and disclosure style can vary by person.",

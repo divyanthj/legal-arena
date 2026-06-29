@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 
 const {
   getCourtroomDifficultyProfile,
@@ -249,5 +250,17 @@ assert.ok(
   )
 );
 assert.equal(isPlayerAdverseVerdictPoint("The record supports that the first mailing went to the old address."), true);
+
+const courtroomSource = await readFile(
+  new URL("../libs/game/engine/courtroom.js", import.meta.url),
+  "utf8"
+);
+assert.match(courtroomSource, /export const buildCourtroomRuleApplicationGuidance/);
+assert.match(courtroomSource, /Rule 11/);
+assert.match(courtroomSource, /itemization, actual-cost support/);
+assert.match(courtroomSource, /Rule 9/);
+assert.match(courtroomSource, /ordinary wear/);
+assert.match(courtroomSource, /landlord must justify/);
+assert.match(courtroomSource, /partial remedy or reduced award/);
 
 console.log("Courtroom difficulty tests passed");

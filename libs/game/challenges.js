@@ -43,6 +43,10 @@ import {
   getSideOpeningStatement,
 } from "./templateInterview";
 import { generateClientMemoryExcerpt } from "./clientMemory";
+import {
+  buildMemoryClaimFactSheetPatch,
+  normalizeMemoryClaims,
+} from "./memoryClaims";
 
 const MONGO_ID_PATTERN = /^[a-f0-9]{24}$/i;
 const CHALLENGE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
@@ -436,6 +440,56 @@ const setParticipantClientMemory = (
   markParticipantsModified(challenge);
 };
 
+const getParticipantMemoryClaims = (participant) =>
+  normalizeMemoryClaims(
+    participant?.clientMemory?.memoryClaims || participant?.clientMemory?.claims || [],
+    participant?.side || "client"
+  );
+
+const syncChallengeMemoryContentions = (challenge) => {
+  const participants = challenge?.participants || [];
+  if (participants.length < 2) {
+    return false;
+  }
+
+  return participants.reduce((changed, participant) => {
+    const otherParticipant = participants.find((candidate) => candidate !== participant);
+    const patch = buildMemoryClaimFactSheetPatch({
+      ownClaims: getParticipantMemoryClaims(participant),
+      opposingClaims: getParticipantMemoryClaims(otherParticipant),
+      side: participant.side,
+    });
+    const hasPatch = patch.knownClaims.length || patch.disputedFacts.length;
+
+    if (!hasPatch) {
+      return changed;
+    }
+
+    const currentFactSheet = participant.factSheet?.toObject
+      ? participant.factSheet.toObject()
+      : participant.factSheet || {};
+    const nextFactSheet = mergeFactSheet(
+      currentFactSheet,
+      patch,
+      templateForChallenge(challenge),
+      {
+        playerSide: participant.side,
+      }
+    );
+    const nextKnown = uniqueList(nextFactSheet.knownClaims || []);
+    const nextDisputed = uniqueList(nextFactSheet.disputedFacts || []);
+    const didChange =
+      nextKnown.length > uniqueList(currentFactSheet.knownClaims || []).length ||
+      nextDisputed.length > uniqueList(currentFactSheet.disputedFacts || []).length;
+
+    if (didChange) {
+      setParticipantFactSheet(challenge, participant, nextFactSheet);
+    }
+
+    return changed || didChange;
+  }, false);
+};
+
 const userMapForChallenge = async (challenge) => {
   const userIds = [
     challenge.initiatorId,
@@ -547,6 +601,7 @@ const ensureParticipantClientMemory = async ({ challenge, participant, otherPart
       result.clientMemory,
       clientMemoryExcerpt
     );
+    syncChallengeMemoryContentions(challenge);
     return true;
   }
 
@@ -777,6 +832,7 @@ export const getChallengeForUser = async ({ userId, challengeId }) => {
       otherParticipant,
       userId,
     })) || changed;
+  changed = syncChallengeMemoryContentions(challenge) || changed;
   if (changed) {
     await challenge.save();
   }
@@ -827,6 +883,7 @@ export const acceptChallengeForUser = async ({ userId, challengeId }) => {
     otherParticipant: getOtherParticipant(challenge, userId),
     userId,
   });
+  syncChallengeMemoryContentions(challenge);
   await challenge.save();
 
   try {
@@ -929,6 +986,7 @@ export const continueChallengeInterview = async ({ userId, challengeId, question
     relatedFactIds: result.relatedFactIds || [],
   });
   setParticipantFactSheet(challenge, participant, result.nextFactSheet);
+  syncChallengeMemoryContentions(challenge);
   if (result.caseAssessment) {
     setParticipantCaseAssessment(challenge, participant, result.caseAssessment);
   }

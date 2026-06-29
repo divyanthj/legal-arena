@@ -432,6 +432,28 @@ progress::-webkit-progress-value {
       transform 80ms ease;
   }
 
+  .arena-presenting-gavel {
+    position: relative;
+    display: inline-flex;
+    width: 2rem;
+    height: 2rem;
+    color: currentColor;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .arena-presenting-gavel-icon {
+    width: 2rem;
+    height: 2rem;
+    overflow: visible;
+  }
+
+  .arena-presenting-gavel-swing {
+    transform-box: fill-box;
+    transform-origin: 76% 76%;
+    animation: arena-gavel-strike 1050ms ease-in-out infinite;
+  }
+
   .help-prose {
     @apply max-w-none text-base text-base-content/80;
   }
@@ -598,6 +620,19 @@ progress::-webkit-progress-value {
   }
 }
 
+@keyframes arena-gavel-strike {
+  0%,
+  100% {
+    transform: rotate(-22deg) translateY(0);
+  }
+  42% {
+    transform: rotate(8deg) translateY(0.12rem);
+  }
+  58% {
+    transform: rotate(-18deg) translateY(-0.03rem);
+  }
+}
+
 @keyframes arena-orbit {
   0% {
     transform: rotate(0deg) translateX(2.7rem) rotate(0deg);
@@ -623,6 +658,7 @@ progress::-webkit-progress-value {
   .arena-round-transition,
   .arena-loading-bar,
   .arena-typing-dot,
+  .arena-presenting-gavel-swing,
   .motion-safe\:animate-\[arena-orbit_2\.8s_linear_infinite\],
   .motion-safe\:animate-\[arena-icon-drift_2\.4s_ease-in-out_infinite\] {
     animation: none !important;

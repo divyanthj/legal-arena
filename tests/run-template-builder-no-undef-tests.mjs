@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { ESLint } from "eslint";
 
 const templateBuilderFiles = [
@@ -37,5 +38,21 @@ for (const result of results) {
 }
 
 assert.deepEqual(failures, []);
+
+const generationSource = await readFile(
+  new URL("../libs/game/generation.js", import.meta.url),
+  "utf8"
+);
+const promptSource = await readFile(
+  new URL("../libs/game/templateBuilder/prompts.js", import.meta.url),
+  "utf8"
+);
+
+assert.match(generationSource, /getCategoryStoryRules/);
+assert.match(generationSource, /original deposit amount and the amount withheld/);
+assert.match(generationSource, /item-by-item split is disputed/);
+assert.match(promptSource, /preserve the concrete deposit amount/);
+assert.match(promptSource, /Do not collapse deposit and deduction amounts into vague phrases/);
+assert.match(promptSource, /making the basic deposit total unknowable/);
 
 console.log("Template builder no-undef tests passed");

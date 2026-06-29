@@ -58,14 +58,34 @@ assert.match(engineSource, /clientMemory\.evidenceAccess/);
 assert.match(engineSource, /const normalizeClientMemory = \(aiResult\) =>/);
 assert.match(engineSource, /coerceString\(aiResult\.clientStory\)/);
 assert.match(engineSource, /clientStory:\s*"string"/);
+assert.match(engineSource, /memoryClaims:\s*\[/);
 assert.match(engineSource, /freeform first-person client memory story/);
 assert.match(engineSource, /subjective truth as they see it/);
-assert.match(engineSource, /may be wrong, self-serving, defensive, or selectively truthful/);
-assert.match(engineSource, /do not create new objective events, documents, witnesses, records/);
-assert.match(engineSource, /this story can express client belief, but it does not create new evidence inventory/);
+assert.match(engineSource, /may be wrong, self-serving, defensive, selectively truthful/);
+assert.match(engineSource, /may add plausible case-domain details that are party-side claims rather than canon/);
+assert.match(engineSource, /do not create new evidence artifacts/);
+assert.match(engineSource, /plausible invented claims/);
+assert.match(engineSource, /buildClientMemoryMoneyAnchors/);
+assert.match(engineSource, /moneyAnchors/);
+assert.match(engineSource, /Preserve exact dollar figures from moneyAnchors/);
+assert.match(engineSource, /original deposit amount and the amount withheld, returned, or deducted/);
+assert.match(engineSource, /invented details are party claims, not new documents, photos, messages, witnesses, records, or proof/);
 assert.match(engineSource, /treat the latest question as a continuation/);
 assert.match(engineSource, /Retell the stored client memory only if the lawyer explicitly asks/);
 assert.match(engineSource, /Never answer a proof-possession question by retelling the full memory story/);
+assert.match(engineSource, /memoryClaims:\s*getClientMemoryClaims\(clientMemoryResult\.clientMemory, playerSide\)/);
+assert.match(engineSource, /newMemoryClaims:\s*\[/);
+assert.match(engineSource, /If an amount, date, name, location, or count question asks for a central case detail/);
+assert.match(engineSource, /you may give one plausible party-side claim or estimate/);
+assert.match(engineSource, /include it in newMemoryClaims/);
+assert.match(engineSource, /use existing memoryClaims first/);
+assert.match(engineSource, /Do not invent documents, photos, receipts, witnesses, messages, admissions, records, or automatic evidence/);
+assert.match(engineSource, /const nextClientMemory = withClientMemoryClaims/);
+assert.match(engineSource, /interviewResult\.newMemoryClaims\.length/);
+assert.doesNotMatch(
+  engineSource,
+  /For amount, date, name, location, or count questions, answer in one sentence with that detail only; if you do not remember it, say that plainly and stop/
+);
 assert.doesNotMatch(engineSource, /const pickSpecificMemoryAnswer =/);
 assert.doesNotMatch(engineSource, /const buildProofPossessionMemoryAnswer =/);
 assert.doesNotMatch(engineSource, /splitMemorySentences\(memoryText\)/);
@@ -81,10 +101,10 @@ assert.match(engineSource, /canonicalRoleContext:\s*actorContext/);
 assert.match(engineSource, /mode:\s*"stored_client_memory"/);
 assert.match(engineSource, /mode:\s*"canonical_context"/);
 assert.doesNotMatch(engineSource, /mode:\s*"canonical_fallback"/);
-assert.match(engineSource, /clientMemory:\s*clientMemoryResult\.created \? clientMemoryResult\.clientMemory : null/);
+assert.match(engineSource, /clientMemory:\s*[\s\S]*clientMemoryResult\.created \|\| interviewResult\.newMemoryClaims\.length[\s\S]*\? nextClientMemory[\s\S]*: null/);
 assert.match(
   engineSource,
-  /Use only the stored freeform client memory story, current visible fact sheet, and recent transcript/
+  /Use the stored freeform client memory story, memoryClaims, current visible fact sheet, and recent transcript/
 );
 assert.match(
   engineSource,

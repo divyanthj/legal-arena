@@ -93,6 +93,42 @@ const extractWeakCategories = (factSheet = {}) =>
     ].filter((item) => SUBJECTIVE_CHARGE_PATTERN.test(item) || WEAK_PROOF_PATTERN.test(item))
   ).slice(0, 4);
 
+const DEPOSIT_CASE_PATTERN =
+  /\b(security deposit|deposit|withheld|deduction|deductions|itemized|itemised|ordinary wear|cleaning|repair)\b/i;
+
+export const buildCourtroomRuleApplicationGuidance = ({ caseSession = {}, template = {} } = {}) => {
+  const categoryCorpus = [
+    caseSession.primaryCategory,
+    caseSession.practiceArea,
+    template.primaryCategory,
+    template.practiceArea,
+    template.title,
+    template.overview,
+    ...(caseSession.factSheet?.summary || []),
+    ...(caseSession.factSheet?.supportingFacts || []),
+    ...(caseSession.factSheet?.knownClaims || []),
+    ...(caseSession.factSheet?.disputedFacts || []),
+    ...(caseSession.factSheet?.corroboratedFacts || []),
+    ...(caseSession.factSheet?.missingEvidence || []),
+  ].join(" ");
+  const guidance = [
+    "Apply every materially cited lawbook rule that fits the visible record; do not let generic burden or proportionality rules crowd out category-specific rules.",
+    "Treat visible party-side claimed amounts as testimony or party claims. Approximation lowers precision, but it does not erase the claim if the amount was surfaced in the fact sheet or transcript.",
+    "When the record supports liability or an improper category but not the full requested amount, consider a partial remedy or reduced award instead of an all-or-nothing denial.",
+  ];
+
+  if (DEPOSIT_CASE_PATTERN.test(categoryCorpus)) {
+    guidance.push(
+      "For security-deposit disputes, apply Rule 11 directly: a landlord withholding deposit money needs itemization, actual-cost support, and a connection between each deduction and tenant-caused damage.",
+      "For security-deposit disputes, apply Rule 9 directly: ordinary wear, routine turnover cleaning, and vague minor repairs should not be treated as chargeable damage without specific support.",
+      "Use deposit burden allocation: the tenant must show the deposit was withheld and why the deduction is challenged; the landlord must justify the deduction with itemization, actual costs, or specific condition evidence.",
+      "Missing landlord receipts, invoices, itemization, or condition records are legal weaknesses for the landlord, not merely proof gaps for the tenant."
+    );
+  }
+
+  return guidance;
+};
+
 const OPPONENT_FACT_LIMITS = {
   1: 2,
   2: 3,
@@ -332,6 +368,8 @@ export const normalizeCounselAnalysis = ({ aiResult, caseSession, rules }) => {
       ...(caseSession.factSheet.timeline || []),
       ...(caseSession.factSheet.corroboratedFacts || []),
       ...(caseSession.factSheet.knownFacts || []),
+      ...(caseSession.factSheet.knownClaims || []),
+      ...(caseSession.factSheet.disputedFacts || []),
     ].map((item) => String(item || "").trim())
   );
 
@@ -361,6 +399,10 @@ export const buildCourtroomAgentContext = ({
   const opponentSide = getOpposingSide(playerSide);
   const proofStrategy = buildProofStrategyContext({ caseSession });
   const difficultyProfile = getCourtroomDifficultyProfile(caseSession.complexity);
+  const ruleApplicationGuidance = buildCourtroomRuleApplicationGuidance({
+    caseSession,
+    template: safeTemplate,
+  });
   const opponentPortfolio = buildOpponentCourtroomPortfolio({
     template: safeTemplate,
     opponentSide,
@@ -393,11 +435,13 @@ export const buildCourtroomAgentContext = ({
       judgeProfile: caseSession.judgeProfile || null,
       recentCourtroomTranscript: caseSession.courtroomTranscript.slice(-6),
       proofStrategy,
+      ruleApplicationGuidance,
       scoringRules: [
         "Score the player only from the representedCounsel.publicCaseFile, lawbook rules, and courtroom transcript.",
         "Score the opponent only from opposingCounsel.preparedCaseFile, lawbook rules, and courtroom transcript.",
         "Do not infer, cite, or credit facts, claims, story details, or evidence outside those visible side files.",
         "Treat missing or unsurfaced proof as unavailable, even if an argument alludes to it.",
+        ...ruleApplicationGuidance,
       ],
       courtroomCalibration: {
         counselPosture: difficultyProfile.counselPosture,
@@ -435,6 +479,8 @@ export const normalizeCourtResult = ({
       ...(caseSession.factSheet.timeline || []),
       ...(caseSession.factSheet.corroboratedFacts || []),
       ...(caseSession.factSheet.knownFacts || []),
+      ...(caseSession.factSheet.knownClaims || []),
+      ...(caseSession.factSheet.disputedFacts || []),
     ].map((item) => String(item || "").trim())
   );
   const validClaimIds = caseSession.factSheet.discoveredClaimIds || [];

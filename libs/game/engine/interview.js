@@ -12,6 +12,7 @@ import {
   coerceStringList,
   sanitizeIdList,
 } from "./shared";
+import { normalizeMemoryClaims } from "../memoryClaims";
 
 export const normalizeInterviewResult = ({
   aiResult,
@@ -86,6 +87,7 @@ export const normalizeInterviewResult = ({
 
   return {
     partyResponse,
+    newMemoryClaims: normalizeMemoryClaims(aiResult.newMemoryClaims || [], playerSide),
     patch: mergedPatch,
     nextFactSheet: mergeFactSheet(factSheet, mergedPatch, safeTemplate, {
       playerSide,

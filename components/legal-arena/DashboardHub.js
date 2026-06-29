@@ -872,7 +872,16 @@ export default function DashboardHub({
     : isNewUser
     ? "Start Your First Case"
     : "Start New Case";
-  const desktopFeatureProgress = canContinueDesktopHeroCase ? desktopHeroCaseProgress.percent : 12;
+  const desktopFeatureProgress = canContinueDesktopHeroCase ? desktopHeroCaseProgress.percent : 0;
+  const desktopFeatureProgressFill = canContinueDesktopHeroCase
+    ? Math.max(8, desktopFeatureProgress)
+    : 0;
+  const desktopFeatureProgressLabel = canContinueDesktopHeroCase
+    ? "Intake Progress"
+    : "Ready to start";
+  const desktopFeatureStageCountLabel = canContinueDesktopHeroCase
+    ? `Stage ${Math.max(1, Math.round(desktopFeatureProgress / 12.5))} of 8`
+    : "Not started";
   const desktopFeatureStage = canContinueDesktopHeroCase
     ? desktopHeroCaseProgress.label
     : shouldSellLifetimeAccess
@@ -1228,9 +1237,7 @@ export default function DashboardHub({
                             {desktopFeatureStage}
                           </span>
                           <span className="text-sm text-white/62">
-                            {canContinueDesktopHeroCase
-                              ? `Stage ${Math.max(1, Math.round(desktopFeatureProgress / 12.5))} of 8`
-                              : "Stage 1 of 8"}
+                            {desktopFeatureStageCountLabel}
                           </span>
                         </div>
                         <div className="mt-6 flex max-w-xl items-center gap-4">
@@ -1240,11 +1247,11 @@ export default function DashboardHub({
                           <div className="arena-progress-track h-2">
                             <div
                               className="arena-progress-fill"
-                              style={{ width: `${Math.max(8, desktopFeatureProgress)}%` }}
+                              style={{ width: `${desktopFeatureProgressFill}%` }}
                             />
                           </div>
                           <span className="shrink-0 text-sm text-white/62">
-                            Intake Progress
+                            {desktopFeatureProgressLabel}
                           </span>
                         </div>
                         <p className="mt-6 max-w-xl text-lg leading-8 text-white/70">
@@ -1675,7 +1682,7 @@ export default function DashboardHub({
                                 <div
                                   className="arena-progress-fill"
                                   style={{
-                                    width: `${canResumeLastCase ? lastCaseProgress.percent : 12}%`,
+                                    width: `${canResumeLastCase ? lastCaseProgress.percent : 0}%`,
                                   }}
                                 />
                               </div>
@@ -1946,7 +1953,7 @@ export default function DashboardHub({
                                   <div
                                     className="arena-progress-fill"
                                     style={{
-                                      width: `${canResumeLastCase ? lastCaseProgress.percent : 12}%`,
+                                      width: `${canResumeLastCase ? lastCaseProgress.percent : 0}%`,
                                     }}
                                   />
                                 </div>

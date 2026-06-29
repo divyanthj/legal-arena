@@ -92,6 +92,12 @@ const missingEvidenceUnavailablePattern =
 const missingEvidenceUncertainPattern =
   /\b(any|if one exists|if it exists|may have|might have|should have|could have|likely has|prepared but did not provide|do not know|don't know|not sure|need to ask|need to confirm)\b/i;
 
+const evidenceRecordPattern =
+  /\b(portal|message|messages|text|texts|email|emails|lease|agreement|receipt|receipts|photo|photos|screenshot|screenshots|statement|checklist|inspection|invoice|invoices|record|records|document|documents|work order|work orders)\b/i;
+
+const evidenceAvailabilityPattern =
+  /\b(i have|i may have|may have|might have|should have|i believe i have|believe i have|i'm pretty sure|i am pretty sure|yes|available|likely available|can get|could get)\b/i;
+
 const getMissingEvidenceTone = (item = "") => {
   if (missingEvidenceUnavailablePattern.test(item)) {
     return "unavailable";
@@ -106,6 +112,62 @@ const getMissingEvidenceTone = (item = "") => {
 
 const formatMissingEvidenceLabel = (item = "") =>
   String(item || "").replace(/^unavailable:\s*/i, "");
+
+const shouldPromptForEvidenceProduction = (text = "") => {
+  const normalizedText = String(text || "");
+  return evidenceRecordPattern.test(normalizedText) && evidenceAvailabilityPattern.test(normalizedText);
+};
+
+const getEvidenceFollowUpQuestions = (item = "") => {
+  const text = String(item || "").toLowerCase();
+
+  if (/\bportal|maintenance request|repair request/.test(text)) {
+    return [
+      "Read me the portal message, including the date and exact wording.",
+      "What did the portal request say about the repair issue?",
+    ];
+  }
+
+  if (/\btext|message/.test(text)) {
+    return [
+      "Read me the text message, including who sent it and when.",
+      "What exactly did the manager text say?",
+    ];
+  }
+
+  if (/\blease|agreement/.test(text)) {
+    return [
+      "Read me the lease clause that supports this point.",
+      "What exact lease language applies here?",
+    ];
+  }
+
+  if (/\breceipt|payment|deposit/.test(text)) {
+    return [
+      "What does the receipt or payment record show?",
+      "Read me the date and amount on the deposit proof.",
+    ];
+  }
+
+  if (/\bphoto|screenshot/.test(text)) {
+    return [
+      "Describe what the photo or screenshot shows.",
+      "When was the photo or screenshot taken?",
+    ];
+  }
+
+  if (/\bstatement|checklist|inspection|invoice|work order|record|document/.test(text)) {
+    return [
+      "Read me the record's date and exact wording.",
+      "What specific amounts or details does that record show?",
+    ];
+  }
+
+  return [
+    "Read me the record's date and exact wording.",
+    "What specific detail does that evidence prove?",
+  ];
+};
 
 const strongProofPattern =
   /\b(photo|photos|message|messages|text|texts|receipt|receipts|invoice|invoices|letter|email|emails|witness|witnesses|record|records|checklist|inspection|lease|statement|bank|deposit|paid|returned the keys|notice)\b/i;
@@ -193,6 +255,38 @@ const VoiceWaveform = ({ level = 0 }) => {
     </span>
   );
 };
+
+const PresentingArgumentIndicator = ({ captionClassName = "text-black/62" }) => (
+  <span className="flex flex-col items-center justify-center gap-1.5">
+    <span className="inline-flex items-center justify-center gap-2">
+      <span className="arena-presenting-gavel" aria-hidden="true">
+        <svg viewBox="0 0 48 48" className="arena-presenting-gavel-icon" focusable="false">
+          <g className="arena-presenting-gavel-swing">
+            <rect x="8" y="10" width="18" height="8" rx="2.5" fill="currentColor" />
+            <rect x="5" y="8" width="7" height="12" rx="2" fill="currentColor" opacity="0.88" />
+            <rect x="23" y="8" width="7" height="12" rx="2" fill="currentColor" opacity="0.88" />
+            <rect
+              x="23"
+              y="19"
+              width="23"
+              height="6"
+              rx="3"
+              fill="currentColor"
+              transform="rotate(43 23 19)"
+            />
+          </g>
+          <ellipse cx="14" cy="39" rx="12" ry="3.2" fill="currentColor" opacity="0.42" />
+          <rect x="5" y="34" width="18" height="5" rx="2.5" fill="currentColor" opacity="0.58" />
+        </svg>
+      </span>
+      <span>Presenting</span>
+      <span className="loading loading-dots loading-xs" aria-hidden="true" />
+    </span>
+    <span className={`block text-xs font-medium ${captionClassName}`}>
+      Submitting your argument to the judge
+    </span>
+  </span>
+);
 
 const categoryTitleBySlug = new Map(
   LEGAL_CASE_CATEGORIES.map((category) => [category.slug, category.title])
@@ -304,6 +398,16 @@ const IntakeProgressRing = ({ value }) => {
   );
 };
 
+const INTERVIEW_HISTORY_DEFAULT_HEIGHT = 240;
+const INTERVIEW_HISTORY_MIN_HEIGHT = 140;
+const INTERVIEW_HISTORY_MAX_HEIGHT = 520;
+
+const clampInterviewHistoryHeight = (value) =>
+  Math.min(
+    INTERVIEW_HISTORY_MAX_HEIGHT,
+    Math.max(INTERVIEW_HISTORY_MIN_HEIGHT, Math.round(Number(value) || 0))
+  );
+
 export default function CaseWorkspace({
   initialCase,
   apiConfig = {},
@@ -329,6 +433,9 @@ export default function CaseWorkspace({
   const [lawbookSearch, setLawbookSearch] = useState("");
   const [showFullMobileBrief, setShowFullMobileBrief] = useState(false);
   const [showMobileExchangeHistory, setShowMobileExchangeHistory] = useState(false);
+  const [interviewHistoryHeight, setInterviewHistoryHeight] = useState(
+    INTERVIEW_HISTORY_DEFAULT_HEIGHT
+  );
   const [showFullMobileOpponentArgument, setShowFullMobileOpponentArgument] = useState(false);
   const [activeMobileFactSheetKey, setActiveMobileFactSheetKey] = useState("theory");
   const [showMobileFactSheetDialog, setShowMobileFactSheetDialog] = useState(false);
@@ -347,6 +454,37 @@ export default function CaseWorkspace({
     handleQuestionVoiceInput,
     handleArgumentVoiceInput,
   } = useCaseVoiceRecorder({ setQuestion, setArgument });
+  const resizeInterviewHistoryBy = (delta) => {
+    setInterviewHistoryHeight((current) => clampInterviewHistoryHeight(current + delta));
+  };
+  const handleInterviewHistoryResizeStart = (event) => {
+    event.preventDefault();
+    const startY = event.clientY;
+    const startHeight = interviewHistoryHeight;
+    const maxHeight = Math.min(
+      INTERVIEW_HISTORY_MAX_HEIGHT,
+      Math.max(
+        INTERVIEW_HISTORY_MIN_HEIGHT,
+        Math.round((window.innerHeight || INTERVIEW_HISTORY_MAX_HEIGHT) * 0.58)
+      )
+    );
+
+    const handlePointerMove = (moveEvent) => {
+      const nextHeight = startHeight + moveEvent.clientY - startY;
+      setInterviewHistoryHeight(
+        Math.min(maxHeight, Math.max(INTERVIEW_HISTORY_MIN_HEIGHT, Math.round(nextHeight)))
+      );
+    };
+    const handlePointerUp = () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", handlePointerUp);
+    };
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointercancel", handlePointerUp);
+  };
   const [factSheetDraft, setFactSheetDraft] = useState({
     summary: ensureDraftList(initialFactSheet.summary),
     theory: ensureDraftList(initialFactSheet.theory),
@@ -514,6 +652,13 @@ export default function CaseWorkspace({
     }
 
     form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  };
+
+  const useSuggestedIntakeQuestion = (nextQuestion, { closeFactSheetDialog = false } = {}) => {
+    setQuestion(nextQuestion);
+    if (closeFactSheetDialog) {
+      setShowMobileFactSheetDialog(false);
+    }
   };
 
   const handleInterviewSubmit = async (event) => {
@@ -705,9 +850,12 @@ export default function CaseWorkspace({
   }, [visibleInterviewTranscript]);
   const latestMobileInterviewExchange =
     mobileInterviewExchangePairs[mobileInterviewExchangePairs.length - 1] || null;
-  const mobileInterviewExchangeHistory = mobileInterviewExchangePairs
-    .slice(0, -1)
-    .reverse();
+  const mobileInterviewExchangeHistory = mobileInterviewExchangePairs.slice(0, -1);
+  const latestEvidenceProductionQuestions =
+    latestMobileInterviewExchange?.response &&
+    shouldPromptForEvidenceProduction(latestMobileInterviewExchange.response.text)
+      ? getEvidenceFollowUpQuestions(latestMobileInterviewExchange.response.text)
+      : [];
   const opponentPartyName = getOpponentPartyName(caseSession);
   const defendantName = getDefendantName(caseSession);
   const isDefendantSide =
@@ -1285,11 +1433,29 @@ export default function CaseWorkspace({
                         factSheetBulletToneClass[bulletTone] || factSheetBulletToneClass.secondary
                       }`}
                     />
-                    <p className="min-w-0 flex-1 text-sm leading-7 text-white/78">
-                      {section.key === "missingEvidence"
-                        ? formatMissingEvidenceLabel(item)
-                        : item}
-                    </p>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm leading-7 text-white/78">
+                        {section.key === "missingEvidence"
+                          ? formatMissingEvidenceLabel(item)
+                          : item}
+                      </p>
+                      {isInterview && section.key === "missingEvidence" ? (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {getEvidenceFollowUpQuestions(item)
+                            .slice(0, 2)
+                            .map((questionText) => (
+                              <button
+                                key={`${section.key}-${itemIndex}-${questionText}`}
+                                type="button"
+                                className="rounded-full border border-amber-200/16 bg-amber-200/[0.055] px-3 py-1.5 text-left text-xs font-semibold text-amber-100 transition hover:border-amber-200/38 hover:bg-amber-200/10"
+                                onClick={() => useSuggestedIntakeQuestion(questionText)}
+                              >
+                                {questionText}
+                              </button>
+                            ))}
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                 );
               })}
@@ -1613,6 +1779,63 @@ export default function CaseWorkspace({
                         ) : null}
                       </div>
 
+                      {showMobileExchangeHistory && mobileInterviewExchangeHistory.length > 0 ? (
+                        <div className="mt-3 border-b border-white/10 pb-3">
+                          <div
+                            className="arena-scroll space-y-4 overflow-y-auto pr-1"
+                            style={{ height: `${interviewHistoryHeight}px` }}
+                          >
+                            {mobileInterviewExchangeHistory.map((exchange) => (
+                              <article
+                                key={exchange.id}
+                                className="space-y-2"
+                              >
+                                <div className="flex justify-end">
+                                  <div className="max-w-[88%] rounded-2xl rounded-br-md border border-white/[0.06] bg-sky-300/[0.075] px-3 py-2 text-right">
+                                    <p className="text-[0.62rem] font-semibold uppercase tracking-[0.12em] text-sky-200/72">
+                                      You
+                                    </p>
+                                    <p className="mt-1 break-words text-xs font-semibold leading-5 text-white/84">
+                                      {exchange.question.text}
+                                    </p>
+                                  </div>
+                                </div>
+                                {exchange.response ? (
+                                  <div className="flex justify-start">
+                                    <div className="max-w-[88%] rounded-2xl rounded-bl-md border border-white/[0.055] bg-amber-200/[0.055] px-3 py-2">
+                                      <p className="text-[0.62rem] font-semibold uppercase tracking-[0.12em] text-amber-200/72">
+                                        {getInterviewEntrySpeaker(exchange.response)}
+                                      </p>
+                                      <p className="mt-1 break-words text-xs font-semibold leading-5 text-white/72">
+                                        {exchange.response.text}
+                                      </p>
+                                    </div>
+                                  </div>
+                                ) : null}
+                              </article>
+                            ))}
+                          </div>
+                          <button
+                            type="button"
+                            className="mt-2 flex h-5 w-full cursor-ns-resize touch-none items-center justify-center rounded-full border border-white/[0.06] bg-white/[0.035] text-white/35 transition hover:border-white/15 hover:text-white/60"
+                            aria-label="Resize interview history"
+                            onPointerDown={handleInterviewHistoryResizeStart}
+                            onKeyDown={(event) => {
+                              if (event.key === "ArrowUp") {
+                                event.preventDefault();
+                                resizeInterviewHistoryBy(-24);
+                              }
+                              if (event.key === "ArrowDown") {
+                                event.preventDefault();
+                                resizeInterviewHistoryBy(24);
+                              }
+                            }}
+                          >
+                            <HeroIcons.ArrowsUpDownIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                          </button>
+                        </div>
+                      ) : null}
+
                       {latestMobileInterviewExchange ? (
                         <div className="mt-3 space-y-2">
                           <div className="rounded-xl border border-white/10 bg-black/24 p-3">
@@ -1652,40 +1875,6 @@ export default function CaseWorkspace({
                           </p>
                         </div>
                       )}
-
-                      {showMobileExchangeHistory && mobileInterviewExchangeHistory.length > 0 ? (
-                        <div className="mt-3 space-y-4 border-t border-white/10 pt-3">
-                          {mobileInterviewExchangeHistory.map((exchange) => (
-                            <article
-                              key={exchange.id}
-                              className="space-y-2"
-                            >
-                              <div className="flex justify-end">
-                                <div className="max-w-[88%] rounded-2xl rounded-br-md border border-white/[0.06] bg-sky-300/[0.075] px-3 py-2 text-right">
-                                  <p className="text-[0.62rem] font-semibold uppercase tracking-[0.12em] text-sky-200/72">
-                                    You
-                                  </p>
-                                  <p className="mt-1 break-words text-xs font-semibold leading-5 text-white/84">
-                                    {exchange.question.text}
-                                  </p>
-                                </div>
-                              </div>
-                              {exchange.response ? (
-                                <div className="flex justify-start">
-                                  <div className="max-w-[88%] rounded-2xl rounded-bl-md border border-white/[0.055] bg-amber-200/[0.055] px-3 py-2">
-                                    <p className="text-[0.62rem] font-semibold uppercase tracking-[0.12em] text-amber-200/72">
-                                      {getInterviewEntrySpeaker(exchange.response)}
-                                    </p>
-                                    <p className="mt-1 break-words text-xs font-semibold leading-5 text-white/72">
-                                      {exchange.response.text}
-                                    </p>
-                                  </div>
-                                </div>
-                              ) : null}
-                            </article>
-                          ))}
-                        </div>
-                      ) : null}
                     </div>
 
                     <div className="relative mt-3">
@@ -1958,6 +2147,63 @@ export default function CaseWorkspace({
                         ) : null}
                       </div>
 
+                      {showMobileExchangeHistory && mobileInterviewExchangeHistory.length > 0 ? (
+                        <div className="mt-3 border-b border-white/10 pb-3">
+                          <div
+                            className="arena-scroll space-y-4 overflow-y-auto pr-1"
+                            style={{ height: `${interviewHistoryHeight}px` }}
+                          >
+                            {mobileInterviewExchangeHistory.map((exchange) => (
+                              <article
+                                key={exchange.id}
+                                className="space-y-2"
+                              >
+                                <div className="flex justify-end">
+                                  <div className="max-w-[74%] rounded-2xl rounded-br-md border border-white/[0.06] bg-sky-300/[0.075] px-4 py-3 text-right">
+                                    <p className="text-[0.64rem] font-semibold uppercase tracking-[0.13em] text-sky-200/72">
+                                      You
+                                    </p>
+                                    <p className="mt-1 break-words text-sm font-semibold leading-6 text-white/84">
+                                      {exchange.question.text}
+                                    </p>
+                                  </div>
+                                </div>
+                                {exchange.response ? (
+                                  <div className="flex justify-start">
+                                    <div className="max-w-[74%] rounded-2xl rounded-bl-md border border-white/[0.055] bg-amber-200/[0.055] px-4 py-3">
+                                      <p className="text-[0.64rem] font-semibold uppercase tracking-[0.13em] text-amber-200/72">
+                                        {getInterviewEntrySpeaker(exchange.response)}
+                                      </p>
+                                      <p className="mt-1 break-words text-sm font-semibold leading-6 text-white/72">
+                                        {exchange.response.text}
+                                      </p>
+                                    </div>
+                                  </div>
+                                ) : null}
+                              </article>
+                            ))}
+                          </div>
+                          <button
+                            type="button"
+                            className="mt-2 flex h-5 w-full cursor-ns-resize touch-none items-center justify-center rounded-full border border-white/[0.06] bg-white/[0.035] text-white/35 transition hover:border-white/15 hover:text-white/60"
+                            aria-label="Resize interview history"
+                            onPointerDown={handleInterviewHistoryResizeStart}
+                            onKeyDown={(event) => {
+                              if (event.key === "ArrowUp") {
+                                event.preventDefault();
+                                resizeInterviewHistoryBy(-24);
+                              }
+                              if (event.key === "ArrowDown") {
+                                event.preventDefault();
+                                resizeInterviewHistoryBy(24);
+                              }
+                            }}
+                          >
+                            <HeroIcons.ArrowsUpDownIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                          </button>
+                        </div>
+                      ) : null}
+
                       {latestMobileInterviewExchange ? (
                         <div className="mt-3 grid gap-3 lg:grid-cols-2">
                           <div className="rounded-xl border border-white/10 bg-black/24 p-3">
@@ -1998,37 +2244,26 @@ export default function CaseWorkspace({
                         </div>
                       )}
 
-                      {showMobileExchangeHistory && mobileInterviewExchangeHistory.length > 0 ? (
-                        <div className="arena-scroll mt-3 max-h-60 space-y-4 overflow-y-auto border-t border-white/10 pt-3">
-                          {mobileInterviewExchangeHistory.map((exchange) => (
-                            <article
-                              key={exchange.id}
-                              className="space-y-2"
-                            >
-                              <div className="flex justify-end">
-                                <div className="max-w-[74%] rounded-2xl rounded-br-md border border-white/[0.06] bg-sky-300/[0.075] px-4 py-3 text-right">
-                                  <p className="text-[0.64rem] font-semibold uppercase tracking-[0.13em] text-sky-200/72">
-                                    You
-                                  </p>
-                                  <p className="mt-1 break-words text-sm font-semibold leading-6 text-white/84">
-                                    {exchange.question.text}
-                                  </p>
-                                </div>
-                              </div>
-                              {exchange.response ? (
-                                <div className="flex justify-start">
-                                  <div className="max-w-[74%] rounded-2xl rounded-bl-md border border-white/[0.055] bg-amber-200/[0.055] px-4 py-3">
-                                    <p className="text-[0.64rem] font-semibold uppercase tracking-[0.13em] text-amber-200/72">
-                                      {getInterviewEntrySpeaker(exchange.response)}
-                                    </p>
-                                    <p className="mt-1 break-words text-sm font-semibold leading-6 text-white/72">
-                                      {exchange.response.text}
-                                    </p>
-                                  </div>
-                                </div>
-                              ) : null}
-                            </article>
-                          ))}
+                      {latestEvidenceProductionQuestions.length > 0 ? (
+                        <div className="mt-3 rounded-xl border border-amber-200/18 bg-amber-200/[0.055] p-3">
+                          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-200">
+                            Turn evidence into proof
+                          </p>
+                          <p className="mt-1 text-xs leading-5 text-white/58">
+                            Ask them to read, quote, or describe the record so it can help in court.
+                          </p>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {latestEvidenceProductionQuestions.slice(0, 2).map((item) => (
+                              <button
+                                key={`latest-evidence-${item}`}
+                                type="button"
+                                className="rounded-full border border-amber-200/20 bg-black/18 px-3 py-1.5 text-left text-xs font-semibold text-amber-100 transition hover:border-amber-200/45 hover:bg-amber-200/10"
+                                onClick={() => useSuggestedIntakeQuestion(item)}
+                              >
+                                {item}
+                              </button>
+                            ))}
+                          </div>
                         </div>
                       ) : null}
                     </div>
@@ -2123,9 +2358,9 @@ export default function CaseWorkspace({
                       Back to Cases
                     </Link>
                   </div>
-                </div>
-              </div>
-            ) : (
+                          </div>
+                        </div>
+                      ) : (
               <>
               <div id="courtroom" className="space-y-4 pb-24 sm:hidden">
                 <section className="arena-surface overflow-hidden border-white/10 bg-white/[0.025]">
@@ -2363,10 +2598,16 @@ export default function CaseWorkspace({
                         className="w-full rounded-xl border border-white/80 bg-white px-5 py-3 text-sm font-bold text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
                         disabled={working || recordingArgument || transcribingArgument || !argument.trim()}
                       >
-                        {pendingAction === "courtroom" ? "Presenting..." : "Present Argument"}
-                        <span className="mt-1 block text-xs font-medium text-blue-800">
-                          Submit your argument to the judge
-                        </span>
+                        {pendingAction === "courtroom" ? (
+                          <PresentingArgumentIndicator captionClassName="text-blue-800" />
+                        ) : (
+                          <>
+                            Present Argument
+                            <span className="mt-1 block text-xs font-medium text-blue-800">
+                              Submit your argument to the judge
+                            </span>
+                          </>
+                        )}
                       </button>
                     </form>
                   </section>
@@ -2638,10 +2879,16 @@ export default function CaseWorkspace({
                           className="w-full rounded-xl border border-amber-200/35 bg-amber-200 px-5 py-3 text-sm font-bold text-black transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
                           disabled={working || recordingArgument || transcribingArgument || !argument.trim()}
                         >
-                          {pendingAction === "courtroom" ? "Presenting..." : "Present Argument"}
-                          <span className="mt-1 block text-xs font-medium text-black/62">
-                            Submit your argument to the judge
-                          </span>
+                          {pendingAction === "courtroom" ? (
+                            <PresentingArgumentIndicator />
+                          ) : (
+                            <>
+                              Present Argument
+                              <span className="mt-1 block text-xs font-medium text-black/62">
+                                Submit your argument to the judge
+                              </span>
+                            </>
+                          )}
                         </button>
                       </div>
                     </form>
@@ -3438,11 +3685,33 @@ export default function CaseWorkspace({
                             factSheetBulletToneClass.secondary
                           }`}
                         />
-                        <p className="min-w-0 flex-1 text-sm font-semibold leading-6 text-white/80">
-                          {activeMobileFactSheetSection.key === "missingEvidence"
-                            ? formatMissingEvidenceLabel(item)
-                            : item}
-                        </p>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold leading-6 text-white/80">
+                            {activeMobileFactSheetSection.key === "missingEvidence"
+                              ? formatMissingEvidenceLabel(item)
+                              : item}
+                          </p>
+                          {isInterview && activeMobileFactSheetSection.key === "missingEvidence" ? (
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {getEvidenceFollowUpQuestions(item)
+                                .slice(0, 2)
+                                .map((questionText) => (
+                                  <button
+                                    key={`${activeMobileFactSheetSection.key}-dialog-${itemIndex}-${questionText}`}
+                                    type="button"
+                                    className="rounded-full border border-amber-200/16 bg-amber-200/[0.055] px-3 py-1.5 text-left text-xs font-semibold text-amber-100 transition hover:border-amber-200/38 hover:bg-amber-200/10"
+                                    onClick={() =>
+                                      useSuggestedIntakeQuestion(questionText, {
+                                        closeFactSheetDialog: true,
+                                      })
+                                    }
+                                  >
+                                    {questionText}
+                                  </button>
+                                ))}
+                            </div>
+                          ) : null}
+                        </div>
                       </div>
                     );
                   })}
@@ -3498,10 +3767,41 @@ export default function CaseWorkspace({
                   <p className="mt-2 text-sm leading-6 text-white/62">
                     Use these points to ground your next argument in facts, proof, risks, and
                     requested relief.
-                  </p>
-                </div>
-              )}
-            </div>
+                          </p>
+                        </div>
+                      )}
+
+                      {latestEvidenceProductionQuestions.length > 0 ? (
+                        <div className="mt-3 rounded-xl border border-amber-200/18 bg-amber-200/[0.055] p-3">
+                          <div className="flex items-start gap-3">
+                            <HeroIcons.DocumentMagnifyingGlassIcon
+                              className="mt-0.5 h-5 w-5 shrink-0 text-amber-200"
+                              aria-hidden="true"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-200">
+                                Turn evidence into proof
+                              </p>
+                              <p className="mt-1 text-sm leading-6 text-white/62">
+                                Ask them to read, quote, or describe the record so it can help in court.
+                              </p>
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                {latestEvidenceProductionQuestions.slice(0, 2).map((item) => (
+                                  <button
+                                    key={`latest-evidence-desktop-${item}`}
+                                    type="button"
+                                    className="rounded-full border border-amber-200/20 bg-black/18 px-3 py-1.5 text-left text-xs font-semibold text-amber-100 transition hover:border-amber-200/45 hover:bg-amber-200/10"
+                                    onClick={() => useSuggestedIntakeQuestion(item)}
+                                  >
+                                    {item}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
             </>
           ) : null}
         </div>

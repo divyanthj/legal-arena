@@ -212,7 +212,7 @@ const finalizeRouteSource = await readFile(
 );
 assert.match(
   engineSource,
-  /const combinedPatch = mergeFactSheetPatches\(conversationPatch\)/
+  /const combinedPatch = mergeFactSheetPatches\(memoryClaimPatch, conversationPatch\)/
 );
 assert.doesNotMatch(
   engineSource,
@@ -226,6 +226,10 @@ assert.match(
   engineSource,
   /const currentConversationFactSheet = factSheetHasVisibleContent\(caseSession\.factSheet\)/
 );
+assert.match(engineSource, /const completedSections = \[/);
+assert.match(engineSource, /completedSections < 4/);
+assert.match(engineSource, /warnings\.push\("case theory"\)/);
+assert.doesNotMatch(engineSource, /missing\.push\("case theory"\)/);
 assert.match(
   engineSource,
   /export const rebuildFactSheetFromTranscript/
