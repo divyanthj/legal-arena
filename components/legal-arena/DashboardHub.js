@@ -858,9 +858,7 @@ export default function DashboardHub({
     ? "Unlock Lifetime Access"
     : canResumeLastCase
     ? "Continue Case"
-    : isNewUser
-      ? "Start Your First Case"
-      : "Start New Case";
+    : "Start This Case";
   const desktopFeaturedTemplate = activeTemplate || firstUnlockedTemplate;
   const desktopFeatureTitle = canContinueDesktopHeroCase
     ? desktopHeroCase.title
@@ -896,9 +894,9 @@ export default function DashboardHub({
       ? desktopHeroCase?.defendantName || desktopHeroCase?.premise?.opponentName
       : desktopFeaturedTemplate?.defendantName || desktopFeaturedTemplate?.opponentName) ||
     "Defendant";
-  const desktopRepresentsPlaintiff = canContinueDesktopHeroCase
-    ? desktopHeroCase?.playerSide !== "opponent"
-    : true;
+  const desktopHasAssignedSide = canContinueDesktopHeroCase && Boolean(desktopHeroCase?.playerSide);
+  const desktopRepresentsPlaintiff =
+    desktopHasAssignedSide && desktopHeroCase?.playerSide !== "opponent";
   const unlockCards = [
     {
       title: "Earn XP",
@@ -1253,10 +1251,12 @@ export default function DashboardHub({
                           {desktopFeatureBody}
                         </p>
                         <div className="mt-6 flex flex-wrap gap-3">
-                          <span className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.035] px-4 py-2 text-sm text-white/74">
-                            <HeroIcons.UserIcon className="h-5 w-5 text-white/52" aria-hidden="true" />
-                            {desktopHeroCase?.playerSide === "opponent" ? "Defendant Side" : "Plaintiff Side"}
-                          </span>
+                          {desktopHasAssignedSide ? (
+                            <span className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.035] px-4 py-2 text-sm text-white/74">
+                              <HeroIcons.UserIcon className="h-5 w-5 text-white/52" aria-hidden="true" />
+                              {desktopHeroCase?.playerSide === "opponent" ? "Defendant Side" : "Plaintiff Side"}
+                            </span>
+                          ) : null}
                           <span className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.035] px-4 py-2 text-sm text-white/74">
                             <HeroIcons.BriefcaseIcon className="h-5 w-5 text-white/52" aria-hidden="true" />
                             {desktopHeroCase?.primaryCategory ||
@@ -1321,9 +1321,11 @@ export default function DashboardHub({
                               </p>
                               <p
                                 className={`mt-2 line-clamp-3 text-4xl font-black leading-[0.95] ${
-                                  desktopRepresentsPlaintiff
+                                  desktopHasAssignedSide && desktopRepresentsPlaintiff
                                     ? "text-emerald-200 drop-shadow-[0_0_18px_rgba(52,211,153,0.2)]"
-                                    : "text-white/72"
+                                    : desktopHasAssignedSide
+                                      ? "text-white/72"
+                                      : "text-white"
                                 }`}
                               >
                                 {desktopPlaintiffName}
@@ -1338,9 +1340,11 @@ export default function DashboardHub({
                               </p>
                               <p
                                 className={`mt-2 line-clamp-3 text-4xl font-black leading-[0.95] ${
-                                  !desktopRepresentsPlaintiff
+                                  desktopHasAssignedSide && !desktopRepresentsPlaintiff
                                     ? "text-emerald-200 drop-shadow-[0_0_18px_rgba(52,211,153,0.2)]"
-                                    : "text-white/72"
+                                    : desktopHasAssignedSide
+                                      ? "text-white/72"
+                                      : "text-white"
                                 }`}
                               >
                                 {desktopDefendantName}
@@ -1410,6 +1414,7 @@ export default function DashboardHub({
                       <p className="text-lg leading-8 text-white/82">
                         <span className="mr-3 text-3xl font-serif text-emerald-300/75">“</span>
                         {playerEncouragementNote}
+                        <span className="ml-2 text-3xl font-serif text-emerald-300/75">”</span>
                       </p>
                     </div>
                   </Link>
