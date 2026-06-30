@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
 import apiClient from "@/libs/api";
+import { trackGoal } from "@/libs/datafast";
 import { useNavigationLoading } from "@/components/NavigationLoadingProvider";
 
 const formatCategoryLabel = (value = "") =>
@@ -60,6 +61,9 @@ export default function ChallengeButton({
 
   const startChallenge = () => {
     if (!hasArenaAccess) {
+      trackGoal("pvp_challenge_access_blocked", {
+        source: "challenge_button",
+      });
       if (onNeedsAccess) {
         onNeedsAccess();
       } else {
@@ -69,6 +73,9 @@ export default function ChallengeButton({
     }
 
     if (!unlockedTemplates.length) {
+      trackGoal("pvp_challenge_no_cases", {
+        source: "challenge_button",
+      });
       toast.error("Unlock a case before sending a challenge.");
       return;
     }
@@ -76,6 +83,10 @@ export default function ChallengeButton({
     setActiveTemplateIndex((current) =>
       unlockedTemplates[current] ? current : 0
     );
+    trackGoal("pvp_challenge_modal_opened", {
+      available_cases: unlockedTemplates.length,
+      source: "challenge_button",
+    });
     setOpen(true);
   };
 
@@ -85,12 +96,22 @@ export default function ChallengeButton({
     }
 
     setCreating(true);
+    trackGoal("pvp_challenge_create_started", {
+      template_id: selectedTemplateId,
+      category: activeTemplate?.primaryCategory,
+      complexity: activeTemplate?.complexity,
+    });
     try {
       const response = await apiClient.post("/challenges", {
         challengedId: targetPlayerId,
         caseTemplateId: selectedTemplateId,
       });
       const challenge = response.challenge;
+      trackGoal("pvp_challenge_sent", {
+        template_id: selectedTemplateId,
+        category: activeTemplate?.primaryCategory,
+        complexity: activeTemplate?.complexity,
+      });
       toast.success("Challenge sent.");
       setOpen(false);
       startNavigationLoading("Opening challenge");
@@ -98,6 +119,11 @@ export default function ChallengeButton({
       router.prefetch(challengeHref);
       router.push(challengeHref);
     } catch (error) {
+      trackGoal("pvp_challenge_create_failed", {
+        template_id: selectedTemplateId,
+        category: activeTemplate?.primaryCategory,
+        complexity: activeTemplate?.complexity,
+      });
       toast.error(error?.message || "Could not create challenge.");
     } finally {
       setCreating(false);
@@ -106,6 +132,10 @@ export default function ChallengeButton({
 
   const goToPreviousTemplate = () => {
     if (!canNavigateTemplates) return;
+    trackGoal("pvp_challenge_case_browsed", {
+      direction: "previous",
+      category: selectedCategory,
+    });
     setActiveTemplateIndex((current) =>
       current === 0 ? visibleTemplates.length - 1 : current - 1
     );
@@ -113,12 +143,19 @@ export default function ChallengeButton({
 
   const goToNextTemplate = () => {
     if (!canNavigateTemplates) return;
+    trackGoal("pvp_challenge_case_browsed", {
+      direction: "next",
+      category: selectedCategory,
+    });
     setActiveTemplateIndex((current) =>
       current >= visibleTemplates.length - 1 ? 0 : current + 1
     );
   };
 
   const chooseCategory = (categorySlug) => {
+    trackGoal("pvp_challenge_category_selected", {
+      category: categorySlug,
+    });
     setSelectedCategory(categorySlug);
     setActiveTemplateIndex(0);
   };

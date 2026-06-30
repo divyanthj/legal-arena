@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import config from "@/config";
 import { useNavigationLoading } from "@/components/NavigationLoadingProvider";
+import { trackGoal } from "@/libs/datafast";
 
 const loginHref = `${config.auth.loginUrl}?callbackUrl=${encodeURIComponent(
   config.auth.callbackUrl
@@ -20,6 +21,11 @@ const ButtonSignin = ({ text = "Get started", extraStyle }) => {
   const { startNavigationLoading } = useNavigationLoading();
 
   const handleClick = () => {
+    trackGoal("auth_intent", {
+      state: status === "authenticated" ? "authenticated" : "anonymous",
+      source: "signin_button",
+      label: text,
+    });
     startNavigationLoading("Opening your case desk");
 
     if (status === "authenticated") {

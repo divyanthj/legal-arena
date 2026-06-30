@@ -9,6 +9,7 @@ import * as HeroIcons from "@heroicons/react/24/outline";
 import ButtonAccount from "@/components/ButtonAccount";
 import { useNavigationLoading } from "@/components/NavigationLoadingProvider";
 import apiClient from "@/libs/api";
+import { trackGoal } from "@/libs/datafast";
 import {
   LAWBOOK_ALL_CATEGORIES,
   legalArenaLawbook,
@@ -445,6 +446,7 @@ export default function CaseWorkspace({
   const courtroomTranscriptRef = useRef(null);
   const workingRef = useRef(false);
   const updateCaseFromResponseRef = useRef(null);
+  const workspaceViewedRef = useRef(false);
   const {
     recordingQuestion,
     transcribingQuestion,
@@ -500,6 +502,15 @@ export default function CaseWorkspace({
     apiConfig.basePath || `/cases/${getCaseRouteRef(session)}`;
   const realtimeRefreshPath = apiConfig.realtimeRefreshPath || getApiBasePath(caseSession);
   const realtimeRefreshIntervalMs = apiConfig.realtimeRefreshIntervalMs || 4000;
+  const analyticsMode = apiConfig.analyticsMode || (apiConfig.basePath ? "pvp" : "solo");
+  const caseAnalyticsParams = (extra = {}) => ({
+    mode: analyticsMode,
+    status: caseSession.status,
+    category: caseSession.primaryCategory,
+    complexity: caseSession.complexity,
+    side: caseSession.playerSide,
+    ...extra,
+  });
   const getResponseCase = (response) =>
     apiConfig.responseToCase ? apiConfig.responseToCase(response) : response?.caseSession;
   const updateCaseFromResponse = (response) => {
@@ -576,6 +587,27 @@ export default function CaseWorkspace({
   const isExited = caseSession.status === "exited";
   const isIntakeLocked = Boolean(apiConfig.intakeLocked);
   const viewerSubmittedCurrentRound = Boolean(caseSession.score.viewerSubmittedCurrentRound);
+
+  useEffect(() => {
+    if (workspaceViewedRef.current) {
+      return;
+    }
+
+    workspaceViewedRef.current = true;
+    trackGoal("case_workspace_viewed", {
+      mode: analyticsMode,
+      status: caseSession.status,
+      category: caseSession.primaryCategory,
+      complexity: caseSession.complexity,
+      side: caseSession.playerSide,
+    });
+  }, [
+    analyticsMode,
+    caseSession.complexity,
+    caseSession.playerSide,
+    caseSession.primaryCategory,
+    caseSession.status,
+  ]);
 
   useEffect(() => {
     if (!isInterview || !interviewTranscriptRef.current) {
@@ -666,6 +698,11 @@ export default function CaseWorkspace({
     if (working || isIntakeLocked || !question.trim()) return;
 
     const submittedQuestion = question.trim();
+    trackGoal("intake_question_sent", caseAnalyticsParams({
+      question_chars: submittedQuestion.length,
+      transcript_count: visibleInterviewTranscript.length,
+      intake_locked: isIntakeLocked,
+    }));
 
     setOptimisticTranscriptEntry({
       role: "player",
@@ -685,8 +722,14 @@ export default function CaseWorkspace({
       );
 
       updateCaseFromResponse(response);
+      trackGoal("intake_question_answered", caseAnalyticsParams({
+        question_chars: submittedQuestion.length,
+      }));
     } catch (error) {
       setQuestion(submittedQuestion);
+      trackGoal("intake_question_failed", caseAnalyticsParams({
+        question_chars: submittedQuestion.length,
+      }));
       console.error(error);
     } finally {
       setOptimisticTranscriptEntry(null);
@@ -701,6 +744,12 @@ export default function CaseWorkspace({
       return;
     }
 
+    const factSheetPayload = buildFactSheetPayload();
+    trackGoal("fact_sheet_finalize_started", caseAnalyticsParams({
+      sections_complete: completedFactSheetItems,
+      open_questions: suggestedQuestions.length,
+    }));
+
     setFinalizeFeedback(null);
     setWorking(true);
     setPendingAction("finalize");
@@ -709,11 +758,15 @@ export default function CaseWorkspace({
       const response = await apiClient.post(
         `${getApiBasePath(caseSession)}/${apiConfig.finalizePath || "finalize"}`,
         {
-          factSheet: buildFactSheetPayload(),
+          factSheet: factSheetPayload,
         }
       );
 
       const nextCase = updateCaseFromResponse(response);
+      trackGoal("fact_sheet_finalized", caseAnalyticsParams({
+        next_status: nextCase?.status,
+        sections_complete: completedFactSheetItems,
+      }));
       const successMessage =
         apiConfig.finalizeSuccessMessage ||
         (nextCase?.status === "courtroom"
@@ -722,6 +775,9 @@ export default function CaseWorkspace({
       setFinalizeFeedback({ tone: "success", text: successMessage });
       toast.success(successMessage);
     } catch (error) {
+      trackGoal("fact_sheet_finalize_failed", caseAnalyticsParams({
+        sections_complete: completedFactSheetItems,
+      }));
       setFinalizeFeedback({
         tone: "error",
         text: error?.message || "Could not finalize the fact sheet.",
@@ -738,6 +794,11 @@ export default function CaseWorkspace({
     if (working || showCourtroomWaitingCard || !argument.trim()) return;
 
     const submittedArgument = argument.trim();
+    trackGoal("courtroom_argument_sent", caseAnalyticsParams({
+      argument_chars: submittedArgument.length,
+      round: caseSession.score.roundsCompleted + 1,
+      waiting_card: showCourtroomWaitingCard,
+    }));
 
     setOptimisticTranscriptEntry({
       round: caseSession.score.roundsCompleted + 1,
@@ -760,8 +821,16 @@ export default function CaseWorkspace({
       );
 
       updateCaseFromResponse(response);
+      trackGoal("courtroom_argument_scored", caseAnalyticsParams({
+        argument_chars: submittedArgument.length,
+        round: caseSession.score.roundsCompleted + 1,
+      }));
     } catch (error) {
       setArgument(submittedArgument);
+      trackGoal("courtroom_argument_failed", caseAnalyticsParams({
+        argument_chars: submittedArgument.length,
+        round: caseSession.score.roundsCompleted + 1,
+      }));
       console.error(error);
     } finally {
       setOptimisticTranscriptEntry(null);
@@ -778,9 +847,11 @@ export default function CaseWorkspace({
     );
 
     if (!confirmed) {
+      trackGoal("case_exit_cancelled", caseAnalyticsParams());
       return;
     }
 
+    trackGoal("case_exit_confirmed", caseAnalyticsParams());
     setWorking(true);
     setPendingAction("exit");
 
@@ -796,7 +867,9 @@ export default function CaseWorkspace({
         router.push(apiConfig.exitRedirect || "/dashboard");
         router.refresh();
       }
+      trackGoal("case_exit_completed", caseAnalyticsParams());
     } catch (error) {
+      trackGoal("case_exit_failed", caseAnalyticsParams());
       console.error(error);
     } finally {
       setPendingAction("");

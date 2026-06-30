@@ -3,6 +3,7 @@
 import { useState } from "react";
 import apiClient from "@/libs/api";
 import config from "@/config";
+import { trackGoal } from "@/libs/datafast";
 
 // This component is used to create Stripe Checkout Sessions
 // It calls the /api/stripe/create-checkout route with the priceId, successUrl and cancelUrl
@@ -13,6 +14,12 @@ const ButtonCheckout = ({ priceId, mode = "payment" }) => {
 
   const handlePayment = async () => {
     setIsLoading(true);
+    trackGoal("checkout_started", {
+      provider: "stripe",
+      mode,
+      price_id: priceId,
+      source: "button_checkout",
+    });
 
     try {
       const res = await apiClient.post("/stripe/create-checkout", {
@@ -22,8 +29,18 @@ const ButtonCheckout = ({ priceId, mode = "payment" }) => {
         cancelUrl: window.location.href,
       });
 
+      trackGoal("checkout_redirect", {
+        provider: "stripe",
+        mode,
+        price_id: priceId,
+      });
       window.location.href = res.url;
     } catch (e) {
+      trackGoal("checkout_failed", {
+        provider: "stripe",
+        mode,
+        price_id: priceId,
+      });
       console.error(e);
     }
 

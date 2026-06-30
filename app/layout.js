@@ -87,6 +87,13 @@ export default function RootLayout({ children }) {
               __html: JSON.stringify(webApplicationSchema),
             }}
           />
+          <script
+            id="datafast-queue"
+            dangerouslySetInnerHTML={{
+              __html:
+                "window.datafast=window.datafast||function(){window.datafast.q=window.datafast.q||[];window.datafast.q.push(arguments);};",
+            }}
+          />
           <Script
             defer
             data-website-id={DATAFAST_WEBSITE_ID}

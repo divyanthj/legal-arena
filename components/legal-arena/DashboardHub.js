@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import * as HeroIcons from "@heroicons/react/24/outline";
 import ButtonAccount from "@/components/ButtonAccount";
 import { useNavigationLoading } from "@/components/NavigationLoadingProvider";
 import apiClient from "@/libs/api";
+import { trackGoal } from "@/libs/datafast";
 import { DevelopmentAccessPanel } from "@/components/legal-arena/DevelopmentAccessGate";
 
 const statusLabel = {
@@ -219,7 +220,13 @@ const PvpDocketSection = ({
                     ? "border-amber-200/24 bg-amber-200/[0.075] text-amber-100"
                     : "border-white/[0.07] bg-white/[0.025] text-white/52 hover:border-white/12 hover:text-white/78"
                 }`}
-                onClick={() => onTabChange(tab.value)}
+                onClick={() => {
+                  trackGoal("pvp_docket_tab_selected", {
+                    tab: tab.value,
+                    count,
+                  });
+                  onTabChange(tab.value);
+                }}
               >
                 {tab.label} <span className="text-white/42">{count}</span>
               </button>
@@ -242,6 +249,14 @@ const PvpDocketSection = ({
                   key={challenge.id}
                   href={href}
                   className="arena-surface-soft block p-4 text-white transition hover:-translate-y-0.5 hover:border-white/18"
+                  onClick={() =>
+                    trackGoal("pvp_challenge_opened", {
+                      status: challenge.status,
+                      tab: activeTab,
+                      category: challenge.primaryCategory,
+                      action: getPvpActionLabel(challenge),
+                    })
+                  }
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -804,6 +819,7 @@ export default function DashboardHub({
   const [searchedLawyers, setSearchedLawyers] = useState(null);
   const [lawyerSearchLoading, setLawyerSearchLoading] = useState(false);
   const [isMobileActivationViewport, setIsMobileActivationViewport] = useState(false);
+  const dashboardViewedRef = useRef(false);
   const [dashboardTutorialCompleted, setDashboardTutorialCompleted] = useState(
     Boolean(onboarding?.dashboardTutorialCompleted)
   );
@@ -826,6 +842,30 @@ export default function DashboardHub({
     [initialCases]
   );
   const selectedArchiveCases = caseArchiveTab === "finished" ? finishedCases : ongoingCases;
+
+  useEffect(() => {
+    if (dashboardViewedRef.current) {
+      return;
+    }
+
+    dashboardViewedRef.current = true;
+    trackGoal("dashboard_viewed", {
+      has_access: hasArenaAccess,
+      can_start_solo: canStartSoloCases,
+      cases_total: initialCases.length,
+      cases_finished: finishedCases.length,
+      pvp_total: challenges.length,
+      pvp_attention: challenges.filter((challenge) =>
+        ["pending", "active", "courtroom"].includes(challenge.status)
+      ).length,
+    });
+  }, [
+    canStartSoloCases,
+    challenges,
+    finishedCases.length,
+    hasArenaAccess,
+    initialCases.length,
+  ]);
 
   const selectedLeaderboard = categoryLeaderboards[selectedCategory] || [];
   const categoryProgress =
@@ -961,11 +1001,24 @@ export default function DashboardHub({
 
   const handleCreateCase = async (caseTemplateId) => {
     if (!caseTemplateId) return;
+    const selectedTemplateForAnalytics =
+      templates.find((template) => template.id === caseTemplateId) || activeTemplate;
     if (!canStartSoloCases) {
+      trackGoal("paywall_prompt_viewed", {
+        source: "case_start",
+        template_id: caseTemplateId,
+        category: selectedTemplateForAnalytics?.primaryCategory,
+      });
       setShowPaywallModal(true);
       return;
     }
 
+    trackGoal("case_start_clicked", {
+      template_id: caseTemplateId,
+      category: selectedTemplateForAnalytics?.primaryCategory,
+      complexity: selectedTemplateForAnalytics?.complexity,
+      unlocked: selectedTemplateForAnalytics?.unlocked,
+    });
     setCreating(true);
     startNavigationLoading("Preparing your client intake", { failsafeMs: 60000 });
 
@@ -974,6 +1027,12 @@ export default function DashboardHub({
         caseTemplateId,
       });
 
+      trackGoal("case_created", {
+        template_id: caseTemplateId,
+        category: caseSession.primaryCategory || selectedTemplateForAnalytics?.primaryCategory,
+        complexity: caseSession.complexity || selectedTemplateForAnalytics?.complexity,
+        side: caseSession.playerSide,
+      });
       startNavigationLoading("Creating courtroom portraits", { failsafeMs: 60000 });
       const caseRef = caseSession.slug || caseSession.id;
       const caseHref = `/dashboard/cases/${caseRef}`;
@@ -990,6 +1049,11 @@ export default function DashboardHub({
       router.push(caseHref);
     } catch (error) {
       stopNavigationLoading();
+      trackGoal("case_create_failed", {
+        template_id: caseTemplateId,
+        category: selectedTemplateForAnalytics?.primaryCategory,
+        complexity: selectedTemplateForAnalytics?.complexity,
+      });
       console.error(error);
     } finally {
       setCreating(false);
@@ -1060,6 +1124,10 @@ export default function DashboardHub({
   };
 
   const selectCaseCategory = (categorySlug = "") => {
+    trackGoal("case_category_selected", {
+      category: categorySlug || "all",
+      playable_only: showPlayableOnly,
+    });
     const scrollPosition =
       typeof window !== "undefined"
         ? { left: window.scrollX, top: window.scrollY }
@@ -1555,6 +1623,11 @@ export default function DashboardHub({
                               className="inline-flex min-h-[4rem] w-full max-w-md items-center justify-center gap-4 rounded-xl border border-amber-200/45 bg-amber-200 px-6 text-lg font-bold text-black shadow-[0_18px_40px_rgba(251,191,36,0.22)] transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
                               onClick={() => {
                                 if (shouldSellLifetimeAccess) {
+                                  trackGoal("paywall_prompt_viewed", {
+                                    source: "featured_case_mobile",
+                                    template_id: featuredLibraryTemplate.id,
+                                    category: featuredLibraryTemplate.primaryCategory,
+                                  });
                                   setShowPaywallModal(true);
                                   return;
                                 }
@@ -1969,6 +2042,11 @@ export default function DashboardHub({
                               className="inline-flex min-h-0 items-center gap-2 rounded-xl border border-amber-200/25 bg-amber-300/14 px-3 py-2.5 text-xs font-semibold text-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
                               onClick={() => {
                                 if (shouldSellLifetimeAccess) {
+                                  trackGoal("paywall_prompt_viewed", {
+                                    source: "featured_case_desktop",
+                                    template_id: featuredLibraryTemplate.id,
+                                    category: featuredLibraryTemplate.primaryCategory,
+                                  });
                                   setShowPaywallModal(true);
                                   return;
                                 }

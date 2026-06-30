@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import * as HeroIcons from "@heroicons/react/24/outline";
 import { toast } from "react-hot-toast";
 import apiClient from "@/libs/api";
+import { trackGoal } from "@/libs/datafast";
 import CaseWorkspace from "./CaseWorkspace";
 
 const statusLabel = {
@@ -335,11 +336,26 @@ export default function ChallengeWorkspace({ initialChallenge }) {
 
   const runAction = async (label, action) => {
     setBusy(label);
+    trackGoal(`pvp_challenge_${label}_started`, {
+      status: challenge.status,
+      category: challenge.primaryCategory,
+      side: viewer.side,
+    });
     try {
       const response = await action();
       setChallenge(response.challenge);
+      trackGoal(`pvp_challenge_${label}_completed`, {
+        status: response.challenge?.status,
+        category: response.challenge?.primaryCategory || challenge.primaryCategory,
+        side: response.challenge?.viewer?.side || viewer.side,
+      });
       return response.challenge;
     } catch (error) {
+      trackGoal(`pvp_challenge_${label}_failed`, {
+        status: challenge.status,
+        category: challenge.primaryCategory,
+        side: viewer.side,
+      });
       toast.error(error?.message || "Challenge action failed.");
       return null;
     } finally {
@@ -435,6 +451,7 @@ export default function ChallengeWorkspace({ initialChallenge }) {
       initialCase={caseSession}
       workspaceNotice={<OpponentStageNotice challenge={challenge} />}
       apiConfig={{
+        analyticsMode: "pvp",
         basePath: `/challenges/${challengeRef}`,
         finalizePath: "ready",
         finalizeSuccessMessage:
