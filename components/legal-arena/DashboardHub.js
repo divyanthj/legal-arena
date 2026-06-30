@@ -123,6 +123,42 @@ const getPvpTurnSummary = (challenge = {}) => {
   return challengeStatusLabel[challenge.status] || "Open";
 };
 
+const isPvpChallengeActionable = (challenge = {}) => {
+  if (isIncomingPendingChallenge(challenge)) {
+    return true;
+  }
+
+  if (challenge.status === "active") {
+    return challenge.viewer?.status !== "ready";
+  }
+
+  if (challenge.status === "courtroom") {
+    if (challenge.viewer?.status !== "ready") {
+      return true;
+    }
+
+    return !getOpenPvpRound(challenge)?.viewerSubmitted;
+  }
+
+  return false;
+};
+
+const getPvpUrgencyLabel = (challenge = {}) => {
+  if (isIncomingPendingChallenge(challenge)) {
+    return "Accept now";
+  }
+
+  if (challenge.status === "active") {
+    return challenge.viewer?.status === "ready" ? "Waiting" : "Finish intake";
+  }
+
+  if (challenge.status === "courtroom") {
+    return challenge.viewer?.status === "ready" ? "Your court turn" : "Finish intake";
+  }
+
+  return "Play";
+};
+
 const getPvpActionLabel = (challenge = {}) => {
   if (isIncomingPendingChallenge(challenge)) {
     return "Accept";
@@ -181,16 +217,30 @@ const PvpDocketSection = ({
 }) => {
   const groupedChallenges = groupPvpChallenges(challenges);
   const selectedChallenges = groupedChallenges[activeTab] || [];
-  const activeCount =
-    (groupedChallenges["needs-response"] || []).length +
-    (groupedChallenges["active-intake"] || []).length +
-    (groupedChallenges["in-court"] || []).length;
+  const actionableChallenges = challenges.filter(isPvpChallengeActionable);
+  const activeCount = actionableChallenges.length;
+  const nextActionableChallenge = actionableChallenges[0] || null;
+  const nextActionableHref = nextActionableChallenge
+    ? `/dashboard/challenges/${getChallengeRef(nextActionableChallenge)}`
+    : "";
+  const attentionByTab = pvpDocketTabs.reduce(
+    (counts, tab) => ({
+      ...counts,
+      [tab.value]: (groupedChallenges[tab.value] || []).filter(isPvpChallengeActionable)
+        .length,
+    }),
+    {}
+  );
 
   return (
     <section
       id="pvp-docket"
       data-onboarding-target="pvp-docket"
-      className="arena-surface min-w-0 overflow-hidden"
+      className={`arena-surface min-w-0 overflow-hidden ${
+        activeCount
+          ? "border-amber-200/35 bg-[radial-gradient(circle_at_92%_10%,rgba(251,191,36,0.14),transparent_30%),rgba(251,191,36,0.025)] shadow-[0_0_0_1px_rgba(251,191,36,0.08),0_24px_80px_rgba(251,191,36,0.08)]"
+          : ""
+      }`}
     >
       <div className={compact ? "p-4 md:p-5" : "p-5 md:p-6"}>
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
@@ -198,18 +248,61 @@ const PvpDocketSection = ({
             <p className="arena-kicker text-amber-200">My PVP Docket</p>
             <h2 className="arena-headline mt-2 text-2xl">Open player matches</h2>
             <p className="mt-2 text-sm leading-6 text-white/58">
-              Incoming invites, active intake, courtroom turns, and finished matches live here.
+              Play ongoing PVP first so the other player is not left waiting.
             </p>
           </div>
-          <span className="inline-flex w-fit rounded-full border border-emerald-300/18 bg-emerald-300/[0.055] px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-emerald-100/80">
-            {activeCount} need attention
+          <span
+            className={`inline-flex w-fit rounded-full border px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] ${
+              activeCount
+                ? "border-amber-200/60 bg-amber-200/16 text-amber-50 shadow-[0_0_28px_rgba(251,191,36,0.18)]"
+                : "border-emerald-300/18 bg-emerald-300/[0.055] text-emerald-100/80"
+            }`}
+          >
+            {activeCount ? `${activeCount} waiting on you` : "No PVP waiting"}
           </span>
         </div>
+
+        {nextActionableChallenge ? (
+          <Link
+            href={nextActionableHref}
+            className="mt-5 flex flex-col gap-3 rounded-2xl border border-amber-200/55 bg-amber-200/[0.12] p-4 text-white shadow-[0_18px_60px_rgba(251,191,36,0.12),inset_0_1px_0_rgba(255,255,255,0.08)] transition hover:-translate-y-0.5 hover:border-amber-100 sm:flex-row sm:items-center sm:justify-between"
+            onClick={() =>
+              trackGoal("pvp_priority_match_opened", {
+                status: nextActionableChallenge.status,
+                category: nextActionableChallenge.primaryCategory,
+                action: getPvpActionLabel(nextActionableChallenge),
+              })
+            }
+          >
+            <span className="flex min-w-0 items-start gap-3">
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-black/24 text-amber-100">
+                <HeroIcons.BoltIcon className="h-7 w-7" aria-hidden="true" />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-xs font-semibold uppercase tracking-[0.18em] text-amber-100/88">
+                  Play this first
+                </span>
+                <span className="mt-1 block truncate text-base font-semibold">
+                  {nextActionableChallenge.title}
+                </span>
+                <span className="mt-1 block text-sm text-white/72">
+                  {getPvpTurnSummary(nextActionableChallenge)} vs.{" "}
+                  {nextActionableChallenge.opponent?.name || "opposing counsel"}
+                </span>
+              </span>
+            </span>
+            <span className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-white/70 bg-white px-4 py-3 text-sm font-bold text-black">
+              {getPvpActionLabel(nextActionableChallenge)}
+              <HeroIcons.ChevronRightIcon className="h-4 w-4" aria-hidden="true" />
+            </span>
+          </Link>
+        ) : null}
 
         <div className="mt-5 grid gap-2 sm:grid-cols-5">
           {pvpDocketTabs.map((tab) => {
             const selected = activeTab === tab.value;
             const count = groupedChallenges[tab.value]?.length || 0;
+            const attentionCount = attentionByTab[tab.value] || 0;
 
             return (
               <button
@@ -218,6 +311,8 @@ const PvpDocketSection = ({
                 className={`min-h-11 rounded-xl border px-3 py-2 text-xs font-semibold uppercase tracking-[0.07em] transition ${
                   selected
                     ? "border-amber-200/24 bg-amber-200/[0.075] text-amber-100"
+                    : attentionCount
+                    ? "border-amber-200/35 bg-amber-200/[0.07] text-amber-100 shadow-[0_0_24px_rgba(251,191,36,0.08)] hover:border-amber-200/60"
                     : "border-white/[0.07] bg-white/[0.025] text-white/52 hover:border-white/12 hover:text-white/78"
                 }`}
                 onClick={() => {
@@ -229,6 +324,11 @@ const PvpDocketSection = ({
                 }}
               >
                 {tab.label} <span className="text-white/42">{count}</span>
+                {attentionCount ? (
+                  <span className="ml-1 rounded-full bg-amber-200 px-1.5 py-0.5 text-[0.58rem] text-black">
+                    {attentionCount}
+                  </span>
+                ) : null}
               </button>
             );
           })}
@@ -243,12 +343,17 @@ const PvpDocketSection = ({
             {selectedChallenges.map((challenge) => {
               const visibleStatus = getChallengeViewerStatus(challenge);
               const href = `/dashboard/challenges/${getChallengeRef(challenge)}`;
+              const needsPlayerAction = isPvpChallengeActionable(challenge);
 
               return (
                 <Link
                   key={challenge.id}
                   href={href}
-                  className="arena-surface-soft block p-4 text-white transition hover:-translate-y-0.5 hover:border-white/18"
+                  className={`arena-surface-soft block p-4 text-white transition hover:-translate-y-0.5 ${
+                    needsPlayerAction
+                      ? "border-amber-200/45 bg-amber-200/[0.075] shadow-[0_18px_60px_rgba(251,191,36,0.1)] hover:border-amber-100"
+                      : "hover:border-white/18"
+                  }`}
                   onClick={() =>
                     trackGoal("pvp_challenge_opened", {
                       status: challenge.status,
@@ -264,6 +369,11 @@ const PvpDocketSection = ({
                         <span className={`badge border arena-status ${getPvpStatusTone(challenge)}`}>
                           {challengeStatusLabel[visibleStatus] || visibleStatus}
                         </span>
+                        {needsPlayerAction ? (
+                          <span className="rounded-full border border-amber-100/40 bg-amber-200 px-2.5 py-1 text-[0.68rem] font-black uppercase tracking-[0.08em] text-black">
+                            {getPvpUrgencyLabel(challenge)}
+                          </span>
+                        ) : null}
                         <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-white/48">
                           {challenge.primaryCategory}
                         </span>
@@ -275,7 +385,11 @@ const PvpDocketSection = ({
                         vs. {challenge.opponent?.name || "Opposing counsel"} | Updated{" "}
                         {formatDate(challenge.updatedAt)}
                       </p>
-                      <p className="mt-2 text-sm font-semibold text-amber-100/78">
+                      <p
+                        className={`mt-2 text-sm font-semibold ${
+                          needsPlayerAction ? "text-amber-50" : "text-amber-100/78"
+                        }`}
+                      >
                         {getPvpTurnSummary(challenge)}
                       </p>
                     </div>
@@ -283,7 +397,13 @@ const PvpDocketSection = ({
                       <p className="text-sm font-semibold text-white/78">
                         {challenge.viewer?.score || 0}-{challenge.opponent?.score || 0}
                       </p>
-                      <span className="mt-3 inline-flex rounded-xl border border-amber-200/18 bg-amber-200/[0.06] px-3 py-2 text-xs font-semibold text-amber-100">
+                      <span
+                        className={`mt-3 inline-flex rounded-xl border px-3 py-2 text-xs font-semibold ${
+                          needsPlayerAction
+                            ? "border-white/70 bg-white text-black"
+                            : "border-amber-200/18 bg-amber-200/[0.06] text-amber-100"
+                        }`}
+                      >
                         {getPvpActionLabel(challenge)}
                       </span>
                     </div>
@@ -842,6 +962,7 @@ export default function DashboardHub({
     [initialCases]
   );
   const selectedArchiveCases = caseArchiveTab === "finished" ? finishedCases : ongoingCases;
+  const pvpAttentionCount = challenges.filter(isPvpChallengeActionable).length;
 
   useEffect(() => {
     if (dashboardViewedRef.current) {
@@ -855,9 +976,7 @@ export default function DashboardHub({
       cases_total: initialCases.length,
       cases_finished: finishedCases.length,
       pvp_total: challenges.length,
-      pvp_attention: challenges.filter((challenge) =>
-        ["pending", "active", "courtroom"].includes(challenge.status)
-      ).length,
+      pvp_attention: pvpAttentionCount,
     });
   }, [
     canStartSoloCases,
@@ -865,6 +984,7 @@ export default function DashboardHub({
     finishedCases.length,
     hasArenaAccess,
     initialCases.length,
+    pvpAttentionCount,
   ]);
 
   const selectedLeaderboard = categoryLeaderboards[selectedCategory] || [];
@@ -1411,13 +1531,33 @@ export default function DashboardHub({
 
                       <Link
                         href="#pvp-docket"
-                        className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-left text-white transition hover:border-white/20"
+                        className={`flex items-center gap-3 rounded-2xl border px-4 py-3 text-left text-white transition ${
+                          pvpAttentionCount
+                            ? "border-amber-200/45 bg-amber-200/[0.11] shadow-[0_18px_55px_rgba(251,191,36,0.12)] hover:border-amber-100"
+                            : "border-white/10 bg-white/[0.04] hover:border-white/20"
+                        }`}
                       >
-                        <HeroIcons.UserGroupIcon className="h-6 w-6 shrink-0 text-white/68" aria-hidden="true" />
+                        <HeroIcons.UserGroupIcon
+                          className={`h-6 w-6 shrink-0 ${
+                            pvpAttentionCount ? "text-amber-100" : "text-white/68"
+                          }`}
+                          aria-hidden="true"
+                        />
                         <span className="min-w-0 flex-1">
                           <span className="block font-semibold uppercase tracking-[0.03em]">PVP Docket</span>
-                          <span className="mt-1 block text-sm text-white/56">Accept and resume matches.</span>
+                          <span className="mt-1 block text-sm text-white/56">
+                            {pvpAttentionCount
+                              ? `${pvpAttentionCount} match${
+                                  pvpAttentionCount === 1 ? "" : "es"
+                                } waiting on you.`
+                              : "Accept and resume matches."}
+                          </span>
                         </span>
+                        {pvpAttentionCount ? (
+                          <span className="rounded-full bg-amber-200 px-2 py-1 text-[0.65rem] font-black uppercase tracking-[0.08em] text-black">
+                            First
+                          </span>
+                        ) : null}
                         <HeroIcons.ChevronRightIcon className="h-5 w-5 shrink-0 text-white/55" aria-hidden="true" />
                       </Link>
                       <Link
@@ -2922,10 +3062,22 @@ export default function DashboardHub({
               </a>
               <a
                 href="#pvp-docket"
-                className="arena-surface-soft flex origin-center items-center justify-between !border-white/[0.045] px-4 py-3 text-sm text-white/72 transition hover:scale-[1.01] hover:!border-white/[0.09] hover:text-white"
+                className={`arena-surface-soft flex origin-center items-center justify-between px-4 py-3 text-sm transition hover:scale-[1.01] ${
+                  pvpAttentionCount
+                    ? "!border-amber-200/30 !bg-amber-200/[0.075] text-amber-50 hover:!border-amber-200/55"
+                    : "!border-white/[0.045] text-white/72 hover:!border-white/[0.09] hover:text-white"
+                }`}
               >
                 <span>PVP Docket</span>
-                <span className="text-white/35">04</span>
+                <span
+                  className={
+                    pvpAttentionCount
+                      ? "rounded-full bg-amber-200 px-2 py-0.5 text-[0.62rem] font-black text-black"
+                      : "text-white/35"
+                  }
+                >
+                  {pvpAttentionCount || "04"}
+                </span>
               </a>
               <Link
                 href="/dashboard/bar-association"
