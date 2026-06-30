@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Tooltip } from "react-tooltip";
 import { toast } from "react-hot-toast";
@@ -84,6 +84,263 @@ const CourtPortraitAvatar = ({
         <FallbackIcon className="h-6 w-6" aria-hidden="true" />
       )}
     </span>
+  );
+};
+
+const intakeTourSteps = [
+  {
+    target: "intake-latest-exchange",
+    eyebrow: "Intake",
+    title: "Start the record",
+    body: "Your interview appears here. At the beginning, this space is empty because you have not asked the client anything yet.",
+  },
+  {
+    target: "intake-question-box",
+    eyebrow: "Question Box",
+    title: "Type your first question",
+    body: "This is where you ask the client one clear question. Good intake questions usually ask about dates, records, witnesses, notice, or what happened next.",
+  },
+  {
+    target: "intake-send-button",
+    eyebrow: "Send",
+    title: "Submit the question",
+    body: "Once your question is ready, send it and the client will answer. Their answer can reveal facts for your case file.",
+  },
+  {
+    target: "intake-suggestions",
+    eyebrow: "Prompts",
+    title: "Use a starter question",
+    body: "These chips can seed the question box when you want a quick opening move.",
+  },
+];
+
+const intakeTourStorageKey = "legal-arena:intake-tour-seen:v1";
+
+const clampOverlayValue = (value, min, max) => Math.min(Math.max(value, min), max);
+
+const getVisibleIntakeTourTarget = (target) => {
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  return Array.from(
+    document.querySelectorAll(`[data-intake-tour-target="${target}"]`)
+  ).find((element) => {
+    const rect = element.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  });
+};
+
+const IntakeTourOverlay = ({ isOpen, onComplete }) => {
+  const [stepIndex, setStepIndex] = useState(0);
+  const [targetRect, setTargetRect] = useState(null);
+  const step = intakeTourSteps[stepIndex] || intakeTourSteps[0];
+
+  useEffect(() => {
+    if (isOpen) {
+      setStepIndex(0);
+      setTargetRect(null);
+    }
+  }, [isOpen]);
+
+  const finishTour = useCallback(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(intakeTourStorageKey, "true");
+    }
+    onComplete();
+  }, [onComplete]);
+
+  const findAvailableStepIndex = useCallback((startIndex, direction = 1) => {
+    for (
+      let index = startIndex;
+      index >= 0 && index < intakeTourSteps.length;
+      index += direction
+    ) {
+      if (getVisibleIntakeTourTarget(intakeTourSteps[index].target)) {
+        return index;
+      }
+    }
+
+    return -1;
+  }, []);
+
+  const measureTarget = useCallback(() => {
+    if (!isOpen || !step || typeof window === "undefined") {
+      return;
+    }
+
+    const target = getVisibleIntakeTourTarget(step.target);
+
+    if (!target) {
+      const nextIndex = findAvailableStepIndex(stepIndex + 1, 1);
+      const previousIndex =
+        nextIndex >= 0 ? -1 : findAvailableStepIndex(stepIndex - 1, -1);
+
+      if (nextIndex >= 0 || previousIndex >= 0) {
+        setStepIndex(nextIndex >= 0 ? nextIndex : previousIndex);
+      } else {
+        finishTour();
+      }
+
+      return;
+    }
+
+    const rect = target.getBoundingClientRect();
+    const padding = 8;
+
+    setTargetRect({
+      top: clampOverlayValue(rect.top - padding, padding, window.innerHeight - padding),
+      left: clampOverlayValue(rect.left - padding, padding, window.innerWidth - padding),
+      width: Math.min(rect.width + padding * 2, window.innerWidth - padding * 2),
+      height: Math.min(rect.height + padding * 2, window.innerHeight - padding * 2),
+      centerX: rect.left + rect.width / 2,
+    });
+  }, [findAvailableStepIndex, finishTour, isOpen, step, stepIndex]);
+
+  useEffect(() => {
+    if (!isOpen || !step || typeof window === "undefined") {
+      return;
+    }
+
+    const target = getVisibleIntakeTourTarget(step.target);
+
+    if (target) {
+      target.scrollIntoView({ block: "center", inline: "center", behavior: "smooth" });
+    }
+
+    const timeoutId = window.setTimeout(measureTarget, 240);
+
+    window.addEventListener("resize", measureTarget);
+    window.addEventListener("scroll", measureTarget, true);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      window.removeEventListener("resize", measureTarget);
+      window.removeEventListener("scroll", measureTarget, true);
+    };
+  }, [isOpen, measureTarget, step]);
+
+  if (!isOpen || !targetRect || typeof window === "undefined") {
+    return null;
+  }
+
+  const calloutWidth = Math.min(360, Math.max(280, window.innerWidth - 32));
+  const estimatedCalloutHeight = 230;
+  const hasRoomBelow =
+    targetRect.top + targetRect.height + estimatedCalloutHeight + 28 < window.innerHeight;
+  const calloutTop = hasRoomBelow
+    ? targetRect.top + targetRect.height + 20
+    : Math.max(16, targetRect.top - estimatedCalloutHeight - 20);
+  const calloutLeft = clampOverlayValue(
+    targetRect.centerX - calloutWidth / 2,
+    16,
+    window.innerWidth - calloutWidth - 16
+  );
+  const arrowLeft = clampOverlayValue(targetRect.centerX - calloutLeft - 7, 24, calloutWidth - 24);
+  const isFirstStep = stepIndex === 0;
+  const isLastStep = stepIndex >= intakeTourSteps.length - 1;
+
+  const goToPreviousStep = () => {
+    const previousIndex = findAvailableStepIndex(stepIndex - 1, -1);
+
+    if (previousIndex >= 0) {
+      setStepIndex(previousIndex);
+    }
+  };
+
+  const goToNextStep = () => {
+    const nextIndex = findAvailableStepIndex(stepIndex + 1, 1);
+
+    if (nextIndex >= 0) {
+      setStepIndex(nextIndex);
+    } else {
+      finishTour();
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-[95]"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="intake-tour-title"
+    >
+      <div
+        className="fixed left-0 right-0 top-0 bg-black/72 backdrop-blur-[3px]"
+        style={{ height: targetRect.top }}
+      />
+      <div
+        className="fixed left-0 bg-black/72 backdrop-blur-[3px]"
+        style={{ top: targetRect.top, width: targetRect.left, height: targetRect.height }}
+      />
+      <div
+        className="fixed right-0 bg-black/72 backdrop-blur-[3px]"
+        style={{
+          top: targetRect.top,
+          left: targetRect.left + targetRect.width,
+          height: targetRect.height,
+        }}
+      />
+      <div
+        className="fixed bottom-0 left-0 right-0 bg-black/72 backdrop-blur-[3px]"
+        style={{ top: targetRect.top + targetRect.height }}
+      />
+      <div
+        className="pointer-events-none fixed rounded-2xl border border-amber-100/90 bg-transparent shadow-[0_0_0_6px_rgba(251,191,36,0.12),0_20px_80px_rgba(0,0,0,0.55)] transition-all duration-200"
+        style={{
+          top: targetRect.top,
+          left: targetRect.left,
+          width: targetRect.width,
+          height: targetRect.height,
+        }}
+      />
+      <div
+        className="fixed rounded-2xl border border-white/12 bg-[#111] p-4 text-white shadow-2xl transition-all duration-200 sm:p-5"
+        style={{ top: calloutTop, left: calloutLeft, width: calloutWidth }}
+      >
+        <span
+          className={`absolute h-3.5 w-3.5 rotate-45 border-white/12 bg-[#111] ${
+            hasRoomBelow ? "-top-2 border-l border-t" : "-bottom-2 border-b border-r"
+          }`}
+          style={{ left: arrowLeft }}
+          aria-hidden="true"
+        />
+        <p className="arena-kicker text-amber-200">{step.eyebrow}</p>
+        <h2 id="intake-tour-title" className="mt-2 text-lg font-semibold">
+          {step.title}
+        </h2>
+        <p className="mt-3 text-sm leading-6 text-white/68">{step.body}</p>
+        <div className="mt-5 flex items-center justify-between gap-3">
+          <p className="text-xs uppercase tracking-[0.16em] text-white/42">
+            {stepIndex + 1} / {intakeTourSteps.length}
+          </p>
+          <div className="flex flex-wrap justify-end gap-2">
+            <button
+              type="button"
+              className="arena-btn-dark min-h-0 px-3 py-2 text-sm"
+              onClick={finishTour}
+            >
+              Skip
+            </button>
+            <button
+              type="button"
+              className="arena-btn-dark min-h-0 px-3 py-2 text-sm"
+              onClick={goToPreviousStep}
+              disabled={isFirstStep}
+            >
+              Back
+            </button>
+            <button
+              type="button"
+              className="arena-btn-light min-h-0 px-4 py-2 text-sm"
+              onClick={isLastStep ? finishTour : goToNextStep}
+            >
+              {isLastStep ? "Finish" : "Next"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 };
 
@@ -442,11 +699,13 @@ export default function CaseWorkspace({
   const [showMobileFactSheetDialog, setShowMobileFactSheetDialog] = useState(false);
   const [showMobileBriefDialog, setShowMobileBriefDialog] = useState(false);
   const [showMobileLawbookDialog, setShowMobileLawbookDialog] = useState(false);
+  const [showIntakeTour, setShowIntakeTour] = useState(false);
   const interviewTranscriptRef = useRef(null);
   const courtroomTranscriptRef = useRef(null);
   const workingRef = useRef(false);
   const updateCaseFromResponseRef = useRef(null);
   const workspaceViewedRef = useRef(false);
+  const intakeTourPromptedRef = useRef(false);
   const {
     recordingQuestion,
     transcribingQuestion,
@@ -587,6 +846,9 @@ export default function CaseWorkspace({
   const isExited = caseSession.status === "exited";
   const isIntakeLocked = Boolean(apiConfig.intakeLocked);
   const viewerSubmittedCurrentRound = Boolean(caseSession.score.viewerSubmittedCurrentRound);
+  const opponentSubmittedCurrentRound = Boolean(
+    caseSession.score.opponentSubmittedCurrentRound
+  );
 
   useEffect(() => {
     if (workspaceViewedRef.current) {
@@ -608,6 +870,29 @@ export default function CaseWorkspace({
     caseSession.primaryCategory,
     caseSession.status,
   ]);
+
+  useEffect(() => {
+    if (
+      !isInterview ||
+      intakeTourPromptedRef.current ||
+      visibleInterviewTranscript.length > 0 ||
+      typeof window === "undefined"
+    ) {
+      return;
+    }
+
+    intakeTourPromptedRef.current = true;
+
+    if (window.localStorage.getItem(intakeTourStorageKey) === "true") {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setShowIntakeTour(true);
+    }, 650);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [isInterview, visibleInterviewTranscript.length]);
 
   useEffect(() => {
     if (!isInterview || !interviewTranscriptRef.current) {
@@ -953,8 +1238,14 @@ export default function CaseWorkspace({
       latestCourtroomRound || caseSession.score.roundsCompleted || 1
     )
   );
+  const lastCourtroomEntryWasViewer =
+    typeof lastCourtroomEntry?.submittedByViewer === "boolean"
+      ? lastCourtroomEntry.submittedByViewer
+      : lastCourtroomEntry?.speaker === "player";
   const waitingForOpponentResponse = Boolean(
-    apiConfig.turnBasedCourtroom && lastCourtroomEntry?.speaker === "player"
+    apiConfig.turnBasedCourtroom &&
+      ((viewerSubmittedCurrentRound && !opponentSubmittedCurrentRound) ||
+        (!viewerSubmittedCurrentRound && lastCourtroomEntryWasViewer))
   );
   const showCourtroomWaitingCard = Boolean(
     !isVerdict &&
@@ -966,11 +1257,17 @@ export default function CaseWorkspace({
     caseSession.playerSide === "opponent" ? "Defendant" : "Plaintiff";
   const opponentRoleLabel =
     caseSession.playerSide === "opponent" ? "Plaintiff" : "Defendant";
+  const showPvpCounselNames = analyticsMode === "pvp";
+  const playerCounselLabel = String(caseSession.playerCounselName || "").trim() || "You";
+  const opponentCounselLabel =
+    String(caseSession.opponentCounselName || "").trim() || "Opposing lawyer";
   const sideBadgeLabel = `Representing ${playerPartyName}`;
   const sideContextLabel = `${playerRoleLabel} side`;
   const playerRepresentationLabel = `You represent ${playerPartyName} (${playerRoleLabel}).`;
   const interviewContextLabel = isInterview
     ? `Interviewing ${playerInterviewSubjectName}.`
+    : showPvpCounselNames
+    ? `${opponentCounselLabel} represents ${opponentPartyName}.`
     : `Opposing counsel represents ${opponentPartyName}.`;
   const verdictStyle =
     verdictTone[caseSession.verdict?.winner] || verdictTone.draw;
@@ -1836,12 +2133,26 @@ export default function CaseWorkspace({
                             : `Start with ${playerInterviewSubjectName}`}
                         </p>
                       </div>
-                      <span className="rounded-full border border-white/10 bg-black/24 px-2.5 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.12em] text-white/48">
-                        {question.trim().length}/500
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-amber-200/20 bg-amber-200/10 text-amber-100 transition hover:border-amber-200/40 hover:bg-amber-200/15"
+                          onClick={() => setShowIntakeTour(true)}
+                          aria-label="Take the intake tour"
+                          title="Intake tour"
+                        >
+                          <HeroIcons.QuestionMarkCircleIcon className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                        <span className="rounded-full border border-white/10 bg-black/24 px-2.5 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.12em] text-white/48">
+                          {question.trim().length}/500
+                        </span>
+                      </div>
                     </div>
 
-                    <div className="mt-3 rounded-2xl border border-white/10 bg-black/20 p-3">
+                    <div
+                      className="mt-3 rounded-2xl border border-white/10 bg-black/20 p-3"
+                      data-intake-tour-target="intake-latest-exchange"
+                    >
                       <div className="flex items-center justify-between gap-3">
                         <div>
                           <p className="text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-white/42">
@@ -1971,7 +2282,14 @@ export default function CaseWorkspace({
                       )}
                     </div>
 
-                    <div className="relative mt-3">
+                    <div
+                      className="relative mt-3 rounded-2xl border border-amber-200/20 bg-amber-200/[0.035] p-2"
+                      data-intake-tour-target="intake-question-box"
+                    >
+                      <label className="mb-2 flex items-center gap-2 px-1 text-xs font-semibold uppercase tracking-[0.14em] text-amber-200">
+                        <HeroIcons.ChatBubbleLeftRightIcon className="h-4 w-4" aria-hidden="true" />
+                        Your question
+                      </label>
                       <textarea
                         className="textarea textarea-bordered arena-textarea arena-field h-24 min-w-0 w-full pr-12 text-slate-100"
                         placeholder={`Type your question to ${playerInterviewSubjectName}...`}
@@ -2001,13 +2319,17 @@ export default function CaseWorkspace({
                     <button
                       className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-amber-200/35 bg-amber-200 px-4 py-3 text-sm font-semibold text-black transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
                       disabled={working || recordingQuestion || transcribingQuestion || !question.trim()}
+                      data-intake-tour-target="intake-send-button"
                     >
                       {pendingAction === "interview" ? "Sending..." : "Send Question"}
                       <HeroIcons.PaperAirplaneIcon className="h-4 w-4" aria-hidden="true" />
                     </button>
 
                     {suggestedQuestions.length > 0 ? (
-                      <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+                      <div
+                        className="mt-3 flex gap-2 overflow-x-auto pb-1"
+                        data-intake-tour-target="intake-suggestions"
+                      >
                         {suggestedQuestions.slice(0, 3).map((item) => (
                           <button
                             key={item}
@@ -2204,12 +2526,26 @@ export default function CaseWorkspace({
                             : "Start building the record."}
                         </p>
                       </div>
-                      <span className="rounded-full border border-white/10 bg-black/24 px-3 py-1.5 text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-white/48">
-                        {question.trim().length}/500
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-amber-200/20 bg-amber-200/10 text-amber-100 transition hover:border-amber-200/40 hover:bg-amber-200/15"
+                          onClick={() => setShowIntakeTour(true)}
+                          aria-label="Take the intake tour"
+                          title="Intake tour"
+                        >
+                          <HeroIcons.QuestionMarkCircleIcon className="h-5 w-5" aria-hidden="true" />
+                        </button>
+                        <span className="rounded-full border border-white/10 bg-black/24 px-3 py-1.5 text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-white/48">
+                          {question.trim().length}/500
+                        </span>
+                      </div>
                     </div>
 
-                    <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
+                    <div
+                      className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4"
+                      data-intake-tour-target="intake-latest-exchange"
+                    >
                       <div className="flex items-center justify-between gap-3">
                         <div>
                           <p className="text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-white/42">
@@ -2362,7 +2698,14 @@ export default function CaseWorkspace({
                       ) : null}
                     </div>
 
-                    <div className="relative mt-4">
+                    <div
+                      className="relative mt-4 rounded-2xl border border-amber-200/20 bg-amber-200/[0.035] p-2"
+                      data-intake-tour-target="intake-question-box"
+                    >
+                      <label className="mb-2 flex items-center gap-2 px-1 text-xs font-semibold uppercase tracking-[0.14em] text-amber-200">
+                        <HeroIcons.ChatBubbleLeftRightIcon className="h-4 w-4" aria-hidden="true" />
+                        Your question
+                      </label>
                       <textarea
                         className="textarea textarea-bordered arena-textarea arena-field h-24 min-w-0 w-full pr-12 text-slate-100"
                         placeholder={`Type your question to ${playerInterviewSubjectName}...`}
@@ -2404,12 +2747,16 @@ export default function CaseWorkspace({
                       <button
                         className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-amber-200/35 bg-amber-200 px-6 py-3 text-sm font-semibold text-black transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60 lg:w-56"
                         disabled={working || recordingQuestion || transcribingQuestion || !question.trim()}
+                        data-intake-tour-target="intake-send-button"
                       >
                         {pendingAction === "interview" ? "Sending..." : "Send Question"}
                         <HeroIcons.PaperAirplaneIcon className="h-4 w-4" aria-hidden="true" />
                       </button>
                       {suggestedQuestions.length > 0 ? (
-                        <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1 lg:flex-wrap lg:overflow-visible lg:pb-0">
+                        <div
+                          className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1 lg:flex-wrap lg:overflow-visible lg:pb-0"
+                          data-intake-tour-target="intake-suggestions"
+                        >
                           {suggestedQuestions.slice(0, 4).map((item) => (
                             <button
                               key={item}
@@ -2502,6 +2849,11 @@ export default function CaseWorkspace({
                           <p className="truncate text-lg font-semibold text-white">{opponentPartyName}</p>
                           <p className="text-2xl font-bold text-rose-300">{Math.round(opponentPressurePct)}%</p>
                         </div>
+                        {showPvpCounselNames ? (
+                          <p className="mt-1 truncate text-sm font-semibold text-rose-100/70">
+                            Lawyer: {opponentCounselLabel}
+                          </p>
+                        ) : null}
                         <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/12">
                           <div
                             className="h-full rounded-full bg-gradient-to-r from-rose-500 to-rose-300"
@@ -2523,6 +2875,11 @@ export default function CaseWorkspace({
                             <p className="truncate text-lg font-semibold text-white">You</p>
                             <p className="text-2xl font-bold text-sky-300">{Math.round(playerPressurePct)}%</p>
                           </div>
+                          {showPvpCounselNames ? (
+                            <p className="mt-1 truncate text-sm font-semibold text-sky-100/70">
+                              Lawyer: {playerCounselLabel}
+                            </p>
+                          ) : null}
                           <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/12">
                             <div
                               className="h-full rounded-full bg-gradient-to-r from-sky-500 to-sky-300"
@@ -2734,6 +3091,11 @@ export default function CaseWorkspace({
                               {Math.round(opponentPressurePct)}%
                             </p>
                           </div>
+                          {showPvpCounselNames ? (
+                            <p className="mt-1 truncate text-sm font-semibold text-rose-100/70">
+                              Lawyer: {opponentCounselLabel}
+                            </p>
+                          ) : null}
                           <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/12">
                             <div
                               className="h-full rounded-full bg-gradient-to-r from-rose-500 to-rose-300"
@@ -2757,6 +3119,11 @@ export default function CaseWorkspace({
                                 {Math.round(playerPressurePct)}%
                               </p>
                             </div>
+                            {showPvpCounselNames ? (
+                              <p className="mt-1 truncate text-sm font-semibold text-sky-100/70">
+                                Lawyer: {playerCounselLabel}
+                              </p>
+                            ) : null}
                             <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/12">
                               <div
                                 className="h-full rounded-full bg-gradient-to-r from-sky-500 to-sky-300"
@@ -3911,6 +4278,10 @@ export default function CaseWorkspace({
           </button>
         </div>
       </div>
+      <IntakeTourOverlay
+        isOpen={showIntakeTour && isInterview}
+        onComplete={() => setShowIntakeTour(false)}
+      />
       {Number.isFinite(Number(displayedSuccessChance)) ? (
         <Tooltip
           id="success-chance-tooltip"

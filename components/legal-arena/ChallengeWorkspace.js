@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import Image from "next/image";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as HeroIcons from "@heroicons/react/24/outline";
 import { toast } from "react-hot-toast";
 import apiClient from "@/libs/api";
@@ -95,6 +96,9 @@ const challengeToCaseSession = (challenge = {}) => {
     (round.submissions || []).map((submission) => ({
       round: round.round,
       speaker: submission.isViewer ? "player" : "opponent",
+      submittedByViewer: Boolean(submission.isViewer),
+      submittedSide: submission.side || "",
+      submittedByName: submission.playerName || "",
       text: submission.text,
       citedFacts: submission.citedFacts || [],
       citedClaimIds: submission.citedClaimIds || [],
@@ -178,6 +182,9 @@ const challengeToCaseSession = (challenge = {}) => {
     playerCounselName: viewer.name,
     opponentCounselName: opponent.name,
     clientMemoryExcerpt: viewer.clientMemoryExcerpt || "",
+    clientPortrait: viewer.clientPortrait || {},
+    opponentPortrait: opponent.clientPortrait || {},
+    playerImage: viewer.image || "",
     plaintiffName: challenge.premise?.clientName,
     defendantName: challenge.premise?.opponentName,
     interviewTranscript: viewer.interviewTranscript || [],
@@ -189,6 +196,9 @@ const challengeToCaseSession = (challenge = {}) => {
       opponent: opponent.score || 0,
       roundsCompleted: judgedRounds.length,
       viewerSubmittedCurrentRound: Boolean(openRound?.viewerSubmitted),
+      opponentSubmittedCurrentRound: Boolean(
+        openRound?.submissions?.some((submission) => !submission.isViewer)
+      ),
       lastBenchSignal:
         judgedRounds[judgedRounds.length - 1]?.benchSummary ||
         openRound?.benchSummary ||
@@ -280,43 +290,41 @@ const ChallengeActionOverlay = ({ action, challengerName }) => {
     : `${challengerName || "Your opponent"} is being seated. Preparing your confidential case file.`;
 
   return (
-    <div className="absolute inset-0 z-20 flex items-center justify-center rounded-[1.75rem] bg-black/72 p-5 backdrop-blur-md">
-      <div
-        className="w-full max-w-md arena-surface-soft p-5 text-center shadow-2xl"
-        role="status"
-        aria-live="polite"
-      >
-        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-amber-200/28 bg-amber-200/12 text-amber-100">
-          {isDeclining ? (
-            <HeroIcons.XMarkIcon className="h-8 w-8" aria-hidden="true" />
-          ) : (
-            <span className="arena-presenting-gavel" aria-hidden="true">
-              <svg viewBox="0 0 48 48" className="arena-presenting-gavel-icon" focusable="false">
-                <g className="arena-presenting-gavel-swing">
-                  <rect x="8" y="10" width="18" height="8" rx="2.5" fill="currentColor" />
-                  <rect x="5" y="8" width="7" height="12" rx="2" fill="currentColor" opacity="0.88" />
-                  <rect x="23" y="8" width="7" height="12" rx="2" fill="currentColor" opacity="0.88" />
-                  <rect
-                    x="23"
-                    y="19"
-                    width="23"
-                    height="6"
-                    rx="3"
-                    fill="currentColor"
-                    transform="rotate(43 23 19)"
-                  />
-                </g>
-                <ellipse cx="14" cy="39" rx="12" ry="3.2" fill="currentColor" opacity="0.42" />
-                <rect x="5" y="34" width="18" height="5" rx="2.5" fill="currentColor" opacity="0.58" />
-              </svg>
-            </span>
-          )}
+    <div
+      className="fixed inset-0 z-[120] flex items-center justify-center bg-[#030508]/88 px-5 text-white backdrop-blur-md"
+      role="status"
+      aria-live="polite"
+      aria-label={title}
+    >
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_18%,rgba(255,255,255,0.1),transparent_30%),linear-gradient(180deg,rgba(13,20,31,0.88),rgba(3,5,8,0.96))]" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-white/20" />
+      <div className="relative w-full max-w-xl text-center">
+        <div className="relative mx-auto grid h-24 w-24 place-items-center">
+          <div className="absolute inset-0 rounded-full border border-white/12 bg-white/[0.03] shadow-[0_0_48px_rgba(111,183,255,0.2)]" />
+          <div className="absolute inset-2 rounded-full border border-dashed border-white/25 motion-safe:animate-spin motion-safe:[animation-duration:6s]" />
+          <div className="absolute h-3 w-3 rounded-full bg-white/90 shadow-[0_0_18px_rgba(255,255,255,0.72)] motion-safe:animate-[arena-orbit_2.8s_linear_infinite]" />
+          <Image
+            src="/icon.png"
+            alt=""
+            width={56}
+            height={56}
+            className="relative h-14 w-14 rounded-2xl shadow-[0_16px_34px_rgba(0,0,0,0.36)] motion-safe:animate-[arena-icon-drift_2.4s_ease-in-out_infinite]"
+            aria-hidden="true"
+          />
         </div>
-        <p className="arena-kicker mt-5">{isDeclining ? "Closing notice" : "Challenge accepted"}</p>
-        <h2 className="arena-headline mt-2 text-2xl uppercase">{title}</h2>
-        <p className="mx-auto mt-3 max-w-sm text-sm leading-6 text-white/68">{detail}</p>
-        <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-white/10">
-          <div className="arena-loading-bar h-full w-1/3 rounded-full bg-amber-300/90" />
+
+        <p className="arena-kicker mt-8 text-white/55">Legal Arena</p>
+        <h2 className="arena-headline mt-3 text-3xl uppercase sm:text-4xl">
+          {title}
+        </h2>
+        <div className="mx-auto mt-6 max-w-md space-y-3">
+          <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+            <div className="arena-loading-bar h-full w-1/3 rounded-full bg-white/90" />
+          </div>
+          <p className="text-center text-[0.68rem] font-semibold uppercase tracking-[0.22em] text-white/42">
+            PVP Challenge
+          </p>
+          <p className="text-sm leading-6 text-white/68">{detail}</p>
         </div>
       </div>
     </div>
@@ -326,6 +334,7 @@ const ChallengeActionOverlay = ({ action, challengerName }) => {
 export default function ChallengeWorkspace({ initialChallenge }) {
   const [challenge, setChallenge] = useState(initialChallenge);
   const [busy, setBusy] = useState("");
+  const requestedPortraitsRef = useRef(new Set());
   const challengeRef = getChallengeRef(challenge);
   const viewer = challenge.viewer || {};
   const isPendingInvite =
@@ -368,6 +377,56 @@ export default function ChallengeWorkspace({ initialChallenge }) {
 
   const declineChallenge = () =>
     runAction("decline", () => apiClient.post(`/challenges/${challengeRef}/decline`));
+
+  useEffect(() => {
+    if (!["active", "courtroom", "verdict"].includes(challenge.status)) {
+      return;
+    }
+
+    const requests = [];
+    if (!challenge.viewer?.clientPortrait?.image) {
+      requests.push({ target: "client", key: `${challengeRef}:client` });
+    }
+    if (!challenge.opponent?.clientPortrait?.image) {
+      requests.push({ target: "opponent", key: `${challengeRef}:opponent` });
+    }
+
+    let cancelled = false;
+
+    const generatePortraits = async () => {
+      for (const { target, key } of requests) {
+        if (cancelled || requestedPortraitsRef.current.has(key)) {
+          continue;
+        }
+
+        requestedPortraitsRef.current.add(key);
+        try {
+          const response = await apiClient.post(
+            target === "opponent"
+              ? `/challenges/${challengeRef}/client-portrait?target=opponent`
+              : `/challenges/${challengeRef}/client-portrait`
+          );
+
+          if (!cancelled && response?.challenge) {
+            setChallenge(response.challenge);
+          }
+        } catch (error) {
+          console.error("PVP portrait generation failed", error);
+        }
+      }
+    };
+
+    generatePortraits();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    challenge.opponent?.clientPortrait?.image,
+    challenge.status,
+    challenge.viewer?.clientPortrait?.image,
+    challengeRef,
+  ]);
 
   if (isPendingInvite || ["pending", "declined", "expired"].includes(challenge.status)) {
     return (

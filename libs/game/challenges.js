@@ -397,6 +397,23 @@ const markCourtroomRoundsModified = (challenge) => {
   }
 };
 
+const isMongooseVersionConflict = (error) =>
+  error?.name === "VersionError" ||
+  /No matching document found/i.test(String(error?.message || ""));
+
+const saveReadChangesAndRefresh = async (challenge) => {
+  try {
+    await challenge.save();
+    return challenge;
+  } catch (error) {
+    if (!isMongooseVersionConflict(error)) {
+      throw error;
+    }
+
+    return (await Challenge.findById(challenge._id)) || challenge;
+  }
+};
+
 const setParticipantFactSheet = (challenge, participant, factSheet) => {
   if (typeof participant?.set === "function") {
     participant.set("factSheet", factSheet);
@@ -794,7 +811,9 @@ export const listChallengesForUser = async (userId) => {
   });
 
   if (dirtyChallenges.length) {
-    await Promise.all(dirtyChallenges.map((challenge) => challenge.save()));
+    await Promise.all(
+      dirtyChallenges.map((challenge) => saveReadChangesAndRefresh(challenge))
+    );
   }
 
   return Promise.all(
@@ -827,7 +846,8 @@ export const getChallengeForUser = async ({ userId, challengeId }) => {
     })) || changed;
   changed = syncChallengeMemoryContentions(challenge) || changed;
   if (changed) {
-    await challenge.save();
+    const latestChallenge = await saveReadChangesAndRefresh(challenge);
+    return buildChallengePayload({ challenge: latestChallenge, viewerUserId: userId });
   }
 
   return buildChallengePayload({ challenge, viewerUserId: userId });
@@ -848,7 +868,7 @@ export const getChallengeDocumentForUser = async ({ userId, challengeId }) => {
   changed = backfillChallengeCourtroomFeedback(challenge) || changed;
   changed = appendOpenRoundIfNeeded(challenge) || changed;
   if (changed) {
-    await challenge.save();
+    return saveReadChangesAndRefresh(challenge);
   }
 
   return challenge;
@@ -918,27 +938,15 @@ export const declineChallengeForUser = async ({ userId, challengeId }) => {
   return buildChallengePayload({ challenge, viewerUserId: userId });
 };
 
-export const continueChallengeInterview = async ({ userId, challengeId, question }) => {
-  const challenge = await getChallengeDocumentForUser({ userId, challengeId });
-  if (!challenge) {
-    return null;
-  }
+const applyChallengeInterviewResult = ({ challenge, userId, question, result }) => {
   if (!["active", "courtroom"].includes(challenge.status)) {
     throw new Error("This challenge is not in private intake.");
   }
 
   const participant = getParticipant(challenge, userId);
-  const otherParticipant = getOtherParticipant(challenge, userId);
   if (!participant || participant.status === "ready") {
     throw new Error("This intake file is already locked.");
   }
-
-  const caseSession = buildParticipantCaseSession({
-    challenge,
-    participant,
-    otherParticipant,
-  });
-  const result = await continueInterview({ caseSession, question, userId });
 
   if (result.clientMemory) {
     setParticipantClientMemory(
@@ -984,8 +992,57 @@ export const continueChallengeInterview = async ({ userId, challengeId, question
     setParticipantCaseAssessment(challenge, participant, result.caseAssessment);
   }
 
-  await challenge.save();
-  return buildChallengePayload({ challenge, viewerUserId: userId });
+  return challenge;
+};
+
+export const continueChallengeInterview = async ({ userId, challengeId, question }) => {
+  const challenge = await getChallengeDocumentForUser({ userId, challengeId });
+  if (!challenge) {
+    return null;
+  }
+  if (!["active", "courtroom"].includes(challenge.status)) {
+    throw new Error("This challenge is not in private intake.");
+  }
+
+  const participant = getParticipant(challenge, userId);
+  const otherParticipant = getOtherParticipant(challenge, userId);
+  if (!participant || participant.status === "ready") {
+    throw new Error("This intake file is already locked.");
+  }
+
+  const caseSession = buildParticipantCaseSession({
+    challenge,
+    participant,
+    otherParticipant,
+  });
+  const result = await continueInterview({ caseSession, question, userId });
+
+  applyChallengeInterviewResult({ challenge, userId, question, result });
+
+  try {
+    await challenge.save();
+    return buildChallengePayload({ challenge, viewerUserId: userId });
+  } catch (error) {
+    if (!isMongooseVersionConflict(error)) {
+      throw error;
+    }
+
+    const freshChallenge = await Challenge.findOne(
+      getChallengeLookupQuery({ userId, challengeId })
+    );
+    if (!freshChallenge) {
+      return null;
+    }
+
+    applyChallengeInterviewResult({
+      challenge: freshChallenge,
+      userId,
+      question,
+      result,
+    });
+    await freshChallenge.save();
+    return buildChallengePayload({ challenge: freshChallenge, viewerUserId: userId });
+  }
 };
 
 export const markChallengeReady = async ({ userId, challengeId, factSheet }) => {
@@ -1528,6 +1585,7 @@ export const buildChallengePayload = async ({ challenge, viewerUserId }) => {
       ? {
           userId: toObjectIdString(participant.userId),
           name: getPlayerDisplayName(viewerUser),
+          image: viewerUser?.image || "",
           side: participant.side,
           status: participant.status,
           score: participant.score || 0,
@@ -1536,6 +1594,7 @@ export const buildChallengePayload = async ({ challenge, viewerUserId }) => {
           caseAssessment: participant.caseAssessment,
           interviewTranscript: participant.interviewTranscript || [],
           readyAt: participant.readyAt,
+          clientPortrait: participant.clientPortrait || {},
           partyName: getPartyName(plainChallenge.templateSnapshot, participant.side),
           clientMemoryExcerpt: participant.clientMemoryExcerpt || "",
           interviewSubjectName:
@@ -1552,11 +1611,13 @@ export const buildChallengePayload = async ({ challenge, viewerUserId }) => {
       ? {
           userId: toObjectIdString(otherParticipant.userId),
           name: getPlayerDisplayName(opponentUser),
+          image: opponentUser?.image || "",
           side: otherParticipant.side,
           status: otherParticipant.status,
           score: otherParticipant.score || 0,
           verdict: otherParticipant.verdict || "",
           readyAt: otherParticipant.readyAt,
+          clientPortrait: otherParticipant.clientPortrait || {},
           partyName: getPartyName(plainChallenge.templateSnapshot, otherParticipant.side),
           interviewSubjectName:
             opponentInterviewSubject?.name ||
