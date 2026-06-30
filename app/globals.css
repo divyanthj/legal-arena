@@ -82,9 +82,10 @@ progress::-webkit-progress-value {
 
   .arena-landing {
     background:
-      radial-gradient(circle at 18% 16%, rgba(255, 255, 255, 0.08), transparent 28%),
-      radial-gradient(circle at 82% 12%, rgba(255, 255, 255, 0.05), transparent 24%),
-      linear-gradient(180deg, #050505 0%, #020202 34%, #070707 100%);
+      radial-gradient(circle at 18% 14%, rgba(251, 191, 36, 0.13), transparent 30%),
+      radial-gradient(circle at 84% 10%, rgba(85, 213, 160, 0.1), transparent 26%),
+      radial-gradient(circle at 48% 0%, rgba(255, 255, 255, 0.065), transparent 32%),
+      linear-gradient(180deg, #050505 0%, #020202 38%, #060606 100%);
   }
 
   .arena-column-bg {
@@ -100,9 +101,9 @@ progress::-webkit-progress-value {
     border-radius: inherit;
     opacity: 0.4;
     background:
-      linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.025) 10%, transparent 20%),
+      linear-gradient(90deg, transparent 0%, rgba(251, 191, 36, 0.035) 10%, transparent 20%),
       linear-gradient(90deg, transparent 28%, rgba(255, 255, 255, 0.025) 38%, transparent 48%),
-      linear-gradient(90deg, transparent 56%, rgba(255, 255, 255, 0.025) 66%, transparent 76%),
+      linear-gradient(90deg, transparent 56%, rgba(85, 213, 160, 0.026) 66%, transparent 76%),
       linear-gradient(90deg, transparent 82%, rgba(255, 255, 255, 0.025) 92%, transparent 100%);
     filter: blur(1px);
   }
@@ -114,7 +115,8 @@ progress::-webkit-progress-value {
     z-index: -1;
     border-radius: inherit;
     background:
-      radial-gradient(circle at 50% 8%, rgba(255, 255, 255, 0.08), transparent 24%),
+      radial-gradient(circle at 50% 8%, rgba(251, 191, 36, 0.09), transparent 24%),
+      radial-gradient(circle at 82% 12%, rgba(85, 213, 160, 0.07), transparent 26%),
       linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 22%),
       linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.62) 100%);
   }

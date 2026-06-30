@@ -10,6 +10,7 @@ import {
 } from "@/libs/adminOps";
 import { getSEOTags } from "@/libs/seo";
 import config from "@/config";
+import LandingCategoryCarousel from "@/components/legal-arena/LandingCategoryCarousel";
 import WhatsNewDialog from "@/components/legal-arena/WhatsNewDialog";
 
 export const dynamic = "force-dynamic";
@@ -89,10 +90,10 @@ const steps = [
 ];
 
 const skillPoints = [
-  "Talk to AI clients like a lawyer would",
-  "Separate useful facts from noise and contradictions",
-  "Build a case theory before you walk into court",
-  "Argue in your own words and learn from the verdict",
+  "Talk to AI clients in your own words",
+  "Uncover facts, contradictions, and missing details",
+  "Argue against an AI opponent or another player",
+  "Get judged by an AI court that reacts to your case",
 ];
 
 const practiceCards = [
@@ -116,15 +117,6 @@ const practiceCards = [
     detail:
       "Challenge another player to the same dispute. You each prepare privately with your own AI client, then fight it out in court with an AI judge.",
   },
-];
-
-const categoryFallbacks = [
-  { title: "Criminal Law", cases: "Case Track" },
-  { title: "Civil Litigation", cases: "Case Track" },
-  { title: "Corporate Law", cases: "Case Track" },
-  { title: "Constitutional Law", cases: "Case Track" },
-  { title: "Family Law", cases: "Case Track" },
-  { title: "And More", cases: "Growing Library" },
 ];
 
 const earlyAccessPlan = config.lemonsqueezy.plans[0];
@@ -280,14 +272,6 @@ export default async function Page() {
   const campaignCtaLabel =
     freeGameplayAnnouncement?.ctaLabel ||
     (freeGameplayCampaignActive ? "Play Free Case" : "Start Free");
-  const displayCases =
-    featuredCases.length > 0
-      ? featuredCases.slice(0, 6).map((template) => ({
-          title: getCategoryTitle(template.primaryCategory),
-          cases: `${template.practiceArea || "Live"} Matter`,
-        }))
-      : categoryFallbacks;
-
   const totalCasesLabel =
     totalActiveCases > 0 ? totalActiveCases.toLocaleString("en-US") : "Growing";
   const homepageSchema = {
@@ -309,12 +293,12 @@ export default async function Page() {
   };
 
   return (
-    <main className="arena-landing min-h-screen overflow-hidden bg-[#020202] text-white">
+    <main className="arena-landing arena-app-shell min-h-screen overflow-hidden text-white">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(homepageSchema) }}
       />
-      <header className="sticky top-0 z-40 border-b border-white/10 bg-black/80 backdrop-blur-xl">
+      <header className="sticky top-0 z-40 border-b border-white/10 bg-[#050505]/88 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 md:px-8">
           <Link href="/" className="inline-flex items-center gap-3" aria-label="Legal Arena home">
             <Image
@@ -347,7 +331,7 @@ export default async function Page() {
             </Link>
             <Link
               href="/dashboard"
-              className="rounded-2xl border border-white/15 bg-white px-5 py-3 text-sm font-semibold text-black transition hover:bg-white/90"
+              className="arena-btn-light inline-flex px-5 py-3 text-sm"
             >
               {campaignCtaLabel}
             </Link>
@@ -358,7 +342,7 @@ export default async function Page() {
       <section className="arena-column-bg relative">
         <div className="mx-auto max-w-7xl px-5 pb-12 pt-10 md:px-8 md:pb-16 md:pt-16">
           {freeGameplayAnnouncement ? (
-            <div className="mx-auto mb-8 flex max-w-5xl flex-col gap-4 rounded-2xl border border-emerald-300/20 bg-emerald-300/10 px-5 py-4 text-left shadow-[0_20px_80px_rgba(0,0,0,0.26)] md:flex-row md:items-center md:justify-between">
+            <div className="arena-surface-soft mx-auto mb-8 flex max-w-5xl flex-col gap-4 border-emerald-300/22 bg-emerald-300/[0.055] px-5 py-4 text-left md:flex-row md:items-center md:justify-between">
               <div className="min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-100/72">
                   Free Gameplay Campaign
@@ -372,13 +356,13 @@ export default async function Page() {
               </div>
               <Link
                 href={freeGameplayAnnouncement.ctaHref || "/dashboard"}
-                className="inline-flex shrink-0 justify-center rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-black transition hover:bg-white/90"
+                className="arena-btn-light inline-flex shrink-0 justify-center px-5 py-3 text-sm"
               >
                 {freeGameplayAnnouncement.ctaLabel || "Try a Case"}
               </Link>
             </div>
           ) : null}
-          <div className="mx-auto mb-8 flex max-w-5xl flex-col gap-4 rounded-2xl border border-amber-200/20 bg-amber-200/10 px-5 py-4 text-left shadow-[0_20px_80px_rgba(0,0,0,0.26)] md:flex-row md:items-center md:justify-between">
+          <div className="arena-surface-soft mx-auto mb-8 flex max-w-5xl flex-col gap-4 border-amber-200/22 bg-amber-200/[0.055] px-5 py-4 text-left md:flex-row md:items-center md:justify-between">
             <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-amber-100/72">
                 Magna Carta Early-Access Offer
@@ -396,7 +380,7 @@ export default async function Page() {
             <div className="flex w-full shrink-0 flex-col gap-3 md:w-auto">
               <Link
                 href="/dashboard"
-                className="inline-flex w-full justify-center whitespace-nowrap rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-black transition hover:bg-white/90"
+                className="arena-btn-light inline-flex w-full justify-center whitespace-nowrap px-5 py-3 text-sm"
               >
                 Lock In {currentEarlyAccessPrice}
               </Link>
@@ -410,19 +394,19 @@ export default async function Page() {
                 Be the lawyer.
               </h1>
               <p className="mx-auto mt-6 max-w-3xl text-lg leading-8 text-white/72 md:text-2xl md:leading-10">
-                Legal Arena is an AI-powered lawyer game. You interview AI clients, build your case from what they tell you, then fight it out in court. You can also challenge other players: both sides prepare separately, then argue before an AI judge.
+                Interview AI clients. Build your case from what they tell you. Fight it out in court before an AI judge — against an AI opponent, or challenge another player in PvP.
               </p>
 
               <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
                 <Link
                   href="/dashboard"
-                  className="rounded-2xl bg-white px-6 py-4 text-sm font-semibold text-black transition hover:bg-white/90"
+                  className="arena-btn-light px-6 py-4 text-sm"
                 >
                   {freeGameplayCampaignActive ? campaignCtaLabel : "Try a Case"}
                 </Link>
                 <a
                   href="#how-it-works"
-                  className="rounded-2xl border border-white/15 bg-white/5 px-6 py-4 text-sm font-semibold text-white transition hover:bg-white/10"
+                  className="arena-btn-dark px-6 py-4 text-sm"
                 >
                   How the Game Works
                 </a>
@@ -436,7 +420,7 @@ export default async function Page() {
                       key={item.title}
                       className="mx-auto flex h-full max-w-xs flex-col items-center space-y-3 text-center xl:max-w-none"
                     >
-                      <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/12 bg-white/5 text-white/75">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-amber-200/16 bg-amber-200/[0.055] text-amber-100/82">
                         <Icon kind={iconKinds[index]} />
                       </div>
                       <div>
@@ -452,7 +436,7 @@ export default async function Page() {
         </div>
       </section>
 
-      <section id="how-it-works" className="border-y border-white/10 bg-black/60">
+      <section id="how-it-works" className="border-y border-white/10 bg-black/45">
         <div className="mx-auto max-w-7xl px-5 py-16 md:px-8 md:py-20">
           <p className="text-center text-sm font-semibold uppercase tracking-[0.34em] text-white/45">
             How It Works
@@ -461,12 +445,12 @@ export default async function Page() {
             {steps.map((step, index) => {
               const iconKinds = ["folder", "pen", "gavel"];
               return (
-                <div key={step.number} className="relative rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-8">
+                <div key={step.number} className="arena-surface-soft relative p-8">
                   <div className="flex items-center justify-between">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-white/12 bg-black/30 text-lg font-semibold text-white">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-amber-200/18 bg-amber-200/[0.055] text-lg font-semibold text-amber-100">
                       {step.number}
                     </div>
-                    <div className="text-white/28">
+                    <div className="text-white/32">
                       <Icon kind={iconKinds[index]} className="h-8 w-8" />
                     </div>
                   </div>
@@ -487,13 +471,13 @@ export default async function Page() {
         <div className="grid gap-10 xl:grid-cols-[minmax(0,0.86fr)_minmax(0,1.14fr)] xl:items-start">
           <div className="xl:pr-6">
             <p className="text-sm font-semibold uppercase tracking-[0.3em] text-white/45">
-              Why it feels different
+              Why this couldn&apos;t exist before
             </p>
             <h2 className="arena-headline mt-5 max-w-lg text-4xl uppercase leading-[0.92] md:text-[4.25rem]">
-              The client talks back.
+              AI makes lawyer games possible.
             </h2>
             <p className="mt-6 max-w-lg text-lg leading-8 text-white/66">
-              Most legal games give you a fixed puzzle. Legal Arena gives you an AI client. You decide what to ask, what matters, what to ignore, and how to argue it when the court pushes back. In PVP, another player does the same on the other side.
+              For years, legal games had to be scripted: fixed clues, fixed dialogue, fixed outcomes. Legal Arena is different. You interview AI clients, ask your own questions, discover facts in your own way, and argue before an AI judge. No dialogue trees. No preset path. Just your words, your strategy, and the case you build.
             </p>
             <div className="mt-8 max-w-md space-y-4">
               {skillPoints.map((point) => (
@@ -507,9 +491,9 @@ export default async function Page() {
             </div>
             <Link
               href="/lawyer-game"
-              className="mt-10 inline-flex rounded-2xl border border-white/15 bg-white/5 px-5 py-4 text-sm font-semibold text-white transition hover:bg-white/10"
+              className="arena-btn-dark mt-10 inline-flex px-5 py-4 text-sm"
             >
-              Explore the Lawyer Game
+              Try the First AI Lawyer Game
             </Link>
           </div>
 
@@ -529,7 +513,7 @@ export default async function Page() {
         </div>
       </section>
 
-      <section id="case-library" className="border-y border-white/10 bg-black/60">
+      <section id="case-library" className="border-y border-white/10 bg-black/45">
         <div className="mx-auto max-w-7xl px-5 py-16 md:px-8 md:py-20">
           <p className="text-center text-sm font-semibold uppercase tracking-[0.28em] text-white/45">
             Cases You Can Play
@@ -537,26 +521,13 @@ export default async function Page() {
           <p className="mx-auto mt-4 max-w-2xl text-center text-lg leading-8 text-white/62">
             Each case gives you a client, a dispute, an opponent, and a courtroom fight. The AI turns the same structure into an open-ended legal battle.
           </p>
-          <div className="mt-12 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
-            {displayCases.map((category) => (
-              <div
-                key={`${category.title}-${category.cases}`}
-                className="rounded-[1.5rem] border border-white/10 bg-white/[0.03] p-5 text-center"
-              >
-                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl border border-white/10 bg-black/30 text-white/55">
-                  <Icon kind="scale" />
-                </div>
-                <p className="mt-5 text-lg font-semibold text-white">{category.title}</p>
-                <p className="mt-2 text-sm text-white/45">{category.cases}</p>
-              </div>
-            ))}
-          </div>
+          <LandingCategoryCarousel />
 
           <div className="mt-14 grid gap-5 lg:grid-cols-3">
             {featuredCases.slice(0, 3).map((template, index) => (
               <div
                 key={template.id || `featured-case-${index}`}
-                className="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-6"
+                className="arena-surface-soft p-6"
               >
                 <p className="text-xs uppercase tracking-[0.28em] text-white/42">
                   {getCategoryTitle(template.primaryCategory)}
@@ -587,9 +558,9 @@ export default async function Page() {
             const iconKinds = ["users", "gavel", "star"];
 
             return (
-            <div key={item.title} className="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-6">
+            <div key={item.title} className="arena-surface-soft p-6">
               <div className="flex items-center gap-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-white/10 bg-black/30 text-white/55">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-emerald-300/16 bg-emerald-300/[0.045] text-emerald-100/72">
                   <Icon kind={iconKinds[index]} />
                 </div>
                 <div>
@@ -611,7 +582,7 @@ export default async function Page() {
             { icon: "star", value: "PVP", label: "Player Challenges" },
           ].map((stat) => (
             <div key={stat.label} className="flex items-center justify-center gap-4">
-              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-white/55">
+              <div className="rounded-xl border border-amber-200/14 bg-amber-200/[0.045] p-3 text-amber-100/72">
                 <Icon kind={stat.icon} />
               </div>
               <div className="text-left">
@@ -636,7 +607,7 @@ export default async function Page() {
           </p>
           <Link
             href="/dashboard"
-            className="mt-8 inline-flex rounded-2xl bg-white px-6 py-4 text-sm font-semibold text-black transition hover:bg-white/90"
+            className="arena-btn-light mt-8 inline-flex px-6 py-4 text-sm"
           >
             Start Your First Case
           </Link>
