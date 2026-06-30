@@ -48,9 +48,13 @@ export default async function Dashboard() {
     action: "create",
   });
 
-  const [dashboardData, challenges, leaderboards] = await Promise.all([
+  const [dashboardData, challengesResult, leaderboards] = await Promise.all([
     listDashboardDataForUser(session.user.id, session.user),
-    withOptionalTimeout(listChallengesForUser(session.user.id), [], "challenges"),
+    withOptionalTimeout(
+      listChallengesForUser(session.user.id),
+      { challenges: [], timedOut: true },
+      "challenges"
+    ),
     withOptionalTimeout(
       listDashboardLeaderboards({
         categorySlugs: LEGAL_CASE_CATEGORIES.map((category) => category.slug),
@@ -61,6 +65,11 @@ export default async function Dashboard() {
       "leaderboards"
     ),
   ]);
+  const challenges = Array.isArray(challengesResult)
+    ? challengesResult
+    : challengesResult.challenges || [];
+  const challengesLoadTimedOut =
+    !Array.isArray(challengesResult) && Boolean(challengesResult.timedOut);
 
   return (
     <DashboardHub
@@ -71,6 +80,7 @@ export default async function Dashboard() {
       progression={toClientJSON(dashboardData.progression)}
       dashboardEncouragementNote={dashboardData.dashboardEncouragementNote}
       challenges={toClientJSON(challenges)}
+      challengesLoadTimedOut={challengesLoadTimedOut}
       overallLeaderboard={toClientJSON(leaderboards.overallLeaderboard)}
       categoryLeaderboards={toClientJSON(leaderboards.categoryLeaderboards)}
       isAdmin={isAdminEmail(session.user?.email)}

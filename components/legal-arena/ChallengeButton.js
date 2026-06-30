@@ -320,7 +320,7 @@ export default function ChallengeButton({
                   disabled={creating || !activeTemplate}
                   onClick={createChallenge}
                 >
-                  {creating ? "Sending..." : "Send Challenge"}
+                  {creating ? "Creating invite..." : "Send Challenge"}
                 </button>
                 </div>
               </div>

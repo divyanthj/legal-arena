@@ -161,7 +161,16 @@ assert.ok(
 const createChallengeStart = challengeSource.indexOf("export const createChallenge = async");
 const createChallengeEnd = challengeSource.indexOf("export const listChallengesForUser");
 const createChallengeSource = challengeSource.slice(createChallengeStart, createChallengeEnd);
-assert.match(createChallengeSource, /await ensureParticipantClientMemory/);
+assert.doesNotMatch(
+  createChallengeSource,
+  /await ensureParticipantClientMemory/,
+  "challenge creation should return without synchronous AI client-memory preparation"
+);
+assert.ok(
+  createChallengeSource.indexOf("await challenge.save()") <
+    createChallengeSource.indexOf("await sendChallengeInviteEmail"),
+  "challenge creation should persist before non-blocking invite email work"
+);
 assert.match(challengeSource, /export const getChallengeForUser = async[\s\S]*ensureParticipantClientMemory/);
 assert.match(challengeSource, /export const acceptChallengeForUser = async[\s\S]*ensureParticipantClientMemory/);
 assert.match(storeSource, /playerInterviewSubjectName:/);

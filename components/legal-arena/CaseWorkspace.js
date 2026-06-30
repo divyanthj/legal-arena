@@ -889,8 +889,16 @@ export default function CaseWorkspace({
         viewerSubmittedCurrentRound ||
         waitingForOpponentResponse)
   );
-  const sideBadgeLabel =
-    caseSession.playerSide === "opponent" ? "Defendant Side" : "Plaintiff Side";
+  const playerRoleLabel =
+    caseSession.playerSide === "opponent" ? "Defendant" : "Plaintiff";
+  const opponentRoleLabel =
+    caseSession.playerSide === "opponent" ? "Plaintiff" : "Defendant";
+  const sideBadgeLabel = `Representing ${playerPartyName}`;
+  const sideContextLabel = `${playerRoleLabel} side`;
+  const playerRepresentationLabel = `You represent ${playerPartyName} (${playerRoleLabel}).`;
+  const interviewContextLabel = isInterview
+    ? `Interviewing ${playerInterviewSubjectName}.`
+    : `Opposing counsel represents ${opponentPartyName}.`;
   const verdictStyle =
     verdictTone[caseSession.verdict?.winner] || verdictTone.draw;
   const verdictIsPlayerWin = caseSession.verdict?.winner === "player";
@@ -1551,13 +1559,17 @@ export default function CaseWorkspace({
           <h1 className="mt-4 text-2xl font-semibold leading-tight text-white">
             {caseSession.title}
           </h1>
+          <p className="mt-2 text-sm font-semibold leading-6 text-white/68">
+            {playerRepresentationLabel} {interviewContextLabel}
+          </p>
           <div className="mt-3 flex items-center gap-2 overflow-hidden">
             <span
-              className={`shrink-0 rounded-lg border px-2.5 py-1 text-xs font-semibold ${
+              className={`min-w-0 max-w-[58vw] truncate rounded-lg border px-2.5 py-1 text-xs font-semibold ${
                 caseSession.playerSide === "opponent"
                   ? "border-sky-300/25 bg-sky-300/10 text-sky-100"
                   : "border-emerald-300/25 bg-emerald-300/10 text-emerald-100"
               }`}
+              title={sideBadgeLabel}
             >
               {sideBadgeLabel}
             </span>
@@ -1623,18 +1635,25 @@ export default function CaseWorkspace({
                   <h1 className="mt-1 truncate text-2xl font-semibold leading-tight text-white">
                     {caseSession.title}
                   </h1>
+                  <p className="mt-1 truncate text-sm font-semibold text-white/58">
+                    {playerRepresentationLabel} {interviewContextLabel}
+                  </p>
                 </div>
               </div>
 
               <div className="flex flex-wrap items-center gap-2 lg:justify-end">
                 <span
-                  className={`shrink-0 rounded-lg border px-2.5 py-1 text-xs font-semibold ${
+                  className={`min-w-0 max-w-xs truncate rounded-lg border px-2.5 py-1 text-xs font-semibold ${
                     caseSession.playerSide === "opponent"
                       ? "border-sky-300/25 bg-sky-300/10 text-sky-100"
                       : "border-emerald-300/25 bg-emerald-300/10 text-emerald-100"
                   }`}
+                  title={sideBadgeLabel}
                 >
                   {sideBadgeLabel}
+                </span>
+                <span className="shrink-0 rounded-lg border border-white/10 bg-white/[0.035] px-2.5 py-1 text-xs font-semibold text-white/62">
+                  {sideContextLabel}
                 </span>
                 <span
                   className={`shrink-0 rounded-lg border px-2.5 py-1 text-xs font-semibold arena-status ${
@@ -1706,15 +1725,17 @@ export default function CaseWorkspace({
                 <div className="grid grid-cols-2 gap-2">
                   <div className="rounded-xl border border-sky-300/20 bg-sky-300/[0.06] p-3">
                     <p className="text-xs font-semibold uppercase tracking-[0.14em] text-sky-200">
-                      You
+                      You represent
                     </p>
                     <p className="mt-1 truncate font-semibold text-white">{playerPartyName}</p>
+                    <p className="mt-1 text-xs text-white/45">{playerRoleLabel}</p>
                   </div>
                   <div className="rounded-xl border border-rose-300/20 bg-rose-300/[0.06] p-3">
                     <p className="text-xs font-semibold uppercase tracking-[0.14em] text-rose-200">
-                      Opponent
+                      Opponent represents
                     </p>
                     <p className="mt-1 truncate font-semibold text-white">{opponentPartyName}</p>
+                    <p className="mt-1 text-xs text-white/45">{opponentRoleLabel}</p>
                   </div>
                 </div>
               </div>
@@ -1958,7 +1979,7 @@ export default function CaseWorkspace({
                         {playerInterviewSubjectName} is waiting.
                       </h2>
                       <p className="mt-3 max-w-[11.5rem] text-sm leading-6 text-white/64">
-                        Ask the right questions to uncover facts and build your case.
+                        You represent {playerPartyName}. Ask the right questions to uncover facts and build your case.
                       </p>
                       <button
                         type="button"
@@ -2368,10 +2389,12 @@ export default function CaseWorkspace({
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="text-sm font-semibold text-sky-300">
-                          You: <span className="text-white/72">{playerPartyName}</span>
+                          You represent: <span className="text-white/72">{playerPartyName}</span>
+                          <span className="ml-1 text-white/38">({playerRoleLabel})</span>
                         </p>
                         <p className="mt-2 text-sm font-semibold text-rose-300">
-                          Opponent: <span className="text-white/72">{opponentPartyName}</span>
+                          Opponent represents: <span className="text-white/72">{opponentPartyName}</span>
+                          <span className="ml-1 text-white/38">({opponentRoleLabel})</span>
                         </p>
                       </div>
                       {Number.isFinite(Number(displayedSuccessChance)) ? (
@@ -3092,7 +3115,7 @@ export default function CaseWorkspace({
                         {playerInterviewSubjectName} is waiting.
                       </h2>
                       <p className="mt-3 text-sm leading-6 text-white/64">
-                        Ask the right questions to uncover facts and build your case.
+                        You represent {playerPartyName}. Ask the right questions to uncover facts and build your case.
                       </p>
                     </div>
                     <button

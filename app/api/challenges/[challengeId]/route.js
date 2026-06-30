@@ -17,7 +17,13 @@ export async function GET(req, { params }) {
     });
 
     if (!challenge) {
-      return NextResponse.json({ error: "Challenge not found" }, { status: 404 });
+      return NextResponse.json(
+        {
+          error:
+            "Challenge not found for your account. It may have expired, been declined, or belong to another player.",
+        },
+        { status: 404 }
+      );
     }
 
     return NextResponse.json({ challenge });

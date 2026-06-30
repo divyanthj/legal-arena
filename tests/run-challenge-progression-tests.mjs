@@ -29,6 +29,10 @@ const dashboardHubSource = await readFile(
   new URL("../components/legal-arena/DashboardHub.js", import.meta.url),
   "utf8"
 );
+const challengeButtonSource = await readFile(
+  new URL("../components/legal-arena/ChallengeButton.js", import.meta.url),
+  "utf8"
+);
 const caseWorkspaceSource = await readFile(
   new URL("../components/legal-arena/CaseWorkspace.js", import.meta.url),
   "utf8"
@@ -49,6 +53,17 @@ assert.match(progressionSource, /combinedDraws = \(progression\.draws \|\| 0\) \
 assert.match(progressionSource, /pvpCategoryStat\?\.wins \|\| 0/);
 assert.match(progressionSource, /right\.completedCases/);
 assert.match(dashboardHubSource, /\{entry\.completedCases\} matches \| \{entry\.wins\} wins/);
+assert.match(dashboardHubSource, /const pvpDocketTabs = \[/);
+assert.match(dashboardHubSource, /value: "needs-response"/);
+assert.match(dashboardHubSource, /value: "active-intake"/);
+assert.match(dashboardHubSource, /const getPvpDocketTab = /);
+assert.match(dashboardHubSource, /const getPvpActionLabel = /);
+assert.match(dashboardHubSource, /My PVP Docket/);
+assert.match(dashboardHubSource, /Open PVP Docket/);
+assert.match(dashboardHubSource, /PVP docket is still loading/);
+assert.match(dashboardHubSource, /challengesLoadTimedOut/);
+assert.doesNotMatch(dashboardHubSource, /No PVP docket yet/);
+assert.match(challengeButtonSource, /Creating invite\.\.\./);
 assert.match(challengeModelSource, /quitByUserId/);
 assert.match(challengeModelSource, /stayBonus/);
 assert.match(challengeStoreSource, /export const quitChallengeForUser/);
@@ -151,10 +166,7 @@ assert.match(challengeWorkspaceSource, /playerCounselName:\s*viewer\.name/);
 assert.match(challengeWorkspaceSource, /opponentCounselName:\s*opponent\.name/);
 assert.match(caseWorkspaceSource, /apiClient\.get\(realtimeRefreshPath\)/);
 assert.match(caseWorkspaceSource, /window\.setInterval\(refreshCase, realtimeRefreshIntervalMs\)/);
-assert.match(caseWorkspaceSource, /const CounselIdentity = /);
-assert.match(caseWorkspaceSource, /const useCounselLabels = Boolean\(apiConfig\.counselLabels\)/);
-assert.match(caseWorkspaceSource, /`Counsel for \$\{opponentPartyName\}`/);
-assert.match(caseWorkspaceSource, /Represented by \{representedBy\}/);
+assert.match(caseWorkspaceSource, /Opponent Argument/);
 assert.match(caseWorkspaceSource, /const waitingForPlaintiffOpening = Boolean/);
 assert.match(caseWorkspaceSource, /const waitingForOpponentResponse = Boolean/);
 assert.match(caseWorkspaceSource, /const showCourtroomWaitingCard = Boolean/);
@@ -170,7 +182,7 @@ assert.match(
   caseWorkspaceSource,
   /setPendingSpeaker\(apiConfig\.courtroomSubmitOnly \? "" : getOpponentPartyName\(caseSession\)\)/
 );
-assert.match(caseWorkspaceSource, /Submitting\.\.\./);
+assert.match(caseWorkspaceSource, /PresentingArgumentIndicator/);
 assert.match(
   caseWorkspaceSource,
   /form\.dispatchEvent\(new Event\("submit", \{ bubbles: true, cancelable: true \}\)\)/

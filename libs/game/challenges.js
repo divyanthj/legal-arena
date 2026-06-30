@@ -766,13 +766,6 @@ export const createChallenge = async ({
   });
 
   ensureChallengeSlug(challenge);
-  const initiatorParticipant = getParticipant(challenge, initiator._id);
-  await ensureParticipantClientMemory({
-    challenge,
-    participant: initiatorParticipant,
-    otherParticipant: getOtherParticipant(challenge, initiator._id),
-    userId: initiator._id,
-  });
   await challenge.save();
 
   try {
