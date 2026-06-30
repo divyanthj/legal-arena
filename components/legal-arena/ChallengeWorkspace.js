@@ -185,6 +185,7 @@ const challengeToCaseSession = (challenge = {}) => {
     clientPortrait: viewer.clientPortrait || {},
     opponentPortrait: opponent.clientPortrait || {},
     playerImage: viewer.image || "",
+    opponentImage: opponent.image || "",
     plaintiffName: challenge.premise?.clientName,
     defendantName: challenge.premise?.opponentName,
     interviewTranscript: viewer.interviewTranscript || [],

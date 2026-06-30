@@ -1332,8 +1332,15 @@ export default function CaseWorkspace({
   const opponentPressurePct = clampPercent(
     (caseSession.score.opponent / pressureTotal) * 100
   );
-  const opponentCourtPortrait = String(caseSession.opponentPortrait?.image || "").trim();
-  const playerCourtPortrait = String(caseSession.playerImage || "").trim() || "/images/profile.jpg";
+  const opponentClientPortrait = String(caseSession.opponentPortrait?.image || "").trim();
+  const opponentCounselPortrait = String(caseSession.opponentImage || "").trim();
+  const playerCounselPortrait =
+    String(caseSession.playerImage || "").trim() || "/images/profile.jpg";
+  const opponentCourtPortrait =
+    (showPvpCounselNames ? opponentCounselPortrait : opponentClientPortrait) ||
+    opponentClientPortrait ||
+    "/images/profile.jpg";
+  const playerCourtPortrait = playerCounselPortrait;
 
   const courtroomStageLabel = useMemo(() => {
     if (isExited) return "Exited";
@@ -2841,7 +2848,7 @@ export default function CaseWorkspace({
                     <div className="flex items-center gap-3">
                       <CourtPortraitAvatar
                         src={opponentCourtPortrait}
-                        alt={`${opponentPartyName} portrait`}
+                        alt={`${opponentCounselLabel} lawyer portrait`}
                         className="border border-rose-300/30 bg-rose-400/12 text-rose-100"
                       />
                       <div className="min-w-0 flex-1">
@@ -2851,7 +2858,7 @@ export default function CaseWorkspace({
                         </div>
                         {showPvpCounselNames ? (
                           <p className="mt-1 truncate text-sm font-semibold text-rose-100/70">
-                            Lawyer: {opponentCounselLabel}
+                            Represented by {opponentCounselLabel}
                           </p>
                         ) : null}
                         <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/12">
@@ -2866,7 +2873,7 @@ export default function CaseWorkspace({
                       <div className="flex items-center gap-3">
                         <CourtPortraitAvatar
                           src={playerCourtPortrait}
-                          alt="Your portrait"
+                          alt="Your lawyer portrait"
                           className="border border-sky-300/30 bg-sky-400/12 text-sky-100"
                           fallbackIcon={HeroIcons.ShieldCheckIcon}
                         />
@@ -2877,7 +2884,7 @@ export default function CaseWorkspace({
                           </div>
                           {showPvpCounselNames ? (
                             <p className="mt-1 truncate text-sm font-semibold text-sky-100/70">
-                              Lawyer: {playerCounselLabel}
+                              Represented by {playerCounselLabel}
                             </p>
                           ) : null}
                           <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/12">
@@ -2935,7 +2942,7 @@ export default function CaseWorkspace({
                     <div className="flex items-start gap-3">
                       <CourtPortraitAvatar
                         src={opponentCourtPortrait}
-                        alt={`${opponentPartyName} portrait`}
+                        alt={`${opponentCounselLabel} lawyer portrait`}
                         className="h-11 w-11 border border-rose-300/30 bg-rose-400/12 text-rose-100"
                       />
                       <div className="min-w-0 flex-1">
@@ -2998,7 +3005,7 @@ export default function CaseWorkspace({
                           <div className="flex items-center gap-3">
                             <CourtPortraitAvatar
                               src={playerCourtPortrait}
-                              alt="Your portrait"
+                              alt="Your lawyer portrait"
                               className="h-11 w-11 border border-sky-300/35 bg-sky-400/12 text-sky-100"
                               fallbackIcon={HeroIcons.ShieldCheckIcon}
                             />
@@ -3079,7 +3086,7 @@ export default function CaseWorkspace({
                       <div className="flex items-center gap-3">
                         <CourtPortraitAvatar
                           src={opponentCourtPortrait}
-                          alt={`${opponentPartyName} portrait`}
+                          alt={`${opponentCounselLabel} lawyer portrait`}
                           className="border border-rose-300/30 bg-rose-400/12 text-rose-100"
                         />
                         <div className="min-w-0 flex-1">
@@ -3093,7 +3100,7 @@ export default function CaseWorkspace({
                           </div>
                           {showPvpCounselNames ? (
                             <p className="mt-1 truncate text-sm font-semibold text-rose-100/70">
-                              Lawyer: {opponentCounselLabel}
+                              Represented by {opponentCounselLabel}
                             </p>
                           ) : null}
                           <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/12">
@@ -3108,7 +3115,7 @@ export default function CaseWorkspace({
                         <div className="flex items-center gap-3">
                           <CourtPortraitAvatar
                             src={playerCourtPortrait}
-                            alt="Your portrait"
+                            alt="Your lawyer portrait"
                             className="border border-sky-300/30 bg-sky-400/12 text-sky-100"
                             fallbackIcon={HeroIcons.ShieldCheckIcon}
                           />
@@ -3121,7 +3128,7 @@ export default function CaseWorkspace({
                             </div>
                             {showPvpCounselNames ? (
                               <p className="mt-1 truncate text-sm font-semibold text-sky-100/70">
-                                Lawyer: {playerCounselLabel}
+                                Represented by {playerCounselLabel}
                               </p>
                             ) : null}
                             <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/12">
@@ -3184,7 +3191,7 @@ export default function CaseWorkspace({
                     <div className="flex items-start gap-3">
                       <CourtPortraitAvatar
                         src={opponentCourtPortrait}
-                        alt={`${opponentPartyName} portrait`}
+                        alt={`${opponentCounselLabel} lawyer portrait`}
                         className="h-11 w-11 border border-rose-300/30 bg-rose-400/12 text-rose-100"
                       />
                       <div className="min-w-0 flex-1">
@@ -3249,7 +3256,7 @@ export default function CaseWorkspace({
                           <div className="flex items-center gap-3">
                             <CourtPortraitAvatar
                               src={playerCourtPortrait}
-                              alt="Your portrait"
+                              alt="Your lawyer portrait"
                               className="h-11 w-11 border border-sky-300/35 bg-sky-400/12 text-sky-100"
                               fallbackIcon={HeroIcons.ShieldCheckIcon}
                             />
