@@ -654,7 +654,7 @@ export default function CaseWorkspace({
     form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
   };
 
-  const useSuggestedIntakeQuestion = (nextQuestion, { closeFactSheetDialog = false } = {}) => {
+  const applySuggestedIntakeQuestion = (nextQuestion, { closeFactSheetDialog = false } = {}) => {
     setQuestion(nextQuestion);
     if (closeFactSheetDialog) {
       setShowMobileFactSheetDialog(false);
@@ -1448,7 +1448,7 @@ export default function CaseWorkspace({
                                 key={`${section.key}-${itemIndex}-${questionText}`}
                                 type="button"
                                 className="rounded-full border border-amber-200/16 bg-amber-200/[0.055] px-3 py-1.5 text-left text-xs font-semibold text-amber-100 transition hover:border-amber-200/38 hover:bg-amber-200/10"
-                                onClick={() => useSuggestedIntakeQuestion(questionText)}
+                                onClick={() => applySuggestedIntakeQuestion(questionText)}
                               >
                                 {questionText}
                               </button>
@@ -2258,7 +2258,7 @@ export default function CaseWorkspace({
                                 key={`latest-evidence-${item}`}
                                 type="button"
                                 className="rounded-full border border-amber-200/20 bg-black/18 px-3 py-1.5 text-left text-xs font-semibold text-amber-100 transition hover:border-amber-200/45 hover:bg-amber-200/10"
-                                onClick={() => useSuggestedIntakeQuestion(item)}
+                                onClick={() => applySuggestedIntakeQuestion(item)}
                               >
                                 {item}
                               </button>
@@ -3701,7 +3701,7 @@ export default function CaseWorkspace({
                                     type="button"
                                     className="rounded-full border border-amber-200/16 bg-amber-200/[0.055] px-3 py-1.5 text-left text-xs font-semibold text-amber-100 transition hover:border-amber-200/38 hover:bg-amber-200/10"
                                     onClick={() =>
-                                      useSuggestedIntakeQuestion(questionText, {
+                                      applySuggestedIntakeQuestion(questionText, {
                                         closeFactSheetDialog: true,
                                       })
                                     }
@@ -3791,7 +3791,7 @@ export default function CaseWorkspace({
                                     key={`latest-evidence-desktop-${item}`}
                                     type="button"
                                     className="rounded-full border border-amber-200/20 bg-black/18 px-3 py-1.5 text-left text-xs font-semibold text-amber-100 transition hover:border-amber-200/45 hover:bg-amber-200/10"
-                                    onClick={() => useSuggestedIntakeQuestion(item)}
+                                    onClick={() => applySuggestedIntakeQuestion(item)}
                                   >
                                     {item}
                                   </button>
