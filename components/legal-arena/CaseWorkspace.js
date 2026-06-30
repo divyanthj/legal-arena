@@ -1264,10 +1264,10 @@ export default function CaseWorkspace({
     String(caseSession.opponentCounselName || "").trim() || "Opposing lawyer";
   const courtroomWaitingMessage = waitingForPlaintiffOpening
     ? `${opponentPartyName} has the opening statement. Waiting for ${opponentCounselLabel} to file.`
-    : `${opponentPartyName} is preparing a response...`;
+    : "The other side is preparing a response...";
   const courtroomWaitingLoadingLabel = waitingForPlaintiffOpening
     ? `Waiting for ${opponentCounselLabel} to file the opening statement`
-    : `${opponentPartyName} is preparing a response`;
+    : "The other side is preparing a response";
   const sideBadgeLabel = `Representing ${playerPartyName}`;
   const sideContextLabel = `${playerRoleLabel} side`;
   const playerRepresentationLabel = `You represent ${playerPartyName} (${playerRoleLabel}).`;
@@ -1567,12 +1567,22 @@ export default function CaseWorkspace({
   const lastOpponentCourtEntry = [...normalizedCourtroomTranscript]
     .reverse()
     .find((entry) => entry.speaker !== "player");
+  const lastPlayerCourtEntry = [...normalizedCourtroomTranscript]
+    .reverse()
+    .find((entry) => entry.speaker === "player");
   const lastOpponentCourtEntryKey = lastOpponentCourtEntry
     ? `${lastOpponentCourtEntry.round || ""}-${lastOpponentCourtEntry.text || ""}`
     : "";
   const lastOpponentCourtEntryDisplayRound = Math.max(
     Number(lastOpponentCourtEntry?.round || 0),
     displayedCourtroomRound
+  );
+  const lastPlayerCourtEntryDisplayRound = Math.max(
+    Number(lastPlayerCourtEntry?.round || 0),
+    displayedCourtroomRound
+  );
+  const showSubmittedPlayerCourtEntry = Boolean(
+    showCourtroomWaitingCard && lastPlayerCourtEntry
   );
   const mobileOpponentArgumentCanExpand =
     String(lastOpponentCourtEntry?.text || "").length > 160 ||
@@ -2994,6 +3004,33 @@ export default function CaseWorkspace({
                   </section>
                 ) : null}
 
+                {showSubmittedPlayerCourtEntry ? (
+                  <section className="rounded-2xl border border-sky-300/35 bg-sky-500/[0.07] p-4">
+                    <div className="flex items-start gap-3">
+                      <CourtPortraitAvatar
+                        src={playerCourtPortrait}
+                        alt="Your lawyer portrait"
+                        className="h-11 w-11 border border-sky-300/35 bg-sky-400/12 text-sky-100"
+                        fallbackIcon={HeroIcons.ShieldCheckIcon}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="text-lg font-semibold text-white">You</h3>
+                          <span className="rounded-lg border border-sky-300/25 bg-sky-400/10 px-2 py-1 text-xs font-semibold text-sky-200">
+                            Your Argument
+                          </span>
+                          <span className="text-xs font-semibold text-white/42">
+                            Round {lastPlayerCourtEntryDisplayRound}
+                          </span>
+                        </div>
+                        <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-white/78">
+                          {lastPlayerCourtEntry.text}
+                        </p>
+                      </div>
+                    </div>
+                  </section>
+                ) : null}
+
                 {showCourtroomWaitingCard ? (
                   <section className="arena-surface p-4">
                     <p className="font-semibold text-white">{courtroomWaitingMessage}</p>
@@ -3240,6 +3277,33 @@ export default function CaseWorkspace({
                             />
                           </button>
                         ) : null}
+                      </div>
+                    </div>
+                  </section>
+                ) : null}
+
+                {showSubmittedPlayerCourtEntry ? (
+                  <section className="rounded-2xl border border-sky-300/35 bg-sky-500/[0.07] p-4 sm:p-5">
+                    <div className="flex items-start gap-3">
+                      <CourtPortraitAvatar
+                        src={playerCourtPortrait}
+                        alt="Your lawyer portrait"
+                        className="h-11 w-11 border border-sky-300/35 bg-sky-400/12 text-sky-100"
+                        fallbackIcon={HeroIcons.ShieldCheckIcon}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="text-lg font-semibold text-white">You</h3>
+                          <span className="rounded-lg border border-sky-300/25 bg-sky-400/10 px-2 py-1 text-xs font-semibold text-sky-200">
+                            Your Argument
+                          </span>
+                          <span className="text-xs font-semibold text-white/42">
+                            Round {lastPlayerCourtEntryDisplayRound}
+                          </span>
+                        </div>
+                        <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-white/78">
+                          {lastPlayerCourtEntry.text}
+                        </p>
                       </div>
                     </div>
                   </section>
