@@ -177,6 +177,56 @@ const IconTile = ({ icon: Icon, className = "" }) => (
   </span>
 );
 
+const categoryIconMap = {
+  "rental-dispute": HeroIcons.BuildingOffice2Icon,
+  "marital-dispute": HeroIcons.HeartIcon,
+  "business-dispute": HeroIcons.BriefcaseIcon,
+  "contract-violation": HeroIcons.DocumentCheckIcon,
+  employment: HeroIcons.IdentificationIcon,
+  property: HeroIcons.HomeModernIcon,
+  "personal-injury": HeroIcons.PlusCircleIcon,
+  consumer: HeroIcons.ShoppingBagIcon,
+  criminal: HeroIcons.ShieldExclamationIcon,
+  administrative: HeroIcons.ClipboardDocumentCheckIcon,
+};
+
+const compactCategoryLabel = {
+  "rental-dispute": "Rental",
+  "marital-dispute": "Marital",
+  "business-dispute": "Business",
+  "contract-violation": "Contract",
+  employment: "Work",
+  property: "Property",
+  "personal-injury": "Injury",
+  consumer: "Consumer",
+  criminal: "Criminal",
+  administrative: "Agency",
+};
+
+const getStableCategoryWeight = (category, seed = "") =>
+  normalizeSearchText(`${category.slug}-${seed}`)
+    .split("")
+    .reduce((total, character) => total + character.charCodeAt(0), 0);
+
+const difficultyOptions = [
+  { value: "all", label: "All" },
+  { value: "easy", label: "Easy" },
+  { value: "medium", label: "Medium" },
+  { value: "hard", label: "Hard" },
+];
+
+const getDifficultyMeta = (complexity = 1) => {
+  if (complexity >= 4) {
+    return { value: "hard", label: "Hard", className: "text-rose-300 border-rose-300/25 bg-rose-400/10" };
+  }
+
+  if (complexity >= 2) {
+    return { value: "medium", label: "Medium", className: "text-amber-200 border-amber-200/25 bg-amber-300/10" };
+  }
+
+  return { value: "easy", label: "Easy", className: "text-emerald-300 border-emerald-300/25 bg-emerald-400/10" };
+};
+
 const getCaseProgress = (caseSession = null) => {
   if (!caseSession) {
     return { label: "Not started", percent: 0, nextStep: "Begin client interview" };
@@ -193,29 +243,6 @@ const getCaseProgress = (caseSession = null) => {
   return { label: "Client interview", percent: 42, nextStep: "Build your fact sheet" };
 };
 
-const gameLoopSteps = [
-  {
-    title: "Interview Client",
-    body: "Ask the right questions to uncover useful facts.",
-    icon: HeroIcons.ChatBubbleLeftRightIcon,
-  },
-  {
-    title: "Build Fact Sheet",
-    body: "Organize facts, evidence, risks, and key issues.",
-    icon: HeroIcons.DocumentTextIcon,
-  },
-  {
-    title: "Argue in Court",
-    body: "Present your argument and challenge the other side.",
-    icon: HeroIcons.ScaleIcon,
-  },
-  {
-    title: "Get Verdict + XP",
-    body: "Receive the ruling, earn XP, and improve your standing.",
-    icon: HeroIcons.ShieldCheckIcon,
-  },
-];
-
 const onboardingSteps = [
   {
     target: "quick-start-case",
@@ -228,12 +255,6 @@ const onboardingSteps = [
     eyebrow: "Your Profile",
     title: "Open your lawyer page",
     body: "This player brief is a shortcut to your lawyer profile page. Click it to review your portrait, record, public matters, and specialty progress.",
-  },
-  {
-    target: "case-categories",
-    eyebrow: "Choose a Track",
-    title: "Filter by specialty",
-    body: "Pick the legal lane you feel like training today. Contract chaos, workplace drama, consumer disputes: choose your flavor of courtroom workout.",
   },
   {
     target: "case-library",
@@ -524,10 +545,14 @@ export default function DashboardHub({
   const [showPlayableOnly, setShowPlayableOnly] = useState(true);
   const [showPaywallModal, setShowPaywallModal] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [caseLibrarySearch, setCaseLibrarySearch] = useState("");
+  const [selectedDifficulty, setSelectedDifficulty] = useState("all");
+  const [caseArchiveTab, setCaseArchiveTab] = useState("ongoing");
+  const [showAllCaseCategories, setShowAllCaseCategories] = useState(false);
   const [lawyerSearch, setLawyerSearch] = useState("");
   const [searchedLawyers, setSearchedLawyers] = useState(null);
   const [lawyerSearchLoading, setLawyerSearchLoading] = useState(false);
-  const [mobileCommandOpen, setMobileCommandOpen] = useState(false);
+  const [isMobileActivationViewport, setIsMobileActivationViewport] = useState(false);
   const [dashboardTutorialCompleted, setDashboardTutorialCompleted] = useState(
     Boolean(onboarding?.dashboardTutorialCompleted)
   );
@@ -541,6 +566,15 @@ export default function DashboardHub({
       ),
     [selectedCategory, showPlayableOnly, templates]
   );
+  const finishedCases = useMemo(
+    () => initialCases.filter((caseSession) => caseSession.status === "verdict"),
+    [initialCases]
+  );
+  const ongoingCases = useMemo(
+    () => initialCases.filter((caseSession) => caseSession.status !== "verdict"),
+    [initialCases]
+  );
+  const selectedArchiveCases = caseArchiveTab === "finished" ? finishedCases : ongoingCases;
 
   const selectedLeaderboard = categoryLeaderboards[selectedCategory] || [];
   const categoryProgress =
@@ -553,7 +587,20 @@ export default function DashboardHub({
   const lastActiveCase = initialCases[0] || null;
   const selectedCategoryMeta =
     categories.find((category) => category.slug === selectedCategory) || null;
-  const selectedCategoryTitle = selectedCategoryMeta?.title || selectedCategory;
+  const selectedCategoryTitle = selectedCategoryMeta?.title || "All cases";
+  const mobileFeaturedCategories = useMemo(
+    () =>
+      [...categories]
+        .sort(
+          (left, right) =>
+            getStableCategoryWeight(left, userId) - getStableCategoryWeight(right, userId)
+        )
+        .slice(0, 3),
+    [categories, userId]
+  );
+  const visibleMobileCategories = showAllCaseCategories
+    ? categories
+    : mobileFeaturedCategories;
   const currentLeaderboardEntry =
     overallLeaderboard.find((entry) => String(entry.id) === String(userId)) || null;
   const userPortrait =
@@ -602,6 +649,18 @@ export default function DashboardHub({
   useEffect(() => {
     const detectedTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     setBrowserTimeZone(detectedTimeZone || null);
+  }, []);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 1279px)");
+    const updateViewport = () => setIsMobileActivationViewport(mediaQuery.matches);
+
+    updateViewport();
+    mediaQuery.addEventListener("change", updateViewport);
+
+    return () => {
+      mediaQuery.removeEventListener("change", updateViewport);
+    };
   }, []);
 
   useEffect(() => {
@@ -664,8 +723,20 @@ export default function DashboardHub({
         caseTemplateId,
       });
 
+      startNavigationLoading("Creating courtroom portraits", { failsafeMs: 60000 });
+      const caseRef = caseSession.slug || caseSession.id;
+      const caseHref = `/dashboard/cases/${caseRef}`;
+      router.prefetch(caseHref);
+      const portraitResults = await Promise.allSettled([
+        apiClient.post(`/cases/${caseRef}/client-portrait`),
+        apiClient.post(`/cases/${caseRef}/client-portrait?target=opponent`),
+      ]);
+      portraitResults
+        .filter((result) => result.status === "rejected")
+        .forEach((result) => console.error(result.reason));
+
       startNavigationLoading("Opening the matter", { failsafeMs: 60000 });
-      router.push(`/dashboard/cases/${caseSession.slug || caseSession.id}`);
+      router.push(caseHref);
     } catch (error) {
       stopNavigationLoading();
       console.error(error);
@@ -679,6 +750,42 @@ export default function DashboardHub({
     visibleTemplates.length > 0
       ? visibleTemplates[Math.min(activeTemplateIndex, visibleTemplates.length - 1)]
       : null;
+  const searchedLibraryTemplates = useMemo(() => {
+    const query = normalizeSearchText(caseLibrarySearch);
+
+    return filteredTemplates.filter((template) => {
+      const difficulty = getDifficultyMeta(template.complexity).value;
+
+      if (selectedDifficulty !== "all" && difficulty !== selectedDifficulty) {
+        return false;
+      }
+
+      if (!query) {
+        return true;
+      }
+
+      return normalizeSearchText(
+        [
+          template.title,
+          template.overview,
+          template.practiceArea,
+          template.primaryCategory,
+          template.plaintiffName,
+          template.clientName,
+          template.defendantName,
+          template.opponentName,
+        ].join(" ")
+      ).includes(query);
+    });
+  }, [caseLibrarySearch, filteredTemplates, selectedDifficulty]);
+  const featuredLibraryTemplate =
+    searchedLibraryTemplates.find((template) => template.id === activeTemplate?.id) ||
+    searchedLibraryTemplates.find((template) => template.unlocked) ||
+    searchedLibraryTemplates[0] ||
+    null;
+  const moreLibraryTemplates = searchedLibraryTemplates
+    .filter((template) => template.id !== featuredLibraryTemplate?.id)
+    .slice(0, 3);
   const firstUnlockedTemplate =
     visibleTemplates.find((template) => template.unlocked) ||
     templates.find((template) => template.unlocked) ||
@@ -701,6 +808,31 @@ export default function DashboardHub({
     );
   };
 
+  const selectCaseCategory = (categorySlug = "") => {
+    const scrollPosition =
+      typeof window !== "undefined"
+        ? { left: window.scrollX, top: window.scrollY }
+        : null;
+    const nextTemplates = templates.filter(
+      (template) =>
+        (!categorySlug || template.primaryCategory === categorySlug) &&
+        (!showPlayableOnly || template.unlocked)
+    );
+    const firstUnlockedIndex = nextTemplates.findIndex((template) => template.unlocked);
+
+    setSelectedCategory(categorySlug);
+    setActiveTemplateIndex(firstUnlockedIndex >= 0 ? firstUnlockedIndex : 0);
+
+    if (scrollPosition) {
+      window.requestAnimationFrame(() => {
+        window.scrollTo({ ...scrollPosition, behavior: "auto" });
+        window.requestAnimationFrame(() => {
+          window.scrollTo({ ...scrollPosition, behavior: "auto" });
+        });
+      });
+    }
+  };
+
   const goToNextTemplate = () => {
     if (!canNavigateTemplates) return;
     setActiveTemplateIndex((current) =>
@@ -717,44 +849,63 @@ export default function DashboardHub({
   const isNewUser = (progression.completedCases || 0) === 0;
   const shouldSellLifetimeAccess = !hasArenaAccess;
   const lastCaseProgress = getCaseProgress(lastActiveCase);
+  const desktopHeroCase = ongoingCases[0] || null;
+  const desktopHeroCaseProgress = getCaseProgress(desktopHeroCase);
+  const canContinueDesktopHeroCase = Boolean(desktopHeroCase) && !shouldSellLifetimeAccess;
   const primaryTemplateId =
     (activeTemplate?.unlocked ? activeTemplate : firstUnlockedTemplate)?.id || "";
   const primaryCtaLabel = shouldSellLifetimeAccess
     ? "Unlock Lifetime Access"
     : canResumeLastCase
     ? "Continue Case"
+    : "Start This Case";
+  const desktopFeaturedTemplate = activeTemplate || firstUnlockedTemplate;
+  const desktopFeatureTitle = canContinueDesktopHeroCase
+    ? desktopHeroCase.title
+    : shouldSellLifetimeAccess
+    ? "Unlock Legal Arena"
+    : desktopFeaturedTemplate?.title || "Start a new case";
+  const desktopFeatureKicker = canContinueDesktopHeroCase
+    ? "Continue Your Case"
+    : shouldSellLifetimeAccess
+    ? "Unlock Your Arena"
     : isNewUser
-      ? "Start Your First Case"
-      : "Start New Case";
-  const heroTitle = shouldSellLifetimeAccess
-    ? "Unlock Legal Arena for life."
-    : canResumeLastCase
-    ? "Continue your case."
-    : isNewUser
-      ? "Win the courtroom. Start your first case."
-      : "Choose your next case.";
-  const heroBody = shouldSellLifetimeAccess
-    ? "Get permanent access to the AI lawyer game: interview clients, argue cases, challenge players, and keep every future update as the case library grows."
-    : canResumeLastCase
-    ? `${lastCaseProgress.nextStep} in ${lastActiveCase.title}.`
-    : "Interview your client. Build your case. Argue in court. Get the verdict and earn XP.";
-  const firstCaseProgressPercent = Math.min(
-    100,
-    Math.round(((progression.completedCases || 0) / 1) * 100)
-  );
-  const navItems = [
-    { href: "#activation-home", label: "Home", icon: HeroIcons.HomeIcon },
-    { href: "#recent-cases", label: "My Cases", icon: HeroIcons.ClipboardDocumentListIcon },
-    { href: "#case-library", label: "Case Library", icon: HeroIcons.BookOpenIcon },
-    {
-      href: "/dashboard/bar-association",
-      label: "Bar Association",
-      icon: HeroIcons.UserGroupIcon,
-    },
-    { href: "#progress", label: "My Progress", icon: HeroIcons.ArrowTrendingUpIcon },
-    { href: "#rankings", label: "Rankings", icon: HeroIcons.TrophyIcon },
-    { href: "#specialty-board", label: "Specialty Board", icon: HeroIcons.ChartBarSquareIcon },
-  ];
+    ? "Start Your First Case"
+    : "Start New Case";
+  const desktopFeatureProgress = canContinueDesktopHeroCase ? desktopHeroCaseProgress.percent : 0;
+  const desktopFeatureProgressFill = canContinueDesktopHeroCase
+    ? Math.max(8, desktopFeatureProgress)
+    : 0;
+  const desktopFeatureProgressLabel = canContinueDesktopHeroCase
+    ? "Intake Progress"
+    : "Ready to start";
+  const desktopFeatureStageCountLabel = canContinueDesktopHeroCase
+    ? `Stage ${Math.max(1, Math.round(desktopFeatureProgress / 12.5))} of 8`
+    : "Not started";
+  const desktopFeatureStage = canContinueDesktopHeroCase
+    ? desktopHeroCaseProgress.label
+    : shouldSellLifetimeAccess
+    ? "Lifetime Access"
+    : "Client Intake";
+  const desktopFeatureBody = canContinueDesktopHeroCase
+    ? `${desktopHeroCaseProgress.nextStep}. ${desktopHeroCase.primaryCategory || "Your case"} is ready.`
+    : shouldSellLifetimeAccess
+    ? "Get permanent access to the case library, player challenges, and future updates."
+    : desktopFeaturedTemplate?.overview ||
+      "Choose a dispute, interview your client, and prepare for court.";
+  const desktopPlaintiffName =
+    (canContinueDesktopHeroCase
+      ? desktopHeroCase?.plaintiffName || desktopHeroCase?.premise?.clientName
+      : desktopFeaturedTemplate?.plaintiffName || desktopFeaturedTemplate?.clientName) ||
+    "Plaintiff";
+  const desktopDefendantName =
+    (canContinueDesktopHeroCase
+      ? desktopHeroCase?.defendantName || desktopHeroCase?.premise?.opponentName
+      : desktopFeaturedTemplate?.defendantName || desktopFeaturedTemplate?.opponentName) ||
+    "Defendant";
+  const desktopHasAssignedSide = canContinueDesktopHeroCase && Boolean(desktopHeroCase?.playerSide);
+  const desktopRepresentsPlaintiff =
+    desktopHasAssignedSide && desktopHeroCase?.playerSide !== "opponent";
   const unlockCards = [
     {
       title: "Earn XP",
@@ -776,160 +927,137 @@ export default function DashboardHub({
 
   if (useActivationDashboard) {
     return (
-      <main className="arena-app-shell min-h-screen max-w-full overflow-x-hidden px-3 py-3 md:px-6 md:py-6">
+      <main className="arena-app-shell min-h-screen max-w-full overflow-x-hidden px-3 pb-24 pt-3 md:px-6 md:py-6">
         <section className="mx-auto w-full max-w-[1600px] min-w-0 arena-reveal">
-          <div className="grid min-w-0 gap-4 xl:grid-cols-[240px_minmax(0,1fr)]">
-            <aside className="arena-surface arena-column-bg flex h-full min-w-0 flex-col overflow-visible">
-              <div className="border-b border-white/10 px-4 py-4 md:px-5 md:py-6">
-                <div className="flex items-center justify-between gap-3 xl:block">
-                  <div>
-                    <p className="arena-kicker">LEGAL ARENA</p>
-                    <h2 className="arena-headline mt-2 text-xl uppercase leading-none md:mt-3 md:text-2xl">
-                      Command
-                    </h2>
-                  </div>
-                  <button
-                    type="button"
-                    className="arena-btn-dark inline-flex min-h-0 items-center gap-2 px-3 py-2 text-sm xl:hidden"
-                    onClick={() => setMobileCommandOpen((current) => !current)}
-                    aria-expanded={mobileCommandOpen}
-                    aria-controls="mobile-command-panel"
-                  >
-                    <span>{mobileCommandOpen ? "Hide" : "Menu"}</span>
-                    <HeroIcons.ChevronDownIcon
-                      className={`h-4 w-4 transition ${mobileCommandOpen ? "rotate-180" : ""}`}
-                      aria-hidden="true"
-                    />
-                  </button>
-                </div>
-              </div>
+          <div className="grid min-w-0 overflow-visible gap-4 xl:grid-cols-[88px_minmax(0,1fr)]">
+            <aside className="relative z-50 hidden min-h-[calc(100vh-3rem)] overflow-visible flex-col items-center justify-between rounded-[1.75rem] border border-white/10 bg-black/34 py-6 shadow-[0_22px_80px_rgba(0,0,0,0.42)] backdrop-blur-xl xl:flex">
+              <nav className="relative z-50 flex flex-col items-center gap-4 overflow-visible" aria-label="Dashboard shortcuts">
+                {[
+                  { href: "#activation-home", label: "Home", icon: HeroIcons.HomeIcon, active: true },
+                  { href: "#case-library", label: "Case Library", icon: HeroIcons.BriefcaseIcon },
+                  { href: "#rankings", label: "Rankings", icon: HeroIcons.ChartBarIcon },
+                  { href: "#recent-cases", label: "Saved Transcripts", icon: HeroIcons.ClipboardDocumentListIcon },
+                  { href: `/dashboard/players/${userId}`, label: "Player Brief", icon: HeroIcons.UserIcon },
+                ].map((item) => {
+                  const Icon = item.icon;
+                  const RailLink = item.href.startsWith("/") ? Link : "a";
 
-              <div
-                id="mobile-command-panel"
-                className={`${mobileCommandOpen ? "block" : "hidden"} xl:flex xl:flex-1 xl:flex-col`}
-              >
-                <nav className="flex-1 space-y-2 px-3 py-4">
-                  {navItems.map((item, index) => {
-                    const Icon = item.icon;
-                    const NavLink = item.href.startsWith("/") ? Link : "a";
-
-                    return (
-                      <NavLink
-                        key={item.href}
-                        href={item.href}
-                        className={`flex origin-center items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-semibold transition hover:scale-[1.01] ${
-                          index === 0
-                            ? "border-white/[0.08] bg-white/[0.08] text-white hover:border-white/[0.12]"
-                            : "border-white/[0.045] bg-white/[0.025] text-white/64 hover:border-white/[0.09] hover:text-white"
-                        }`}
-                        onClick={() => setMobileCommandOpen(false)}
-                      >
-                        <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />
-                        <span>{item.label}</span>
-                      </NavLink>
-                    );
-                  })}
-                  {isAdmin ? (
-                    <Link
-                      href="/dashboard/admin"
-                      className="flex origin-center items-center gap-3 rounded-2xl border border-white/[0.045] bg-white/[0.025] px-4 py-3 text-sm font-semibold text-white/64 transition hover:scale-[1.01] hover:border-white/[0.09] hover:text-white"
+                  return (
+                    <RailLink
+                      key={item.href}
+                      href={item.href}
+                      className={`group relative flex h-14 w-14 items-center justify-center rounded-2xl transition ${
+                        item.active
+                          ? "bg-amber-200/16 text-amber-100 shadow-[0_0_28px_rgba(251,191,36,0.16)]"
+                          : "text-white/54 hover:bg-white/[0.04] hover:text-white"
+                      }`}
+                      aria-label={item.label}
+                      title={item.label}
                     >
-                      <HeroIcons.WrenchScrewdriverIcon className="h-5 w-5" aria-hidden="true" />
-                      <span>Admin Lab</span>
-                    </Link>
-                  ) : null}
-                </nav>
+                      <Icon className="h-6 w-6" aria-hidden="true" />
+                      <span className="pointer-events-none absolute left-[4.25rem] z-[100] hidden whitespace-nowrap rounded-lg border border-white/10 bg-black/95 px-3 py-2 text-xs font-semibold text-white/82 shadow-2xl group-hover:block">
+                        {item.label}
+                      </span>
+                    </RailLink>
+                  );
+                })}
+              </nav>
 
-                <div className="space-y-4 border-t border-white/10 px-4 py-4">
-                <div className="arena-surface-soft p-4">
-                  <div className="flex items-center gap-3">
-                    <LeaderboardPortrait image={userPortrait} name={userName} />
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-white">{userName}</p>
-                      <p className="mt-1 text-xs text-white/52">
-                        {currentLeaderboardEntry
-                          ? `Rank #${currentLeaderboardEntry.rank}`
-                          : "Rookie Advocate"}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="mt-4">
-                    <div className="flex items-center justify-between text-xs text-white/58">
-                      <span>Lvl. {Math.max(1, Math.floor((progression.overallXp || 0) / 250) + 1)}</span>
-                      <span>{progression.overallXp || 0} XP</span>
-                    </div>
-                    <div className="mt-2 arena-progress-track">
-                      <div
-                        className="arena-progress-fill"
-                        style={{
-                          width: `${Math.max(8, Math.min(100, ((progression.overallXp || 0) % 250) / 2.5))}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-                  <div className="mt-4 [&_.btn]:w-full [&_.btn]:justify-between [&_.btn]:text-sm">
-                    <ButtonAccount />
-                  </div>
-                </div>
-
-                {isNewUser ? (
-                  <div className="arena-surface-soft p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-white">
-                          {shouldSellLifetimeAccess
-                            ? "Unlock lifetime access"
-                            : "Complete your first case"}
-                        </p>
-                        <p className="mt-1 text-xs text-white/52">
-                          {shouldSellLifetimeAccess
-                            ? "All future updates included"
-                            : "Earn 250 XP"}
-                        </p>
-                      </div>
-                      <HeroIcons.RocketLaunchIcon className="h-5 w-5 text-white/64" aria-hidden="true" />
-                    </div>
-                    <div className="mt-4 arena-progress-track">
-                      <div
-                        className="arena-progress-fill"
-                        style={{ width: `${Math.max(8, firstCaseProgressPercent)}%` }}
-                      />
-                    </div>
-                    <p className="mt-2 text-right text-xs text-white/52">
-                      {progression.completedCases || 0} / 1
-                    </p>
-                  </div>
+              <div className="flex flex-col items-center gap-3">
+                {isAdmin ? (
+                  <Link
+                    href="/dashboard/admin"
+                    className="flex h-12 w-12 items-center justify-center rounded-2xl text-white/54 transition hover:bg-white/[0.04] hover:text-white"
+                    aria-label="Admin Lab"
+                    title="Admin Lab"
+                  >
+                    <HeroIcons.WrenchScrewdriverIcon className="h-6 w-6" aria-hidden="true" />
+                  </Link>
                 ) : null}
-              </div>
+                <button
+                  type="button"
+                  className="flex h-12 w-12 items-center justify-center rounded-2xl text-white/54 transition hover:bg-white/[0.04] hover:text-white"
+                  onClick={() => setDashboardTutorialCompleted(false)}
+                  aria-label="Take the quick tour"
+                  title="Quick tour"
+                >
+                  <HeroIcons.Cog6ToothIcon className="h-6 w-6" aria-hidden="true" />
+                </button>
               </div>
             </aside>
 
             <div id="activation-home" className="min-w-0 space-y-4">
-              <section className="arena-surface arena-column-bg overflow-hidden">
-                <div className="grid min-h-[22rem] min-w-0 lg:grid-cols-[minmax(0,0.92fr)_minmax(320px,0.78fr)]">
-                  <div className="relative z-10 min-w-0 p-5 md:p-9">
-                    <p className="text-sm text-white/70">Welcome to Legal Arena, {userName}</p>
-                    <h1 className="arena-headline mt-6 max-w-3xl break-words text-3xl leading-[1.02] sm:text-4xl md:mt-7 md:text-6xl md:leading-[0.96]">
-                      {heroTitle}
-                    </h1>
-                    <p className="mt-5 max-w-xl text-base leading-7 text-white/68">
-                      {heroBody}
-                    </p>
+              <section className="relative isolate overflow-hidden rounded-[1.75rem] border border-white/10 bg-black px-4 pb-5 pt-5 shadow-[0_26px_90px_rgba(0,0,0,0.62)] xl:hidden">
+                <img
+                  src="/images/court.jpg"
+                  alt=""
+                  className="absolute inset-0 h-full w-full object-cover opacity-28"
+                  style={{ objectPosition: "63% center" }}
+                />
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_64%_10%,rgba(255,255,255,0.12),transparent_26%),linear-gradient(90deg,rgba(0,0,0,0.96)_0%,rgba(0,0,0,0.82)_48%,rgba(0,0,0,0.44)_100%),linear-gradient(180deg,rgba(0,0,0,0.3)_0%,rgba(0,0,0,0.96)_82%)]" />
 
-                    <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+                <div className="relative z-10">
+                  <div className="flex items-center justify-between gap-3">
+                    <Link
+                      href={`/dashboard/players/${userId}`}
+                      className="inline-flex min-w-0 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.045] px-3 py-2 text-sm font-semibold text-white/86 backdrop-blur-md transition hover:border-white/20"
+                    >
+                      <HeroIcons.UserCircleIcon className="h-5 w-5 shrink-0 text-white/72" aria-hidden="true" />
+                      <span className="max-w-[8rem] truncate">{userName}</span>
+                    </Link>
+                    <Link
+                      href="#rankings"
+                      className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.045] px-3 py-2 text-sm font-semibold text-white/86 backdrop-blur-md transition hover:border-white/20"
+                    >
+                      <HeroIcons.TrophyIcon className="h-5 w-5 text-amber-200/82" aria-hidden="true" />
+                      <span>Rankings</span>
+                    </Link>
+                  </div>
+
+                  <div className="mt-4 flex items-center justify-center gap-2 text-white/78">
+                    <img
+                      src="/logoAndName.png"
+                      alt=""
+                      className="h-8 w-8 rounded-lg border border-white/10 bg-black object-contain"
+                    />
+                    <p className="text-sm font-semibold uppercase tracking-[0.16em]">
+                      Legal Arena
+                    </p>
+                  </div>
+
+                  <div className="mt-5">
+                    <p className="text-[0.72rem] font-semibold uppercase tracking-[0.22em] text-amber-200/90">
+                      Start playing
+                    </p>
+                    <div className="mt-3 space-y-2.5">
                       {canResumeLastCase && !shouldSellLifetimeAccess ? (
                         <Link
                           href={`/dashboard/cases/${lastActiveCase.slug || lastActiveCase.id}`}
-                          data-onboarding-target="quick-start-case"
-                          className="arena-btn-light inline-flex min-w-0 items-center justify-center gap-3 px-4 py-4 sm:px-6"
+                          data-onboarding-target={
+                            isMobileActivationViewport ? "quick-start-case" : undefined
+                          }
+                          className="flex min-h-[5.35rem] items-center gap-3 rounded-2xl border border-amber-200/70 bg-amber-200/[0.12] px-4 py-3 text-left text-white shadow-[0_18px_50px_rgba(0,0,0,0.38),inset_0_1px_0_rgba(255,255,255,0.08)] transition hover:border-amber-100"
                         >
-                          <span>{primaryCtaLabel}</span>
-                          <HeroIcons.ChevronRightIcon className="h-5 w-5" aria-hidden="true" />
+                          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-black/20 text-amber-100">
+                            <HeroIcons.PlayCircleIcon className="h-8 w-8" aria-hidden="true" />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-base font-semibold uppercase tracking-[0.03em]">
+                              {primaryCtaLabel}
+                            </span>
+                            <span className="mt-1 block text-sm leading-5 text-white/72">
+                              {lastCaseProgress.nextStep}
+                            </span>
+                          </span>
+                          <HeroIcons.ChevronRightIcon className="h-6 w-6 shrink-0 text-amber-100" aria-hidden="true" />
                         </Link>
                       ) : (
                         <button
-                          data-onboarding-target="quick-start-case"
-                          className="arena-btn-light inline-flex min-w-0 items-center justify-center gap-3 px-4 py-4 sm:px-6"
+                          data-onboarding-target={
+                            isMobileActivationViewport ? "quick-start-case" : undefined
+                          }
+                          type="button"
+                          className="flex min-h-[5.35rem] w-full items-center gap-3 rounded-2xl border border-amber-200/70 bg-amber-200/[0.12] px-4 py-3 text-left text-white shadow-[0_18px_50px_rgba(0,0,0,0.38),inset_0_1px_0_rgba(255,255,255,0.08)] transition hover:border-amber-100 disabled:cursor-not-allowed disabled:opacity-65"
                           onClick={() => {
                             if (shouldSellLifetimeAccess) {
                               setShowPaywallModal(true);
@@ -940,346 +1068,1006 @@ export default function DashboardHub({
                           }}
                           disabled={creating || (!shouldSellLifetimeAccess && !primaryTemplateId)}
                         >
-                          {creating && !shouldSellLifetimeAccess ? (
-                            <span className="loading loading-spinner loading-xs" />
-                          ) : null}
-                          <span>{primaryCtaLabel}</span>
-                          <HeroIcons.ChevronRightIcon className="h-5 w-5" aria-hidden="true" />
+                          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-black/20 text-amber-100">
+                            {creating && !shouldSellLifetimeAccess ? (
+                              <span className="loading loading-spinner loading-sm" />
+                            ) : (
+                              <HeroIcons.PlayCircleIcon className="h-8 w-8" aria-hidden="true" />
+                            )}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-base font-semibold uppercase tracking-[0.03em]">
+                              {primaryCtaLabel}
+                            </span>
+                            <span className="mt-1 block text-sm leading-5 text-white/72">
+                              {shouldSellLifetimeAccess
+                                ? "Get lifetime access to every case."
+                                : "Open a new case against AI counsel."}
+                            </span>
+                          </span>
+                          <HeroIcons.ChevronRightIcon className="h-6 w-6 shrink-0 text-amber-100" aria-hidden="true" />
                         </button>
                       )}
+
                       <Link
                         href="#case-library"
-                        className="arena-btn-dark inline-flex min-w-0 items-center justify-center px-4 py-4 sm:px-6"
+                        className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-left text-white transition hover:border-white/20"
                       >
-                        Browse Case Library
+                        <HeroIcons.BriefcaseIcon className="h-6 w-6 shrink-0 text-white/68" aria-hidden="true" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block font-semibold uppercase tracking-[0.03em]">Case Library</span>
+                          <span className="mt-1 block text-sm text-white/56">Browse available disputes.</span>
+                        </span>
+                        <HeroIcons.ChevronRightIcon className="h-5 w-5 shrink-0 text-white/55" aria-hidden="true" />
+                      </Link>
+                      <Link
+                        href="#recent-cases"
+                        className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-left text-white transition hover:border-white/20"
+                      >
+                        <HeroIcons.ClipboardDocumentListIcon className="h-6 w-6 shrink-0 text-white/68" aria-hidden="true" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block font-semibold uppercase tracking-[0.03em]">My Cases</span>
+                          <span className="mt-1 block text-sm text-white/56">Continue and review progress.</span>
+                        </span>
+                        <HeroIcons.ChevronRightIcon className="h-5 w-5 shrink-0 text-white/55" aria-hidden="true" />
+                      </Link>
+                      <Link
+                        href="#rankings"
+                        className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-left text-white transition hover:border-white/20"
+                      >
+                        <HeroIcons.ChartBarIcon className="h-6 w-6 shrink-0 text-white/68" aria-hidden="true" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block font-semibold uppercase tracking-[0.03em]">Rankings</span>
+                          <span className="mt-1 block text-sm text-white/56">See the leaderboard.</span>
+                        </span>
+                        <HeroIcons.ChevronRightIcon className="h-5 w-5 shrink-0 text-white/55" aria-hidden="true" />
                       </Link>
                     </div>
-                    <p className="mt-4 flex items-center gap-2 text-sm text-white/52">
-                      <HeroIcons.ShieldCheckIcon className="h-4 w-4" aria-hidden="true" />
-                      {shouldSellLifetimeAccess
-                        ? "Pay once. Keep permanent access to every future Legal Arena update."
-                        : "No commitment. Just your first step."}
-                    </p>
                   </div>
 
-                  <div className="relative min-h-[18rem] overflow-hidden border-t border-white/10 sm:min-h-[20rem] lg:border-l lg:border-t-0">
+                  <Link
+                    href={`/dashboard/players/${userId}`}
+                    data-onboarding-target={
+                      isMobileActivationViewport ? "player-brief" : undefined
+                    }
+                    className="mt-4 block rounded-2xl border border-white/10 bg-black/44 p-4 text-white backdrop-blur-md transition hover:border-white/20"
+                    aria-label="Open your lawyer profile page"
+                  >
+                    <div className="flex items-center gap-3">
+                      <LeaderboardPortrait image={userPortrait} name={userName} className="h-14 w-14" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-base font-semibold">{userName}</p>
+                        <p className="mt-1 text-sm text-amber-200/82">
+                          {currentLeaderboardEntry ? `Rank #${currentLeaderboardEntry.rank}` : "Rookie Advocate"}
+                        </p>
+                        <p className="mt-1 text-xs text-white/52">
+                          {progression.wins || 0} Wins | {progression.completedCases || 0} Cases
+                        </p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="text-sm font-semibold text-emerald-300">{progression.overallXp || 0} XP</p>
+                        <p className="mt-1 text-xs text-white/58">Level {playerLevel}</p>
+                      </div>
+                    </div>
+                    <div className="mt-4 arena-progress-track">
+                      <div className="arena-progress-fill" style={{ width: `${nextLevelProgressPercent}%` }} />
+                    </div>
+                  </Link>
+
+                  <button
+                    type="button"
+                    className="mt-4 flex w-full items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-4 text-left text-white transition hover:border-white/20"
+                    onClick={() => setDashboardTutorialCompleted(false)}
+                  >
+                    <HeroIcons.BoltIcon className="h-8 w-8 shrink-0 text-amber-200" aria-hidden="true" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-semibold">New here?</span>
+                      <span className="mt-1 block text-sm text-white/58">Take the quick tour.</span>
+                    </span>
+                    <span className="rounded-xl border border-amber-200/28 px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-amber-100">
+                      Start
+                    </span>
+                  </button>
+                </div>
+              </section>
+
+              <section className="hidden xl:block">
+                <div className="mb-6 flex items-start justify-between gap-6 px-1">
+                  <div className="flex items-center gap-3">
+                    <img
+                      src="/logoAndName.png"
+                      alt=""
+                      className="h-10 w-10 rounded-xl border border-white/10 bg-black object-contain"
+                    />
+                    <div>
+                      <p className="text-3xl font-black uppercase tracking-[0.08em] text-white">
+                        Legal <span className="text-amber-200">Arena</span>
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex min-w-[320px] items-center gap-4">
+                    <LeaderboardPortrait
+                      image={userPortrait}
+                      name={userName}
+                      className="h-16 w-16 border-white/20 shadow-[0_0_0_5px_rgba(255,255,255,0.035)]"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-lg font-semibold text-white">{userName}</p>
+                          <p className="mt-0.5 text-sm text-white/62">
+                            Level {playerLevel} | {progression.overallXp || 0} XP
+                          </p>
+                        </div>
+                        <ButtonAccount />
+                      </div>
+                      <div className="mt-3 flex items-center gap-2">
+                        <HeroIcons.ShieldCheckIcon
+                          className="h-4 w-4 shrink-0 text-emerald-300"
+                          aria-hidden="true"
+                        />
+                        <div className="arena-progress-track h-2">
+                          <div
+                            className="arena-progress-fill"
+                            style={{ width: `${nextLevelProgressPercent}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(340px,0.48fr)]">
+                  <article className="arena-surface arena-column-bg relative min-h-[36rem] overflow-hidden border-amber-200/35">
                     <img
                       src="/images/court.jpg"
                       alt=""
-                      className="absolute inset-0 h-full w-full object-cover opacity-46"
+                      className="absolute inset-0 h-full w-full object-cover opacity-18"
+                      style={{ objectPosition: "center" }}
                     />
-                    <div className="absolute inset-0 bg-gradient-to-r from-black via-black/45 to-black/10 lg:bg-gradient-to-l" />
-                    <div className="relative z-10 flex h-full min-h-[18rem] items-center p-5 sm:min-h-[20rem] md:p-7">
-                      <Link
-                        href={`/dashboard/players/${userId}`}
-                        data-onboarding-target="player-brief"
-                        className="block w-full rounded-[1.35rem] border border-white/10 bg-black/40 p-4 text-white shadow-[0_24px_70px_rgba(0,0,0,0.46)] backdrop-blur-md transition hover:scale-[1.01] hover:border-white/18 focus:outline-none focus:ring-2 focus:ring-white/35 sm:p-5"
-                        aria-label="Open your lawyer profile page"
-                      >
-                        <div className="flex min-w-0 flex-col items-center gap-3 text-center sm:flex-row sm:justify-center sm:gap-4">
-                          <LeaderboardPortrait
-                            image={userPortrait}
-                            name={userName}
-                            className="h-16 w-16 border-white/20 shadow-[0_0_0_6px_rgba(255,255,255,0.035)]"
-                          />
-                          <div className="min-w-0">
-                            <p className="arena-kicker">Player Brief</p>
-                            <p className="mt-2 truncate text-xl font-semibold leading-tight text-white">
-                              {userName}
-                            </p>
-                            <p className="mt-1 text-sm text-white/56">
-                              Level {playerLevel} | {progression.overallXp || 0} XP
-                            </p>
-                          </div>
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_78%_34%,rgba(251,191,36,0.13),transparent_24%),linear-gradient(90deg,rgba(0,0,0,0.94)_0%,rgba(0,0,0,0.82)_53%,rgba(0,0,0,0.52)_100%),linear-gradient(180deg,rgba(0,0,0,0.12),rgba(0,0,0,0.74))]" />
+                    <div className="relative z-10 grid min-h-[36rem] grid-cols-[minmax(0,1fr)_280px] gap-5 p-8">
+                      <div className="flex min-w-0 flex-col justify-center">
+                        <p className="arena-kicker text-amber-200">{desktopFeatureKicker}</p>
+                        <h1 className="mt-6 max-w-3xl break-words text-5xl font-bold leading-tight text-white">
+                          {desktopFeatureTitle}
+                        </h1>
+                        <div className="mt-6 flex flex-wrap items-center gap-4">
+                          <span className="rounded-lg border border-emerald-300/30 bg-emerald-300/10 px-4 py-2 text-sm font-semibold text-emerald-200">
+                            {desktopFeatureStage}
+                          </span>
+                          <span className="text-sm text-white/62">
+                            {desktopFeatureStageCountLabel}
+                          </span>
                         </div>
-
-                        <div className="mt-5 grid grid-cols-3 gap-2">
-                          <div className="rounded-xl border border-white/10 bg-white/[0.035] p-3">
-                            <p className="text-[0.65rem] uppercase tracking-[0.16em] text-white/42">Rank</p>
-                            <p className="mt-2 text-sm font-semibold text-white">{playerRankLabel}</p>
-                          </div>
-                          <div className="rounded-xl border border-white/10 bg-white/[0.035] p-3">
-                            <p className="text-[0.65rem] uppercase tracking-[0.16em] text-white/42">Record</p>
-                            <p className="mt-2 text-sm font-semibold text-white">{playerRecordLabel}</p>
-                          </div>
-                          <div className="rounded-xl border border-white/10 bg-white/[0.035] p-3">
-                            <p className="text-[0.65rem] uppercase tracking-[0.16em] text-white/42">Cases</p>
-                            <p className="mt-2 text-sm font-semibold text-white">
-                              {progression.completedCases || 0}
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="mt-5">
-                          <div className="flex items-center justify-between gap-3 text-xs text-white/58">
-                            <span>Next level</span>
-                            <span>{currentLevelXp}/250 XP</span>
-                          </div>
-                          <div className="mt-2 arena-progress-track">
+                        <div className="mt-6 flex max-w-xl items-center gap-4">
+                          <span className="text-2xl font-bold text-emerald-300">
+                            {desktopFeatureProgress}%
+                          </span>
+                          <div className="arena-progress-track h-2">
                             <div
                               className="arena-progress-fill"
-                              style={{ width: `${nextLevelProgressPercent}%` }}
+                              style={{ width: `${desktopFeatureProgressFill}%` }}
                             />
                           </div>
+                          <span className="shrink-0 text-sm text-white/62">
+                            {desktopFeatureProgressLabel}
+                          </span>
                         </div>
-
-                        <p className="mt-5 rounded-xl border border-emerald-300/10 bg-emerald-300/10 px-4 py-3 text-sm leading-6 text-emerald-50/90">
-                          {playerEncouragementNote}
+                        <p className="mt-6 max-w-xl text-lg leading-8 text-white/70">
+                          {desktopFeatureBody}
                         </p>
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              </section>
-
-              <section className="arena-surface" aria-labelledby="dashboard-how-it-works">
-                <div className="p-4 md:p-6">
-                  <p className="arena-kicker">How it works</p>
-                  <h2 id="dashboard-how-it-works" className="sr-only">
-                    How Legal Arena works
-                  </h2>
-                  <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                    {gameLoopSteps.map((step, index) => (
-                      <div key={step.title} className="arena-surface-soft flex min-w-0 gap-3 p-4 sm:gap-4">
-                        <IconTile icon={step.icon} />
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold text-white">
-                            {index + 1}. {step.title}
-                          </p>
-                          <p className="mt-2 text-sm leading-6 text-white/58">{step.body}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </section>
-
-              <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.55fr)_minmax(300px,0.68fr)]">
-                <section id="case-library" data-onboarding-target="case-library" className="arena-surface min-w-0">
-                  <div className="p-4 md:p-6">
-                    <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-                      <div className="min-w-0" />
-                      <div className="flex flex-wrap items-center gap-3 md:justify-end">
-                        <p className="max-w-full break-words text-xs uppercase tracking-[0.12em] text-white/42">
-                          {carouselStatus}
-                        </p>
-                        <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-white/10 bg-white/[0.035] px-3 py-2 text-xs font-semibold text-white/70 transition hover:border-white/18 hover:text-white">
-                          <span>Playable only</span>
-                          <input
-                            type="checkbox"
-                            className="toggle toggle-xs border-white/20 bg-white/10 [--tglbg:#151515] checked:border-emerald-300/40 checked:bg-emerald-400"
-                            checked={showPlayableOnly}
-                            onChange={(event) => setShowPlayableOnly(event.target.checked)}
-                          />
-                        </label>
-                      </div>
-                    </div>
-
-                    <div
-                      data-onboarding-target="case-categories"
-                      className="mt-5 flex flex-wrap gap-2"
-                    >
-                      {categories.map((category) => (
-                        <button
-                          key={category.slug}
-                          className={`badge h-auto min-h-8 max-w-full origin-center cursor-pointer whitespace-normal border px-2.5 py-2 text-center text-xs leading-tight transition sm:text-sm ${
-                            selectedCategory === category.slug
-                              ? "arena-pill arena-pill-selected hover:scale-[1.03]"
-                              : "arena-pill hover:scale-[1.01]"
-                          }`}
-                          onClick={() => {
-                            const nextTemplates = templates.filter(
-                              (template) =>
-                                template.primaryCategory === category.slug &&
-                                (!showPlayableOnly || template.unlocked)
-                            );
-                            const firstUnlockedIndex = nextTemplates.findIndex(
-                              (template) => template.unlocked
-                            );
-
-                            setSelectedCategory(category.slug);
-                            setActiveTemplateIndex(firstUnlockedIndex >= 0 ? firstUnlockedIndex : 0);
-                          }}
-                        >
-                          {category.title}
-                        </button>
-                      ))}
-                    </div>
-
-                    {activeTemplate ? (
-                      <div className="mt-5 overflow-hidden rounded-[1.35rem] border border-white/10 bg-white/[0.025]">
-                        <div className="grid min-w-0 md:grid-cols-[minmax(0,1fr)_220px]">
-                          <div className="min-w-0 p-4 sm:p-5">
-                            <span className="badge badge-outline border-white/15 text-white/80">
-                              {shouldSellLifetimeAccess
-                                ? "Included with lifetime access"
-                                : activeTemplate.unlocked
-                                  ? "Beginner Friendly"
-                                  : "Locked"}
+                        <div className="mt-6 flex flex-wrap gap-3">
+                          {desktopHasAssignedSide ? (
+                            <span className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.035] px-4 py-2 text-sm text-white/74">
+                              <HeroIcons.UserIcon className="h-5 w-5 text-white/52" aria-hidden="true" />
+                              {desktopHeroCase?.playerSide === "opponent" ? "Defendant Side" : "Plaintiff Side"}
                             </span>
-                            <h3 className="mt-4 flex h-[4.75rem] items-start overflow-hidden break-words text-xl font-semibold leading-tight text-white sm:h-[5.625rem] sm:text-2xl">
-                              {activeTemplate.title}
-                            </h3>
-
-                            <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                              <div className="arena-surface-soft p-3">
-                                <p className="text-xs text-white/45">Difficulty</p>
-                                <p className="mt-1 text-sm font-semibold text-emerald-300">
-                                  {activeTemplate.complexity <= 1 ? "Easy" : `Tier ${activeTemplate.complexity}`}
-                                </p>
-                              </div>
-                              <div className="arena-surface-soft p-3">
-                                <p className="text-xs text-white/45">Est. Time</p>
-                                <p className="mt-1 text-sm font-semibold text-white">15-20 min</p>
-                              </div>
-                              <div className="arena-surface-soft p-3">
-                                <p className="text-xs text-white/45">Skills</p>
-                                <p className="mt-1 break-words text-sm font-semibold text-white">
-                                  {activeTemplate.practiceArea}
-                                </p>
-                              </div>
-                            </div>
-
+                          ) : null}
+                          <span className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.035] px-4 py-2 text-sm text-white/74">
+                            <HeroIcons.BriefcaseIcon className="h-5 w-5 text-white/52" aria-hidden="true" />
+                            {desktopHeroCase?.primaryCategory ||
+                              desktopFeaturedTemplate?.primaryCategory ||
+                              "Case Library"}
+                          </span>
+                          <span className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.035] px-4 py-2 text-sm text-white/74">
+                            <HeroIcons.ScaleIcon className="h-5 w-5 text-white/52" aria-hidden="true" />
+                            {desktopHeroCase?.premise?.courtName || "County Civil Court"}
+                          </span>
+                        </div>
+                        <div className="mt-8 flex flex-col items-start gap-4">
+                          {canContinueDesktopHeroCase ? (
+                            <Link
+                              href={`/dashboard/cases/${desktopHeroCase.slug || desktopHeroCase.id}`}
+                              data-onboarding-target="quick-start-case"
+                              className="inline-flex min-h-[4rem] w-full max-w-md items-center justify-center gap-4 rounded-xl border border-amber-200/45 bg-amber-200 px-6 text-lg font-bold text-black shadow-[0_18px_40px_rgba(251,191,36,0.22)] transition hover:bg-amber-100"
+                            >
+                              Continue This Case
+                              <HeroIcons.ChevronRightIcon className="h-6 w-6" aria-hidden="true" />
+                            </Link>
+                          ) : (
                             <button
-                              className="arena-btn-light mt-5 inline-flex w-full min-w-0 items-center justify-center gap-3 px-4 py-4 sm:px-5"
+                              data-onboarding-target="quick-start-case"
+                              type="button"
+                              className="inline-flex min-h-[4rem] w-full max-w-md items-center justify-center gap-4 rounded-xl border border-amber-200/45 bg-amber-200 px-6 text-lg font-bold text-black shadow-[0_18px_40px_rgba(251,191,36,0.22)] transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
                               onClick={() => {
                                 if (shouldSellLifetimeAccess) {
                                   setShowPaywallModal(true);
                                   return;
                                 }
 
-                                handleCreateCase(activeTemplate.id);
+                                handleCreateCase(primaryTemplateId);
                               }}
-                              disabled={creating || (!shouldSellLifetimeAccess && !activeTemplate.unlocked)}
+                              disabled={creating || (!shouldSellLifetimeAccess && !primaryTemplateId)}
+                            >
+                              {creating && !shouldSellLifetimeAccess ? (
+                                <span className="loading loading-spinner loading-sm" />
+                              ) : null}
+                              {primaryCtaLabel}
+                              <HeroIcons.ChevronRightIcon className="h-6 w-6" aria-hidden="true" />
+                            </button>
+                          )}
+                          <a
+                            href="#case-library"
+                            className="inline-flex items-center gap-3 text-sm font-semibold text-white/68 transition hover:text-white"
+                          >
+                            Browse Case Library
+                            <HeroIcons.ChevronRightIcon className="h-4 w-4" aria-hidden="true" />
+                          </a>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-center">
+                        <div className="flex w-full max-w-[18rem] flex-col items-center justify-center px-4 text-center">
+                          <p className="text-xs font-bold uppercase tracking-[0.18em] text-white/42">
+                            Case Matchup
+                          </p>
+                          <div className="mt-6 w-full space-y-5">
+                            <div>
+                              <p className="text-[0.65rem] font-bold uppercase tracking-[0.16em] text-white/40">
+                                Plaintiff
+                              </p>
+                              <p
+                                className={`mt-2 line-clamp-3 text-4xl font-black leading-[0.95] ${
+                                  desktopHasAssignedSide && desktopRepresentsPlaintiff
+                                    ? "text-emerald-200 drop-shadow-[0_0_18px_rgba(52,211,153,0.2)]"
+                                    : desktopHasAssignedSide
+                                      ? "text-white/72"
+                                      : "text-white"
+                                }`}
+                              >
+                                {desktopPlaintiffName}
+                              </p>
+                            </div>
+                            <p className="text-sm font-black uppercase tracking-[0.2em] text-amber-200/90">
+                              vs
+                            </p>
+                            <div>
+                              <p className="text-[0.65rem] font-bold uppercase tracking-[0.16em] text-white/40">
+                                Defendant
+                              </p>
+                              <p
+                                className={`mt-2 line-clamp-3 text-4xl font-black leading-[0.95] ${
+                                  desktopHasAssignedSide && !desktopRepresentsPlaintiff
+                                    ? "text-emerald-200 drop-shadow-[0_0_18px_rgba(52,211,153,0.2)]"
+                                    : desktopHasAssignedSide
+                                      ? "text-white/72"
+                                      : "text-white"
+                                }`}
+                              >
+                                {desktopDefendantName}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </article>
+
+                  <Link
+                    href={`/dashboard/players/${userId}`}
+                    data-onboarding-target="player-brief"
+                    className="arena-surface block p-8 text-white transition hover:border-white/20"
+                    aria-label="Open your lawyer profile page"
+                  >
+                    <p className="arena-kicker text-amber-200">Player Brief</p>
+                    <div className="mt-8 flex items-center gap-5">
+                      <LeaderboardPortrait
+                        image={userPortrait}
+                        name={userName}
+                        className="h-20 w-20 border-white/20 shadow-[0_0_0_7px_rgba(255,255,255,0.035)]"
+                      />
+                      <div className="min-w-0">
+                        <p className="truncate text-3xl font-semibold leading-tight text-white">
+                          {userName}
+                        </p>
+                        <p className="mt-2 inline-flex items-center gap-2 text-amber-200">
+                          <HeroIcons.TrophyIcon className="h-5 w-5" aria-hidden="true" />
+                          {currentLeaderboardEntry ? `Rank #${currentLeaderboardEntry.rank}` : "Rookie Advocate"}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-8 grid grid-cols-3 gap-3">
+                      <div className="rounded-xl border border-white/10 bg-white/[0.035] p-4">
+                        <p className="text-xs uppercase tracking-[0.12em] text-white/48">Rank</p>
+                        <p className="mt-3 text-2xl font-semibold text-white">{playerRankLabel}</p>
+                      </div>
+                      <div className="rounded-xl border border-white/10 bg-white/[0.035] p-4">
+                        <p className="text-xs uppercase tracking-[0.12em] text-white/48">Record</p>
+                        <p className="mt-3 text-2xl font-semibold text-white">{playerRecordLabel}</p>
+                      </div>
+                      <div className="rounded-xl border border-white/10 bg-white/[0.035] p-4">
+                        <p className="text-xs uppercase tracking-[0.12em] text-white/48">Cases Won</p>
+                        <p className="mt-3 text-2xl font-semibold text-white">{progression.wins || 0}</p>
+                      </div>
+                    </div>
+                    <div className="mt-8">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="font-semibold text-white">XP Progress</span>
+                        <span className="text-white/62">
+                          <span className="font-semibold text-emerald-300">
+                            {progression.overallXp || 0}
+                          </span>{" "}
+                          / {playerLevel * 250} XP
+                        </span>
+                      </div>
+                      <div className="mt-3 arena-progress-track h-2">
+                        <div
+                          className="arena-progress-fill"
+                          style={{ width: `${nextLevelProgressPercent}%` }}
+                        />
+                      </div>
+                    </div>
+                    <div className="mt-10 rounded-2xl border border-emerald-300/12 bg-emerald-300/[0.055] p-5">
+                      <p className="text-lg leading-8 text-white/82">
+                        <span className="mr-3 text-3xl font-serif text-emerald-300/75">“</span>
+                        {playerEncouragementNote}
+                        <span className="ml-2 text-3xl font-serif text-emerald-300/75">”</span>
+                      </p>
+                    </div>
+                  </Link>
+                </div>
+
+                <div className="mt-6 grid gap-6 xl:grid-cols-3">
+                  {[
+                    {
+                      href: "#case-library",
+                      title: "Start New Case",
+                      body: "Choose a case type and begin your next battle.",
+                      icon: HeroIcons.DocumentPlusIcon,
+                      tone: "emerald",
+                    },
+                    {
+                      href: "#rankings",
+                      title: "Rankings",
+                      body: "Climb the leaderboard and earn stronger standing.",
+                      icon: HeroIcons.TrophyIcon,
+                      tone: "amber",
+                    },
+                    {
+                      href: "#recent-cases",
+                      title: "Saved Transcripts",
+                      body: "Review your transcripts and key case documents.",
+                      icon: HeroIcons.DocumentTextIcon,
+                      tone: "amber",
+                    },
+                  ].map((item) => {
+                    const Icon = item.icon;
+
+                    return (
+                      <a
+                        key={item.href}
+                        href={item.href}
+                        className="arena-surface-soft flex min-h-[10rem] items-center gap-5 p-6 text-white transition hover:border-white/20"
+                      >
+                        <span
+                          className={`flex h-20 w-20 shrink-0 items-center justify-center rounded-full border ${
+                            item.tone === "emerald"
+                              ? "border-emerald-300/30 bg-emerald-300/10 text-emerald-200"
+                              : "border-amber-200/28 bg-amber-200/10 text-amber-100"
+                          }`}
+                        >
+                          <Icon className="h-9 w-9" aria-hidden="true" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-xl font-semibold">{item.title}</span>
+                          <span className="mt-2 block text-base leading-7 text-white/62">
+                            {item.body}
+                          </span>
+                        </span>
+                        <HeroIcons.ChevronRightIcon
+                          className="h-6 w-6 shrink-0 text-white/48"
+                          aria-hidden="true"
+                        />
+                      </a>
+                    );
+                  })}
+                </div>
+              </section>
+
+              <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.65fr)]">
+                <section id="case-library" data-onboarding-target="case-library" className="arena-surface min-w-0 overflow-hidden">
+                  <div className="md:hidden">
+                    <div className="border-b border-white/10 px-4 py-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <a
+                          href="#activation-home"
+                          className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.035] text-white/70"
+                          aria-label="Back to dashboard home"
+                        >
+                          <HeroIcons.ArrowLeftIcon className="h-5 w-5" aria-hidden="true" />
+                        </a>
+                        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-amber-200">
+                          Case Library
+                        </p>
+                        <label className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.035] text-white/70">
+                          <span className="sr-only">Playable only</span>
+                          <input
+                            type="checkbox"
+                            className="peer sr-only"
+                            checked={showPlayableOnly}
+                            onChange={(event) => setShowPlayableOnly(event.target.checked)}
+                          />
+                          <HeroIcons.AdjustmentsHorizontalIcon
+                            className="h-5 w-5 transition peer-checked:text-emerald-300"
+                            aria-hidden="true"
+                          />
+                        </label>
+                      </div>
+                      <h2 className="mt-5 text-2xl font-semibold leading-tight text-white">
+                        Choose your case
+                      </h2>
+                      <p className="mt-1 text-sm text-white/56">
+                        {templates.length}+ cases across {categories.length}+ categories.
+                      </p>
+                      <div className="relative mt-4">
+                        <HeroIcons.MagnifyingGlassIcon
+                          className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-white/42"
+                          aria-hidden="true"
+                        />
+                        <input
+                          type="search"
+                          value={caseLibrarySearch}
+                          onChange={(event) => setCaseLibrarySearch(event.target.value)}
+                          placeholder="Search cases, topics, or skills..."
+                          aria-label="Search cases, topics, or skills"
+                          className="h-11 w-full rounded-xl border border-white/10 bg-black/35 pl-10 pr-3 text-sm font-semibold text-white outline-none transition placeholder:text-white/35 focus:border-emerald-300/45"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="px-4 py-4">
+                      <div
+                        data-onboarding-target="case-categories"
+                        className="grid grid-cols-4 gap-1.5"
+                      >
+                        <button
+                          type="button"
+                          className={`flex min-h-[4.05rem] min-w-0 flex-col items-center justify-center gap-1 rounded-xl border px-1.5 text-center transition ${
+                            !selectedCategory
+                              ? "border-emerald-300 bg-emerald-300/10 text-emerald-200 shadow-[0_0_22px_rgba(52,211,153,0.12)]"
+                              : "border-white/10 bg-white/[0.03] text-white/70 hover:border-white/20"
+                          }`}
+                          onClick={() => selectCaseCategory("")}
+                        >
+                          <HeroIcons.Squares2X2Icon className="h-4 w-4" aria-hidden="true" />
+                          <span className="line-clamp-2 text-[0.56rem] font-semibold leading-tight">
+                            All
+                          </span>
+                        </button>
+                        {visibleMobileCategories.map((category) => {
+                          const Icon = categoryIconMap[category.slug] || HeroIcons.Squares2X2Icon;
+                          const selected = selectedCategory === category.slug;
+
+                          return (
+                            <button
+                              key={category.slug}
+                              type="button"
+                              className={`flex min-h-[4.05rem] min-w-0 flex-col items-center justify-center gap-1 rounded-xl border px-1.5 text-center transition ${
+                                selected
+                                  ? "border-emerald-300 bg-emerald-300/10 text-emerald-200 shadow-[0_0_22px_rgba(52,211,153,0.12)]"
+                                  : "border-white/10 bg-white/[0.03] text-white/70 hover:border-white/20"
+                              }`}
+                              onClick={() => selectCaseCategory(category.slug)}
+                            >
+                              <Icon className="h-4 w-4" aria-hidden="true" />
+                              <span className="line-clamp-2 text-[0.56rem] font-semibold leading-tight">
+                                {compactCategoryLabel[category.slug] || category.title}
+                              </span>
+                            </button>
+                          );
+                        })}
+                        <button
+                          type="button"
+                          className={`flex min-h-[4.05rem] min-w-0 items-center justify-center rounded-xl border px-1.5 text-center transition ${
+                            showAllCaseCategories
+                              ? "border-amber-200/35 bg-amber-300/10 text-amber-100"
+                              : "border-white/10 bg-white/[0.03] text-white/70 hover:border-white/20"
+                          }`}
+                          onClick={() => setShowAllCaseCategories((current) => !current)}
+                          aria-expanded={showAllCaseCategories}
+                          aria-label={
+                            showAllCaseCategories
+                              ? "Hide additional case categories"
+                              : "Show additional case categories"
+                          }
+                        >
+                          <HeroIcons.EllipsisHorizontalIcon className="h-6 w-6" aria-hidden="true" />
+                        </button>
+                      </div>
+
+                      <div className="mt-3 border-t border-white/8 pt-4">
+                        <p className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-white/42">
+                          Difficulty
+                        </p>
+                        <div className="mt-2 grid grid-cols-4 gap-2">
+                          {difficultyOptions.map((option) => (
+                            <button
+                              key={option.value}
+                              type="button"
+                              className={`h-9 rounded-lg border text-xs font-semibold transition ${
+                                selectedDifficulty === option.value
+                                  ? option.value === "all"
+                                    ? "border-emerald-300/40 bg-emerald-300/10 text-emerald-200"
+                                    : getDifficultyMeta(
+                                        option.value === "hard" ? 4 : option.value === "medium" ? 2 : 1
+                                      ).className
+                                  : "border-white/10 bg-white/[0.025] text-white/58"
+                              }`}
+                              onClick={() => {
+                                setSelectedDifficulty(option.value);
+                                setActiveTemplateIndex(0);
+                              }}
+                            >
+                              {option.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="mt-5 flex items-center justify-between gap-3">
+                        <p className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-white/42">
+                          Recommended for you
+                        </p>
+                        <p className="text-xs font-semibold text-white/60">
+                          {searchedLibraryTemplates.length} matches
+                        </p>
+                      </div>
+
+                      {featuredLibraryTemplate ? (
+                        <div className="mt-3 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.035] shadow-[0_18px_55px_rgba(0,0,0,0.34)]">
+                          <div className="relative min-h-[11.5rem] p-4">
+                            <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_12%,rgba(52,211,153,0.18),transparent_30%),linear-gradient(135deg,rgba(255,255,255,0.08),transparent_34%),linear-gradient(180deg,rgba(0,0,0,0.12),rgba(0,0,0,0.68))]" />
+                            <div className="relative z-10">
+                              <div className="flex items-start justify-between gap-3">
+                                <span
+                                  className={`rounded-full border px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.08em] ${
+                                    getDifficultyMeta(featuredLibraryTemplate.complexity).className
+                                  }`}
+                                >
+                                  {getDifficultyMeta(featuredLibraryTemplate.complexity).label}
+                                </span>
+                                <button
+                                  type="button"
+                                  className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/25 text-white/70"
+                                  aria-label="Save case"
+                                >
+                                  <HeroIcons.StarIcon className="h-5 w-5" aria-hidden="true" />
+                                </button>
+                              </div>
+                              <h3 className="mt-7 line-clamp-2 text-xl font-semibold leading-tight text-white">
+                                {featuredLibraryTemplate.title}
+                              </h3>
+                              <p className="mt-2 line-clamp-2 text-sm leading-6 text-white/66">
+                                {featuredLibraryTemplate.overview}
+                              </p>
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                <span className="rounded-full border border-white/10 bg-black/22 px-2.5 py-1 text-[0.68rem] font-semibold text-white/70">
+                                  {selectedCategoryTitle}
+                                </span>
+                                <span className="rounded-full border border-white/10 bg-black/22 px-2.5 py-1 text-[0.68rem] font-semibold text-white/70">
+                                  {featuredLibraryTemplate.practiceArea}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3 border-t border-white/10 px-4 py-3">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-emerald-300/30 bg-emerald-300/10 text-xs font-semibold text-emerald-200">
+                              {lastCaseProgress.percent}%
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-xs font-semibold text-white/58">
+                                {canResumeLastCase ? "Intake Progress" : "Ready to start"}
+                              </p>
+                              <div className="mt-2 arena-progress-track">
+                                <div
+                                  className="arena-progress-fill"
+                                  style={{
+                                    width: `${canResumeLastCase ? lastCaseProgress.percent : 0}%`,
+                                  }}
+                                />
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              className="inline-flex min-h-0 items-center gap-2 rounded-xl border border-amber-200/25 bg-amber-300/14 px-3 py-2.5 text-xs font-semibold text-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                              onClick={() => {
+                                if (shouldSellLifetimeAccess) {
+                                  setShowPaywallModal(true);
+                                  return;
+                                }
+
+                                handleCreateCase(featuredLibraryTemplate.id);
+                              }}
+                              disabled={
+                                creating ||
+                                (!shouldSellLifetimeAccess && !featuredLibraryTemplate.unlocked)
+                              }
+                            >
+                              <span>
+                                {canResumeLastCase ? "Continue" : shouldSellLifetimeAccess ? "Unlock" : "Enter"}
+                              </span>
+                              <HeroIcons.ChevronRightIcon className="h-4 w-4" aria-hidden="true" />
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="mt-3 rounded-2xl border border-dashed border-white/12 bg-white/[0.025] p-6 text-center">
+                          <p className="text-sm font-semibold text-white">No matching cases</p>
+                          <p className="mt-2 text-sm text-white/54">
+                            Try a different category, difficulty, or search term.
+                          </p>
+                        </div>
+                      )}
+
+                      {moreLibraryTemplates.length > 0 ? (
+                        <div className="mt-6">
+                          <p className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-white/42">
+                            More cases
+                          </p>
+                          <div className="mt-3 space-y-2.5">
+                            {moreLibraryTemplates.map((template) => {
+                              const Icon =
+                                categoryIconMap[template.primaryCategory] || HeroIcons.BriefcaseIcon;
+                              const difficulty = getDifficultyMeta(template.complexity);
+
+                              return (
+                                <button
+                                  key={`mobile-case-${template.id}`}
+                                  type="button"
+                                  className="flex w-full items-center gap-3 rounded-xl border border-white/10 bg-white/[0.025] p-3 text-left transition hover:border-white/20"
+                                  onClick={() => {
+                                    const nextIndex = visibleTemplates.findIndex(
+                                      (item) => item.id === template.id
+                                    );
+
+                                    if (nextIndex >= 0) {
+                                      setActiveTemplateIndex(nextIndex);
+                                    }
+                                  }}
+                                >
+                                  <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-black/28 text-white/70">
+                                    <Icon className="h-6 w-6" aria-hidden="true" />
+                                  </span>
+                                  <span className="min-w-0 flex-1">
+                                    <span className="flex items-center gap-2">
+                                      <span
+                                        className={`rounded-full border px-2 py-0.5 text-[0.6rem] font-semibold uppercase tracking-[0.06em] ${difficulty.className}`}
+                                      >
+                                        {difficulty.label}
+                                      </span>
+                                      <span className="text-[0.68rem] font-semibold text-white/48">
+                                        {template.complexity <= 1 ? "10-15 min" : template.complexity <= 3 ? "20-25 min" : "30+ min"}
+                                      </span>
+                                    </span>
+                                    <span className="mt-1.5 line-clamp-1 block text-sm font-semibold text-white">
+                                      {template.title}
+                                    </span>
+                                    <span className="mt-1 line-clamp-1 block text-xs text-white/48">
+                                      {template.practiceArea}
+                                    </span>
+                                  </span>
+                                  <HeroIcons.ChevronRightIcon className="h-5 w-5 shrink-0 text-amber-200/70" aria-hidden="true" />
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="hidden p-4 md:block md:p-6">
+                    <div className="flex flex-col gap-4">
+                      <div className="min-w-0">
+                        <p className="arena-kicker text-amber-200">Case Library</p>
+                        <h2 className="mt-2 text-2xl font-semibold leading-tight text-white">
+                          Choose your case
+                        </h2>
+                        <p className="mt-1 text-sm text-white/56">
+                          {templates.length}+ cases across {categories.length}+ categories.
+                        </p>
+                      </div>
+                      <div className="grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_auto]">
+                        <div className="relative min-w-0">
+                          <HeroIcons.MagnifyingGlassIcon
+                            className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-white/42"
+                            aria-hidden="true"
+                          />
+                          <input
+                            type="search"
+                            value={caseLibrarySearch}
+                            onChange={(event) => setCaseLibrarySearch(event.target.value)}
+                            placeholder="Search cases, topics, or skills..."
+                            aria-label="Search cases, topics, or skills"
+                            className="h-11 w-full rounded-xl border border-white/10 bg-black/35 pl-10 pr-3 text-sm font-semibold text-white outline-none transition placeholder:text-white/35 focus:border-emerald-300/45"
+                          />
+                        </div>
+                        <label className="inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.035] px-3 text-xs font-semibold text-white/78 transition hover:border-white/18 hover:text-white">
+                          <input
+                            type="checkbox"
+                            className="checkbox checkbox-sm rounded border-white/25 bg-black/35 [--chkbg:#34d399] [--chkfg:#050505] checked:border-emerald-300 checked:bg-emerald-300"
+                            checked={showPlayableOnly}
+                            onChange={(event) => setShowPlayableOnly(event.target.checked)}
+                          />
+                          <span>Playable only</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    <div
+                      data-onboarding-target="case-categories"
+                      className="mt-5 grid grid-cols-4 gap-2 lg:grid-cols-6 xl:grid-cols-5 2xl:grid-cols-6"
+                    >
+                      <button
+                        type="button"
+                        className={`flex min-h-[4.5rem] min-w-0 flex-col items-center justify-center gap-1.5 rounded-xl border px-2 text-center transition ${
+                          !selectedCategory
+                            ? "border-emerald-300 bg-emerald-300/10 text-emerald-200 shadow-[0_0_22px_rgba(52,211,153,0.12)]"
+                            : "border-white/10 bg-white/[0.03] text-white/70 hover:border-white/20"
+                        }`}
+                        onClick={() => selectCaseCategory("")}
+                      >
+                        <HeroIcons.Squares2X2Icon className="h-5 w-5" aria-hidden="true" />
+                        <span className="line-clamp-2 text-[0.68rem] font-semibold leading-tight">
+                          All
+                        </span>
+                      </button>
+                      {categories.map((category) => {
+                        const Icon = categoryIconMap[category.slug] || HeroIcons.Squares2X2Icon;
+                        const selected = selectedCategory === category.slug;
+
+                        return (
+                          <button
+                            key={category.slug}
+                            type="button"
+                            className={`flex min-h-[4.5rem] min-w-0 flex-col items-center justify-center gap-1.5 rounded-xl border px-2 text-center transition ${
+                              selected
+                                ? "border-emerald-300 bg-emerald-300/10 text-emerald-200 shadow-[0_0_22px_rgba(52,211,153,0.12)]"
+                                : "border-white/10 bg-white/[0.03] text-white/70 hover:border-white/20"
+                            }`}
+                            onClick={() => selectCaseCategory(category.slug)}
+                          >
+                            <Icon className="h-5 w-5" aria-hidden="true" />
+                            <span className="line-clamp-2 text-[0.68rem] font-semibold leading-tight">
+                              {compactCategoryLabel[category.slug] || category.title}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div className="mt-4 flex flex-col gap-3 border-t border-white/8 pt-4 lg:flex-row lg:items-center lg:justify-between">
+                      <div>
+                        <p className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-white/42">
+                          Difficulty
+                        </p>
+                        <div className="mt-2 grid grid-cols-4 gap-2 sm:w-[28rem]">
+                          {difficultyOptions.map((option) => (
+                            <button
+                              key={option.value}
+                              type="button"
+                              className={`h-9 rounded-lg border text-xs font-semibold transition ${
+                                selectedDifficulty === option.value
+                                  ? option.value === "all"
+                                    ? "border-emerald-300/40 bg-emerald-300/10 text-emerald-200"
+                                    : getDifficultyMeta(
+                                        option.value === "hard"
+                                          ? 4
+                                          : option.value === "medium"
+                                          ? 2
+                                          : 1
+                                      ).className
+                                  : "border-white/10 bg-white/[0.025] text-white/58 hover:border-white/20"
+                              }`}
+                              onClick={() => {
+                                setSelectedDifficulty(option.value);
+                                setActiveTemplateIndex(0);
+                              }}
+                            >
+                              {option.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/42">
+                        {searchedLibraryTemplates.length} matches
+                      </p>
+                    </div>
+
+                    {featuredLibraryTemplate ? (
+                      <div className="mt-5 grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(260px,0.58fr)]">
+                        <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.035] shadow-[0_18px_55px_rgba(0,0,0,0.34)]">
+                          <div className="relative min-h-[16rem] p-5 md:p-6">
+                            <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_12%,rgba(52,211,153,0.18),transparent_30%),radial-gradient(circle_at_84%_18%,rgba(251,191,36,0.12),transparent_28%),linear-gradient(135deg,rgba(255,255,255,0.08),transparent_34%),linear-gradient(180deg,rgba(0,0,0,0.08),rgba(0,0,0,0.72))]" />
+                            <div className="relative z-10 flex h-full min-h-[13rem] flex-col">
+                              <div className="flex flex-wrap items-start justify-between gap-2">
+                                <span
+                                  className={`rounded-full border px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.08em] ${
+                                    getDifficultyMeta(featuredLibraryTemplate.complexity).className
+                                  }`}
+                                >
+                                  {getDifficultyMeta(featuredLibraryTemplate.complexity).label}
+                                </span>
+                                <span className="max-w-full rounded-full border border-white/10 bg-black/24 px-3 py-1 text-xs font-semibold text-white/62">
+                                  {carouselStatus}
+                                </span>
+                              </div>
+                              <div className="mt-auto max-w-3xl">
+                                <p className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-white/42">
+                                  Recommended for you
+                                </p>
+                                <h3 className="mt-3 line-clamp-2 text-3xl font-semibold leading-tight text-white">
+                                  {featuredLibraryTemplate.title}
+                                </h3>
+                                <p className="mt-3 line-clamp-2 text-sm leading-6 text-white/66">
+                                  {featuredLibraryTemplate.overview}
+                                </p>
+                                <div className="mt-4 flex flex-wrap gap-2">
+                                  <span className="rounded-full border border-white/10 bg-black/22 px-2.5 py-1 text-[0.68rem] font-semibold text-white/70">
+                                    {selectedCategoryTitle}
+                                  </span>
+                                  <span className="rounded-full border border-white/10 bg-black/22 px-2.5 py-1 text-[0.68rem] font-semibold text-white/70">
+                                    {featuredLibraryTemplate.practiceArea}
+                                  </span>
+                                  <span className="rounded-full border border-white/10 bg-black/22 px-2.5 py-1 text-[0.68rem] font-semibold text-white/70">
+                                    {featuredLibraryTemplate.complexity <= 1
+                                      ? "10-15 min"
+                                      : featuredLibraryTemplate.complexity <= 3
+                                      ? "20-25 min"
+                                      : "30+ min"}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex flex-col gap-3 border-t border-white/10 px-5 py-4 sm:flex-row sm:items-center">
+                            <div className="flex min-w-0 flex-1 items-center gap-3">
+                              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-emerald-300/30 bg-emerald-300/10 text-xs font-semibold text-emerald-200">
+                                {canResumeLastCase ? `${lastCaseProgress.percent}%` : "GO"}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <p className="text-xs font-semibold text-white/58">
+                                  {canResumeLastCase ? "Intake Progress" : "Ready to start"}
+                                </p>
+                                <div className="mt-2 arena-progress-track">
+                                  <div
+                                    className="arena-progress-fill"
+                                    style={{
+                                      width: `${canResumeLastCase ? lastCaseProgress.percent : 0}%`,
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              className="inline-flex min-h-0 items-center justify-center gap-2 rounded-xl border border-amber-200/35 bg-amber-200 px-4 py-3 text-sm font-semibold text-black transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                              onClick={() => {
+                                if (shouldSellLifetimeAccess) {
+                                  setShowPaywallModal(true);
+                                  return;
+                                }
+
+                                handleCreateCase(featuredLibraryTemplate.id);
+                              }}
+                              disabled={
+                                creating ||
+                                (!shouldSellLifetimeAccess && !featuredLibraryTemplate.unlocked)
+                              }
                             >
                               {creating && !shouldSellLifetimeAccess ? (
                                 <span className="loading loading-spinner loading-xs" />
                               ) : null}
                               <span>
-                                {shouldSellLifetimeAccess
-                                  ? "Unlock Lifetime Access"
-                                  : activeTemplate.unlocked
-                                  ? isNewUser
-                                    ? "Begin Client Interview"
-                                    : "Start This Case"
+                                {canResumeLastCase
+                                  ? "Continue"
+                                  : shouldSellLifetimeAccess
+                                  ? "Unlock"
+                                  : featuredLibraryTemplate.unlocked
+                                  ? "Enter"
                                   : "Locked"}
                               </span>
-                              {activeTemplate.unlocked || shouldSellLifetimeAccess ? (
-                                <HeroIcons.ChevronRightIcon className="h-5 w-5" aria-hidden="true" />
+                              {featuredLibraryTemplate.unlocked || shouldSellLifetimeAccess ? (
+                                <HeroIcons.ChevronRightIcon className="h-4 w-4" aria-hidden="true" />
                               ) : (
-                                <HeroIcons.LockClosedIcon className="h-5 w-5" aria-hidden="true" />
+                                <HeroIcons.LockClosedIcon className="h-4 w-4" aria-hidden="true" />
                               )}
                             </button>
-                            <div className="mt-3 min-h-[4.5rem]">
-                              {!activeTemplate.unlocked ? (
-                                <p className="rounded-2xl border border-amber-300/20 bg-amber-500/10 px-4 py-3 text-sm leading-6 text-amber-100/82">
-                                  {getTemplateUnlockMessage(activeTemplate, browserTimeZone)}
-                                </p>
-                              ) : null}
-                            </div>
-                            <p className="mt-4 text-sm text-white/52">
-                              New here? This case is designed to teach the core loop.
-                            </p>
-                            <div className="mt-4 flex items-center justify-between gap-3 md:hidden">
-                              <button
-                                type="button"
-                                className="arena-btn-dark min-h-0 px-3 py-2"
-                                onClick={goToPreviousTemplate}
-                                disabled={!canNavigateTemplates}
-                                aria-label="Show previous case"
-                              >
-                                &lt;
-                              </button>
-                              <p className="min-w-0 text-center text-xs text-white/52">
-                                {carouselStatus}
-                              </p>
-                              <button
-                                type="button"
-                                className="arena-btn-dark min-h-0 px-3 py-2"
-                                onClick={goToNextTemplate}
-                                disabled={!canNavigateTemplates}
-                                aria-label="Show next case"
-                              >
-                                &gt;
-                              </button>
-                            </div>
-                          </div>
-                          <div
-                            className="relative hidden min-h-[14rem] overflow-hidden border-t border-white/10 md:flex md:flex-col md:justify-center md:border-l md:border-t-0 md:p-5"
-                            style={{
-                              backgroundImage: [
-                                "linear-gradient(180deg, rgba(0,0,0,0.72), rgba(0,0,0,0.88))",
-                                "url('/images/office.jpg')",
-                              ].join(", "),
-                              backgroundPosition: "center, center",
-                              backgroundRepeat: "no-repeat, no-repeat",
-                              backgroundSize: "cover, cover",
-                            }}
-                          >
-                            <div className="relative z-10">
-                              <p className="arena-kicker">Matchup</p>
-                              <div className="mt-5 space-y-5">
-                                <div>
-                                  <p className="text-xs uppercase tracking-[0.16em] text-white/42">
-                                    Plaintiff
-                                  </p>
-                                  <p className="mt-2 break-words text-lg font-semibold leading-tight text-white">
-                                    {activeTemplate.plaintiffName || activeTemplate.clientName || "Plaintiff"}
-                                  </p>
-                                </div>
-                                <div className="flex items-center gap-3 text-white/35">
-                                  <div className="h-px flex-1 bg-white/10" />
-                                  <span className="text-xs font-semibold uppercase tracking-[0.16em]">
-                                    vs
-                                  </span>
-                                  <div className="h-px flex-1 bg-white/10" />
-                                </div>
-                                <div>
-                                  <p className="text-xs uppercase tracking-[0.16em] text-white/42">
-                                    Defendant
-                                  </p>
-                                  <p className="mt-2 break-words text-lg font-semibold leading-tight text-white">
-                                    {activeTemplate.defendantName || activeTemplate.opponentName || "Defendant"}
-                                  </p>
-                                </div>
-                              </div>
-                            </div>
                           </div>
                         </div>
 
-                        <div className="hidden flex-col items-stretch justify-between gap-3 border-t border-white/10 px-4 py-4 sm:flex-row sm:items-center sm:px-5 md:flex">
-                          <button
-                            type="button"
-                            className="arena-btn-dark min-h-0 px-3 py-2"
-                            onClick={goToPreviousTemplate}
-                            disabled={!canNavigateTemplates}
-                            aria-label="Show previous case"
-                          >
-                            &lt;
-                          </button>
-                          <p className="min-w-0 text-center text-sm text-white/58">
-                            {activeTemplate.unlocked
-                              ? getTemplateUnlockMessage(activeTemplate, browserTimeZone)
-                              : "Use the arrows to pick an available case."}
-                          </p>
-                          <button
-                            type="button"
-                            className="arena-btn-dark min-h-0 px-3 py-2"
-                            onClick={goToNextTemplate}
-                            disabled={!canNavigateTemplates}
-                            aria-label="Show next case"
-                          >
-                            &gt;
-                          </button>
+                        <div className="arena-surface-soft min-w-0 p-4">
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-white/42">
+                              More cases
+                            </p>
+                            <span className="text-xs font-semibold text-white/48">
+                              {moreLibraryTemplates.length}
+                            </span>
+                          </div>
+                          <div className="mt-3 space-y-2.5">
+                            {moreLibraryTemplates.length > 0 ? (
+                              moreLibraryTemplates.map((template) => {
+                                const difficulty = getDifficultyMeta(template.complexity);
+
+                                return (
+                                  <button
+                                    key={`desktop-case-${template.id}`}
+                                    type="button"
+                                    className="flex w-full items-center gap-3 rounded-xl border border-white/10 bg-white/[0.025] p-3 text-left transition hover:border-white/20"
+                                    onClick={() => {
+                                      const nextIndex = visibleTemplates.findIndex(
+                                        (item) => item.id === template.id
+                                      );
+
+                                      if (nextIndex >= 0) {
+                                        setActiveTemplateIndex(nextIndex);
+                                      }
+                                    }}
+                                  >
+                                    <span className="mt-2.5 h-2 w-2 shrink-0 rounded-full bg-amber-200/75 shadow-[0_0_12px_rgba(251,191,36,0.28)]" />
+                                    <span className="min-w-0 flex-1">
+                                      <span className="flex flex-wrap items-center gap-2">
+                                        <span
+                                          className={`rounded-full border px-2 py-0.5 text-[0.6rem] font-semibold uppercase tracking-[0.06em] ${difficulty.className}`}
+                                        >
+                                          {difficulty.label}
+                                        </span>
+                                        <span className="text-[0.68rem] font-semibold text-white/48">
+                                          {template.complexity <= 1
+                                            ? "10-15 min"
+                                            : template.complexity <= 3
+                                            ? "20-25 min"
+                                            : "30+ min"}
+                                        </span>
+                                      </span>
+                                      <span className="mt-1.5 block text-sm font-semibold leading-5 text-white">
+                                        {template.title}
+                                      </span>
+                                      <span className="mt-1 line-clamp-1 block text-xs text-white/48">
+                                        {template.practiceArea}
+                                      </span>
+                                    </span>
+                                    <HeroIcons.ChevronRightIcon
+                                      className="h-5 w-5 shrink-0 text-amber-200/70"
+                                      aria-hidden="true"
+                                    />
+                                  </button>
+                                );
+                              })
+                            ) : (
+                              <div className="rounded-xl border border-dashed border-white/10 bg-black/20 p-4 text-sm text-white/45">
+                                No related cases match these filters.
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </div>
                     ) : (
-                      <div className="arena-surface-soft mt-5 border-dashed p-8 text-center">
-                        <p className="text-lg font-semibold text-white">No cases available</p>
+                      <div className="mt-5 rounded-2xl border border-dashed border-white/12 bg-white/[0.025] p-8 text-center">
+                        <p className="text-lg font-semibold text-white">No matching cases</p>
                         <p className="mt-2 text-sm text-white/62">
-                          {showPlayableOnly
-                            ? "Turn off playable only to view locked cases in this category."
-                            : "Check back after new disputes are added to the case library."}
+                          Try a different category, difficulty, or search term.
                         </p>
                       </div>
                     )}
@@ -1306,65 +2094,177 @@ export default function DashboardHub({
                   </div>
                 </section>
 
-                <section className="arena-surface min-w-0">
-                  <div className="p-4 md:p-6">
-                    <p className="arena-kicker">Continue where you left off</p>
-                    {lastActiveCase ? (
-                      <div className="mt-5 arena-surface-soft p-4">
-                        <div className="flex flex-col items-start justify-between gap-4 sm:flex-row">
-                          <div className="min-w-0">
-                            <span className={`badge border arena-status ${severityClass[statusSeverity[lastActiveCase.status] || "neutral"]}`}>
-                              {lastCaseProgress.label}
-                            </span>
-                            <h3 className="mt-4 text-lg font-semibold leading-tight text-white">
-                              {lastActiveCase.title}
-                            </h3>
-                            <p className="mt-2 text-sm text-white/52">
-                              Updated {formatDate(lastActiveCase.updatedAt)}
-                            </p>
-                          </div>
-                          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border border-white/12 bg-white/[0.03] text-sm font-semibold text-white">
-                            {lastCaseProgress.percent}%
-                          </div>
-                        </div>
-                        <div className="mt-5 arena-progress-track">
-                          <div
-                            className="arena-progress-fill"
-                            style={{ width: `${Math.max(8, lastCaseProgress.percent)}%` }}
-                          />
-                        </div>
-                        <Link
-                          href={`/dashboard/cases/${lastActiveCase.slug || lastActiveCase.id}`}
-                          className="arena-btn-dark mt-5 inline-flex w-full items-center justify-center gap-3 px-5 py-3"
-                        >
-                          <span>{canResumeLastCase ? "Continue Case" : "View Case"}</span>
-                          <HeroIcons.ChevronRightIcon className="h-5 w-5" aria-hidden="true" />
-                        </Link>
-                      </div>
-                    ) : (
-                      <div className="mt-5 arena-surface-soft border-dashed p-5 text-sm leading-7 text-white/62">
-                        Your first case will appear here as soon as you begin.
-                      </div>
-                    )}
-
-                    <button
-                      type="button"
-                      className="mt-4 block w-full overflow-hidden rounded-[1.35rem] border border-white/10 bg-white/[0.025] p-4 text-left transition hover:border-white/20"
-                      onClick={() => setDashboardTutorialCompleted(false)}
-                    >
-                      <p className="text-sm font-semibold text-white">New to Legal Arena?</p>
-                      <p className="mt-1 text-sm text-white/58">Take the quick tour.</p>
-                    </button>
-                  </div>
-                </section>
               </div>
 
               <section
                 id="recent-cases"
                 data-onboarding-target="recent-matters"
-                className="arena-surface"
+                className="arena-surface overflow-hidden"
               >
-                <div className="p-4 md:p-6">
+                <div className="md:hidden">
+                  <div className="border-b border-white/10 px-4 py-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-amber-200">
+                          Your Cases
+                        </p>
+                        <h2 className="mt-2 text-2xl font-semibold leading-tight text-white">
+                          Continue your docket
+                        </h2>
+                      </div>
+                      <span className="rounded-full border border-white/10 bg-white/[0.035] px-3 py-1.5 text-xs font-semibold text-white/62">
+                        {initialCases.length} total
+                      </span>
+                    </div>
+                    <div className="mt-4 grid grid-cols-2 gap-1 rounded-xl border border-white/[0.055] bg-white/[0.025] p-1">
+                      {[
+                        { value: "ongoing", label: "Ongoing", count: ongoingCases.length },
+                        { value: "finished", label: "Finished", count: finishedCases.length },
+                      ].map((tab) => (
+                        <button
+                          key={`mobile-case-tab-${tab.value}`}
+                          type="button"
+                          className={`rounded-lg px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] transition ${
+                            caseArchiveTab === tab.value
+                              ? "bg-amber-200/[0.09] text-amber-100 shadow-[inset_0_0_0_1px_rgba(251,191,36,0.08)]"
+                              : "text-white/42 hover:bg-white/[0.035] hover:text-white/74"
+                          }`}
+                          onClick={() => setCaseArchiveTab(tab.value)}
+                        >
+                          {tab.label} {tab.count}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="px-4 py-4">
+                    {selectedArchiveCases.length > 0 ? (
+                      <Link
+                        href={`/dashboard/cases/${selectedArchiveCases[0].slug || selectedArchiveCases[0].id}`}
+                        className="block overflow-hidden rounded-2xl border border-white/10 bg-white/[0.035] text-white shadow-[0_18px_55px_rgba(0,0,0,0.34)] transition hover:border-white/20"
+                      >
+                        <div className="relative min-h-[10.75rem] p-4">
+                          <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_8%,rgba(251,191,36,0.16),transparent_28%),radial-gradient(circle_at_82%_18%,rgba(52,211,153,0.12),transparent_28%),linear-gradient(180deg,rgba(255,255,255,0.06),rgba(0,0,0,0.64))]" />
+                          <div className="relative z-10">
+                            {(() => {
+                              const featuredCase = selectedArchiveCases[0];
+                              const featuredProgress = getCaseProgress(featuredCase);
+                              const featuredSeverity = statusSeverity[featuredCase.status] || "neutral";
+
+                              return (
+                                <>
+                            <div className="flex items-start justify-between gap-3">
+                              <span
+                                className={`rounded-full border px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.08em] arena-status ${
+                                  severityClass[featuredSeverity]
+                                }`}
+                              >
+                                {statusLabel[featuredCase.status] || featuredProgress.label}
+                              </span>
+                              <span className="flex h-10 w-10 items-center justify-center rounded-full border border-emerald-300/30 bg-emerald-300/10 text-xs font-semibold text-emerald-200">
+                                {featuredProgress.percent}%
+                              </span>
+                            </div>
+                            <h3 className="mt-7 line-clamp-2 text-xl font-semibold leading-tight">
+                              {featuredCase.title}
+                            </h3>
+                            <p className="mt-2 text-sm leading-6 text-white/62">
+                              {featuredCase.primaryCategory} | Updated {formatDate(featuredCase.updatedAt)}
+                            </p>
+                                </>
+                              );
+                            })()}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 border-t border-white/10 px-4 py-3">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-semibold text-white/58">
+                              {caseArchiveTab === "finished" ? "Review the ruling" : "Continue the file"}
+                            </p>
+                            <div className="mt-2 arena-progress-track">
+                              <div
+                                className="arena-progress-fill"
+                                style={{ width: `${Math.max(8, getCaseProgress(selectedArchiveCases[0]).percent)}%` }}
+                              />
+                            </div>
+                          </div>
+                          <span className="inline-flex items-center gap-2 rounded-xl border border-amber-200/25 bg-amber-300/14 px-3 py-2.5 text-xs font-semibold text-amber-100">
+                            {caseArchiveTab === "finished" ? "View" : "Continue"}
+                            <HeroIcons.ChevronRightIcon className="h-4 w-4" aria-hidden="true" />
+                          </span>
+                        </div>
+                      </Link>
+                    ) : (
+                      <div className="rounded-2xl border border-dashed border-white/12 bg-white/[0.025] p-6 text-center">
+                        <p className="text-sm font-semibold text-white">No cases opened yet</p>
+                        <p className="mt-2 text-sm text-white/54">
+                          No {caseArchiveTab} cases yet.
+                        </p>
+                      </div>
+                    )}
+
+                    {selectedArchiveCases.length > 1 ? (
+                      <div className="mt-6">
+                        <p className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-white/42">
+                          Recent files
+                        </p>
+                        <div className="mt-3 space-y-2.5">
+                          {selectedArchiveCases
+                            .slice(1)
+                            .slice(0, 5)
+                            .map((item) => {
+                              const caseProgress = getCaseProgress(item);
+                              const caseSeverity = statusSeverity[item.status] || "neutral";
+                              const Icon = categoryIconMap[item.primaryCategory] || HeroIcons.DocumentTextIcon;
+
+                              return (
+                                <Link
+                                  key={item.id}
+                                  href={`/dashboard/cases/${item.slug || item.id}`}
+                                  className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.025] p-3 text-left transition hover:border-white/20"
+                                >
+                                  <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-black/28 text-white/70">
+                                    <Icon className="h-6 w-6" aria-hidden="true" />
+                                  </span>
+                                  <span className="min-w-0 flex-1">
+                                    <span
+                                      className={`rounded-full border px-2 py-0.5 text-[0.6rem] font-semibold uppercase tracking-[0.06em] arena-status ${severityClass[caseSeverity]}`}
+                                    >
+                                      {statusLabel[item.status] || "In Progress"}
+                                    </span>
+                                    <span className="mt-1.5 line-clamp-1 block text-sm font-semibold text-white">
+                                      {item.title}
+                                    </span>
+                                    <span className="mt-1 line-clamp-1 block text-xs text-white/48">
+                                      {item.primaryCategory} | Updated {formatDate(item.updatedAt)}
+                                    </span>
+                                  </span>
+                                  <span className="shrink-0 text-xs font-semibold text-white/58">
+                                    {caseProgress.percent}%
+                                  </span>
+                                </Link>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    ) : null}
+
+                    <button
+                      type="button"
+                      className="mt-4 flex w-full items-center gap-3 rounded-xl border border-white/10 bg-white/[0.025] p-3 text-left text-white transition hover:border-white/20"
+                      onClick={() => setDashboardTutorialCompleted(false)}
+                    >
+                      <HeroIcons.BoltIcon className="h-6 w-6 shrink-0 text-amber-200" aria-hidden="true" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-semibold">New here?</span>
+                        <span className="mt-1 block text-xs text-white/54">Take the quick tour.</span>
+                      </span>
+                      <HeroIcons.ChevronRightIcon className="h-5 w-5 shrink-0 text-white/45" aria-hidden="true" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="hidden p-4 md:block md:p-6">
                   <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
                     <div>
                       <p className="arena-kicker">Your Cases</p>
@@ -1375,6 +2275,26 @@ export default function DashboardHub({
                     </span>
                   </div>
 
+                  <div className="mt-5 inline-grid grid-cols-2 gap-1 rounded-xl border border-white/[0.055] bg-white/[0.025] p-1">
+                    {[
+                      { value: "ongoing", label: "Ongoing", count: ongoingCases.length },
+                      { value: "finished", label: "Finished", count: finishedCases.length },
+                    ].map((tab) => (
+                      <button
+                        key={`desktop-case-tab-${tab.value}`}
+                        type="button"
+                        className={`rounded-lg px-4 py-2 text-xs font-semibold uppercase tracking-[0.1em] transition ${
+                          caseArchiveTab === tab.value
+                            ? "bg-amber-200/[0.09] text-amber-100 shadow-[inset_0_0_0_1px_rgba(251,191,36,0.08)]"
+                            : "text-white/42 hover:bg-white/[0.035] hover:text-white/74"
+                        }`}
+                        onClick={() => setCaseArchiveTab(tab.value)}
+                      >
+                        {tab.label} <span className="text-white/45">{tab.count}</span>
+                      </button>
+                    ))}
+                  </div>
+
                   <div className="mt-5 grid gap-3 lg:grid-cols-2">
                     {initialCases.length === 0 ? (
                       <div className="arena-surface-soft border-dashed p-8 text-center lg:col-span-2">
@@ -1383,8 +2303,19 @@ export default function DashboardHub({
                           Start with the recommended case and the client interview will open.
                         </p>
                       </div>
+                    ) : selectedArchiveCases.length === 0 ? (
+                      <div className="arena-surface-soft border-dashed p-8 text-center lg:col-span-2">
+                        <p className="text-lg font-semibold text-white">
+                          No {caseArchiveTab} cases yet
+                        </p>
+                        <p className="mt-2 text-sm text-white/62">
+                          {caseArchiveTab === "finished"
+                            ? "Completed rulings will appear here after verdict."
+                            : "Active intake and courtroom matters will appear here."}
+                        </p>
+                      </div>
                     ) : (
-                      initialCases.slice(0, 6).map((item) => {
+                      selectedArchiveCases.slice(0, 6).map((item) => {
                         const caseProgress = getCaseProgress(item);
                         const caseSeverity = statusSeverity[item.status] || "neutral";
 
@@ -1521,6 +2452,62 @@ export default function DashboardHub({
             </div>
           </div>
         </section>
+        <nav
+          className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-black/86 px-2 pb-[calc(env(safe-area-inset-bottom)+0.45rem)] pt-2 shadow-[0_-18px_50px_rgba(0,0,0,0.45)] backdrop-blur-xl xl:hidden"
+          aria-label="Mobile dashboard navigation"
+        >
+          <div className={`mx-auto grid max-w-md gap-1 ${isAdmin ? "grid-cols-5" : "grid-cols-4"}`}>
+            {[
+              { href: "#activation-home", label: "Home", icon: HeroIcons.HomeIcon, active: true },
+              {
+                href: "#recent-cases",
+                label: "Cases",
+                icon: HeroIcons.BriefcaseIcon,
+                active: false,
+              },
+              {
+                href: "#rankings",
+                label: "Ranks",
+                icon: HeroIcons.TrophyIcon,
+                active: false,
+              },
+              {
+                href: `/dashboard/players/${userId}`,
+                label: "Profile",
+                icon: HeroIcons.UserIcon,
+                active: false,
+              },
+              ...(isAdmin
+                ? [
+                    {
+                      href: "/dashboard/admin",
+                      label: "Admin",
+                      icon: HeroIcons.WrenchScrewdriverIcon,
+                      active: false,
+                    },
+                  ]
+                : []),
+            ].map((item) => {
+              const Icon = item.icon;
+              const NavLink = item.href.startsWith("/") ? Link : "a";
+
+              return (
+                <NavLink
+                  key={`${item.label}-${item.href}`}
+                  href={item.href}
+                  className={`flex min-h-[3.6rem] flex-col items-center justify-center gap-1 rounded-xl px-1 text-[0.64rem] font-semibold uppercase tracking-[0.08em] transition ${
+                    item.active
+                      ? "text-amber-200"
+                      : "text-white/62 hover:bg-white/[0.04] hover:text-white"
+                  }`}
+                >
+                  <Icon className="h-5 w-5" aria-hidden="true" />
+                  <span className="max-w-full truncate">{item.label}</span>
+                </NavLink>
+              );
+            })}
+          </div>
+        </nav>
         <DashboardOnboardingOverlay
           isOpen={!dashboardTutorialCompleted}
           onComplete={() => setDashboardTutorialCompleted(true)}
@@ -1755,15 +2742,27 @@ export default function DashboardHub({
                   data-onboarding-target="case-categories"
                   className="mt-5 grid grid-cols-2 gap-2 lg:flex lg:flex-wrap"
                 >
+                  <button
+                    type="button"
+                    className={`badge badge-lg h-auto min-h-10 w-full origin-center cursor-pointer whitespace-normal border px-3 py-3 text-center leading-tight transition lg:w-auto ${
+                      !selectedCategory
+                        ? "arena-pill arena-pill-selected hover:scale-[1.03]"
+                        : "arena-pill hover:scale-[1.01]"
+                    }`}
+                    onClick={() => selectCaseCategory("")}
+                  >
+                    All
+                  </button>
                   {categories.map((category) => (
                     <button
                       key={category.slug}
+                      type="button"
                       className={`badge badge-lg h-auto min-h-10 w-full origin-center cursor-pointer whitespace-normal border px-3 py-3 text-center leading-tight transition lg:w-auto ${
                         selectedCategory === category.slug
                           ? "arena-pill arena-pill-selected hover:scale-[1.03]"
                           : "arena-pill hover:scale-[1.01]"
                       }`}
-                      onClick={() => setSelectedCategory(category.slug)}
+                      onClick={() => selectCaseCategory(category.slug)}
                     >
                       {category.title}
                     </button>

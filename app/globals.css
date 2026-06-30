@@ -3,18 +3,18 @@
 @tailwind utilities;
 
 :root {
-  --arena-bg: #060b12;
-  --arena-bg-soft: #0b1624;
-  --arena-panel: #0d1d2e;
-  --arena-panel-alt: #12263b;
-  --arena-line: rgba(118, 154, 192, 0.26);
-  --arena-line-strong: rgba(137, 176, 216, 0.5);
-  --arena-text: #e4ecf6;
-  --arena-text-muted: #9baec3;
+  --arena-bg: #050505;
+  --arena-bg-soft: #0a0a0a;
+  --arena-panel: #101010;
+  --arena-panel-alt: #151515;
+  --arena-line: rgba(255, 255, 255, 0.12);
+  --arena-line-strong: rgba(255, 255, 255, 0.2);
+  --arena-text: #f4f4f0;
+  --arena-text-muted: rgba(255, 255, 255, 0.58);
   --arena-caution: #f2b740;
   --arena-critical: #f26d6d;
   --arena-favorable: #55d5a0;
-  --arena-accent: #6fb7ff;
+  --arena-accent: #fbbf24;
   --arena-ink: #02060b;
   --arena-scroll-track: rgba(255, 255, 255, 0.05);
   --arena-scroll-thumb: rgba(255, 255, 255, 0.22);
@@ -54,11 +54,11 @@ progress::-webkit-progress-value {
   .arena-shell {
     color: var(--arena-text);
     background:
-      linear-gradient(180deg, rgba(5, 9, 15, 0.92), rgba(4, 8, 14, 0.96)),
+      linear-gradient(180deg, rgba(5, 5, 5, 0.96), rgba(2, 2, 2, 0.98)),
       repeating-linear-gradient(
         90deg,
-        rgba(92, 122, 155, 0.08) 0,
-        rgba(92, 122, 155, 0.08) 1px,
+        rgba(255, 255, 255, 0.035) 0,
+        rgba(255, 255, 255, 0.035) 1px,
         transparent 1px,
         transparent 48px
       );
@@ -82,9 +82,10 @@ progress::-webkit-progress-value {
 
   .arena-landing {
     background:
-      radial-gradient(circle at 18% 16%, rgba(255, 255, 255, 0.08), transparent 28%),
-      radial-gradient(circle at 82% 12%, rgba(255, 255, 255, 0.05), transparent 24%),
-      linear-gradient(180deg, #050505 0%, #020202 34%, #070707 100%);
+      radial-gradient(circle at 18% 14%, rgba(251, 191, 36, 0.13), transparent 30%),
+      radial-gradient(circle at 84% 10%, rgba(85, 213, 160, 0.1), transparent 26%),
+      radial-gradient(circle at 48% 0%, rgba(255, 255, 255, 0.065), transparent 32%),
+      linear-gradient(180deg, #050505 0%, #020202 38%, #060606 100%);
   }
 
   .arena-column-bg {
@@ -100,9 +101,9 @@ progress::-webkit-progress-value {
     border-radius: inherit;
     opacity: 0.4;
     background:
-      linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.025) 10%, transparent 20%),
+      linear-gradient(90deg, transparent 0%, rgba(251, 191, 36, 0.035) 10%, transparent 20%),
       linear-gradient(90deg, transparent 28%, rgba(255, 255, 255, 0.025) 38%, transparent 48%),
-      linear-gradient(90deg, transparent 56%, rgba(255, 255, 255, 0.025) 66%, transparent 76%),
+      linear-gradient(90deg, transparent 56%, rgba(85, 213, 160, 0.026) 66%, transparent 76%),
       linear-gradient(90deg, transparent 82%, rgba(255, 255, 255, 0.025) 92%, transparent 100%);
     filter: blur(1px);
   }
@@ -114,7 +115,8 @@ progress::-webkit-progress-value {
     z-index: -1;
     border-radius: inherit;
     background:
-      radial-gradient(circle at 50% 8%, rgba(255, 255, 255, 0.08), transparent 24%),
+      radial-gradient(circle at 50% 8%, rgba(251, 191, 36, 0.09), transparent 24%),
+      radial-gradient(circle at 82% 12%, rgba(85, 213, 160, 0.07), transparent 26%),
       linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 22%),
       linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.62) 100%);
   }
@@ -166,16 +168,16 @@ progress::-webkit-progress-value {
   }
 
   .arena-btn-light {
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(251, 191, 36, 0.38);
     border-radius: 1rem;
-    background: #ffffff;
-    color: #040404;
+    background: #f8d979;
+    color: #050505;
     font-weight: 600;
     text-transform: none;
   }
 
   .arena-btn-light:hover {
-    background: rgba(255, 255, 255, 0.92);
+    background: #ffe8a3;
   }
 
   .arena-btn-dark {
@@ -231,18 +233,22 @@ progress::-webkit-progress-value {
   }
 
   .arena-console {
-    border: 1px solid var(--arena-line);
+    border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 0.9rem;
-    background: linear-gradient(165deg, rgba(13, 29, 46, 0.96), rgba(7, 15, 24, 0.98));
+    background:
+      linear-gradient(180deg, rgba(16, 16, 16, 0.96), rgba(5, 5, 5, 0.94)),
+      radial-gradient(circle at top, rgba(255, 255, 255, 0.05), transparent 44%);
     box-shadow:
       inset 0 0 0 1px rgba(255, 255, 255, 0.02),
       0 20px 40px rgba(1, 4, 8, 0.46);
   }
 
   .arena-console-soft {
-    border: 1px solid rgba(122, 160, 201, 0.18);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 0.85rem;
-    background: linear-gradient(180deg, rgba(16, 31, 48, 0.84), rgba(10, 22, 36, 0.82));
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.02)),
+      rgba(0, 0, 0, 0.28);
   }
 
   .arena-headline {
@@ -250,14 +256,14 @@ progress::-webkit-progress-value {
     font-weight: 700;
     letter-spacing: -0.012em;
     line-height: 0.98;
-    color: #f2f7ff;
+    color: #f4f4f0;
   }
 
   .arena-case-title {
     font-family: var(--font-arena-case), Georgia, serif;
     font-weight: 600;
     letter-spacing: 0.004em;
-    color: #f2f7ff;
+    color: #f4f4f0;
   }
 
   .arena-kicker {
@@ -268,11 +274,12 @@ progress::-webkit-progress-value {
   }
 
   .arena-metric {
-    border: 1px solid rgba(122, 159, 197, 0.26);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 0.75rem;
     padding: 0.9rem;
     background:
-      linear-gradient(180deg, rgba(16, 35, 55, 0.72), rgba(9, 19, 33, 0.82));
+      linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.015)),
+      rgba(0, 0, 0, 0.2);
   }
 
   .arena-progress-track {
@@ -280,27 +287,27 @@ progress::-webkit-progress-value {
     width: 100%;
     height: 0.45rem;
     border-radius: 999px;
-    background: rgba(26, 43, 62, 0.95);
+    background: rgba(255, 255, 255, 0.1);
     overflow: hidden;
   }
 
   .arena-progress-fill {
     height: 100%;
     border-radius: 999px;
-    background: linear-gradient(90deg, #5ea7ef 0%, #8cc8ff 100%);
+    background: linear-gradient(90deg, #34d399 0%, #fbbf24 100%);
     transition: width 320ms ease;
   }
 
   .arena-status {
     border: 1px solid var(--arena-line);
-    color: #d8e4f4;
-    background: rgba(20, 39, 61, 0.65);
+    color: rgba(255, 255, 255, 0.8);
+    background: rgba(255, 255, 255, 0.045);
   }
 
   .arena-status-neutral {
     border-color: var(--arena-line);
-    color: #d8e4f4;
-    background: rgba(20, 39, 61, 0.65);
+    color: rgba(255, 255, 255, 0.8);
+    background: rgba(255, 255, 255, 0.045);
   }
 
   .arena-status-caution {
@@ -353,13 +360,13 @@ progress::-webkit-progress-value {
   }
 
   .arena-transcript-player {
-    border: 1px solid rgba(111, 183, 255, 0.4);
-    background: linear-gradient(180deg, rgba(23, 50, 77, 0.75), rgba(14, 33, 53, 0.87));
+    border: 1px solid rgba(125, 211, 252, 0.28);
+    background: linear-gradient(180deg, rgba(14, 116, 144, 0.18), rgba(2, 6, 23, 0.48));
   }
 
   .arena-transcript-opponent {
-    border: 1px solid rgba(242, 183, 64, 0.3);
-    background: linear-gradient(180deg, rgba(53, 44, 21, 0.48), rgba(37, 31, 16, 0.58));
+    border: 1px solid rgba(251, 191, 36, 0.24);
+    background: linear-gradient(180deg, rgba(120, 53, 15, 0.22), rgba(24, 12, 4, 0.52));
   }
 
   .arena-scanline {
@@ -425,6 +432,28 @@ progress::-webkit-progress-value {
       height 80ms ease,
       opacity 80ms ease,
       transform 80ms ease;
+  }
+
+  .arena-presenting-gavel {
+    position: relative;
+    display: inline-flex;
+    width: 2rem;
+    height: 2rem;
+    color: currentColor;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .arena-presenting-gavel-icon {
+    width: 2rem;
+    height: 2rem;
+    overflow: visible;
+  }
+
+  .arena-presenting-gavel-swing {
+    transform-box: fill-box;
+    transform-origin: 76% 76%;
+    animation: arena-gavel-strike 1050ms ease-in-out infinite;
   }
 
   .help-prose {
@@ -593,6 +622,19 @@ progress::-webkit-progress-value {
   }
 }
 
+@keyframes arena-gavel-strike {
+  0%,
+  100% {
+    transform: rotate(-22deg) translateY(0);
+  }
+  42% {
+    transform: rotate(8deg) translateY(0.12rem);
+  }
+  58% {
+    transform: rotate(-18deg) translateY(-0.03rem);
+  }
+}
+
 @keyframes arena-orbit {
   0% {
     transform: rotate(0deg) translateX(2.7rem) rotate(0deg);
@@ -618,6 +660,7 @@ progress::-webkit-progress-value {
   .arena-round-transition,
   .arena-loading-bar,
   .arena-typing-dot,
+  .arena-presenting-gavel-swing,
   .motion-safe\:animate-\[arena-orbit_2\.8s_linear_infinite\],
   .motion-safe\:animate-\[arena-icon-drift_2\.4s_ease-in-out_infinite\] {
     animation: none !important;

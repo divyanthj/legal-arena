@@ -94,7 +94,9 @@ export default function ChallengeButton({
       toast.success("Challenge sent.");
       setOpen(false);
       startNavigationLoading("Opening challenge");
-      router.push(`/dashboard/challenges/${challenge.slug || challenge.id}`);
+      const challengeHref = `/dashboard/challenges/${challenge.slug || challenge.id}`;
+      router.prefetch(challengeHref);
+      router.push(challengeHref);
     } catch (error) {
       toast.error(error?.message || "Could not create challenge.");
     } finally {

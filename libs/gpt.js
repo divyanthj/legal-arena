@@ -14,6 +14,20 @@ const buildResponsesStructuredFormat = () => ({
   type: "json_object",
 });
 
+export const getPromptCacheHitRate = ({
+  inputTokens = 0,
+  cachedInputTokens = 0,
+} = {}) => {
+  const input = Number(inputTokens || 0);
+  const cached = Number(cachedInputTokens || 0);
+
+  if (input <= 0 || cached <= 0) {
+    return 0;
+  }
+
+  return Number(Math.min(1, cached / input).toFixed(4));
+};
+
 const extractMessageText = (value) => {
   if (typeof value === "string") {
     return value;
@@ -327,6 +341,7 @@ export const requestStructuredCompletion = async ({
   retryAttempts = 0,
   usageLabel = "",
   onUsage,
+  promptCacheKey = "",
 }) => {
   if (!process.env.OPENAI_API_KEY) {
     if (throwOnError) {
@@ -352,6 +367,9 @@ export const requestStructuredCompletion = async ({
             format: buildResponsesStructuredFormat(),
           },
           user: userId,
+          ...(promptCacheKey
+            ? { prompt_cache_key: String(promptCacheKey).trim().slice(0, 64) }
+            : {}),
         }
       : {
           model,
@@ -417,6 +435,7 @@ export const requestStructuredCompletion = async ({
       const parsed = extractJsonObject(content);
 
       if (usageLabel) {
+        const cacheHitRate = getPromptCacheHitRate(usage);
         const usagePayload = {
           label: usageLabel,
           attempt: attempt + 1,
@@ -425,6 +444,8 @@ export const requestStructuredCompletion = async ({
           model,
           api: useResponsesApi ? "responses" : "chat_completions",
           parsed: Boolean(parsed),
+          promptCacheKey: promptCacheKey ? String(promptCacheKey).trim().slice(0, 64) : "",
+          cacheHitRate,
           ...usage,
         };
 

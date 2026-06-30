@@ -16,6 +16,7 @@ export const normalizeClientMemoryText = (clientMemory) => {
   }
 
   return [
+    clientMemory.clientStory,
     clientMemory.clientNarrative,
     clientMemory.voice,
     clientMemory.posture,
@@ -41,6 +42,7 @@ export const generateClientMemoryExcerpt = async ({
   partyName = "",
   playerSide = "client",
   userId,
+  promptCacheKey = "",
   onUsage,
 } = {}) => {
   const clientStory = normalizeClientMemoryText(clientMemory);
@@ -57,6 +59,7 @@ export const generateClientMemoryExcerpt = async ({
       maxTokens: 360,
       retryAttempts: 1,
       usageLabel: "intake.clientMemoryExcerpt",
+      promptCacheKey,
       onUsage,
       systemPrompt:
         "You write active-intake hero excerpts from a private client memory story. Write only a concise first-person excerpt in the interview subject's voice. Use the client's subjective truth, not a neutral case summary. Do not add objective facts, documents, witnesses, outcomes, legal advice, headings, labels, or JSON-looking prose. Avoid generic setup lines like 'I need to walk through this' and choose concrete story content instead. Output valid JSON only.",

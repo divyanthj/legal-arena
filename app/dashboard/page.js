@@ -4,10 +4,7 @@ import { authOptions } from "@/libs/next-auth";
 import DashboardHub from "@/components/legal-arena/DashboardHub";
 import { listDashboardDataForUser } from "@/libs/game/store";
 import { listChallengesForUser } from "@/libs/game/challenges";
-import {
-  listCategoryLeaderboard,
-  listOverallLeaderboard,
-} from "@/libs/game/progression";
+import { listDashboardLeaderboards } from "@/libs/game/progression";
 import { LEGAL_CASE_CATEGORIES } from "@/libs/game/categories";
 import { getSoloGameplayAccessForSession, isAdminEmail } from "@/libs/admin";
 import { toClientJSON } from "@/libs/serialize";
@@ -51,23 +48,17 @@ export default async function Dashboard() {
     action: "create",
   });
 
-  const [dashboardData, challenges, overallLeaderboard, categoryLeaderboards] = await Promise.all([
+  const [dashboardData, challenges, leaderboards] = await Promise.all([
     listDashboardDataForUser(session.user.id, session.user),
     withOptionalTimeout(listChallengesForUser(session.user.id), [], "challenges"),
     withOptionalTimeout(
-      listOverallLeaderboard({ limit: 8, includeUserId: session.user.id }),
-      [],
-      "overall leaderboard"
-    ),
-    withOptionalTimeout(
-      Promise.all(
-        LEGAL_CASE_CATEGORIES.map(async (category) => [
-          category.slug,
-          await listCategoryLeaderboard(category.slug),
-        ])
-      ),
-      [],
-      "category leaderboards"
+      listDashboardLeaderboards({
+        categorySlugs: LEGAL_CASE_CATEGORIES.map((category) => category.slug),
+        overallLimit: 8,
+        includeUserId: session.user.id,
+      }),
+      { overallLeaderboard: [], categoryLeaderboards: {} },
+      "leaderboards"
     ),
   ]);
 
@@ -80,8 +71,8 @@ export default async function Dashboard() {
       progression={toClientJSON(dashboardData.progression)}
       dashboardEncouragementNote={dashboardData.dashboardEncouragementNote}
       challenges={toClientJSON(challenges)}
-      overallLeaderboard={toClientJSON(overallLeaderboard)}
-      categoryLeaderboards={toClientJSON(Object.fromEntries(categoryLeaderboards))}
+      overallLeaderboard={toClientJSON(leaderboards.overallLeaderboard)}
+      categoryLeaderboards={toClientJSON(leaderboards.categoryLeaderboards)}
       isAdmin={isAdminEmail(session.user?.email)}
       userId={session.user?.id || ""}
       userName={session.user?.name || session.user?.email}
