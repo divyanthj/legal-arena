@@ -1223,7 +1223,8 @@ export default function CaseWorkspace({
     apiConfig.requirePlaintiffOpening &&
       isDefendantSide &&
       caseSession.score.roundsCompleted === 0 &&
-      !viewerSubmittedCurrentRound
+      !viewerSubmittedCurrentRound &&
+      !opponentSubmittedCurrentRound
   );
   const lastCourtroomEntry =
     normalizedCourtroomTranscript[normalizedCourtroomTranscript.length - 1] || null;
@@ -1261,6 +1262,12 @@ export default function CaseWorkspace({
   const playerCounselLabel = String(caseSession.playerCounselName || "").trim() || "You";
   const opponentCounselLabel =
     String(caseSession.opponentCounselName || "").trim() || "Opposing lawyer";
+  const courtroomWaitingMessage = waitingForPlaintiffOpening
+    ? `${opponentPartyName} has the opening statement. Waiting for ${opponentCounselLabel} to file.`
+    : `${opponentPartyName} is preparing a response...`;
+  const courtroomWaitingLoadingLabel = waitingForPlaintiffOpening
+    ? `Waiting for ${opponentCounselLabel} to file the opening statement`
+    : `${opponentPartyName} is preparing a response`;
   const sideBadgeLabel = `Representing ${playerPartyName}`;
   const sideContextLabel = `${playerRoleLabel} side`;
   const playerRepresentationLabel = `You represent ${playerPartyName} (${playerRoleLabel}).`;
@@ -2989,10 +2996,12 @@ export default function CaseWorkspace({
 
                 {showCourtroomWaitingCard ? (
                   <section className="arena-surface p-4">
-                    <p className="font-semibold text-white">{opponentPartyName} is preparing a response...</p>
-                    <TypingIndicator speaker={opponentPartyName} />
+                    <p className="font-semibold text-white">{courtroomWaitingMessage}</p>
+                    <TypingIndicator
+                      speaker={waitingForPlaintiffOpening ? opponentCounselLabel : opponentPartyName}
+                    />
                     <div className="mt-4">
-                      <LoadingBar label={`${opponentPartyName} is preparing a response`} />
+                      <LoadingBar label={courtroomWaitingLoadingLabel} />
                     </div>
                   </section>
                 ) : null}
@@ -3238,12 +3247,12 @@ export default function CaseWorkspace({
 
                 {showCourtroomWaitingCard ? (
                   <section className="arena-surface p-4">
-                    <p className="font-semibold text-white">
-                      {opponentPartyName} is preparing a response...
-                    </p>
-                    <TypingIndicator speaker={opponentPartyName} />
+                    <p className="font-semibold text-white">{courtroomWaitingMessage}</p>
+                    <TypingIndicator
+                      speaker={waitingForPlaintiffOpening ? opponentCounselLabel : opponentPartyName}
+                    />
                     <div className="mt-4">
-                      <LoadingBar label={`${opponentPartyName} is preparing a response`} />
+                      <LoadingBar label={courtroomWaitingLoadingLabel} />
                     </div>
                   </section>
                 ) : null}
