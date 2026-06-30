@@ -1259,7 +1259,6 @@ export default function CaseWorkspace({
   const opponentRoleLabel =
     caseSession.playerSide === "opponent" ? "Plaintiff" : "Defendant";
   const showPvpCounselNames = analyticsMode === "pvp";
-  const playerCounselLabel = String(caseSession.playerCounselName || "").trim() || "You";
   const opponentCounselLabel =
     String(caseSession.opponentCounselName || "").trim() || "Opposing lawyer";
   const courtroomWaitingMessage = waitingForPlaintiffOpening
@@ -2896,12 +2895,12 @@ export default function CaseWorkspace({
                         />
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center justify-between gap-3">
-                            <p className="truncate text-lg font-semibold text-white">You</p>
+                            <p className="truncate text-lg font-semibold text-white">{playerPartyName}</p>
                             <p className="text-2xl font-bold text-sky-300">{Math.round(playerPressurePct)}%</p>
                           </div>
                           {showPvpCounselNames ? (
                             <p className="mt-1 truncate text-sm font-semibold text-sky-100/70">
-                              Represented by {playerCounselLabel}
+                              Represented by you
                             </p>
                           ) : null}
                           <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/12">
@@ -3167,14 +3166,16 @@ export default function CaseWorkspace({
                           />
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center justify-between gap-3">
-                              <p className="truncate text-lg font-semibold text-white">You</p>
+                              <p className="truncate text-lg font-semibold text-white">
+                                {playerPartyName}
+                              </p>
                               <p className="text-2xl font-bold text-sky-300">
                                 {Math.round(playerPressurePct)}%
                               </p>
                             </div>
                             {showPvpCounselNames ? (
                               <p className="mt-1 truncate text-sm font-semibold text-sky-100/70">
-                                Represented by {playerCounselLabel}
+                                Represented by you
                               </p>
                             ) : null}
                             <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/12">
