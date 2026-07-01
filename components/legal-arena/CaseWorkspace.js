@@ -1338,14 +1338,11 @@ export default function CaseWorkspace({
   const opponentPressurePct = clampPercent(
     (caseSession.score.opponent / pressureTotal) * 100
   );
-  const opponentClientPortrait = String(caseSession.opponentPortrait?.image || "").trim();
   const opponentCounselPortrait = String(caseSession.opponentImage || "").trim();
   const playerCounselPortrait =
     String(caseSession.playerImage || "").trim() || "/images/profile.jpg";
   const opponentCourtPortrait =
-    (showPvpCounselNames ? opponentCounselPortrait : opponentClientPortrait) ||
-    opponentClientPortrait ||
-    "/images/profile.jpg";
+    (showPvpCounselNames ? opponentCounselPortrait : "") || "/images/profile.jpg";
   const playerCourtPortrait = playerCounselPortrait;
 
   const courtroomStageLabel = useMemo(() => {

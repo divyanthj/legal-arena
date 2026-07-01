@@ -14,7 +14,7 @@ export const maxDuration = 60;
 
 const OPENAI_IMAGE_GENERATION_URL = "https://api.openai.com/v1/images/generations";
 const IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL?.trim() || "gpt-image-1.5";
-const PORTRAIT_PROMPT_VERSION = 3;
+const PORTRAIT_PROMPT_VERSION = 4;
 const PORTRAIT_WIDTH = 640;
 const PORTRAIT_HEIGHT = 720;
 
@@ -193,10 +193,11 @@ const buildGenderPresentationGuidance = ({ caseSession, subjectName, isOrganizat
 
 const buildClientPortraitPrompt = (caseSession, target = "client") => {
   const { name, isOrganization } = getPortraitSubject(caseSession, target);
+  const isOpponentCounsel = target === "opponent";
   const genderGuidance = buildGenderPresentationGuidance({
     caseSession,
     subjectName: name,
-    isOrganization,
+    isOrganization: isOpponentCounsel ? false : isOrganization,
   });
   const context = [
     caseSession.practiceArea,
@@ -206,6 +207,19 @@ const buildClientPortraitPrompt = (caseSession, target = "client") => {
   ]
     .filter(Boolean)
     .join(" | ");
+
+  if (isOpponentCounsel) {
+    return [
+      "Create a photorealistic portrait for a fictional legal game of opposing counsel in a courtroom dispute.",
+      `Opposing counsel represents: ${name}.`,
+      `Case context: ${context || "civil legal dispute"}.`,
+      "Depict an adult lawyer, not the party or client. The subject should look like courtroom counsel: professional suit jacket, dress shirt, and tie or similarly formal legal attire.",
+      "Use a polished legal dashboard portrait style: realistic face, composed professional expression, soft office or courthouse lighting, shoulders and upper torso visible.",
+      "Compose this as a vertical rectangular case-card portrait, not a circular avatar. Do not place the person inside a circle, white badge, round mask, profile bubble, or sticker frame.",
+      "Frame the subject as a counsel headshot: full head, face, neck, and upper shoulders visible with a clean legal-office or courthouse background.",
+      "Avoid text, logos, badges, robes, gavels, courtroom props, caricature, illustration, celebrity resemblance, and dramatic fashion styling.",
+    ].join(" ");
+  }
 
   return [
     `Create a photorealistic portrait for a fictional legal game ${target === "opponent" ? "opposing party" : "client"} seated across a table from their lawyer in a quiet lawyer's office.`,

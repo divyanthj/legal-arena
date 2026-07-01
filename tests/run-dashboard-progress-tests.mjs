@@ -26,5 +26,20 @@ assert.doesNotMatch(
   /canResumeLastCase \? lastCaseProgress\.percent : 12/,
   "Startable library cards should not show 12% progress before a case exists."
 );
+assert.match(
+  dashboardHubSource,
+  /const featuredLibraryCase = findResumableCaseForTemplate\(\s*ongoingCases,\s*featuredLibraryTemplate\s*\);/,
+  "The selected case library card should resolve progress from the matching case session."
+);
+assert.match(
+  dashboardHubSource,
+  /router\.push\(featuredLibraryCaseHref\);/,
+  "Continuing from the selected case library card should open that matching case session."
+);
+assert.doesNotMatch(
+  dashboardHubSource,
+  /canResumeLastCase \? "Intake Progress" : "Ready to start"/,
+  "Case library cards should not use the global last-case resume state."
+);
 
 console.log("Dashboard progress tests passed");

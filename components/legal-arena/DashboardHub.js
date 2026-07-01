@@ -627,6 +627,57 @@ const getCaseProgress = (caseSession = null) => {
   return { label: "Client interview", percent: 42, nextStep: "Build your fact sheet" };
 };
 
+const getComparableId = (value) => {
+  if (!value) {
+    return "";
+  }
+
+  if (typeof value === "object") {
+    return String(value.id || value._id || value.slug || "").trim();
+  }
+
+  return String(value).trim();
+};
+
+const getCaseTemplateIds = (caseSession = {}) =>
+  [
+    getComparableId(caseSession.caseTemplateId),
+    getComparableId(caseSession.template?.id),
+    getComparableId(caseSession.template?._id),
+    getComparableId(caseSession.scenario?.id),
+  ].filter(Boolean);
+
+const getCaseTemplateSlugs = (caseSession = {}) =>
+  [
+    caseSession.templateSlug,
+    caseSession.scenarioId,
+    caseSession.template?.slug,
+    caseSession.scenario?.slug,
+  ]
+    .map((value) => getComparableId(value))
+    .filter(Boolean);
+
+const caseMatchesTemplate = (caseSession = {}, template = null) => {
+  if (!caseSession || !template) {
+    return false;
+  }
+
+  const templateId = getComparableId(template.id || template._id);
+  const templateSlug = getComparableId(template.slug);
+
+  return (
+    (templateId && getCaseTemplateIds(caseSession).includes(templateId)) ||
+    (templateSlug && getCaseTemplateSlugs(caseSession).includes(templateSlug))
+  );
+};
+
+const findResumableCaseForTemplate = (caseSessions = [], template = null) =>
+  caseSessions.find(
+    (caseSession) =>
+      (caseSession.status === "interview" || caseSession.status === "courtroom") &&
+      caseMatchesTemplate(caseSession, template)
+  ) || null;
+
 const onboardingSteps = [
   {
     target: "quick-start-case",
@@ -1185,6 +1236,8 @@ export default function DashboardHub({
     visibleTemplates.length > 0
       ? visibleTemplates[Math.min(activeTemplateIndex, visibleTemplates.length - 1)]
       : null;
+  const isNewUser = (progression.completedCases || 0) === 0;
+  const shouldSellLifetimeAccess = !hasArenaAccess;
   const searchedLibraryTemplates = useMemo(() => {
     const query = normalizeSearchText(caseLibrarySearch);
 
@@ -1221,6 +1274,16 @@ export default function DashboardHub({
   const moreLibraryTemplates = searchedLibraryTemplates
     .filter((template) => template.id !== featuredLibraryTemplate?.id)
     .slice(0, 3);
+  const featuredLibraryCase = findResumableCaseForTemplate(
+    ongoingCases,
+    featuredLibraryTemplate
+  );
+  const canResumeFeaturedLibraryCase =
+    Boolean(featuredLibraryCase) && !shouldSellLifetimeAccess;
+  const featuredLibraryCaseProgress = getCaseProgress(featuredLibraryCase);
+  const featuredLibraryCaseHref = featuredLibraryCase
+    ? `/dashboard/cases/${featuredLibraryCase.slug || featuredLibraryCase.id}`
+    : "";
   const firstUnlockedTemplate =
     visibleTemplates.find((template) => template.unlocked) ||
     templates.find((template) => template.unlocked) ||
@@ -1285,8 +1348,6 @@ export default function DashboardHub({
     }
   }, [activeTemplateIndex, visibleTemplates.length]);
 
-  const isNewUser = (progression.completedCases || 0) === 0;
-  const shouldSellLifetimeAccess = !hasArenaAccess;
   const lastCaseProgress = getCaseProgress(lastActiveCase);
   const desktopHeroCase = ongoingCases[0] || null;
   const desktopHeroCaseProgress = getCaseProgress(desktopHeroCase);
@@ -2162,17 +2223,23 @@ export default function DashboardHub({
                           </div>
                           <div className="flex items-center gap-3 border-t border-white/10 px-4 py-3">
                             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-emerald-300/30 bg-emerald-300/10 text-xs font-semibold text-emerald-200">
-                              {lastCaseProgress.percent}%
+                              {canResumeFeaturedLibraryCase
+                                ? `${featuredLibraryCaseProgress.percent}%`
+                                : "GO"}
                             </div>
                             <div className="min-w-0 flex-1">
                               <p className="text-xs font-semibold text-white/58">
-                                {canResumeLastCase ? "Intake Progress" : "Ready to start"}
+                                {canResumeFeaturedLibraryCase ? "Intake Progress" : "Ready to start"}
                               </p>
                               <div className="mt-2 arena-progress-track">
                                 <div
                                   className="arena-progress-fill"
                                   style={{
-                                    width: `${canResumeLastCase ? lastCaseProgress.percent : 0}%`,
+                                    width: `${
+                                      canResumeFeaturedLibraryCase
+                                        ? featuredLibraryCaseProgress.percent
+                                        : 0
+                                    }%`,
                                   }}
                                 />
                               </div>
@@ -2191,6 +2258,12 @@ export default function DashboardHub({
                                   return;
                                 }
 
+                                if (canResumeFeaturedLibraryCase && featuredLibraryCaseHref) {
+                                  startNavigationLoading("Opening the matter", { failsafeMs: 60000 });
+                                  router.push(featuredLibraryCaseHref);
+                                  return;
+                                }
+
                                 handleCreateCase(featuredLibraryTemplate.id);
                               }}
                               disabled={
@@ -2199,7 +2272,11 @@ export default function DashboardHub({
                               }
                             >
                               <span>
-                                {canResumeLastCase ? "Continue" : shouldSellLifetimeAccess ? "Unlock" : "Enter"}
+                                {shouldSellLifetimeAccess
+                                  ? "Unlock"
+                                  : canResumeFeaturedLibraryCase
+                                  ? "Continue"
+                                  : "Enter"}
                               </span>
                               <HeroIcons.ChevronRightIcon className="h-4 w-4" aria-hidden="true" />
                             </button>
@@ -2438,17 +2515,23 @@ export default function DashboardHub({
                           <div className="flex flex-col gap-3 border-t border-white/10 px-5 py-4 sm:flex-row sm:items-center">
                             <div className="flex min-w-0 flex-1 items-center gap-3">
                               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-emerald-300/30 bg-emerald-300/10 text-xs font-semibold text-emerald-200">
-                                {canResumeLastCase ? `${lastCaseProgress.percent}%` : "GO"}
+                                {canResumeFeaturedLibraryCase
+                                  ? `${featuredLibraryCaseProgress.percent}%`
+                                  : "GO"}
                               </div>
                               <div className="min-w-0 flex-1">
                                 <p className="text-xs font-semibold text-white/58">
-                                  {canResumeLastCase ? "Intake Progress" : "Ready to start"}
+                                  {canResumeFeaturedLibraryCase ? "Intake Progress" : "Ready to start"}
                                 </p>
                                 <div className="mt-2 arena-progress-track">
                                   <div
                                     className="arena-progress-fill"
                                     style={{
-                                      width: `${canResumeLastCase ? lastCaseProgress.percent : 0}%`,
+                                      width: `${
+                                        canResumeFeaturedLibraryCase
+                                          ? featuredLibraryCaseProgress.percent
+                                          : 0
+                                      }%`,
                                     }}
                                   />
                                 </div>
@@ -2463,6 +2546,12 @@ export default function DashboardHub({
                                   return;
                                 }
 
+                                if (canResumeFeaturedLibraryCase && featuredLibraryCaseHref) {
+                                  startNavigationLoading("Opening the matter", { failsafeMs: 60000 });
+                                  router.push(featuredLibraryCaseHref);
+                                  return;
+                                }
+
                                 handleCreateCase(featuredLibraryTemplate.id);
                               }}
                               disabled={
@@ -2474,10 +2563,10 @@ export default function DashboardHub({
                                 <span className="loading loading-spinner loading-xs" />
                               ) : null}
                               <span>
-                                {canResumeLastCase
-                                  ? "Continue"
-                                  : shouldSellLifetimeAccess
+                                {shouldSellLifetimeAccess
                                   ? "Unlock"
+                                  : canResumeFeaturedLibraryCase
+                                  ? "Continue"
                                   : featuredLibraryTemplate.unlocked
                                   ? "Enter"
                                   : "Locked"}
