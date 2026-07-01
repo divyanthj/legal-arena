@@ -3,6 +3,7 @@ import config from "@/config";
 import connectMongo from "@/libs/mongoose";
 import { authOptions } from "@/libs/next-auth";
 import User from "@/models/User";
+import { cookies } from "next/headers";
 import { getServerSession } from "next-auth/next";
 import { NextResponse } from "next/server";
 
@@ -30,12 +31,15 @@ export async function POST(req) {
 
     const user = await User.findById(session?.user?.id);
     const { redirectUrl } = body;
+    const cookieStore = cookies();
 
     const checkoutURL = await createLemonSqueezyCheckout({
       variantId,
       redirectUrl,
       userId: session?.user?.id,
       email: user?.email,
+      datafastVisitorId: cookieStore.get("datafast_visitor_id")?.value,
+      datafastSessionId: cookieStore.get("datafast_session_id")?.value,
     });
 
     return NextResponse.json({ url: checkoutURL });

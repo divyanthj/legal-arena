@@ -12,6 +12,8 @@ export const createLemonSqueezyCheckout = async ({
   redirectUrl,
   variantId,
   discountCode,
+  datafastVisitorId,
+  datafastSessionId,
 }) => {
   try {
     lemonSqueezySetup({ apiKey: process.env.LEMONSQUEEZY_API_KEY });
@@ -24,6 +26,14 @@ export const createLemonSqueezyCheckout = async ({
       throw new Error("Missing Lemon Squeezy storeId or variantId");
     }
 
+    const customData = Object.fromEntries(
+      Object.entries({
+        userId,
+        datafast_visitor_id: datafastVisitorId,
+        datafast_session_id: datafastSessionId,
+      }).filter(([, value]) => value)
+    );
+
     const newCheckout = {
       productOptions: {
         redirectUrl,
@@ -31,9 +41,7 @@ export const createLemonSqueezyCheckout = async ({
       checkoutData: {
         discountCode,
         email,
-        custom: {
-          userId,
-        },
+        custom: customData,
       },
     };
 
