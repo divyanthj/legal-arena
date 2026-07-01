@@ -74,6 +74,164 @@ const styles = {
 
 export const articles = [
   {
+    slug: "legal-arena-may-june-2026-updates",
+    title: "Legal Arena Updates: PVP, Better Intake, Voice Input, and Courtroom Polish",
+    description:
+      "A roundup of Legal Arena updates from May and June 2026, including PVP, improved client intake, voice input, stronger case files, and courtroom polish.",
+    categories: [
+      categories.find((category) => category.slug === categorySlugs.lawyerGame),
+      categories.find(
+        (category) => category.slug === categorySlugs.courtroomStrategy
+      ),
+    ],
+    author: authors.find((author) => author.slug === authorSlugs.legalArenaTeam),
+    publishedAt: "2026-07-01",
+    image: {
+      src: courtImg,
+      urlRelative: "/images/court.jpg",
+      alt: "A courtroom scene representing new Legal Arena gameplay updates",
+    },
+    content: (
+      <>
+        <Image
+          src={courtImg}
+          alt="A courtroom scene representing new Legal Arena gameplay updates"
+          width={700}
+          height={500}
+          priority={true}
+          className="w-full rounded-[1.75rem] border border-white/10 object-cover"
+          placeholder="blur"
+        />
+        <section>
+          <h2 className={styles.h2}>A bigger, smoother Legal Arena</h2>
+          <p className={styles.p}>
+            Over the last two months, Legal Arena has grown from a focused AI
+            courtroom game into a fuller legal strategy experience. We have been
+            improving the parts players touch most: how cases begin, how facts
+            are organized, how arguments feel in court, and how lawyers challenge
+            each other.
+          </p>
+          <p className={styles.p}>
+            This update roundup covers the biggest player-facing changes from May
+            and June 2026: PVP, better client intake, voice input, stronger case
+            files, profile improvements, and a lot of courtroom polish.
+          </p>
+        </section>
+
+        <section>
+          <h2 className={styles.h2}>PVP and lawyer challenges</h2>
+          <p className={styles.p}>
+            The biggest new addition is PVP. You can now challenge another lawyer
+            and test your argument against a real opponent instead of only facing
+            AI opposing counsel.
+          </p>
+          <ul className={styles.ul}>
+            <li className={styles.li}>
+              Challenge other lawyers and enter player-versus-player cases.
+            </li>
+            <li className={styles.li}>
+              Search for lawyers before sending a challenge.
+            </li>
+            <li className={styles.li}>
+              Get clearer waiting states while the other side prepares.
+            </li>
+            <li className={styles.li}>
+              Receive email notifications when a challenge is accepted.
+            </li>
+            <li className={styles.li}>
+              See more polished verdicts and courtroom flow in PVP matters.
+            </li>
+          </ul>
+        </section>
+
+        <section>
+          <h2 className={styles.h2}>Better client intake and case files</h2>
+          <p className={styles.p}>
+            We also spent a lot of time on the beginning of a case. Client intake
+            now does a better job turning messy facts into something you can use.
+            Case files and fact sheets are tighter, clearer, and less likely to
+            leave important gaps.
+          </p>
+          <ul className={styles.ul}>
+            <li className={styles.li}>
+              Improved freeform client intake for more natural case setup.
+            </li>
+            <li className={styles.li}>
+              Added client memory so conversations can carry better context.
+            </li>
+            <li className={styles.li}>
+              Tightened fact sheets and improved case document coverage.
+            </li>
+            <li className={styles.li}>
+              Improved case generation and fixed missing event/details issues.
+            </li>
+            <li className={styles.li}>
+              Added a success chance metric to make case strength easier to read.
+            </li>
+          </ul>
+        </section>
+
+        <section>
+          <h2 className={styles.h2}>A sharper courtroom</h2>
+          <p className={styles.p}>
+            Courtroom play should now feel more readable and more responsive. We
+            tightened courtroom dialogue, improved judgment and verdict language,
+            fixed missing verdict details, and adjusted difficulty so lower
+            complexity cases are less punishing while still rewarding good legal
+            reasoning.
+          </p>
+          <p className={styles.p}>
+            We also made several courtroom-specific fixes for both solo and PVP
+            cases, so the transition from preparation to argument should feel
+            steadier.
+          </p>
+        </section>
+
+        <section>
+          <h2 className={styles.h2}>Voice input, profiles, and onboarding</h2>
+          <p className={styles.p}>
+            Legal Arena now supports mic input, including a waveform so it is
+            easier to tell when your voice is being captured. We also added a new
+            onboarding flow and loading screens to make the first few minutes
+            clearer for new players.
+          </p>
+          <ul className={styles.ul}>
+            <li className={styles.li}>Use mic input during supported flows.</li>
+            <li className={styles.li}>
+              Upload an image and turn it into a lawyer headshot.
+            </li>
+            <li className={styles.li}>
+              Clear your docket when you want a fresh start.
+            </li>
+            <li className={styles.li}>
+              Explore improved lawyer pages, dashboard screens, and the bar
+              association page.
+            </li>
+          </ul>
+        </section>
+
+        <section>
+          <h2 className={styles.h2}>Visual polish and performance</h2>
+          <p className={styles.p}>
+            Across the app, we shipped multiple visual updates: better mobile
+            layouts, a simpler menu, cleaner buttons, improved landing pages, and
+            a more polished dashboard, intake, courtroom, and lawyer profile
+            experience.
+          </p>
+          <p className={styles.p}>
+            Under the hood, we also improved performance, fixed build issues, and
+            cleaned up a long list of small bugs. The goal is simple: less friction
+            between opening a case and making your best argument.
+          </p>
+          <p className={styles.p}>
+            Legal Arena is a game and training simulator. It is not legal advice
+            and does not replace a lawyer for a real dispute.
+          </p>
+        </section>
+      </>
+    ),
+  },
+  {
     slug: "how-to-build-a-strong-case-in-a-lawyer-game",
     title: "How to Build a Strong Case in a Lawyer Game",
     description:
