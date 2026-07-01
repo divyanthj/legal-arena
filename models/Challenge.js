@@ -181,6 +181,59 @@ const courtroomRoundSchema = mongoose.Schema(
   { _id: false }
 );
 
+const settlementEntrySchema = mongoose.Schema(
+  {
+    role: {
+      type: String,
+      enum: ["player", "client", "opponent", "system"],
+      required: true,
+    },
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    side: {
+      type: String,
+      enum: ["client", "opponent", ""],
+      default: "",
+    },
+    speaker: { type: String, required: true },
+    text: { type: String, required: true },
+    moodSnapshot: {
+      player: { type: Number, default: 0 },
+      opponent: { type: Number, default: 0 },
+    },
+    createdAt: { type: Date, default: Date.now },
+  },
+  { _id: false }
+);
+
+const settlementSchema = mongoose.Schema(
+  {
+    status: {
+      type: String,
+      enum: ["none", "proposed", "active", "rejected", "failed", "settled"],
+      default: "none",
+    },
+    moods: {
+      player: { type: Number, default: 0 },
+      opponent: { type: Number, default: 0 },
+    },
+    transcript: {
+      type: [settlementEntrySchema],
+      default: [],
+    },
+    currentTerms: { type: [String], default: [] },
+    finalTerms: { type: [String], default: [] },
+    outcomeSummary: { type: String, default: "" },
+    failureReason: { type: String, default: "" },
+    startedAt: { type: Date, default: null },
+    completedAt: { type: Date, default: null },
+  },
+  { _id: false }
+);
+
 const challengeSchema = mongoose.Schema(
   {
     initiatorId: {
@@ -203,7 +256,7 @@ const challengeSchema = mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["pending", "active", "courtroom", "verdict", "declined", "expired"],
+      enum: ["pending", "active", "settlement", "settled", "courtroom", "verdict", "declined", "expired"],
       default: "pending",
       index: true,
     },
@@ -238,6 +291,10 @@ const challengeSchema = mongoose.Schema(
     courtroomRounds: {
       type: [courtroomRoundSchema],
       default: [],
+    },
+    settlement: {
+      type: settlementSchema,
+      default: () => ({}),
     },
     verdict: {
       winnerUserId: {

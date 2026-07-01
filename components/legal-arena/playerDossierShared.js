@@ -2,6 +2,8 @@ import { LEGAL_CASE_CATEGORIES } from "@/libs/game/categories";
 
 export const statusLabel = {
   interview: "Intake",
+  settlement: "Settlement",
+  settled: "Settled",
   courtroom: "In Court",
   verdict: "Verdict Ready",
   exited: "Exited",
@@ -9,6 +11,8 @@ export const statusLabel = {
 
 export const statusTone = {
   interview: "arena-status-caution",
+  settlement: "arena-status-caution",
+  settled: "arena-status-favorable",
   courtroom: "arena-status-neutral",
   verdict: "arena-status-favorable",
   exited: "arena-status-critical",
@@ -18,10 +22,11 @@ export const outcomeLabel = {
   player: "Won",
   opponent: "Lost",
   draw: "Drew",
+  settled: "Settled",
   "": "In Progress",
 };
 
-export const matterTabs = ["Case File", "Interview", "Courtroom", "Verdict"];
+export const matterTabs = ["Case File", "Interview", "Courtroom", "Settlement", "Verdict"];
 
 export const isValidDate = (value) => {
   if (!value) return false;
@@ -69,7 +74,8 @@ export const findMatterById = (cases = [], matterId = "") => {
   );
 };
 
-export const getOutcome = (caseSession) => caseSession?.verdict?.winner || "";
+export const getOutcome = (caseSession) =>
+  caseSession?.status === "settled" ? "settled" : caseSession?.verdict?.winner || "";
 
 export const getSidePlayed = (caseSession) =>
   caseSession?.playerSide === "opponent" ? "Defendant" : "Plaintiff";
@@ -93,6 +99,7 @@ export const normalizeMatter = (caseSession) => ({
   ...caseSession,
   interviewCount: (caseSession.interviewTranscript || []).length,
   courtroomCount: (caseSession.courtroomTranscript || []).length,
+  settlementCount: (caseSession.settlement?.transcript || []).length,
   outcome: getOutcome(caseSession),
   updatedDateLabel: formatDate(caseSession.updatedAt),
 });

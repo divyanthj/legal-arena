@@ -90,6 +90,88 @@ const courtroomEntrySchema = mongoose.Schema(
   { _id: false }
 );
 
+const settlementEntrySchema = mongoose.Schema(
+  {
+    role: {
+      type: String,
+      enum: ["player", "client", "opponent", "system"],
+      required: true,
+    },
+    speaker: {
+      type: String,
+      required: true,
+    },
+    text: {
+      type: String,
+      required: true,
+    },
+    moodSnapshot: {
+      player: {
+        type: Number,
+        default: 0,
+      },
+      opponent: {
+        type: Number,
+        default: 0,
+      },
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  { _id: false }
+);
+
+const settlementSchema = mongoose.Schema(
+  {
+    status: {
+      type: String,
+      enum: ["none", "proposed", "active", "rejected", "failed", "settled"],
+      default: "none",
+    },
+    moods: {
+      player: {
+        type: Number,
+        default: 0,
+      },
+      opponent: {
+        type: Number,
+        default: 0,
+      },
+    },
+    transcript: {
+      type: [settlementEntrySchema],
+      default: [],
+    },
+    currentTerms: {
+      type: [String],
+      default: [],
+    },
+    finalTerms: {
+      type: [String],
+      default: [],
+    },
+    outcomeSummary: {
+      type: String,
+      default: "",
+    },
+    failureReason: {
+      type: String,
+      default: "",
+    },
+    startedAt: {
+      type: Date,
+      default: null,
+    },
+    completedAt: {
+      type: Date,
+      default: null,
+    },
+  },
+  { _id: false }
+);
+
 const usageEntrySchema = mongoose.Schema(
   {
     label: {
@@ -98,7 +180,7 @@ const usageEntrySchema = mongoose.Schema(
     },
     phase: {
       type: String,
-      enum: ["intake", "courtroom"],
+      enum: ["intake", "courtroom", "settlement"],
       default: "intake",
     },
     model: {
@@ -239,7 +321,7 @@ const caseSessionSchema = mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["interview", "courtroom", "verdict", "exited"],
+      enum: ["interview", "courtroom", "settlement", "verdict", "settled", "exited"],
       default: "interview",
     },
     exitedAt: {
@@ -459,10 +541,18 @@ const caseSessionSchema = mongoose.Schema(
         type: usageBucketSchema,
         default: () => ({}),
       },
+      settlement: {
+        type: usageBucketSchema,
+        default: () => ({}),
+      },
       total: {
         type: usageBucketSchema,
         default: () => ({}),
       },
+    },
+    settlement: {
+      type: settlementSchema,
+      default: () => ({}),
     },
     courtroomTranscript: {
       type: [courtroomEntrySchema],

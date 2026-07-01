@@ -145,7 +145,8 @@ export default function PlayerProfileDossier({
           (category.completedCases || 0) > 0 ||
           (category.wins || 0) > 0 ||
           (category.losses || 0) > 0 ||
-          (category.draws || 0) > 0
+          (category.draws || 0) > 0 ||
+          (category.settlements || 0) > 0
       ),
     [sortedCategories]
   );
@@ -465,7 +466,7 @@ export default function PlayerProfileDossier({
                   <div>
                     <p className="arena-kicker">Record</p>
                     <p className="mt-2 font-semibold text-white">
-                      {player.wins}-{player.losses}-{player.draws}
+                      {player.wins}-{player.losses}-{player.draws}-{player.settlements || 0}
                     </p>
                   </div>
                   <div>
@@ -581,7 +582,7 @@ export default function PlayerProfileDossier({
                                   {getCategoryTitle(category.categorySlug)}
                                 </p>
                                 <p className="mt-1 text-xs font-medium text-white/62">
-                                  {`${category.completedCases} matters | Record ${category.wins}-${category.losses}-${category.draws}`}
+                                  {`${category.completedCases} matters | Record ${category.wins}-${category.losses}-${category.draws}-${category.settlements || 0}`}
                                 </p>
                               </div>
                               <div className="shrink-0 text-right">

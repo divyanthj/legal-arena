@@ -12,6 +12,8 @@ import CaseWorkspace from "./CaseWorkspace";
 const statusLabel = {
   pending: "Awaiting acceptance",
   active: "Intake",
+  settlement: "Settlement",
+  settled: "Settled",
   courtroom: "In court",
   verdict: "Verdict",
   declined: "Declined",
@@ -70,6 +72,12 @@ const normalizeFeedbackForViewer = ({ items = [], viewer = {} }) => {
 const getViewerStage = (challenge = {}) => {
   if (challenge.status === "verdict") {
     return "verdict";
+  }
+  if (challenge.status === "settled") {
+    return "settled";
+  }
+  if (challenge.status === "settlement") {
+    return "settlement";
   }
 
   if (challenge.status === "courtroom" && challenge.viewer?.status !== "ready") {
@@ -139,7 +147,11 @@ const challengeToCaseSession = (challenge = {}) => {
       : "";
   const viewerReady = viewer.status === "ready";
   const status =
-    challenge.status === "verdict"
+    challenge.status === "settled"
+      ? "settled"
+      : challenge.status === "settlement"
+      ? "settlement"
+      : challenge.status === "verdict"
       ? "verdict"
       : challenge.status === "courtroom" && viewerReady
       ? "courtroom"
@@ -191,6 +203,7 @@ const challengeToCaseSession = (challenge = {}) => {
     interviewTranscript: viewer.interviewTranscript || [],
     factSheet: viewer.factSheet || {},
     caseAssessment: viewer.caseAssessment || {},
+    settlement: challenge.settlement || {},
     courtroomTranscript,
     score: {
       player: viewer.score || 0,

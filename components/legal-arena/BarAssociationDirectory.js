@@ -67,7 +67,7 @@ const LawyerPortrait = ({ image = "", name = "" }) => {
 };
 
 const getRecordLabel = (entry = {}) =>
-  `${entry.wins || 0}-${entry.losses || 0}-${entry.draws || 0}`;
+  `${entry.wins || 0}-${entry.losses || 0}-${entry.draws || 0}-${entry.settlements || 0}`;
 
 const getWinRate = (entry = {}) => {
   const total = (entry.wins || 0) + (entry.losses || 0) + (entry.draws || 0);
@@ -82,7 +82,7 @@ const getWinRate = (entry = {}) => {
 const getPvpRecordLabel = (entry = {}) => {
   const pvp = entry.pvp || {};
 
-  return `${pvp.wins || 0}-${pvp.losses || 0}-${pvp.draws || 0}`;
+  return `${pvp.wins || 0}-${pvp.losses || 0}-${pvp.draws || 0}-${pvp.settlements || 0}`;
 };
 
 export default function BarAssociationDirectory({

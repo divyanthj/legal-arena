@@ -22,10 +22,11 @@ export const getDefaultCategoryProgress = (categorySlug) => ({
   completedCases: 0,
   wins: 0,
   losses: 0,
-  draws: 0,
-  unlockedComplexity: 1,
-  recentPerformance: [],
-});
+    draws: 0,
+    settlements: 0,
+    unlockedComplexity: 1,
+    recentPerformance: [],
+  });
 
 export const getDefaultProgression = () => ({
   overallXp: 0,
@@ -33,21 +34,24 @@ export const getDefaultProgression = () => ({
   completedCases: 0,
   wins: 0,
   losses: 0,
-  draws: 0,
-  categoryStats: LEGAL_CASE_CATEGORIES.map((category) =>
-    getDefaultCategoryProgress(category.slug)
-  ),
+    draws: 0,
+    settlements: 0,
+    categoryStats: LEGAL_CASE_CATEGORIES.map((category) =>
+      getDefaultCategoryProgress(category.slug)
+    ),
   pvp: {
     completedChallenges: 0,
     wins: 0,
     losses: 0,
     draws: 0,
+    settlements: 0,
     categoryStats: LEGAL_CASE_CATEGORIES.map((category) => ({
       categorySlug: category.slug,
       completedChallenges: 0,
       wins: 0,
       losses: 0,
       draws: 0,
+      settlements: 0,
     })),
   },
 });
@@ -58,6 +62,7 @@ const getDefaultPvpCategoryProgress = (categorySlug) => ({
   wins: 0,
   losses: 0,
   draws: 0,
+  settlements: 0,
 });
 
 export const normalizePvpProgression = (rawPvp) => {
@@ -74,6 +79,7 @@ export const normalizePvpProgression = (rawPvp) => {
     wins: source.wins || 0,
     losses: source.losses || 0,
     draws: source.draws || 0,
+    settlements: source.settlements || 0,
     categoryStats: LEGAL_CASE_CATEGORIES.map((category) => ({
       ...getDefaultPvpCategoryProgress(category.slug),
       ...(existingMap.get(category.slug) || {}),
@@ -147,6 +153,121 @@ export const applyChallengeVerdictToPvpProgression = async ({
   progression.pvp = pvp;
   user.progression = progression;
   await user.save();
+
+  return progression;
+};
+
+export const calculateSettlementXp = ({ complexity = 1, finalMoods = {} } = {}) => {
+  const baseXp = 55 + (Number(complexity) || 1) * 15;
+  const playerMood = Number(finalMoods.player ?? 0);
+  const opponentMood = Number(finalMoods.opponent ?? 0);
+  const averageMood = Math.max(-100, Math.min(100, (playerMood + opponentMood) / 2));
+  const cooperationBonus = Math.max(
+    0,
+    Math.min(25, Math.round(((averageMood + 100) / 200) * 25))
+  );
+
+  return {
+    baseXp,
+    cooperationBonus,
+    totalXp: baseXp + cooperationBonus,
+  };
+};
+
+export const applySettlementToProgression = async ({
+  userId,
+  userProfile = null,
+  primaryCategory,
+  complexity,
+  finalMoods = {},
+  caseTitle = "",
+  outcomeSummary = "",
+  isPvp = false,
+}) => {
+  const user = await ensureUserProfile(userId, userProfile);
+  if (!user) {
+    return null;
+  }
+
+  const progression = normalizeProgression(user.progression);
+  const xp = calculateSettlementXp({ complexity, finalMoods });
+  const categoryStats = progression.categoryStats.map((item) => ({ ...item }));
+  const categoryIndex = categoryStats.findIndex(
+    (item) => item.categorySlug === primaryCategory
+  );
+  const categoryStat =
+    categoryIndex >= 0
+      ? categoryStats[categoryIndex]
+      : getDefaultCategoryProgress(primaryCategory);
+
+  progression.overallXp += xp.totalXp;
+  progression.completedCases += 1;
+  progression.settlements += 1;
+
+  categoryStat.xp += xp.totalXp;
+  categoryStat.completedCases += 1;
+  categoryStat.settlements += 1;
+  categoryStat.unlockedComplexity = Math.min(
+    5,
+    Math.max(
+      categoryStat.unlockedComplexity,
+      1 + Math.floor(categoryStat.completedCases / 2)
+    )
+  );
+  categoryStat.recentPerformance = uniqueList([
+    `Settled a level ${complexity} matter`,
+    xp.cooperationBonus ? `Earned ${xp.cooperationBonus} cooperation XP` : "",
+    ...categoryStat.recentPerformance,
+  ]).slice(0, 5);
+
+  if (isPvp) {
+    const pvp = normalizePvpProgression(progression.pvp);
+    const pvpCategoryStats = pvp.categoryStats.map((item) => ({ ...item }));
+    const pvpCategoryIndex = pvpCategoryStats.findIndex(
+      (item) => item.categorySlug === primaryCategory
+    );
+    const pvpCategoryStat =
+      pvpCategoryIndex >= 0
+        ? pvpCategoryStats[pvpCategoryIndex]
+        : getDefaultPvpCategoryProgress(primaryCategory);
+
+    pvp.completedChallenges += 1;
+    pvp.settlements += 1;
+    pvpCategoryStat.completedChallenges += 1;
+    pvpCategoryStat.settlements += 1;
+
+    if (pvpCategoryIndex >= 0) {
+      pvpCategoryStats[pvpCategoryIndex] = pvpCategoryStat;
+    } else {
+      pvpCategoryStats.push(pvpCategoryStat);
+    }
+
+    pvp.categoryStats = pvpCategoryStats;
+    progression.pvp = pvp;
+  }
+
+  if (categoryIndex >= 0) {
+    categoryStats[categoryIndex] = categoryStat;
+  } else {
+    categoryStats.push(categoryStat);
+  }
+
+  progression.categoryStats = categoryStats;
+  user.progression = progression;
+  await user.save();
+
+  await ensureStoredDashboardEncouragementNote({
+    user,
+    forceRefresh: true,
+    latestVerdict: {
+      title: caseTitle,
+      category: primaryCategory,
+      complexity,
+      outcome: "settled",
+      summary: outcomeSummary,
+      highlights: ["You resolved the matter through settlement."],
+    },
+  });
 
   return progression;
 };
@@ -343,6 +464,7 @@ export const buildPublicLeaderboardEntry = (user, categorySlug) => {
   const combinedWins = (progression.wins || 0) + (pvp.wins || 0);
   const combinedLosses = (progression.losses || 0) + (pvp.losses || 0);
   const combinedDraws = (progression.draws || 0) + (pvp.draws || 0);
+  const combinedSettlements = (progression.settlements || 0) + (pvp.settlements || 0);
 
   return {
     id: user.id,
@@ -354,6 +476,7 @@ export const buildPublicLeaderboardEntry = (user, categorySlug) => {
     wins: combinedWins,
     losses: combinedLosses,
     draws: combinedDraws,
+    settlements: combinedSettlements,
     category: categoryStat
       ? {
           slug: categoryStat.categorySlug,
@@ -366,6 +489,8 @@ export const buildPublicLeaderboardEntry = (user, categorySlug) => {
           wins: (categoryStat.wins || 0) + (pvpCategoryStat?.wins || 0),
           losses: (categoryStat.losses || 0) + (pvpCategoryStat?.losses || 0),
           draws: (categoryStat.draws || 0) + (pvpCategoryStat?.draws || 0),
+          settlements:
+            (categoryStat.settlements || 0) + (pvpCategoryStat?.settlements || 0),
       }
       : null,
     pvp,

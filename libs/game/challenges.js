@@ -29,7 +29,11 @@ import {
   normalizeFactSheetPatch,
   uniqueList,
 } from "./engine/shared";
-import { applyChallengeVerdictToPvpProgression, ensureUserProfile } from "./progression";
+import {
+  applyChallengeVerdictToPvpProgression,
+  applySettlementToProgression,
+  ensureUserProfile,
+} from "./progression";
 import { listScenarioOptions } from "./store";
 import {
   buildJudgeProfile,
@@ -47,6 +51,7 @@ import {
   buildMemoryClaimFactSheetPatch,
   normalizeMemoryClaims,
 } from "./memoryClaims";
+import { runSettlementExchange } from "./settlement";
 
 const MONGO_ID_PATTERN = /^[a-f0-9]{24}$/i;
 const CHALLENGE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
@@ -540,7 +545,14 @@ const buildParticipantCaseSession = ({ challenge, participant, otherParticipant 
     primaryCategory: challenge.primaryCategory,
     complexity: challenge.complexity,
     playerSide: participant.side,
-    status: challenge.status === "courtroom" ? "courtroom" : "interview",
+    status:
+      challenge.status === "courtroom"
+        ? "courtroom"
+        : challenge.status === "settlement"
+        ? "settlement"
+        : challenge.status === "settled"
+        ? "settled"
+        : "interview",
     lawbookVersion: challenge.lawbookVersion,
     maxCourtRounds: challenge.maxCourtRounds,
     judgeProfile: challenge.judgeProfile,
@@ -555,6 +567,7 @@ const buildParticipantCaseSession = ({ challenge, participant, otherParticipant 
     factSheet: participant.factSheet,
     caseAssessment: participant.caseAssessment,
     clientMemory: participant.clientMemory || null,
+    settlement: challenge.settlement || {},
     courtroomTranscript: judgedRounds.flatMap((round) =>
       (round.submissions || []).map((submission) => ({
         round: round.round,
@@ -1105,6 +1118,164 @@ export const markChallengeReady = async ({ userId, challengeId, factSheet }) => 
   return buildChallengePayload({ challenge, viewerUserId: userId });
 };
 
+const applyChallengeSettlementProgression = async (challenge) => {
+  await Promise.all(
+    (challenge.participants || []).map((participant) =>
+      applySettlementToProgression({
+        userId: participant.userId,
+        primaryCategory: challenge.primaryCategory,
+        complexity: challenge.complexity,
+        finalMoods: challenge.settlement?.moods || {},
+        caseTitle: challenge.title,
+        outcomeSummary: challenge.settlement?.outcomeSummary || "",
+        isPvp: true,
+      })
+    )
+  );
+};
+
+const applySettlementResultToChallenge = async ({
+  challenge,
+  participant,
+  result,
+}) => {
+  const transcript = (result.settlement?.transcript || []).map((entry, index, entries) => {
+    if (
+      entry.role === "player" &&
+      !entry.userId &&
+      index === entries.map((item) => item.role).lastIndexOf("player")
+    ) {
+      return {
+        ...entry,
+        userId: participant.userId,
+        side: participant.side,
+        speaker: "You",
+      };
+    }
+
+    return entry;
+  });
+
+  challenge.settlement = {
+    ...result.settlement,
+    transcript,
+  };
+
+  if (result.settled) {
+    challenge.status = "settled";
+    challenge.completedAt = challenge.completedAt || new Date();
+    challenge.participants.forEach((item) => {
+      item.verdict = "";
+    });
+    await applyChallengeSettlementProgression(challenge);
+  } else if (result.failed) {
+    challenge.status = "settlement";
+  } else if (!result.rejected) {
+    challenge.status = "settlement";
+    if (participant?.status === "active") {
+      participant.status = "active";
+    }
+  }
+
+  if (typeof challenge.markModified === "function") {
+    challenge.markModified("settlement");
+    challenge.markModified("participants");
+  }
+};
+
+export const startChallengeSettlement = async ({ userId, challengeId, message }) => {
+  const challenge = await getChallengeDocumentForUser({ userId, challengeId });
+  if (!challenge) {
+    return null;
+  }
+  if (challenge.status !== "active") {
+    throw new Error("Settlements can only be opened during private intake.");
+  }
+  if (challenge.primaryCategory === "criminal") {
+    throw new Error("Criminal cases cannot be settled.");
+  }
+
+  const participant = getParticipant(challenge, userId);
+  const otherParticipant = getOtherParticipant(challenge, userId);
+  if (!participant || !otherParticipant) {
+    throw new Error("Challenge participant not found.");
+  }
+
+  const caseSession = buildParticipantCaseSession({
+    challenge,
+    participant,
+    otherParticipant,
+  });
+  const result = await runSettlementExchange({
+    caseSession,
+    message,
+    userId,
+    actorSide: participant.side,
+    initial: true,
+  });
+
+  await applySettlementResultToChallenge({ challenge, participant, result });
+  await challenge.save();
+
+  return buildChallengePayload({ challenge, viewerUserId: userId });
+};
+
+export const continueChallengeSettlement = async ({ userId, challengeId, message }) => {
+  const challenge = await getChallengeDocumentForUser({ userId, challengeId });
+  if (!challenge) {
+    return null;
+  }
+  if (challenge.status !== "settlement") {
+    throw new Error("This challenge is not in settlement negotiations.");
+  }
+  if (challenge.primaryCategory === "criminal") {
+    throw new Error("Criminal cases cannot be settled.");
+  }
+
+  const participant = getParticipant(challenge, userId);
+  const otherParticipant = getOtherParticipant(challenge, userId);
+  if (!participant || !otherParticipant) {
+    throw new Error("Challenge participant not found.");
+  }
+
+  const caseSession = buildParticipantCaseSession({
+    challenge,
+    participant,
+    otherParticipant,
+  });
+  const result = await runSettlementExchange({
+    caseSession,
+    message,
+    userId,
+    actorSide: participant.side,
+  });
+
+  await applySettlementResultToChallenge({ challenge, participant, result });
+  await challenge.save();
+
+  return buildChallengePayload({ challenge, viewerUserId: userId });
+};
+
+export const exitChallengeSettlement = async ({ userId, challengeId }) => {
+  const challenge = await getChallengeDocumentForUser({ userId, challengeId });
+  if (!challenge) {
+    return null;
+  }
+  if (!["active", "settlement"].includes(challenge.status)) {
+    throw new Error("Only intake-stage settlement talks can return to intake.");
+  }
+
+  challenge.status = "active";
+  if (challenge.settlement) {
+    challenge.settlement.status =
+      challenge.settlement.status === "failed" ? "failed" : "rejected";
+    challenge.markModified?.("settlement");
+  }
+  await challenge.save();
+
+  return buildChallengePayload({ challenge, viewerUserId: userId });
+};
+
 const getSubmissionForParticipant = (round, participant) =>
   (round.submissions || []).find((submission) =>
     isSameId(submission.userId, participant.userId)
@@ -1576,6 +1747,17 @@ export const buildChallengePayload = async ({ challenge, viewerUserId }) => {
         round.status === "open" ? (round.submissions || []).length : 0,
     };
   });
+  const settlement = plainChallenge.settlement || {};
+  const settlementTranscript = (settlement.transcript || []).map((entry) => ({
+    ...entry,
+    userId: toObjectIdString(entry.userId),
+    isViewer:
+      entry.role === "player"
+        ? !entry.userId || isSameId(entry.userId, viewerUserId)
+        : entry.side
+        ? participant?.side === entry.side
+        : false,
+  }));
 
   return {
     ...publicChallenge,
@@ -1634,6 +1816,17 @@ export const buildChallengePayload = async ({ challenge, viewerUserId }) => {
       name: getPlayerDisplayName(challengedUser),
     },
     courtroomRounds: rounds,
+    settlement: {
+      status: settlement.status || "none",
+      moods: settlement.moods || { player: 0, opponent: 0 },
+      transcript: settlementTranscript,
+      currentTerms: settlement.currentTerms || [],
+      finalTerms: settlement.finalTerms || [],
+      outcomeSummary: settlement.outcomeSummary || "",
+      failureReason: settlement.failureReason || "",
+      startedAt: settlement.startedAt || null,
+      completedAt: settlement.completedAt || null,
+    },
     lawbook: getLawbookRules(),
   };
 };

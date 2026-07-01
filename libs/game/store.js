@@ -46,7 +46,7 @@ const stripUsageEntries = (usage = {}) => {
     return usage;
   }
 
-  return ["intake", "courtroom", "total"].reduce((result, key) => {
+  return ["intake", "courtroom", "settlement", "total"].reduce((result, key) => {
     const bucket = usage[key];
 
     if (!bucket || typeof bucket !== "object") {
@@ -471,7 +471,7 @@ const defaultOpenQuestions = (template, side) =>
 const getActiveCompletedCooldowns = async (userId) => {
   const completedSessions = await CaseSession.find({
     userId,
-    status: "verdict",
+    status: { $in: ["verdict", "settled"] },
   })
     .select("caseTemplateId")
     .sort({ updatedAt: -1 });
@@ -1026,7 +1026,9 @@ export const listDashboardDataForUser = async (userId, userProfile = null) => {
     listScenarioOptions(userId, userProfile),
     ensureUserProfile(userId, userProfile),
   ]);
-  const latestVerdict = cases.find((caseSession) => caseSession.status === "verdict");
+  const latestVerdict = cases.find((caseSession) =>
+    ["verdict", "settled"].includes(caseSession.status)
+  );
   const dashboardEncouragementNote = await ensureStoredDashboardEncouragementNote({
     user,
     latestVerdict: latestVerdict
@@ -1034,9 +1036,18 @@ export const listDashboardDataForUser = async (userId, userProfile = null) => {
           title: latestVerdict.title,
           category: latestVerdict.primaryCategory,
           complexity: latestVerdict.complexity,
-          outcome: latestVerdict.verdict?.winner || "",
-          summary: latestVerdict.verdict?.summary || "",
-          highlights: latestVerdict.verdict?.highlights?.slice(0, 2) || [],
+          outcome:
+            latestVerdict.status === "settled"
+              ? "settled"
+              : latestVerdict.verdict?.winner || "",
+          summary:
+            latestVerdict.status === "settled"
+              ? latestVerdict.settlement?.outcomeSummary || ""
+              : latestVerdict.verdict?.summary || "",
+          highlights:
+            latestVerdict.status === "settled"
+              ? latestVerdict.settlement?.finalTerms?.slice(0, 2) || []
+              : latestVerdict.verdict?.highlights?.slice(0, 2) || [],
         }
       : null,
   });
@@ -1066,7 +1077,7 @@ export const getPublicPlayerProfile = async (
   const hydratedUser = await ensureUserProfile(playerId);
   const cases = await CaseSession.find({
     userId: playerId,
-    status: canViewFullArchive ? { $ne: "exited" } : "verdict",
+    status: canViewFullArchive ? { $ne: "exited" } : { $in: ["verdict", "settled"] },
   })
     .populate("caseTemplateId")
     .sort({ updatedAt: -1 });

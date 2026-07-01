@@ -12,12 +12,16 @@ import { DevelopmentAccessModal } from "@/components/legal-arena/DevelopmentAcce
 
 const statusLabel = {
   interview: "Intake",
+  settlement: "Settlement",
+  settled: "Settled",
   courtroom: "Courtroom",
   verdict: "Verdict Ready",
 };
 
 const statusSeverity = {
   interview: "caution",
+  settlement: "caution",
+  settled: "favorable",
   courtroom: "neutral",
   verdict: "favorable",
 };
@@ -32,6 +36,8 @@ const severityClass = {
 const challengeStatusLabel = {
   pending: "Pending",
   active: "Intake",
+  settlement: "Settlement",
+  settled: "Settled",
   courtroom: "Courtroom",
   verdict: "Verdict",
   declined: "Declined",
@@ -75,6 +81,10 @@ const getPvpDocketTab = (challenge = {}) => {
     return "active-intake";
   }
 
+  if (challenge.status === "settlement") {
+    return "active-intake";
+  }
+
   if (challenge.status === "courtroom") {
     return "in-court";
   }
@@ -108,6 +118,10 @@ const getPvpTurnSummary = (challenge = {}) => {
       : "Your turn";
   }
 
+  if (challenge.status === "settled") {
+    return "View settlement";
+  }
+
   if (challenge.status === "verdict") {
     return "View final ruling";
   }
@@ -130,6 +144,10 @@ const isPvpChallengeActionable = (challenge = {}) => {
 
   if (challenge.status === "active") {
     return challenge.viewer?.status !== "ready";
+  }
+
+  if (challenge.status === "settlement") {
+    return true;
   }
 
   if (challenge.status === "courtroom") {
@@ -155,6 +173,9 @@ const getPvpUrgencyLabel = (challenge = {}) => {
   if (challenge.status === "courtroom") {
     return challenge.viewer?.status === "ready" ? "Your court turn" : "Finish intake";
   }
+  if (challenge.status === "settlement") {
+    return "Negotiate";
+  }
 
   return "Play";
 };
@@ -174,6 +195,12 @@ const getPvpActionLabel = (challenge = {}) => {
 
   if (challenge.status === "courtroom") {
     return challenge.viewer?.status === "ready" ? "Enter Court" : "Finish Intake";
+  }
+  if (challenge.status === "settlement") {
+    return "Negotiate";
+  }
+  if (challenge.status === "settled") {
+    return "View Settlement";
   }
 
   if (challenge.status === "verdict") {
@@ -623,6 +650,12 @@ const getCaseProgress = (caseSession = null) => {
   if (caseSession.status === "verdict") {
     return { label: "Verdict ready", percent: 100, nextStep: "Review the ruling" };
   }
+  if (caseSession.status === "settled") {
+    return { label: "Settled", percent: 100, nextStep: "Review the settlement" };
+  }
+  if (caseSession.status === "settlement") {
+    return { label: "Settlement", percent: 74, nextStep: "Negotiate terms" };
+  }
 
   return { label: "Client interview", percent: 42, nextStep: "Build your fact sheet" };
 };
@@ -1005,11 +1038,11 @@ export default function DashboardHub({
     [selectedCategory, showPlayableOnly, templates]
   );
   const finishedCases = useMemo(
-    () => initialCases.filter((caseSession) => caseSession.status === "verdict"),
+    () => initialCases.filter((caseSession) => ["verdict", "settled"].includes(caseSession.status)),
     [initialCases]
   );
   const ongoingCases = useMemo(
-    () => initialCases.filter((caseSession) => caseSession.status !== "verdict"),
+    () => initialCases.filter((caseSession) => !["verdict", "settled"].includes(caseSession.status)),
     [initialCases]
   );
   const selectedArchiveCases = caseArchiveTab === "finished" ? finishedCases : ongoingCases;
@@ -1078,10 +1111,14 @@ export default function DashboardHub({
     return entries.slice(0, 8);
   }, [lawyerSearch, overallLeaderboard, searchedLawyers]);
   const topCategoryEntries = selectedLeaderboard.slice(0, 5);
-  const recentVerdicts = initialCases.filter((item) => item.status === "verdict").slice(0, 5);
+  const recentVerdicts = initialCases
+    .filter((item) => ["verdict", "settled"].includes(item.status))
+    .slice(0, 5);
   const canResumeLastCase =
     lastActiveCase &&
-    (lastActiveCase.status === "interview" || lastActiveCase.status === "courtroom");
+    (lastActiveCase.status === "interview" ||
+      lastActiveCase.status === "settlement" ||
+      lastActiveCase.status === "courtroom");
   const nextCategoryUnlockTarget = Math.max(
     (categoryProgress?.unlockedComplexity || 1) * 2,
     2
@@ -1103,7 +1140,7 @@ export default function DashboardHub({
   const playerRankLabel = currentLeaderboardEntry ? `#${currentLeaderboardEntry.rank}` : "Unranked";
   const playerRecordLabel = `${progression.wins || 0}-${progression.losses || 0}-${
     progression.draws || 0
-  }`;
+  }-${progression.settlements || 0}`;
   const playerEncouragementNote =
     dashboardEncouragementNote ||
     `${userName}, every case you complete makes your advocacy sharper.`;
@@ -1673,7 +1710,7 @@ export default function DashboardHub({
                           {currentLeaderboardEntry ? `Rank #${currentLeaderboardEntry.rank}` : "Rookie Advocate"}
                         </p>
                         <p className="mt-1 text-xs text-white/52">
-                          {progression.wins || 0} Wins | {progression.completedCases || 0} Cases
+                          {progression.wins || 0} Wins | {progression.settlements || 0} Settlements
                         </p>
                       </div>
                       <div className="shrink-0 text-right">
@@ -3282,7 +3319,7 @@ export default function DashboardHub({
                   <div className="arena-stat-card !p-4">
                     <p className="arena-kicker">Record</p>
                     <p className="mt-2 text-3xl font-semibold text-white">
-                      {progression.wins}-{progression.losses}-{progression.draws}
+                      {progression.wins}-{progression.losses}-{progression.draws}-{progression.settlements || 0}
                     </p>
                     <p className="mt-1 text-sm text-white/50">{recordRatio}% win rate</p>
                   </div>
@@ -3715,7 +3752,7 @@ export default function DashboardHub({
 
             <section className="arena-surface">
               <div className="p-5 md:p-6">
-                <p className="arena-kicker">Recent Verdicts</p>
+                <p className="arena-kicker">Recent Outcomes</p>
                 <h2 className="arena-headline mt-2 text-2xl">Closed matters</h2>
                 <div className="mt-5 space-y-2">
                   {recentVerdicts.length > 0 ? (
@@ -3733,7 +3770,7 @@ export default function DashboardHub({
                     ))
                   ) : (
                     <div className="arena-surface-soft p-4 text-sm text-white/62">
-                      Verdicts will appear here once your first matter reaches final ruling.
+                      Outcomes will appear here once your first matter reaches verdict or settlement.
                     </div>
                   )}
                 </div>

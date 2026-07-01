@@ -260,6 +260,44 @@ export default function PlayerMatterDossier({ player, caseSession }) {
                     </div>
                   )}
 
+                  {activeTab === "Settlement" && (
+                    <div className="space-y-4">
+                      {(matter.settlement?.finalTerms?.length ||
+                        matter.settlement?.currentTerms?.length) ? (
+                        <FactList
+                          title="Settlement terms"
+                          items={
+                            matter.settlement?.finalTerms?.length
+                              ? matter.settlement.finalTerms
+                              : matter.settlement.currentTerms
+                          }
+                        />
+                      ) : null}
+                      {matter.settlement?.outcomeSummary ? (
+                        <FactList title="Outcome" items={[matter.settlement.outcomeSummary]} />
+                      ) : null}
+                      <div className="arena-scroll max-h-[34rem] space-y-4 overflow-y-auto pr-2">
+                        {(matter.settlement?.transcript || []).length === 0 ? (
+                          <EmptyPanel
+                            title="No settlement record"
+                            detail="This matter has no settlement transcript entries yet."
+                          />
+                        ) : (
+                          matter.settlement.transcript.map((entry, index) => (
+                            <TranscriptEntry
+                              key={`${getMatterId(matter)}-settlement-${index}`}
+                              speaker={entry.role === "player" ? player.name : entry.speaker}
+                              meta="Settlement"
+                              isPlayer={entry.role === "player"}
+                            >
+                              {entry.text}
+                            </TranscriptEntry>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {activeTab === "Verdict" && (
                     <div className="space-y-4">
                       {hasVerdict ? (

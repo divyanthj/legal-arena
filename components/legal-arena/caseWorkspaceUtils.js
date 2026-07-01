@@ -56,6 +56,8 @@ export const verdictTone = {
 
 export const statusTone = {
   interview: "arena-status-caution",
+  settlement: "arena-status-caution",
+  settled: "arena-status-favorable",
   courtroom: "arena-status-neutral",
   verdict: "arena-status-favorable",
   exited: "arena-status-critical",

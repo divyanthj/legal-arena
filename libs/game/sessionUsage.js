@@ -61,6 +61,7 @@ const addEntryToBucket = (bucket, entry) => {
 export const buildUsageTotals = (usage = {}) => ({
   intake: normalizeBucket(usage?.intake),
   courtroom: normalizeBucket(usage?.courtroom),
+  settlement: normalizeBucket(usage?.settlement),
   total: normalizeBucket(usage?.total),
 });
 
@@ -76,7 +77,12 @@ export const appendUsageEntriesToCaseSession = (caseSession, entries = []) => {
   const usage = buildUsageTotals(caseSession.usage || {});
 
   validEntries.forEach((entry) => {
-    const phase = entry.phase === "courtroom" ? "courtroom" : "intake";
+    const phase =
+      entry.phase === "courtroom"
+        ? "courtroom"
+        : entry.phase === "settlement"
+        ? "settlement"
+        : "intake";
     addEntryToBucket(usage[phase], entry);
     addEntryToBucket(usage.total, entry);
   });

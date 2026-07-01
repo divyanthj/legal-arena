@@ -32,6 +32,10 @@ const categoryProgressSchema = mongoose.Schema(
       type: Number,
       default: 0,
     },
+    settlements: {
+      type: Number,
+      default: 0,
+    },
     unlockedComplexity: {
       type: Number,
       default: 1,
@@ -64,6 +68,10 @@ const pvpCategoryProgressSchema = mongoose.Schema(
       default: 0,
     },
     draws: {
+      type: Number,
+      default: 0,
+    },
+    settlements: {
       type: Number,
       default: 0,
     },
@@ -220,6 +228,10 @@ const userSchema = mongoose.Schema(
         default: 0,
       },
       draws: {
+        type: Number,
+        default: 0,
+      },
+      settlements: {
         type: Number,
         default: 0,
       },

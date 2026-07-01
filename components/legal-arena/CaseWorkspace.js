@@ -680,6 +680,9 @@ export default function CaseWorkspace({
   }));
   const [question, setQuestion] = useState("");
   const [argument, setArgument] = useState("");
+  const [settlementMessage, setSettlementMessage] = useState("");
+  const [showSettlementDialog, setShowSettlementDialog] = useState(false);
+  const [settlementRejected, setSettlementRejected] = useState(false);
   const [working, setWorking] = useState(false);
   const [pendingAction, setPendingAction] = useState("");
   const [pendingSpeaker, setPendingSpeaker] = useState("");
@@ -842,9 +845,12 @@ export default function CaseWorkspace({
   const normalizedCourtroomTranscript =
     visibleCourtroomTranscript.map(normalizeCourtroomEntry);
   const isInterview = caseSession.status === "interview";
+  const isSettlement = caseSession.status === "settlement";
+  const isSettled = caseSession.status === "settled";
   const isVerdict = caseSession.status === "verdict";
   const isExited = caseSession.status === "exited";
   const isIntakeLocked = Boolean(apiConfig.intakeLocked);
+  const canSettleCase = caseSession.primaryCategory !== "criminal";
   const viewerSubmittedCurrentRound = Boolean(caseSession.score.viewerSubmittedCurrentRound);
   const opponentSubmittedCurrentRound = Boolean(
     caseSession.score.opponentSubmittedCurrentRound
@@ -917,7 +923,7 @@ export default function CaseWorkspace({
   }, [isInterview, normalizedCourtroomTranscript.length, working, pendingSpeaker]);
 
   useEffect(() => {
-    if (!apiConfig.realtimeRefresh || isVerdict || isExited || !realtimeRefreshPath) {
+    if (!apiConfig.realtimeRefresh || isVerdict || isSettled || isExited || !realtimeRefreshPath) {
       return;
     }
 
@@ -947,6 +953,7 @@ export default function CaseWorkspace({
   }, [
     apiConfig.realtimeRefresh,
     isVerdict,
+    isSettled,
     isExited,
     realtimeRefreshIntervalMs,
     realtimeRefreshPath,
@@ -1067,6 +1074,73 @@ export default function CaseWorkspace({
         tone: "error",
         text: error?.message || "Could not finalize the fact sheet.",
       });
+      console.error(error);
+    } finally {
+      setPendingAction("");
+      setWorking(false);
+    }
+  };
+
+  const submitSettlementMessage = async ({ initial = false } = {}) => {
+    if (working || isIntakeLocked || !canSettleCase || !settlementMessage.trim()) {
+      return;
+    }
+
+    const submittedMessage = settlementMessage.trim();
+    setSettlementRejected(false);
+    setWorking(true);
+    setPendingAction(initial ? "settlement-start" : "settlement");
+
+    try {
+      const response = await apiClient.post(
+        `${getApiBasePath(caseSession)}/settlement/${initial ? "start" : "message"}`,
+        { message: submittedMessage }
+      );
+      const nextCase = updateCaseFromResponse(response);
+      setSettlementMessage("");
+
+      if (response?.rejected || nextCase?.settlement?.status === "rejected") {
+        setSettlementRejected(true);
+      } else {
+        setShowSettlementDialog(false);
+        toast.success(
+          nextCase?.status === "settled"
+            ? "Settlement reached."
+            : "Settlement talks are open."
+        );
+      }
+    } catch (error) {
+      toast.error(error?.message || "Could not send settlement message.");
+      console.error(error);
+    } finally {
+      setPendingAction("");
+      setWorking(false);
+    }
+  };
+
+  const handleSettlementStartSubmit = async (event) => {
+    event.preventDefault();
+    await submitSettlementMessage({ initial: true });
+  };
+
+  const handleSettlementMessageSubmit = async (event) => {
+    event.preventDefault();
+    await submitSettlementMessage();
+  };
+
+  const handleSettlementExit = async () => {
+    setSettlementRejected(false);
+    setShowSettlementDialog(false);
+    setWorking(true);
+    setPendingAction("settlement-exit");
+
+    try {
+      const response = await apiClient.post(
+        `${getApiBasePath(caseSession)}/settlement/exit`
+      );
+      updateCaseFromResponse(response);
+    } catch (error) {
+      toast.error(error?.message || "Could not return to intake.");
       console.error(error);
     } finally {
       setPendingAction("");
@@ -1263,10 +1337,7 @@ export default function CaseWorkspace({
     String(caseSession.opponentCounselName || "").trim() || "Opposing lawyer";
   const courtroomWaitingMessage = waitingForPlaintiffOpening
     ? `${opponentPartyName} has the opening statement. Waiting for ${opponentCounselLabel} to file.`
-    : "The other side is preparing a response...";
-  const courtroomWaitingLoadingLabel = waitingForPlaintiffOpening
-    ? `Waiting for ${opponentCounselLabel} to file the opening statement`
-    : "The other side is preparing a response";
+    : `${opponentPartyName} is preparing a response...`;
   const sideBadgeLabel = `Representing ${playerPartyName}`;
   const sideContextLabel = `${playerRoleLabel} side`;
   const playerRepresentationLabel = `You represent ${playerPartyName} (${playerRoleLabel}).`;
@@ -1348,9 +1419,11 @@ export default function CaseWorkspace({
   const courtroomStageLabel = useMemo(() => {
     if (isExited) return "Exited";
     if (isInterview) return "Party Intake";
+    if (isSettlement) return "Settlement";
+    if (isSettled) return "Settled";
     if (isVerdict) return "Verdict";
     return `Courtroom Round ${displayedCourtroomRound}`;
-  }, [displayedCourtroomRound, isExited, isInterview, isVerdict]);
+  }, [displayedCourtroomRound, isExited, isInterview, isSettlement, isSettled, isVerdict]);
 
   const suggestedQuestions = (caseSession.factSheet.openQuestions || []).slice(0, 4);
   const factSheetCompletionItems = [
@@ -1379,7 +1452,7 @@ export default function CaseWorkspace({
       "Document a key risk or dispute") ||
     (!cleanDraftList(factSheetDraft.desiredRelief).length && "Add requested relief") ||
     "Review and finalize fact sheet";
-  const isCourtroom = !isInterview && !isExited && !isVerdict;
+  const isCourtroom = !isInterview && !isSettlement && !isSettled && !isExited && !isVerdict;
   const courtroomRoundLabel = `Courtroom Round ${displayedCourtroomRound}`;
   const assessment = caseSession.caseAssessment || {};
   const displayedSuccessChance = isInterview
@@ -1591,6 +1664,175 @@ export default function CaseWorkspace({
   useEffect(() => {
     setShowFullMobileOpponentArgument(false);
   }, [lastOpponentCourtEntryKey]);
+
+  const settlement = caseSession.settlement || {};
+  const settlementMoodItems = [
+    {
+      key: "player",
+      label: caseSession.plaintiffName || caseSession.premise?.clientName || "Claimant",
+      value: Number(settlement.moods?.player ?? 0),
+    },
+    {
+      key: "opponent",
+      label: caseSession.defendantName || caseSession.premise?.opponentName || "Defense",
+      value: Number(settlement.moods?.opponent ?? 0),
+    },
+  ];
+  const settlementTranscript = settlement.transcript || [];
+  const settlementIsTerminal = isSettled || ["settled", "failed"].includes(settlement.status);
+
+  const renderMoodMeter = (item) => {
+    const percent = Math.max(0, Math.min(100, item.value + 100) / 2);
+    const tone =
+      item.value >= 50
+        ? "bg-emerald-300"
+        : item.value >= 0
+        ? "bg-amber-300"
+        : item.value <= -70
+        ? "bg-rose-400"
+        : "bg-orange-300";
+
+    return (
+      <div key={item.key} className="arena-surface-soft p-4">
+        <div className="flex items-center justify-between gap-3">
+          <p className="min-w-0 truncate text-sm font-semibold text-white">{item.label}</p>
+          <span className="shrink-0 text-sm font-bold text-white/80">{item.value}%</span>
+        </div>
+        <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
+          <div className={`h-full rounded-full ${tone}`} style={{ width: `${percent}%` }} />
+        </div>
+      </div>
+    );
+  };
+
+  const renderSettleButton = (className = "arena-btn-dark w-full px-5 py-3") =>
+    canSettleCase ? (
+      <button
+        type="button"
+        className={className}
+        onClick={() => {
+          setSettlementRejected(false);
+          setShowSettlementDialog(true);
+        }}
+        disabled={working || isIntakeLocked}
+      >
+        {pendingAction === "settlement-start" ? "Sending Offer..." : "Settle"}
+      </button>
+    ) : null;
+
+  const renderSettlementPanel = () => (
+    <div id="settlement" className="space-y-4">
+      <section className="arena-surface overflow-hidden">
+        <div className="p-4 sm:p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="arena-kicker text-emerald-200">Settlement</p>
+              <h2 className="arena-headline mt-2 text-3xl">
+                {isSettled ? "Agreement reached" : settlement.status === "failed" ? "Talks broke down" : "Negotiation room"}
+              </h2>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-white/62">
+                Settle the matter by keeping both parties willing to accept the same practical terms.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="arena-btn-dark min-h-0 px-4 py-2 text-sm"
+              onClick={handleSettlementExit}
+              disabled={working || settlementIsTerminal}
+            >
+              Return to Intake
+            </button>
+          </div>
+          <div className="mt-5 grid gap-3 sm:grid-cols-2">
+            {settlementMoodItems.map(renderMoodMeter)}
+          </div>
+        </div>
+      </section>
+
+      {(settlement.currentTerms || []).length || (settlement.finalTerms || []).length ? (
+        <section className="arena-surface p-4 sm:p-6">
+          <p className="arena-kicker">Terms</p>
+          <div className="mt-3 space-y-2">
+            {(settlement.finalTerms?.length ? settlement.finalTerms : settlement.currentTerms).map(
+              (term, index) => (
+                <div
+                  key={`${term}-${index}`}
+                  className="rounded-xl border border-emerald-200/14 bg-emerald-200/[0.045] p-3 text-sm leading-6 text-white/74"
+                >
+                  {term}
+                </div>
+              )
+            )}
+          </div>
+        </section>
+      ) : null}
+
+      <section className="arena-surface p-4 sm:p-6">
+        <p className="arena-kicker">Negotiation Transcript</p>
+        <div className="arena-scroll mt-4 max-h-[28rem] space-y-3 overflow-y-auto pr-1">
+          {settlementTranscript.length ? (
+            settlementTranscript.map((entry, index) => {
+              const isPlayer = entry.role === "player";
+              return (
+                <div
+                  key={`${entry.createdAt || index}-${index}`}
+                  className={`rounded-2xl border p-4 ${
+                    isPlayer
+                      ? "border-sky-300/20 bg-sky-300/[0.055]"
+                      : entry.role === "client"
+                      ? "border-emerald-300/18 bg-emerald-300/[0.05]"
+                      : "border-white/10 bg-white/[0.025]"
+                  }`}
+                >
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/42">
+                    {isPlayer ? "You" : entry.speaker}
+                  </p>
+                  <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-white/76">
+                    {entry.text}
+                  </p>
+                </div>
+              );
+            })
+          ) : (
+            <div className="rounded-xl border border-dashed border-white/10 bg-black/20 p-5 text-sm text-white/45">
+              No settlement messages yet.
+            </div>
+          )}
+        </div>
+      </section>
+
+      {settlement.outcomeSummary || settlement.failureReason ? (
+        <section className="arena-surface p-4 sm:p-6">
+          <p className="arena-kicker">{isSettled ? "Outcome" : "Status"}</p>
+          <p className="mt-3 text-sm leading-6 text-white/72">
+            {settlement.outcomeSummary || settlement.failureReason}
+          </p>
+        </section>
+      ) : null}
+
+      {!settlementIsTerminal ? (
+        <section className="rounded-2xl border border-emerald-300/24 bg-emerald-300/[0.055] p-4 sm:p-5">
+          <form className="space-y-4" onSubmit={handleSettlementMessageSubmit}>
+            <textarea
+              value={settlementMessage}
+              onChange={(event) => setSettlementMessage(event.target.value)}
+              rows={5}
+              className="w-full resize-none rounded-2xl border border-white/10 bg-black/24 p-4 text-sm leading-6 text-white outline-none placeholder:text-white/32 focus:border-emerald-200/50"
+              placeholder="Send a settlement proposal, concession, or counteroffer..."
+              disabled={working}
+            />
+            <button
+              type="submit"
+              className="arena-btn-light w-full px-5 py-3"
+              disabled={working || !settlementMessage.trim()}
+            >
+              {pendingAction === "settlement" ? "Sending..." : "Send Settlement Message"}
+            </button>
+          </form>
+        </section>
+      ) : null}
+    </div>
+  );
 
   const renderLawbookFilters = () => (
     <div className="mt-4 flex min-w-0 max-w-full flex-wrap gap-1.5 sm:mt-5 sm:gap-2">
@@ -2476,6 +2718,9 @@ export default function CaseWorkspace({
                           : "Finalize Fact Sheet"}
                         <HeroIcons.ArrowRightIcon className="h-4 w-4" aria-hidden="true" />
                       </button>
+                      {renderSettleButton(
+                        "mt-2 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-200/25 bg-emerald-200/[0.08] px-4 py-3 text-sm font-semibold text-emerald-50 transition hover:border-emerald-200/50 hover:bg-emerald-200/[0.12] disabled:cursor-not-allowed disabled:opacity-60"
+                      )}
                       {pendingAction === "finalize" ? (
                         <div className="mt-3">
                           <LoadingBar label="Finalizing fact sheet" />
@@ -3030,11 +3275,9 @@ export default function CaseWorkspace({
                 {showCourtroomWaitingCard ? (
                   <section className="arena-surface p-4">
                     <p className="font-semibold text-white">{courtroomWaitingMessage}</p>
-                    <TypingIndicator
-                      speaker={waitingForPlaintiffOpening ? opponentCounselLabel : opponentPartyName}
-                    />
+                    <TypingIndicator speaker={opponentPartyName} />
                     <div className="mt-4">
-                      <LoadingBar label={courtroomWaitingLoadingLabel} />
+                      <LoadingBar label={`${opponentPartyName} is preparing a response`} />
                     </div>
                   </section>
                 ) : null}
@@ -3310,11 +3553,9 @@ export default function CaseWorkspace({
                 {showCourtroomWaitingCard ? (
                   <section className="arena-surface p-4">
                     <p className="font-semibold text-white">{courtroomWaitingMessage}</p>
-                    <TypingIndicator
-                      speaker={waitingForPlaintiffOpening ? opponentCounselLabel : opponentPartyName}
-                    />
+                    <TypingIndicator speaker={opponentPartyName} />
                     <div className="mt-4">
-                      <LoadingBar label={courtroomWaitingLoadingLabel} />
+                      <LoadingBar label={`${opponentPartyName} is preparing a response`} />
                     </div>
                   </section>
                 ) : null}
@@ -3449,6 +3690,8 @@ export default function CaseWorkspace({
               </div>
               </>
             )}
+
+            {(isSettlement || isSettled) && renderSettlementPanel()}
 
             {(isInterview || isCourtroom) &&
               renderLawbookPanel("hidden xl:block", "desktop-lawbook-details")}
@@ -3767,6 +4010,9 @@ export default function CaseWorkspace({
                           : "Finalize Fact Sheet"}
                         <HeroIcons.ArrowRightIcon className="h-4 w-4" aria-hidden="true" />
                       </button>
+                      {renderSettleButton(
+                        "mt-2 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-200/25 bg-emerald-200/[0.08] px-5 py-3 text-sm font-semibold text-emerald-50 transition hover:border-emerald-200/50 hover:bg-emerald-200/[0.12] disabled:cursor-not-allowed disabled:opacity-60"
+                      )}
                       {pendingAction === "finalize" ? (
                         <div className="mt-3">
                           <LoadingBar label="Finalizing fact sheet" />
@@ -3906,6 +4152,7 @@ export default function CaseWorkspace({
                           ? "Finalizing Fact Sheet..."
                           : "Finalize Fact Sheet"}
                       </button>
+                      {renderSettleButton("arena-btn-dark w-full px-5 py-3")}
                       {pendingAction === "finalize" ? (
                         <LoadingBar label="Finalizing fact sheet" />
                       ) : null}
@@ -4283,6 +4530,9 @@ export default function CaseWorkspace({
                       ? "Finalizing Fact Sheet..."
                       : "Finalize Fact Sheet"}
                   </button>
+                  {renderSettleButton(
+                    "btn mt-2 min-h-0 w-full border-emerald-200/25 bg-emerald-200/[0.08] px-4 py-3 text-sm font-semibold text-emerald-50 hover:border-emerald-200/50 hover:bg-emerald-200/[0.12] disabled:opacity-60"
+                  )}
                   {pendingAction === "finalize" ? (
                     <div className="mt-3">
                       <LoadingBar label="Finalizing fact sheet" />
@@ -4351,6 +4601,124 @@ export default function CaseWorkspace({
             type="button"
             aria-label="Close case file reference"
             onClick={() => setShowMobileFactSheetDialog(false)}
+          >
+            close
+          </button>
+        </div>
+      </div>
+      <div
+        className={`modal modal-bottom sm:modal-middle ${
+          showSettlementDialog ? "modal-open" : ""
+        }`}
+        role="dialog"
+        aria-modal="true"
+        aria-hidden={!showSettlementDialog}
+        aria-label="Start settlement"
+      >
+        <div className="modal-box max-h-[90vh] overflow-hidden rounded-t-2xl border border-emerald-200/15 bg-[#070908] p-0 text-white shadow-2xl shadow-black/70 sm:w-[min(42rem,calc(100vw-3rem))] sm:max-w-none sm:rounded-2xl">
+          <div className="relative overflow-hidden border-b border-white/[0.07] bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.18),transparent_34%),linear-gradient(180deg,rgba(255,255,255,0.055),rgba(0,0,0,0.08))] p-5 sm:p-6">
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/55 to-transparent" />
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex min-w-0 gap-4">
+                <div className="hidden h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-emerald-200/20 bg-emerald-300/[0.08] text-emerald-100 sm:flex">
+                  <HeroIcons.ScaleIcon className="h-6 w-6" aria-hidden="true" />
+                </div>
+                <div className="min-w-0">
+                  <p className="arena-kicker text-emerald-200">Settlement</p>
+                  <h2 className="mt-2 text-2xl font-semibold leading-tight text-white sm:text-3xl">
+                    Send an opening offer
+                  </h2>
+                  <p className="mt-2 max-w-xl text-sm leading-6 text-white/60">
+                    Frame the proposal like counsel: practical terms, a clear ask, and enough room for the other side to move.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="btn btn-circle btn-ghost btn-sm shrink-0 border border-white/[0.08] bg-black/20 text-white/65 hover:border-white/16 hover:bg-white/[0.06] hover:text-white"
+                onClick={() => setShowSettlementDialog(false)}
+                aria-label="Close settlement dialog"
+              >
+                <HeroIcons.XMarkIcon className="h-5 w-5" aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+          <div className="p-5 sm:p-6">
+            {settlementRejected ? (
+              <div className="overflow-hidden rounded-2xl border border-rose-300/22 bg-rose-400/[0.07]">
+                <div className="flex gap-3 border-b border-white/[0.06] bg-black/18 p-4 sm:p-5">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-rose-200/20 bg-rose-300/[0.08] text-rose-100">
+                    <HeroIcons.NoSymbolIcon className="h-5 w-5" aria-hidden="true" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-semibold text-rose-100">The other side rejected settlement.</p>
+                    <p className="mt-1 text-sm leading-6 text-white/62">
+                      Keep gathering facts or move the dispute into court.
+                    </p>
+                  </div>
+                </div>
+                <div className="grid gap-2 p-4 sm:grid-cols-2 sm:p-5">
+                  <button
+                    type="button"
+                    className="arena-btn-dark px-4 py-3"
+                    onClick={handleSettlementExit}
+                    disabled={working}
+                  >
+                    Continue Intake
+                  </button>
+                  <button
+                    type="button"
+                    className="arena-btn-light px-4 py-3"
+                    onClick={() => {
+                      setShowSettlementDialog(false);
+                      handleFinalize();
+                    }}
+                    disabled={working}
+                  >
+                    Finalize Fact Sheet
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <form className="space-y-4" onSubmit={handleSettlementStartSubmit}>
+                <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/28 shadow-inner shadow-black/30 transition focus-within:border-emerald-200/45 focus-within:bg-black/36">
+                  <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] px-4 py-3">
+                    <div className="flex min-w-0 items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-white/44">
+                      <HeroIcons.PencilSquareIcon className="h-4 w-4 text-emerald-200/80" aria-hidden="true" />
+                      Opening message
+                    </div>
+                    <span className="shrink-0 text-xs text-white/32">
+                      {settlementMessage.trim().length} chars
+                    </span>
+                  </div>
+                  <textarea
+                    value={settlementMessage}
+                    onChange={(event) => setSettlementMessage(event.target.value)}
+                    rows={7}
+                    className="block min-h-48 w-full resize-none border-0 bg-transparent px-4 py-4 text-sm leading-7 text-white outline-none placeholder:text-white/34 focus:outline-none"
+                    placeholder="Example: My client is prepared to resolve this now if your side can agree to..."
+                    disabled={working}
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="arena-btn-light flex w-full items-center justify-center gap-2 px-5 py-3.5 shadow-lg shadow-amber-950/20 disabled:cursor-not-allowed disabled:opacity-55"
+                  disabled={working || !settlementMessage.trim()}
+                >
+                  <HeroIcons.PaperAirplaneIcon className="h-4 w-4" aria-hidden="true" />
+                  {pendingAction === "settlement-start"
+                    ? "Sending..."
+                    : "Send Settlement Message"}
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+        <div className="modal-backdrop bg-black/55 backdrop-blur-[2px]">
+          <button
+            type="button"
+            aria-label="Close settlement dialog"
+            onClick={() => setShowSettlementDialog(false)}
           >
             close
           </button>
