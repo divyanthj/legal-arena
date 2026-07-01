@@ -5,6 +5,12 @@ import { MongoClient, ObjectId } from "mongodb";
 
 const GENERIC_PLAINTIFF_NAMES = new Set(["tenant", "the tenant"]);
 const GENERIC_DEFENDANT_NAMES = new Set(["landlord", "the landlord"]);
+const ROLE_LABEL_PLAINTIFF_NAMES = new Set(["plaintiff", "the plaintiff"]);
+const ROLE_LABEL_DEFENDANT_NAMES = new Set(["defendant", "the defendant"]);
+const SECURITY_DEPOSIT_FALLBACK_NAMES = {
+  plaintiffName: "Maya Chen",
+  defendantName: "Harborview Property Management",
+};
 const CONNECTOR_WORDS = new Set([
   "after",
   "and",
@@ -49,10 +55,25 @@ const normalizeName = (value = "") =>
     .replace(/\s+/g, " ");
 
 const isGenericPlaintiffName = (value = "") =>
-  GENERIC_PLAINTIFF_NAMES.has(normalizeName(value).toLowerCase());
+  GENERIC_PLAINTIFF_NAMES.has(normalizeName(value).toLowerCase()) ||
+  ROLE_LABEL_PLAINTIFF_NAMES.has(normalizeName(value).toLowerCase());
 
 const isGenericDefendantName = (value = "") =>
-  GENERIC_DEFENDANT_NAMES.has(normalizeName(value).toLowerCase());
+  GENERIC_DEFENDANT_NAMES.has(normalizeName(value).toLowerCase()) ||
+  ROLE_LABEL_DEFENDANT_NAMES.has(normalizeName(value).toLowerCase());
+
+const isSecurityDepositTemplate = (template = {}) =>
+  /\bsecurity deposit|habitability|lease|rental|tenant|landlord|move-?out\b/i.test(
+    [
+      template.title,
+      template.subtitle,
+      template.overview,
+      template.openingStatement,
+      template.canonicalStory?.story,
+    ]
+      .filter(Boolean)
+      .join(" ")
+  );
 
 const looksLikePersonName = (value = "") => {
   const name = normalizeName(value);
@@ -128,18 +149,112 @@ const buildPatch = (template = {}) => {
   const patch = {};
 
   if (isGenericPlaintiffName(template.plaintiffName)) {
-    const plaintiffName = inferPlaintiffName(template) || "Plaintiff";
+    const plaintiffName =
+      inferPlaintiffName(template) ||
+      (isSecurityDepositTemplate(template)
+        ? SECURITY_DEPOSIT_FALLBACK_NAMES.plaintiffName
+        : "Plaintiff");
     patch.plaintiffName = plaintiffName;
     patch.clientName = plaintiffName;
   }
 
   if (isGenericDefendantName(template.defendantName)) {
-    const defendantName = inferDefendantName(template) || "Defendant";
+    const defendantName =
+      inferDefendantName(template) ||
+      (isSecurityDepositTemplate(template)
+        ? SECURITY_DEPOSIT_FALLBACK_NAMES.defendantName
+        : "Defendant");
     patch.defendantName = defendantName;
     patch.opponentName = defendantName;
   }
 
   return patch;
+};
+
+const replaceGenericTranscriptPartyNames = ({
+  transcript = [],
+  plaintiffName,
+  defendantName,
+}) =>
+  transcript.map((entry) => {
+    if (!entry || typeof entry !== "object") return entry;
+
+    const next = { ...entry };
+    if (plaintiffName && isGenericPlaintiffName(next.speaker)) {
+      next.speaker = plaintiffName;
+    }
+    if (defendantName && isGenericDefendantName(next.speaker)) {
+      next.speaker = defendantName;
+    }
+    if (plaintiffName && /^(?:the\s+)?plaintiff\.?$/i.test(String(next.text || "").trim())) {
+      next.text = plaintiffName;
+    }
+    if (defendantName && /^(?:the\s+)?defendant\.?$/i.test(String(next.text || "").trim())) {
+      next.text = defendantName;
+    }
+
+    return next;
+  });
+
+const repairSessionCopies = async ({ sessions, template, patch, apply }) => {
+  const sessionSet = {};
+  if (patch.plaintiffName) {
+    sessionSet["premise.clientName"] = patch.plaintiffName;
+    sessionSet["templateSnapshot.plaintiffName"] = patch.plaintiffName;
+    sessionSet["templateSnapshot.clientName"] = patch.plaintiffName;
+    sessionSet["canonicalStory.plaintiffName"] = patch.plaintiffName;
+    sessionSet["canonicalStory.clientName"] = patch.plaintiffName;
+  }
+  if (patch.defendantName) {
+    sessionSet["premise.opponentName"] = patch.defendantName;
+    sessionSet["templateSnapshot.defendantName"] = patch.defendantName;
+    sessionSet["templateSnapshot.opponentName"] = patch.defendantName;
+    sessionSet["canonicalStory.defendantName"] = patch.defendantName;
+    sessionSet["canonicalStory.opponentName"] = patch.defendantName;
+  }
+  if (Object.keys(sessionSet).length === 0) {
+    return 0;
+  }
+
+  const sessionQuery = {
+    $or: [
+      { caseTemplateId: template._id },
+      { templateSlug: template.slug },
+      { scenarioId: template.slug },
+    ],
+  };
+  const matchingSessions = await sessions.find(sessionQuery).toArray();
+  let changedSessions = 0;
+
+  for (const session of matchingSessions) {
+    const repairedTranscript = replaceGenericTranscriptPartyNames({
+      transcript: session.interviewTranscript || [],
+      plaintiffName: patch.plaintiffName,
+      defendantName: patch.defendantName,
+    });
+    const transcriptChanged =
+      JSON.stringify(repairedTranscript) !==
+      JSON.stringify(session.interviewTranscript || []);
+    const update = {
+      $set: {
+        ...sessionSet,
+        updatedAt: new Date(),
+      },
+    };
+
+    if (transcriptChanged) {
+      update.$set.interviewTranscript = repairedTranscript;
+    }
+
+    if (apply) {
+      const result = await sessions.updateOne({ _id: session._id }, update);
+      changedSessions += result.modifiedCount;
+    } else {
+      changedSessions += 1;
+    }
+  }
+
+  return changedSessions;
 };
 
 const main = async () => {
@@ -162,6 +277,7 @@ const main = async () => {
 
   try {
     const templates = client.db().collection("casetemplates");
+    const sessions = client.db().collection("casesessions");
     const query = ids.length
       ? { _id: { $in: ids.map((id) => new ObjectId(id)) } }
       : {
@@ -170,6 +286,10 @@ const main = async () => {
             { defendantName: { $regex: /^(?:the\s+)?landlord$/i } },
             { clientName: { $regex: /^(?:the\s+)?tenant$/i } },
             { opponentName: { $regex: /^(?:the\s+)?landlord$/i } },
+            { plaintiffName: { $regex: /^(?:the\s+)?plaintiff$/i } },
+            { defendantName: { $regex: /^(?:the\s+)?defendant$/i } },
+            { clientName: { $regex: /^(?:the\s+)?plaintiff$/i } },
+            { opponentName: { $regex: /^(?:the\s+)?defendant$/i } },
           ],
         };
 
@@ -213,7 +333,105 @@ const main = async () => {
         );
       }
 
+      const sessionCount = await repairSessionCopies({
+        sessions,
+        template,
+        patch,
+        apply,
+      });
+      console.log(
+        `${apply ? "Updated" : "Would update"} ${sessionCount} existing session(s) for ${template.slug}.`
+      );
+
       updated += 1;
+    }
+
+    const genericSessionQuery = {
+      $or: [
+        { "premise.clientName": { $regex: /^(?:the\s+)?(?:tenant|plaintiff)$/i } },
+        { "premise.opponentName": { $regex: /^(?:the\s+)?(?:landlord|defendant)$/i } },
+        { "templateSnapshot.clientName": { $regex: /^(?:the\s+)?(?:tenant|plaintiff)$/i } },
+        { "templateSnapshot.opponentName": { $regex: /^(?:the\s+)?(?:landlord|defendant)$/i } },
+        { "interviewTranscript.speaker": { $regex: /^(?:the\s+)?(?:tenant|plaintiff|landlord|defendant)$/i } },
+        { "interviewTranscript.text": { $regex: /^(?:the\s+)?(?:plaintiff|defendant)\.?$/i } },
+      ],
+    };
+    const genericSessions = await sessions.find(genericSessionQuery).toArray();
+    let sessionOnlyUpdates = 0;
+
+    for (const session of genericSessions) {
+      const source = {
+        title: session.title,
+        subtitle: session.templateSnapshot?.subtitle,
+        overview: session.templateSnapshot?.overview || session.premise?.overview,
+        openingStatement:
+          session.templateSnapshot?.openingStatement || session.premise?.openingStatement,
+        canonicalStory: session.canonicalStory,
+      };
+      if (!isSecurityDepositTemplate(source)) {
+        continue;
+      }
+
+      const patch = {
+        plaintiffName: SECURITY_DEPOSIT_FALLBACK_NAMES.plaintiffName,
+        clientName: SECURITY_DEPOSIT_FALLBACK_NAMES.plaintiffName,
+        defendantName: SECURITY_DEPOSIT_FALLBACK_NAMES.defendantName,
+        opponentName: SECURITY_DEPOSIT_FALLBACK_NAMES.defendantName,
+      };
+      const repairedTranscript = replaceGenericTranscriptPartyNames({
+        transcript: session.interviewTranscript || [],
+        plaintiffName: patch.plaintiffName,
+        defendantName: patch.defendantName,
+      });
+      const update = {
+        $set: {
+          "premise.clientName": patch.plaintiffName,
+          "premise.opponentName": patch.defendantName,
+          "templateSnapshot.plaintiffName": patch.plaintiffName,
+          "templateSnapshot.clientName": patch.plaintiffName,
+          "templateSnapshot.defendantName": patch.defendantName,
+          "templateSnapshot.opponentName": patch.defendantName,
+          "canonicalStory.plaintiffName": patch.plaintiffName,
+          "canonicalStory.clientName": patch.plaintiffName,
+          "canonicalStory.defendantName": patch.defendantName,
+          "canonicalStory.opponentName": patch.defendantName,
+          interviewTranscript: repairedTranscript,
+          updatedAt: new Date(),
+        },
+      };
+
+      console.log(
+        JSON.stringify(
+          {
+            sessionOnly: true,
+            id: String(session._id),
+            title: session.title,
+            from: {
+              clientName: session.premise?.clientName,
+              opponentName: session.premise?.opponentName,
+            },
+            to: {
+              clientName: patch.plaintiffName,
+              opponentName: patch.defendantName,
+            },
+          },
+          null,
+          2
+        )
+      );
+
+      if (apply) {
+        const result = await sessions.updateOne({ _id: session._id }, update);
+        sessionOnlyUpdates += result.modifiedCount;
+      } else {
+        sessionOnlyUpdates += 1;
+      }
+    }
+
+    if (sessionOnlyUpdates > 0) {
+      console.log(
+        `${apply ? "Updated" : "Would update"} ${sessionOnlyUpdates} session-only generic copy/copies.`
+      );
     }
 
     console.log(
