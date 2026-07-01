@@ -47,7 +47,7 @@ const Pricing = () => {
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  {plan.priceAnchor && (
+                  {plan.priceAnchor && plan.priceAnchor > plan.price && (
                     <div className="flex flex-col justify-end mb-[4px] text-lg ">
                       <p className="relative">
                         <span className="absolute bg-base-content h-[1.5px] inset-x-0 top-[53%]"></span>

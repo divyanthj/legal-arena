@@ -42,9 +42,6 @@ const Footer = () => {
               </div>
 
               <div className="mb-10 flex flex-col items-center justify-center gap-2 text-sm md:items-start">
-                <Link href="/lawyer-game" className="text-white/72 transition hover:text-white">
-                  Lawyer Game
-                </Link>
                 <Link href="/blog" className="text-white/72 transition hover:text-white">
                   Blog
                 </Link>
@@ -63,13 +60,13 @@ const Footer = () => {
                 >
                   Privacy Policy
                 </Link>
-                <a
-                  href="mailto:divyanthj@gmail.com"
+                <Link
+                  href="/contact"
                   className="text-white/72 transition hover:text-white"
                   aria-label="Contact Legal Arena"
                 >
                   Contact us
-                </a>
+                </Link>
               </div>
             </div>
 

@@ -20,10 +20,10 @@ const faqSchema = {
   mainEntity: [
     {
       "@type": "Question",
-      name: "Is Legal Arena a lawyer game?",
+      name: "What makes Legal Arena different from a normal legal quiz?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Yes. Legal Arena is an AI-powered lawyer game where you interview AI clients, build a case, argue in court, and receive a ruling from the judge.",
+        text: "Legal Arena is built around open-ended play. You interview AI clients in your own words, build a case file, argue before an AI judge, and win through better questions and clearer reasoning.",
       },
     },
     {
@@ -44,10 +44,18 @@ const faqSchema = {
     },
     {
       "@type": "Question",
-      name: "Is Legal Arena legal advice?",
+      name: "What does lifetime access include?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "No. Legal Arena is a game. It is not a lawyer, law firm, legal advice service, or substitute for hiring an attorney.",
+        text: "Lifetime access gives you permanent access to the current product and future Legal Arena updates and changes.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "Will there be other pricing plans later?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Legal Arena may introduce other pricing plans in the future, but anyone who buys lifetime access now keeps permanent access through future updates and product changes.",
       },
     },
   ],
@@ -55,20 +63,18 @@ const faqSchema = {
 
 export default function FAQPage() {
   return (
-    <main className="min-h-screen bg-base-200">
+    <main className="arena-landing min-h-screen overflow-hidden bg-[#020202] text-white">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
       />
-      <section className="border-b border-base-300 bg-base-100/90">
-        <div className="mx-auto max-w-7xl px-8 py-16">
-          <p className="text-sm uppercase tracking-[0.3em] text-base-content/45">
-            Help Center
-          </p>
-          <h1 className="mt-4 font-serif text-5xl leading-tight text-base-content md:text-6xl">
+      <section className="arena-column-bg border-b border-white/10">
+        <div className="mx-auto max-w-7xl px-5 py-16 md:px-8 md:py-20">
+          <p className="arena-kicker">Help Center</p>
+          <h1 className="arena-headline mt-5 max-w-4xl text-5xl uppercase leading-[0.92] md:text-7xl">
             Questions players ask before stepping into court.
           </h1>
-          <p className="mt-5 max-w-3xl text-lg leading-8 text-base-content/75">
+          <p className="mt-6 max-w-3xl text-lg leading-8 text-white/68 md:text-xl md:leading-9">
             A quick guide to the AI lawyer game: how client interviews work, how
             court arguments work, and what to expect when you open a case.
           </p>

@@ -8,7 +8,7 @@ import ButtonAccount from "@/components/ButtonAccount";
 import { useNavigationLoading } from "@/components/NavigationLoadingProvider";
 import apiClient from "@/libs/api";
 import { trackGoal } from "@/libs/datafast";
-import { DevelopmentAccessPanel } from "@/components/legal-arena/DevelopmentAccessGate";
+import { DevelopmentAccessModal } from "@/components/legal-arena/DevelopmentAccessGate";
 
 const statusLabel = {
   interview: "Intake",
@@ -3008,19 +3008,10 @@ export default function DashboardHub({
           onComplete={() => setDashboardTutorialCompleted(true)}
         />
         {showPaywallModal ? (
-          <dialog className="modal modal-open">
-            <div className="modal-box max-h-none max-w-3xl overflow-visible bg-transparent p-0 shadow-none">
-              <DevelopmentAccessPanel
-                email={userEmail}
-                onClose={() => setShowPaywallModal(false)}
-              />
-            </div>
-            <form method="dialog" className="modal-backdrop">
-              <button type="button" onClick={() => setShowPaywallModal(false)}>
-                close
-              </button>
-            </form>
-          </dialog>
+          <DevelopmentAccessModal
+            email={userEmail}
+            onClose={() => setShowPaywallModal(false)}
+          />
         ) : null}
       </main>
     );
@@ -3717,19 +3708,10 @@ export default function DashboardHub({
         onComplete={() => setDashboardTutorialCompleted(true)}
       />
       {showPaywallModal ? (
-        <dialog className="modal modal-open">
-          <div className="modal-box max-h-none max-w-3xl overflow-visible bg-transparent p-0 shadow-none">
-            <DevelopmentAccessPanel
-              email={userEmail}
-              onClose={() => setShowPaywallModal(false)}
-            />
-          </div>
-          <form method="dialog" className="modal-backdrop">
-            <button type="button" onClick={() => setShowPaywallModal(false)}>
-              close
-            </button>
-          </form>
-        </dialog>
+        <DevelopmentAccessModal
+          email={userEmail}
+          onClose={() => setShowPaywallModal(false)}
+        />
       ) : null}
     </main>
   );

@@ -32,7 +32,7 @@ const updates = [
 
 const dialogTitle = "What's new in Legal Arena";
 
-export default function WhatsNewDialog() {
+export default function WhatsNewDialog({ buttonLabel = dialogTitle }) {
   const [isOpen, setIsOpen] = useState(false);
   const titleId = useId();
   const descriptionId = useId();
@@ -66,7 +66,7 @@ export default function WhatsNewDialog() {
         className="btn btn-outline btn-block min-h-0 h-auto whitespace-nowrap rounded-2xl border-white/20 bg-black/35 px-5 py-3 text-sm text-white hover:border-white/35 hover:bg-white/10 hover:text-white"
       >
         <HeroIcons.SparklesIcon className="h-4 w-4" aria-hidden="true" />
-        {dialogTitle}
+        {buttonLabel}
       </button>
 
       {isOpen ? (

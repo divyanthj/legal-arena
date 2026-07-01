@@ -88,7 +88,7 @@ export const renderSchemaTags = () => {
             {
               "@type": "Offer",
               name: "Early Access",
-              price: "9.99",
+              price: "15.99",
               priceCurrency: "USD",
               availability: "https://schema.org/InStock",
             },

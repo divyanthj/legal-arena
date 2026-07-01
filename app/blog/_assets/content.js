@@ -1,7 +1,6 @@
 import Image from "next/image";
 import authorImg from "@/public/images/profile.jpg";
 import courtImg from "@/public/images/court.jpg";
-import Link from "next/link";
 
 const categorySlugs = {
   lawyerGame: "lawyer-game",
@@ -307,11 +306,8 @@ export const articles = [
           <h2 className={styles.h2}>Start with a case</h2>
           <p className={styles.p}>
             The quickest way to understand Legal Arena is to play one matter from
-            beginning to end: intake, fact sheet, courtroom, ruling. Start on the{" "}
-            <Link href="/lawyer-game" className="link link-primary">
-              lawyer game overview
-            </Link>{" "}
-            or open the dashboard and begin your first case.
+            beginning to end: intake, fact sheet, courtroom, ruling. Open the
+            dashboard and begin your first case.
           </p>
           <p className={styles.p}>
             Legal Arena is a game and training simulator. It is not legal advice

@@ -5,20 +5,17 @@ import Link from "next/link";
 
 export const faqList = [
   {
-    question: "Is Legal Arena a lawyer game?",
+    question: "What makes Legal Arena different from a normal legal quiz?",
     answer: (
       <div className="space-y-2 leading-relaxed">
         <p>
-          Yes. Legal Arena is an AI-powered lawyer game where you interview AI
-          clients, build a case from what they tell you, argue in court, and get
-          a ruling from the judge.
+          Legal Arena is built around open-ended play. You interview AI clients
+          in your own words, decide which facts matter, build a case file, and
+          argue before an AI judge.
         </p>
         <p>
-          If you want the game-focused overview, start with the{" "}
-          <Link href="/lawyer-game" className="link link-primary">
-            lawyer game page
-          </Link>
-          .
+          There is no multiple-choice answer key. Better questions, cleaner
+          reasoning, and sharper courtroom strategy give you the edge.
         </p>
       </div>
     ),
@@ -40,18 +37,7 @@ export const faqList = [
     ),
   },
   {
-    question: "Is Legal Arena legal advice?",
-    answer: (
-      <div className="space-y-2 leading-relaxed">
-        <p>
-          No. Legal Arena is a game. It is not a lawyer, law firm, legal advice
-          service, or substitute for hiring an attorney.
-        </p>
-      </div>
-    ),
-  },
-  {
-    question: "How does Legal Arena actually work?",
+    question: "What happens during a case?",
     answer: (
       <div className="space-y-2 leading-relaxed">
         <p>
@@ -88,8 +74,9 @@ export const faqList = [
           No. New case sessions can assign you either side at random.
         </p>
         <p>
-          The interface will clearly show whether you are representing the
-          plaintiff or the defendant for that run.
+          The interface clearly shows whether you represent the plaintiff or the
+          defendant for that run, so you can question your client and frame your
+          theory from the correct angle.
         </p>
       </div>
     ),
@@ -99,44 +86,73 @@ export const faqList = [
     answer: (
       <div className="space-y-2 leading-relaxed">
         <p>
-          Cases come from a managed case library. Each case includes structured
-          facts, evidence references, and competing claims for both sides.
+          Current cases come from a managed case library. Each case includes
+          structured facts, evidence references, and competing claims for both
+          sides.
         </p>
         <p>
           That structure lets the interview and courtroom stages feel open-ended
-          without collapsing into random chat.
+          without collapsing into random chat. In the future, we may also include
+          dynamically generated cases alongside the curated library.
         </p>
       </div>
     ),
   },
   {
-    question: "Can I replay a case?",
+    question: "What does lifetime access include?",
     answer: (
       <div className="space-y-2 leading-relaxed">
         <p>
-          Yes, but if you exit a case during intake, the same case is locked for
-          24 hours before you can start it again.
+          Right now, Legal Arena offers lifetime access. If you buy now, you keep
+          permanent access to the current product and future Legal Arena updates
+          and changes.
         </p>
         <p>
-          Finished matters stay in your history so you can review transcripts and
-          verdicts.
+          That includes improvements to the interface, case library, gameplay
+          systems, progression, and other features we add over time.
         </p>
       </div>
     ),
   },
   {
-    question: "How do I get access?",
+    question: "Will there be other pricing plans later?",
     answer: (
       <div className="space-y-2 leading-relaxed">
         <p>
-          Legal Arena is still in limited access. If you are not on the allowlist
-          yet, reach out and we can add you.
+          Possibly. We may introduce other pricing plans in the future as Legal
+          Arena grows.
         </p>
         <p>
-          Contact:{" "}
-          <a className="link link-primary" href="mailto:divyanthj@gmail.com">
-            divyanthj@gmail.com
-          </a>
+          The important part: buying lifetime access now means you keep permanent
+          access through future updates and product changes.
+        </p>
+      </div>
+    ),
+  },
+  {
+    question: "Is Legal Arena legal advice?",
+    answer: (
+      <div className="space-y-2 leading-relaxed">
+        <p>
+          No. Legal Arena is a game. It is not a lawyer, law firm, legal advice
+          service, or substitute for hiring an attorney.
+        </p>
+      </div>
+    ),
+  },
+  {
+    question: "What if I have a question before buying?",
+    answer: (
+      <div className="space-y-2 leading-relaxed">
+        <p>
+          Send us a note and we will route it to the right place.
+        </p>
+        <p>
+          Use the{" "}
+          <Link href="/contact" className="text-amber-100 underline underline-offset-4">
+            contact page
+          </Link>{" "}
+          and the team will route your request.
         </p>
       </div>
     ),
@@ -150,7 +166,7 @@ const Item = ({ item }) => {
   return (
     <li>
       <button
-        className="relative flex gap-2 items-center w-full py-5 text-base font-semibold text-left border-t md:text-lg border-base-content/10"
+        className="relative flex w-full items-center gap-3 border-t border-white/10 py-5 text-left text-base font-semibold text-white/82 transition hover:text-white md:text-lg"
         onClick={(e) => {
           e.preventDefault();
           setIsOpen(!isOpen);
@@ -158,7 +174,7 @@ const Item = ({ item }) => {
         aria-expanded={isOpen}
       >
         <span
-          className={`flex-1 text-base-content ${isOpen ? "text-primary" : ""}`}
+          className={`flex-1 ${isOpen ? "text-amber-100" : ""}`}
         >
           {item?.question}
         </span>
@@ -169,7 +185,7 @@ const Item = ({ item }) => {
             viewBox="0 0 24 24"
             strokeWidth={1.5}
             stroke="currentColor"
-            className="ml-auto h-5 w-5 shrink-0"
+            className="ml-auto h-5 w-5 shrink-0 text-amber-100/72"
             aria-hidden="true"
           >
             <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
@@ -181,7 +197,7 @@ const Item = ({ item }) => {
             viewBox="0 0 24 24"
             strokeWidth={1.5}
             stroke="currentColor"
-            className="ml-auto h-5 w-5 shrink-0"
+            className="ml-auto h-5 w-5 shrink-0 text-white/42"
             aria-hidden="true"
           >
             <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
@@ -191,7 +207,7 @@ const Item = ({ item }) => {
 
       <div
         ref={accordion}
-        className={`transition-all duration-300 ease-in-out opacity-80 overflow-hidden`}
+        className="overflow-hidden text-white/62 opacity-80 transition-all duration-300 ease-in-out"
         style={
           isOpen
             ? { maxHeight: accordion?.current?.scrollHeight, opacity: 1 }
@@ -211,26 +227,26 @@ const FAQ = ({
   showAllQuestionsLink = false,
 }) => {
   return (
-    <section className="bg-base-200" id="faq">
-      <div className="py-24 px-8 max-w-7xl mx-auto flex flex-col md:flex-row gap-12">
-        <div className="flex flex-col text-left basis-1/2">
-          <p className="inline-block font-semibold text-primary mb-4">{eyebrow}</p>
-          <p className="sm:text-4xl text-3xl font-extrabold text-base-content">
+    <section className="bg-transparent" id="faq">
+      <div className="mx-auto flex max-w-7xl flex-col gap-10 px-5 py-16 md:flex-row md:px-8 md:py-20">
+        <div className="basis-1/2 text-left">
+          <p className="arena-kicker mb-4">{eyebrow}</p>
+          <p className="arena-headline text-3xl uppercase leading-none text-white sm:text-5xl">
             {title}
           </p>
           {intro ? (
-            <p className="mt-4 max-w-xl leading-7 text-base-content/75">{intro}</p>
+            <p className="mt-5 max-w-xl text-base leading-7 text-white/62">{intro}</p>
           ) : null}
           {showAllQuestionsLink ? (
             <div className="mt-6">
-              <Link href="/faq" className="link link-primary font-semibold">
+              <Link href="/faq" className="font-semibold text-amber-100 underline underline-offset-4">
                 Open the full FAQ page
               </Link>
             </div>
           ) : null}
         </div>
 
-        <ul className="basis-1/2">
+        <ul className="arena-surface basis-1/2 p-5 md:p-7">
           {faqList.map((item, i) => (
             <Item key={i} item={item} />
           ))}

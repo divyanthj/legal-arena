@@ -1,111 +1,96 @@
 import Link from "next/link";
+import * as HeroIcons from "@heroicons/react/24/outline";
 import { getSEOTags } from "@/libs/seo";
 import config from "@/config";
 
-// CHATGPT PROMPT TO GENERATE YOUR PRIVACY POLICY — replace with your own data 👇
-
-// 1. Go to https://chat.openai.com/
-// 2. Copy paste bellow
-// 3. Replace the data with your own (if needed)
-// 4. Paste the answer from ChatGPT directly in the <pre> tag below
-
-// You are an excellent lawyer.
-
-// I need your help to write a simple privacy policy for my website. Here is some context:
-// - Website: https://legalarena.app
-// - Name: Legal Arena
-// - Description: A legal training platform where users practice intake, case-building, and simulated courtroom advocacy
-// - User data collected: name, email and payment information
-// - Non-personal data collection: web cookies
-// - Purpose of Data Collection: Order processing
-// - Data sharing: we do not share the data with any other parties
-// - Children's Privacy: we do not collect any data from children
-// - Updates to the Privacy Policy: users will be updated by email
-// - Contact information: support@legalarena.app
-
-// Please write a simple privacy policy for my site. Add the current date.  Do not add or explain your reasoning. Answer:
-
 export const metadata = getSEOTags({
   title: `Privacy Policy | ${config.appName}`,
+  description: `Privacy policy for ${config.appName}.`,
   canonicalUrlRelative: "/privacy-policy",
 });
 
-const PrivacyPolicy = () => {
+const sections = [
+  {
+    title: "1. Information We Collect",
+    body:
+      "We may collect information you provide directly, including name, email, contact messages, account information, and payment-related information needed to provide access. Payment details are processed by trusted third-party payment providers.",
+  },
+  {
+    title: "2. Product and Usage Data",
+    body:
+      "We may collect non-personal data such as browser type, device information, gameplay interactions, page views, analytics events, cookies, and similar signals to improve the product and troubleshoot issues.",
+  },
+  {
+    title: "3. How We Use Information",
+    body:
+      "We use information to operate Legal Arena, process access and payments, respond to support requests, improve game systems, detect abuse, send important updates, and maintain account security.",
+  },
+  {
+    title: "4. Data Sharing",
+    body:
+      "We do not sell your personal information. We may share limited data with service providers that help us run the product, such as authentication, payment, analytics, hosting, database, and email infrastructure providers.",
+  },
+  {
+    title: "5. Children's Privacy",
+    body:
+      "Legal Arena is not intended for children under the age of 13. We do not knowingly collect personal information from children under 13.",
+  },
+  {
+    title: "6. Updates to This Policy",
+    body:
+      "We may update this Privacy Policy as the product changes. Significant updates may be posted on this page or sent by email.",
+  },
+  {
+    title: "7. Contact and Requests",
+    body:
+      "For privacy questions, correction requests, deletion requests, or account concerns, send a message through the contact page.",
+  },
+];
+
+export default function PrivacyPolicyPage() {
   return (
-    <main className="max-w-xl mx-auto">
-      <div className="p-5">
-        <Link href="/" className="btn btn-ghost">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 20 20"
-            fill="currentColor"
-            className="w-5 h-5"
-          >
-            <path
-              fillRule="evenodd"
-              d="M15 10a.75.75 0 01-.75.75H7.612l2.158 1.96a.75.75 0 11-1.04 1.08l-3.5-3.25a.75.75 0 010-1.08l3.5-3.25a.75.75 0 111.04 1.08L7.612 9.25h6.638A.75.75 0 0115 10z"
-              clipRule="evenodd"
-            />
-          </svg>{" "}
-          Back
-        </Link>
-        <h1 className="text-3xl font-extrabold pb-6">
-          Privacy Policy for {config.appName}
-        </h1>
+    <main className="arena-landing min-h-screen overflow-hidden bg-[#020202] text-white">
+      <section className="arena-column-bg border-b border-white/10">
+        <div className="mx-auto max-w-5xl px-5 py-14 md:px-8 md:py-20">
+          <Link href="/" className="arena-pill inline-flex items-center gap-2 px-4 py-2 text-sm">
+            <HeroIcons.ArrowLeftIcon className="h-4 w-4" aria-hidden="true" />
+            Legal Arena
+          </Link>
 
-        <pre
-          className="leading-relaxed whitespace-pre-wrap"
-          style={{ fontFamily: "sans-serif" }}
-        >
-          {`Last Updated: March 15, 2026
+          <p className="arena-kicker mt-10">Privacy</p>
+          <h1 className="arena-headline mt-5 max-w-4xl text-5xl uppercase leading-[0.92] md:text-7xl">
+            Privacy Policy
+          </h1>
+          <p className="mt-6 max-w-3xl text-lg leading-8 text-white/66">
+            Last updated: March 15, 2026. This page explains how Legal Arena collects,
+            uses, and protects information.
+          </p>
 
-Thank you for visiting Legal Arena ("we," "us," or "our"). This Privacy Policy outlines how we collect, use, and protect your personal and non-personal information when you use our website located at https://legalarena.app (the "Website").
+          <article className="arena-surface mt-10 p-5 md:p-8">
+            <div className="space-y-5">
+              {sections.map((section) => (
+                <section
+                  key={section.title}
+                  className="rounded-2xl border border-white/10 bg-black/25 p-5"
+                >
+                  <h2 className="text-lg font-semibold text-white">{section.title}</h2>
+                  <p className="mt-3 text-sm leading-7 text-white/62 md:text-base">
+                    {section.body}
+                  </p>
+                </section>
+              ))}
+            </div>
 
-By accessing or using the Website, you agree to the terms of this Privacy Policy. If you do not agree with the practices described in this policy, please do not use the Website.
-
-1. Information We Collect
-
-1.1 Personal Data
-
-We collect the following personal information from you:
-
-Name: We collect your name to personalize your experience and communicate with you effectively.
-Email: We collect your email address to send you important information regarding your orders, updates, and communication.
-Payment Information: We collect payment details to process your orders securely. However, we do not store your payment information on our servers. Payments are processed by trusted third-party payment processors.
-
-1.2 Non-Personal Data
-
-We may use web cookies and similar technologies to collect non-personal information such as your IP address, browser type, device information, and browsing patterns. This information helps us to enhance your browsing experience, analyze trends, and improve our services.
-
-2. Purpose of Data Collection
-
-We collect and use your personal data for the sole purpose of order processing. This includes processing your orders, sending order confirmations, providing customer support, and keeping you updated about the status of your orders.
-
-3. Data Sharing
-
-We do not share your personal data with any third parties except as required for order processing (e.g., sharing your information with payment processors). We do not sell, trade, or rent your personal information to others.
-
-4. Children's Privacy
-
-Legal Arena is not intended for children under the age of 13. We do not knowingly collect personal information from children. If you are a parent or guardian and believe that your child has provided us with personal information, please contact us at the email address provided below.
-
-5. Updates to the Privacy Policy
-
-We may update this Privacy Policy from time to time to reflect changes in our practices or for other operational, legal, or regulatory reasons. Any updates will be posted on this page, and we may notify you via email about significant changes.
-
-6. Contact Information
-
-If you have any questions, concerns, or requests related to this Privacy Policy, you can contact us at:
-
-Email: support@legalarena.app
-
-For all other inquiries, please visit our Contact Us page on the Website.
-
-By using Legal Arena, you consent to the terms of this Privacy Policy.`}
-        </pre>
-      </div>
+            <div className="mt-6 rounded-2xl border border-emerald-200/15 bg-emerald-300/10 p-5 text-sm leading-7 text-emerald-50/82">
+              Need help with a privacy request? Use the{" "}
+              <Link href="/contact" className="font-semibold text-emerald-100 underline underline-offset-4">
+                contact page
+              </Link>
+              .
+            </div>
+          </article>
+        </div>
+      </section>
     </main>
   );
-};
-
-export default PrivacyPolicy;
+}

@@ -47,11 +47,7 @@ export default function Section1({ id }) {
         </span>
       </div>
       <p className="mt-5 text-base leading-8 text-white/72">
-        {`If you want the quick game-focused overview before reading the full manual, start with the `}
-        <Link href="/lawyer-game" className="text-white underline underline-offset-4">
-          lawyer game page
-        </Link>
-        {`. Once you start a case, the game moves into intake mode. That stage is where strong runs are usually won or lost.`}
+        {`Once you start a case, the game moves into intake mode. That stage is where strong runs are usually won or lost, so begin with a matter whose facts you can read carefully and question patiently.`}
       </p>
       </div>
     </section>

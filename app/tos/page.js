@@ -1,99 +1,95 @@
 import Link from "next/link";
+import * as HeroIcons from "@heroicons/react/24/outline";
 import { getSEOTags } from "@/libs/seo";
 import config from "@/config";
 
-// CHATGPT PROMPT TO GENERATE YOUR TERMS & SERVICES — replace with your own data 👇
-
-// 1. Go to https://chat.openai.com/
-// 2. Copy paste bellow
-// 3. Replace the data with your own (if needed)
-// 4. Paste the answer from ChatGPT directly in the <pre> tag below
-
-// You are an excellent lawyer.
-
-// I need your help to write a simple Terms & Services for my website. Here is some context:
-// - Website: https://legalarena.app
-// - Name: Legal Arena
-// - Contact information: support@legalarena.app
-// - Description: A legal training platform where users practice client intake, build case files, and argue simulated disputes
-// - Ownership: when buying a package, users can download code to create apps. They own the code but they do not have the right to resell it. They can ask for a full refund within 7 day after the purchase.
-// - User data collected: name, email and payment information
-// - Non-personal data collection: web cookies
-// - Link to privacy-policy: https://legalarena.app/privacy-policy
-// - Governing Law: France
-// - Updates to the Terms: users will be updated by email
-
-// Please write a simple Terms & Services for my site. Add the current date. Do not add or explain your reasoning. Answer:
-
 export const metadata = getSEOTags({
   title: `Terms and Conditions | ${config.appName}`,
+  description: `Terms and conditions for using ${config.appName}.`,
   canonicalUrlRelative: "/tos",
 });
 
-const TOS = () => {
+const sections = [
+  {
+    title: "1. Description of Legal Arena",
+    body:
+      "Legal Arena is a legal strategy game and training simulator that provides interactive case simulations, client-intake exercises, case-building workflows, and simulated courtroom practice tools.",
+  },
+  {
+    title: "2. Ownership and Usage Rights",
+    body:
+      "When you purchase or use Legal Arena, you receive access to the platform and its features for your own personal or internal use. You may not resell, repackage, redistribute, scrape, or commercially exploit the platform, generated case content, or underlying product experience without permission.",
+  },
+  {
+    title: "3. User Data and Privacy",
+    body:
+      "We collect and store user data such as name, email, account activity, and payment-related information as necessary to provide the service. Payment details are handled by third-party payment providers. For more detail, review the Privacy Policy.",
+  },
+  {
+    title: "4. Cookies and Analytics",
+    body:
+      "We may use cookies and analytics tools to understand product usage, improve reliability, monitor performance, and make the experience better for players.",
+  },
+  {
+    title: "5. No Legal Advice",
+    body:
+      "Legal Arena is a game and training simulator. It is not a lawyer, law firm, legal advice service, or substitute for hiring a licensed attorney for a real dispute.",
+  },
+  {
+    title: "6. Governing Law",
+    body:
+      "These Terms are governed by the laws of France, unless another jurisdiction is required by applicable consumer protection law.",
+  },
+  {
+    title: "7. Updates to the Terms",
+    body:
+      "We may update these Terms from time to time. When changes are material, we may notify users by email or through the product.",
+  },
+];
+
+export default function TermsPage() {
   return (
-    <main className="max-w-xl mx-auto">
-      <div className="p-5">
-        <Link href="/" className="btn btn-ghost">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 20 20"
-            fill="currentColor"
-            className="w-5 h-5"
-          >
-            <path
-              fillRule="evenodd"
-              d="M15 10a.75.75 0 01-.75.75H7.612l2.158 1.96a.75.75 0 11-1.04 1.08l-3.5-3.25a.75.75 0 010-1.08l3.5-3.25a.75.75 0 111.04 1.08L7.612 9.25h6.638A.75.75 0 0115 10z"
-              clipRule="evenodd"
-            />
-          </svg>
-          Back
-        </Link>
-        <h1 className="text-3xl font-extrabold pb-6">
-          Terms and Conditions for {config.appName}
-        </h1>
+    <main className="arena-landing min-h-screen overflow-hidden bg-[#020202] text-white">
+      <section className="arena-column-bg border-b border-white/10">
+        <div className="mx-auto max-w-5xl px-5 py-14 md:px-8 md:py-20">
+          <Link href="/" className="arena-pill inline-flex items-center gap-2 px-4 py-2 text-sm">
+            <HeroIcons.ArrowLeftIcon className="h-4 w-4" aria-hidden="true" />
+            Legal Arena
+          </Link>
 
-        <pre
-          className="leading-relaxed whitespace-pre-wrap"
-          style={{ fontFamily: "sans-serif" }}
-        >
-          {`Last Updated: March 15, 2026
+          <p className="arena-kicker mt-10">Legal</p>
+          <h1 className="arena-headline mt-5 max-w-4xl text-5xl uppercase leading-[0.92] md:text-7xl">
+            Terms and Conditions
+          </h1>
+          <p className="mt-6 max-w-3xl text-lg leading-8 text-white/66">
+            Last updated: March 15, 2026. These terms govern your use of Legal Arena.
+          </p>
 
-Welcome to Legal Arena!
+          <article className="arena-surface mt-10 p-5 md:p-8">
+            <div className="space-y-5">
+              {sections.map((section) => (
+                <section
+                  key={section.title}
+                  className="rounded-2xl border border-white/10 bg-black/25 p-5"
+                >
+                  <h2 className="text-lg font-semibold text-white">{section.title}</h2>
+                  <p className="mt-3 text-sm leading-7 text-white/62 md:text-base">
+                    {section.body}
+                  </p>
+                </section>
+              ))}
+            </div>
 
-These Terms of Service ("Terms") govern your use of the Legal Arena website at https://legalarena.app ("Website") and the services provided by Legal Arena. By using our Website and services, you agree to these Terms.
-
-1. Description of Legal Arena
-
-Legal Arena is a legal training platform that provides interactive case simulations, client-intake exercises, and courtroom practice tools.
-
-2. Ownership and Usage Rights
-
-When you purchase or use Legal Arena, you receive access to the training platform and its features for your own internal use. You may not resell, repackage, or redistribute the platform or its underlying content without permission.
-
-3. User Data and Privacy
-
-We collect and store user data, including name, email, and payment information, as necessary to provide our services. For details on how we handle your data, please refer to our Privacy Policy at https://legalarena.app/privacy-policy.
-
-4. Non-Personal Data Collection
-
-We use web cookies to collect non-personal data for the purpose of improving our services and user experience.
-
-5. Governing Law
-
-These Terms are governed by the laws of France.
-
-6. Updates to the Terms
-
-We may update these Terms from time to time. Users will be notified of any changes via email.
-
-For any questions or concerns regarding these Terms of Service, please contact us at support@legalarena.app.
-
-Thank you for using Legal Arena!`}
-        </pre>
-      </div>
+            <div className="mt-6 rounded-2xl border border-amber-100/15 bg-amber-100/10 p-5 text-sm leading-7 text-amber-50/82">
+              Questions about these Terms? Use the{" "}
+              <Link href="/contact" className="font-semibold text-amber-100 underline underline-offset-4">
+                contact page
+              </Link>
+              .
+            </div>
+          </article>
+        </div>
+      </section>
     </main>
   );
-};
-
-export default TOS;
+}

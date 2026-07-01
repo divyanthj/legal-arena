@@ -36,11 +36,9 @@ export const metadata = getSEOTags({
 });
 
 const navItems = [
-  { label: "Lawyer Game", href: "/lawyer-game" },
   { label: "How It Works", href: "#how-it-works" },
   { label: "Features", href: "#features" },
   { label: "Case Library", href: "#case-library" },
-  { label: "Leaderboard", href: "#leaderboard" },
 ];
 
 const featureHighlights = [
@@ -118,10 +116,6 @@ const practiceCards = [
       "Challenge another player to the same dispute. You each prepare privately with your own AI client, then fight it out in court with an AI judge.",
   },
 ];
-
-const earlyAccessPlan = config.lemonsqueezy.plans[0];
-const currentEarlyAccessPrice = `$${earlyAccessPlan.price.toFixed(2)}`;
-const nextEarlyAccessPrice = `$${earlyAccessPlan.priceAnchor.toFixed(2)}`;
 
 const loadFeaturedCases = async () => {
   try {
@@ -365,26 +359,18 @@ export default async function Page() {
           <div className="arena-surface-soft mx-auto mb-8 flex max-w-5xl flex-col gap-4 border-amber-200/22 bg-amber-200/[0.055] px-5 py-4 text-left md:flex-row md:items-center md:justify-between">
             <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-amber-100/72">
-                Magna Carta Early-Access Offer
+                Brand new UI
               </p>
               <h2 className="mt-2 text-xl font-semibold leading-tight text-white">
-                Lifetime access is {currentEarlyAccessPrice} through{" "}
-                {earlyAccessPlan.priceDeadline}.
+                Legal Arena has a brand new interface.
               </h2>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-amber-50/78">
-                On {earlyAccessPlan.priceIncreaseDate}, the price increases to{" "}
-                {nextEarlyAccessPrice}. Buy now and keep access as the Legal
-                Arena case library grows.
+                The arena is cleaner, faster to scan, and easier to navigate,
+                with the same case-building and courtroom flow underneath.
               </p>
             </div>
             <div className="flex w-full shrink-0 flex-col gap-3 md:w-auto">
-              <Link
-                href="/dashboard"
-                className="arena-btn-light inline-flex w-full justify-center whitespace-nowrap px-5 py-3 text-sm"
-              >
-                Lock In {currentEarlyAccessPrice}
-              </Link>
-              <WhatsNewDialog />
+              <WhatsNewDialog buttonLabel="See what's new" />
             </div>
           </div>
           <div className="mx-auto max-w-6xl">
@@ -490,10 +476,10 @@ export default async function Page() {
               ))}
             </div>
             <Link
-              href="/lawyer-game"
+              href="/dashboard"
               className="arena-btn-dark mt-10 inline-flex px-5 py-4 text-sm"
             >
-              Try the First AI Lawyer Game
+              Start Playing
             </Link>
           </div>
 

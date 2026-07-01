@@ -8,7 +8,6 @@ import config from "@/config";
 import { categories } from "../content";
 
 const links = [
-  { href: "/lawyer-game", label: "Lawyer Game" },
   { href: "/blog", label: "All Posts" },
 ];
 
