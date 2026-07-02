@@ -228,6 +228,8 @@ const settlementSchema = mongoose.Schema(
     finalTerms: { type: [String], default: [] },
     outcomeSummary: { type: String, default: "" },
     failureReason: { type: String, default: "" },
+    rejectionCount: { type: Number, default: 0 },
+    cooldownUntil: { type: Date, default: null },
     startedAt: { type: Date, default: null },
     completedAt: { type: Date, default: null },
   },

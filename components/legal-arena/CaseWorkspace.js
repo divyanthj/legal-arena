@@ -56,6 +56,26 @@ const cleanDraftList = (value) =>
     .map((item) => item.trim())
     .filter(Boolean);
 
+const formatSettlementCooldown = (milliseconds = 0) => {
+  const totalSeconds = Math.max(0, Math.ceil(Number(milliseconds) / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  if (minutes >= 60) {
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+    return `${hours}h ${remainingMinutes}m`;
+  }
+
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+};
+
+const triggerSettlementHaptic = () => {
+  if (typeof window !== "undefined" && typeof window.navigator?.vibrate === "function") {
+    window.navigator.vibrate(8);
+  }
+};
+
 const CourtPortraitAvatar = ({
   src,
   alt,
@@ -683,6 +703,9 @@ export default function CaseWorkspace({
   const [settlementMessage, setSettlementMessage] = useState("");
   const [showSettlementDialog, setShowSettlementDialog] = useState(false);
   const [settlementRejected, setSettlementRejected] = useState(false);
+  const [settlementCooldownNow, setSettlementCooldownNow] = useState(() => Date.now());
+  const [activeSettlementTab, setActiveSettlementTab] = useState("deal");
+  const [showSettlementOfferPreview, setShowSettlementOfferPreview] = useState(false);
   const [working, setWorking] = useState(false);
   const [pendingAction, setPendingAction] = useState("");
   const [pendingSpeaker, setPendingSpeaker] = useState("");
@@ -762,6 +785,10 @@ export default function CaseWorkspace({
   });
   const getApiBasePath = (session = caseSession) =>
     apiConfig.basePath || `/cases/${getCaseRouteRef(session)}`;
+  const getWorkspaceHref = (session = caseSession) =>
+    apiConfig.workspaceHref || `/dashboard/cases/${getCaseRouteRef(session)}`;
+  const getSettlementHref = (session = caseSession) =>
+    apiConfig.settlementHref || `${getWorkspaceHref(session)}/settlement`;
   const realtimeRefreshPath = apiConfig.realtimeRefreshPath || getApiBasePath(caseSession);
   const realtimeRefreshIntervalMs = apiConfig.realtimeRefreshIntervalMs || 4000;
   const analyticsMode = apiConfig.analyticsMode || (apiConfig.basePath ? "pvp" : "solo");
@@ -899,6 +926,24 @@ export default function CaseWorkspace({
 
     return () => window.clearTimeout(timeoutId);
   }, [isInterview, visibleInterviewTranscript.length]);
+
+  useEffect(() => {
+    const cooldownUntil = caseSession.settlement?.cooldownUntil;
+    if (!cooldownUntil || typeof window === "undefined") {
+      return undefined;
+    }
+
+    const cooldownUntilTime = new Date(cooldownUntil).getTime();
+    if (!Number.isFinite(cooldownUntilTime) || cooldownUntilTime <= Date.now()) {
+      return undefined;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setSettlementCooldownNow(Date.now());
+    }, 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, [caseSession.settlement?.cooldownUntil]);
 
   useEffect(() => {
     if (!isInterview || !interviewTranscriptRef.current) {
@@ -1082,7 +1127,13 @@ export default function CaseWorkspace({
   };
 
   const submitSettlementMessage = async ({ initial = false } = {}) => {
-    if (working || isIntakeLocked || !canSettleCase || !settlementMessage.trim()) {
+    if (
+      working ||
+      isIntakeLocked ||
+      !canSettleCase ||
+      isSettlementCooldownActive ||
+      !settlementMessage.trim()
+    ) {
       return;
     }
 
@@ -1103,6 +1154,9 @@ export default function CaseWorkspace({
         setSettlementRejected(true);
       } else {
         setShowSettlementDialog(false);
+        if (nextCase?.status === "settlement" && typeof window !== "undefined") {
+          router.replace(getSettlementHref(nextCase));
+        }
         toast.success(
           nextCase?.status === "settled"
             ? "Settlement reached."
@@ -1666,6 +1720,14 @@ export default function CaseWorkspace({
   }, [lastOpponentCourtEntryKey]);
 
   const settlement = caseSession.settlement || {};
+  const settlementCooldownUntilTime = settlement.cooldownUntil
+    ? new Date(settlement.cooldownUntil).getTime()
+    : NaN;
+  const settlementCooldownRemainingMs = Number.isFinite(settlementCooldownUntilTime)
+    ? Math.max(0, settlementCooldownUntilTime - settlementCooldownNow)
+    : 0;
+  const isSettlementCooldownActive = settlementCooldownRemainingMs > 0;
+  const settlementCooldownLabel = formatSettlementCooldown(settlementCooldownRemainingMs);
   const settlementMoodItems = [
     {
       key: "player",
@@ -1680,30 +1742,121 @@ export default function CaseWorkspace({
   ];
   const settlementTranscript = settlement.transcript || [];
   const settlementIsTerminal = isSettled || ["settled", "failed"].includes(settlement.status);
-
-  const renderMoodMeter = (item) => {
-    const percent = Math.max(0, Math.min(100, item.value + 100) / 2);
-    const tone =
-      item.value >= 50
-        ? "bg-emerald-300"
-        : item.value >= 0
-        ? "bg-amber-300"
-        : item.value <= -70
-        ? "bg-rose-400"
-        : "bg-orange-300";
-
-    return (
-      <div key={item.key} className="arena-surface-soft p-4">
-        <div className="flex items-center justify-between gap-3">
-          <p className="min-w-0 truncate text-sm font-semibold text-white">{item.label}</p>
-          <span className="shrink-0 text-sm font-bold text-white/80">{item.value}%</span>
-        </div>
-        <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10">
-          <div className={`h-full rounded-full ${tone}`} style={{ width: `${percent}%` }} />
-        </div>
-      </div>
-    );
+  const playerSettlementWants = cleanDraftList([
+    ...(factSheetDraft.desiredRelief || []),
+    caseSession.premise?.desiredRelief,
+    ...(settlement.currentTerms || []),
+  ]).slice(0, 4);
+  const opponentSettlementWants = cleanDraftList([
+    ...(factSheetDraft.disputedFacts || []),
+    ...(factSheetDraft.risks || []),
+    ...(caseSession.factSheet?.knownClaims || []),
+  ]).slice(0, 4);
+  const settlementTerms = settlement.finalTerms?.length
+    ? settlement.finalTerms
+    : settlement.currentTerms || [];
+  const settlementEvidenceTiles = [
+    { title: "Theory", subtitle: "Case posture", items: factSheetDraft.theory, icon: HeroIcons.LightBulbIcon },
+    { title: "Timeline", subtitle: "Key events", items: factSheetDraft.timeline, icon: HeroIcons.ClockIcon },
+    { title: "Proof", subtitle: "Support", items: factSheetDraft.corroboratedFacts, icon: HeroIcons.DocumentTextIcon },
+    { title: "Payment Records", subtitle: "Amounts", items: factSheetDraft.supportingFacts, icon: HeroIcons.BanknotesIcon },
+    { title: "Risks", subtitle: "Concerns", items: factSheetDraft.risks, icon: HeroIcons.ExclamationTriangleIcon },
+    { title: "More Documents", subtitle: "Gaps", items: factSheetDraft.missingEvidence, icon: HeroIcons.FolderOpenIcon },
+  ];
+  const settlementAmountOption =
+    settlementTerms.find((term) => /\$|payment|amount|balance/i.test(term)) ||
+    firstDraftItem(factSheetDraft.desiredRelief) ||
+    "Open amount";
+  const settlementTimingOption =
+    settlementTerms.find((term) => /day|week|month|deadline|within|timeline/i.test(term)) ||
+    "Prompt performance";
+  const settlementRelationshipOption =
+    settlementTerms.find((term) => /future|relationship|work|release|waive/i.test(term)) ||
+    "Mutual release";
+  const settlementConfidentialityOption =
+    settlementTerms.find((term) => /confidential|private|non-disclosure/i.test(term)) ||
+    "Mutual";
+  const settlementOpponentName = opponentPartyName || settlementMoodItems[1].label;
+  const settlementClientMood = settlementMoodItems[0].value;
+  const settlementOpponentMood = settlementMoodItems[1].value;
+  const describeSettlementMood = (value) => {
+    if (value >= 45) return "Cooperative";
+    if (value >= 10) return "Open";
+    if (value > -20) return "Cautious";
+    if (value > -55) return "Strained";
+    return "Near impasse";
   };
+  const getSettlementMoodEmoji = (value) => {
+    if (value >= 45) return "🙂";
+    if (value >= 10) return "😐";
+    if (value > -20) return "😕";
+    if (value > -55) return "😟";
+    return "😠";
+  };
+  const formatSettlementEntryTime = (createdAt) => {
+    if (!createdAt) return "";
+    const date = new Date(createdAt);
+    if (Number.isNaN(date.getTime())) return "";
+    return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  };
+  const getSettlementAcceptance = (value) => {
+    if (value >= 25) return { label: "Likely", tone: "text-emerald-200", icon: HeroIcons.CheckCircleIcon };
+    if (value > -35) return { label: "Uncertain", tone: "text-amber-100", icon: HeroIcons.MinusCircleIcon };
+    return { label: "No", tone: "text-red-200", icon: HeroIcons.XCircleIcon };
+  };
+  const clientAcceptance = getSettlementAcceptance(settlementClientMood);
+  const opponentAcceptance = getSettlementAcceptance(settlementOpponentMood);
+  const settlementChance = Math.max(
+    5,
+    Math.min(95, Math.round(((settlementClientMood + 100) + (settlementOpponentMood + 100)) / 4))
+  );
+  const settlementStageIndex = settlementIsTerminal
+    ? 4
+    : settlementTranscript.length >= 6
+    ? 2
+    : settlementTranscript.length >= 2
+    ? 1
+    : 0;
+  const settlementStages = [
+    "Opening Offer",
+    "Counteroffers",
+    "Terms Narrowing",
+    "Client Approval",
+    "Finalize Settlement",
+  ];
+  const playerHardLines = cleanDraftList([
+    firstDraftItem(factSheetDraft.risks),
+    "No admission of fault",
+    "No open-ended extra work",
+  ]).slice(0, 3);
+  const opponentHardLines = cleanDraftList([
+    firstDraftItem(factSheetDraft.disputedFacts),
+    "Payment amount is lower",
+    "Quality concerns are acknowledged",
+  ]).slice(0, 3);
+  const recommendedNextMove =
+    settlementChance >= 70
+      ? "Both sides are close. Tighten payment timing and ask for approval on the current terms."
+      : settlementOpponentMood < settlementClientMood
+      ? "Opponent is cautious. Consider lowering the amount slightly or adding certainty on timing and corrective work."
+      : "Your client is the constraint. Preserve value while narrowing release, costs, and corrective-work obligations.";
+  const summarizeSettlementEntry = (entry) => {
+    const text = String(entry?.text || "").replace(/\s+/g, " ").trim();
+    return text.length > 120 ? `${text.slice(0, 117)}...` : text;
+  };
+  const settlementTabs = [
+    { key: "deal", label: "Deal Status" },
+    { key: "messages", label: "Messages" },
+    { key: "strategy", label: "Strategy Notes" },
+  ];
+  const currentOfferTerms = [
+    ["Settlement Amount", settlementAmountOption],
+    ["Payment Timeline", settlementTimingOption],
+    ["Corrective Work", settlementTerms.find((term) => /punch|credit|repair|corrective|work/i.test(term)) || "Limited corrective work"],
+    ["Release Terms", settlementRelationshipOption],
+    ["Costs", settlementTerms.find((term) => /cost|fee|fees/i.test(term)) || "Each side bears own costs"],
+    ["Fault", "No admission of fault"],
+  ];
 
   const renderSettleButton = (className = "arena-btn-dark w-full px-5 py-3") =>
     canSettleCase ? (
@@ -1714,125 +1867,500 @@ export default function CaseWorkspace({
           setSettlementRejected(false);
           setShowSettlementDialog(true);
         }}
-        disabled={working || isIntakeLocked}
+        disabled={working || isIntakeLocked || isSettlementCooldownActive}
       >
-        {pendingAction === "settlement-start" ? "Sending Offer..." : "Settle"}
+        {pendingAction === "settlement-start"
+          ? "Sending Offer..."
+          : isSettlementCooldownActive
+          ? `Settle in ${settlementCooldownLabel}`
+          : "Settle"}
       </button>
     ) : null;
 
-  const renderSettlementPanel = () => (
-    <div id="settlement" className="space-y-4">
-      <section className="arena-surface overflow-hidden">
-        <div className="p-4 sm:p-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+  const renderSettlementSideRail = ({ title, party, role, wants, moodItem, tone }) => {
+    const percent = Math.max(0, Math.min(100, moodItem.value + 100) / 2);
+    const fallbackWants =
+      tone === "player"
+        ? ["Recover a practical payment resolution.", "Avoid spending more time in court."]
+        : ["Reduce exposure on disputed charges.", "Account for delay or touch-up concerns."];
+    const isPlayer = tone === "player";
+    const accent =
+      isPlayer
+        ? "border-emerald-300/9 bg-emerald-400/[0.045]"
+        : "border-red-300/9 bg-red-400/[0.045]";
+    const Icon = isPlayer ? HeroIcons.BuildingOffice2Icon : HeroIcons.BuildingStorefrontIcon;
+    const moodEmoji = getSettlementMoodEmoji(moodItem.value);
+    const acceptance = isPlayer ? clientAcceptance : opponentAcceptance;
+    const AcceptanceIcon = acceptance.icon;
+    const hardLines = isPlayer ? playerHardLines : opponentHardLines;
+
+    return (
+      <aside className={`settlement-interactive flex min-h-full flex-col rounded-2xl border ${accent} p-4 shadow-[0_18px_45px_rgba(0,0,0,0.32)] hover:shadow-[0_22px_55px_rgba(0,0,0,0.38)]`}>
+        <div>
+          <p className={`text-xs font-black uppercase tracking-[0.18em] ${isPlayer ? "text-emerald-200" : "text-red-200"}`}>
+            {title}
+          </p>
+          <p className="mt-3 text-base font-bold leading-5 text-white">{party}</p>
+          <p className={`mt-1 text-xs font-semibold ${isPlayer ? "text-emerald-200/70" : "text-red-200/70"}`}>{role}</p>
+        </div>
+
+        <div className={`mt-5 flex h-14 w-14 items-center justify-center rounded-full border ${isPlayer ? "border-emerald-300/10 bg-emerald-300/9 text-emerald-100" : "border-red-300/10 bg-red-300/9 text-red-100"}`}>
+          <Icon className="h-7 w-7" aria-hidden="true" />
+        </div>
+
+        <div className="mt-5 rounded-xl border border-white/[0.024] bg-black/22 p-3">
+          <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="arena-kicker text-emerald-200">Settlement</p>
-              <h2 className="arena-headline mt-2 text-3xl">
-                {isSettled ? "Agreement reached" : settlement.status === "failed" ? "Talks broke down" : "Negotiation room"}
-              </h2>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-white/62">
-                Settle the matter by keeping both parties willing to accept the same practical terms.
+              <p className={`text-xs font-black uppercase tracking-[0.16em] ${isPlayer ? "text-emerald-200" : "text-red-200"}`}>
+                Mood
+              </p>
+              <p className="mt-1 text-xs font-semibold text-white/52">
+                {describeSettlementMood(moodItem.value)}
               </p>
             </div>
-            <button
-              type="button"
-              className="arena-btn-dark min-h-0 px-4 py-2 text-sm"
-              onClick={handleSettlementExit}
-              disabled={working || settlementIsTerminal}
-            >
-              Return to Intake
-            </button>
+            <div className="flex items-center gap-2">
+              <span className="text-2xl" aria-label={`${describeSettlementMood(moodItem.value)} mood`}>
+                {moodEmoji}
+              </span>
+              <span className="text-2xl font-black text-white">
+                {moodItem.value > 0 ? "+" : ""}
+                {moodItem.value}
+              </span>
+            </div>
           </div>
-          <div className="mt-5 grid gap-3 sm:grid-cols-2">
-            {settlementMoodItems.map(renderMoodMeter)}
+          <div className="mt-4 flex items-center justify-between text-[0.62rem] font-bold text-white/38">
+            <span>-100</span>
+            <span>0</span>
+            <span>+100</span>
+          </div>
+          <div className="mt-1 h-2 overflow-hidden rounded-full bg-white/14">
+            <div
+              className={`h-full rounded-full ${isPlayer ? "bg-gradient-to-r from-emerald-200 to-emerald-400" : "bg-gradient-to-r from-red-200 to-red-400"}`}
+              style={{ width: `${percent}%` }}
+            />
+          </div>
+          <p className={`mt-4 text-xs font-black uppercase tracking-[0.14em] ${isPlayer ? "text-emerald-200" : "text-red-200"}`}>
+            Flexibility
+          </p>
+          <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/14">
+            <div
+              className={`h-full rounded-full ${isPlayer ? "bg-emerald-300" : "bg-red-300"}`}
+              style={{ width: `${percent}%` }}
+            />
+          </div>
+          <div className="mt-4 flex items-center justify-between rounded-lg border border-white/[0.024] bg-black/24 px-3 py-2">
+            <span className="text-xs font-semibold text-white/48">Likely accepts?</span>
+            <span className={`inline-flex items-center gap-1.5 text-xs font-black ${acceptance.tone}`}>
+              <AcceptanceIcon className="h-4 w-4" aria-hidden="true" />
+              {acceptance.label}
+            </span>
           </div>
         </div>
-      </section>
 
-      {(settlement.currentTerms || []).length || (settlement.finalTerms || []).length ? (
-        <section className="arena-surface p-4 sm:p-6">
-          <p className="arena-kicker">Terms</p>
-          <div className="mt-3 space-y-2">
-            {(settlement.finalTerms?.length ? settlement.finalTerms : settlement.currentTerms).map(
-              (term, index) => (
-                <div
-                  key={`${term}-${index}`}
-                  className="rounded-xl border border-emerald-200/14 bg-emerald-200/[0.045] p-3 text-sm leading-6 text-white/74"
-                >
-                  {term}
+        <div className="mt-6">
+          <p className={`text-xs font-black uppercase tracking-[0.16em] ${isPlayer ? "text-emerald-200" : "text-red-200"}`}>
+            Priorities
+          </p>
+          <ul className="mt-3 space-y-2">
+            {(wants.length ? wants : fallbackWants).slice(0, 4).map((item, index) => (
+              <li key={`${title}-want-${index}`} className="flex gap-2 text-xs leading-5 text-white/70">
+                <span className={`mt-2 h-1.5 w-1.5 shrink-0 rounded-full ${isPlayer ? "bg-emerald-300" : "bg-red-300"}`} />
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className={`mt-4 rounded-xl border p-3 ${isPlayer ? "border-emerald-300/8 bg-emerald-300/[0.035]" : "border-red-300/8 bg-red-300/[0.035]"}`}>
+          <p className={`text-xs font-black uppercase tracking-[0.14em] ${isPlayer ? "text-emerald-200" : "text-red-200"}`}>
+            Hard Line
+          </p>
+          <ul className="mt-2 space-y-1.5">
+            {(hardLines.length ? hardLines : ["No unacceptable open-ended terms"]).map((item, index) => (
+              <li key={`${title}-hardline-${index}`} className="flex gap-2 text-xs leading-5 text-white/68">
+                <HeroIcons.NoSymbolIcon className={`mt-0.5 h-4 w-4 shrink-0 ${isPlayer ? "text-emerald-200/75" : "text-red-200/75"}`} aria-hidden="true" />
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </aside>
+    );
+  };
+
+  const renderSettlementPanel = () => {
+    const ClientIcon = clientAcceptance.icon;
+    const OpponentIcon = opponentAcceptance.icon;
+
+    return (
+      <div id="settlement" className="settlement-cockpit mx-auto w-full max-w-[1600px] space-y-4">
+        <section className="arena-surface settlement-cockpit-surface overflow-hidden bg-amber-200/[0.018]">
+          <div className="p-4 sm:p-6">
+            <div className="flex flex-col gap-4 border-b border-white/[0.024] pb-5 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="arena-kicker text-amber-200">Settlement</p>
+                <h2 className="arena-headline mt-2 text-3xl sm:text-4xl">
+                  {isSettled ? "Agreement Reached" : settlement.status === "failed" ? "Talks Broke Down" : "Negotiation Cockpit"}
+                </h2>
+                <p className="mt-3 max-w-2xl text-sm leading-6 text-white/62">
+                  Manage the current offer, both clients&apos; acceptance, and the next negotiation move.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="arena-btn-dark settlement-interactive inline-flex min-h-0 items-center gap-2 px-4 py-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-200/45"
+                onClick={handleSettlementExit}
+                onPointerDown={triggerSettlementHaptic}
+                disabled={working || settlementIsTerminal}
+              >
+                Return to Intake
+                <HeroIcons.ArrowRightIcon className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="mt-5 grid gap-3 lg:grid-cols-5">
+              {settlementStages.map((stage, index) => {
+                const isComplete = index < settlementStageIndex;
+                const isActive = index === settlementStageIndex;
+
+                return (
+                  <div
+                    key={stage}
+                    className={`settlement-interactive rounded-xl border px-3 py-2 ${
+                      isActive
+                        ? "border-amber-200/14 bg-amber-200/[0.07] text-amber-100 shadow-[0_0_0_1px_rgba(251,191,36,0.025)] hover:border-amber-200/28 hover:bg-amber-200/[0.095]"
+                        : isComplete
+                        ? "border-emerald-300/8 bg-emerald-300/[0.038] text-emerald-100 hover:border-emerald-300/16 hover:bg-emerald-300/[0.055]"
+                        : "border-white/[0.026] bg-white/[0.014] text-white/42 hover:border-white/[0.065] hover:bg-white/[0.028] hover:text-white/64"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-white/10 text-xs font-black">
+                        {isComplete ? <HeroIcons.CheckIcon className="h-4 w-4" aria-hidden="true" /> : index + 1}
+                      </span>
+                      <span className="text-xs font-bold">{stage}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="mt-5 grid gap-4 lg:grid-cols-[19rem_minmax(0,1fr)_19rem]">
+              {renderSettlementSideRail({
+                title: "Your Client",
+                party: playerPartyName,
+                role: playerRoleLabel,
+                wants: playerSettlementWants,
+                moodItem: settlementMoodItems[0],
+                tone: "player",
+              })}
+
+              <section className="overflow-hidden rounded-2xl border border-white/[0.026] bg-black/26 shadow-[0_18px_45px_rgba(0,0,0,0.32)] transition duration-200 hover:border-white/[0.045] hover:shadow-[0_22px_58px_rgba(0,0,0,0.42)]">
+                <div className="flex min-h-14 flex-wrap items-center justify-between gap-3 border-b border-white/[0.024] px-4">
+                  <p className="arena-kicker text-amber-100">Settlement Talks</p>
+                  <div className="flex rounded-xl border border-white/[0.026] bg-black/28 p-1">
+                    {settlementTabs.map((tab) => (
+                      <button
+                        key={tab.key}
+                        type="button"
+                        className={`settlement-interactive rounded-lg px-3 py-2 text-xs font-bold focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-200/45 ${
+                          activeSettlementTab === tab.key
+                            ? "bg-amber-200 text-black shadow-[0_8px_18px_rgba(251,191,36,0.16)]"
+                            : "text-white/52 hover:bg-white/[0.045] hover:text-white"
+                        }`}
+                        onClick={() => setActiveSettlementTab(tab.key)}
+                        onPointerDown={triggerSettlementHaptic}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              )
-            )}
+
+                {activeSettlementTab === "deal" ? (
+                  <div className="space-y-4 p-4">
+                    <div className="settlement-interactive rounded-2xl border border-amber-200/8 bg-amber-200/[0.045] p-4 hover:border-amber-200/16 hover:bg-amber-200/[0.055]">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <p className="arena-kicker text-amber-100">Current Offer</p>
+                          <p className="mt-2 text-sm text-white/52">The deal both sides are evaluating now.</p>
+                        </div>
+                        <span className="rounded-lg border border-emerald-300/8 bg-emerald-300/[0.08] px-3 py-1.5 text-xs font-bold text-emerald-100">
+                          {settlementTranscript.length ? "Live offer" : "Draft offer"}
+                        </span>
+                      </div>
+                      <div className="mt-4 grid gap-2 md:grid-cols-3">
+                        {currentOfferTerms.map(([label, value]) => (
+                          <div key={label} className="settlement-interactive rounded-xl border border-white/[0.024] bg-black/28 p-3 hover:border-amber-200/10 hover:bg-amber-200/[0.025]">
+                            <p className="text-[0.65rem] font-black uppercase tracking-[0.12em] text-white/38">{label}</p>
+                            <p className="mt-2 text-sm font-semibold leading-5 text-white">{value}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 md:grid-cols-[1fr_auto_1fr] md:items-stretch">
+                      <div className="settlement-interactive rounded-xl border border-emerald-300/8 bg-emerald-300/[0.045] p-4 hover:border-emerald-300/16">
+                        <p className="arena-kicker text-emerald-200">Your Client</p>
+                        <p className={`mt-3 flex items-center gap-2 text-lg font-black ${clientAcceptance.tone}`}>
+                          <ClientIcon className="h-6 w-6" aria-hidden="true" />
+                          {clientAcceptance.label}
+                        </p>
+                      </div>
+                      <div className="settlement-interactive grid min-h-28 min-w-28 place-items-center rounded-full border border-amber-200/10 bg-black/35 p-4 text-center hover:scale-[1.03] hover:border-amber-200/22">
+                        <div>
+                          <p className="text-3xl font-black text-amber-100">{settlementChance}%</p>
+                          <p className="mt-1 text-[0.65rem] font-bold uppercase tracking-[0.12em] text-white/42">Settlement Chance</p>
+                        </div>
+                      </div>
+                      <div className="settlement-interactive rounded-xl border border-red-300/8 bg-red-300/[0.045] p-4 hover:border-red-300/16 md:text-right">
+                        <p className="arena-kicker text-red-200">Opponent</p>
+                        <p className={`mt-3 flex items-center gap-2 text-lg font-black md:justify-end ${opponentAcceptance.tone}`}>
+                          <OpponentIcon className="h-6 w-6" aria-hidden="true" />
+                          {opponentAcceptance.label}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <div className="settlement-interactive rounded-xl border border-emerald-300/8 bg-emerald-300/[0.045] p-4 hover:border-emerald-300/16">
+                        <p className="text-xs font-black uppercase tracking-[0.14em] text-emerald-200">Settle Now</p>
+                        <dl className="mt-3 space-y-2 text-sm">
+                          <div className="flex justify-between gap-3"><dt className="text-white/48">Recovery</dt><dd className="font-semibold text-white">{settlementAmountOption}</dd></div>
+                          <div className="flex justify-between gap-3"><dt className="text-white/48">Time</dt><dd className="font-semibold text-white">{settlementTimingOption}</dd></div>
+                          <div className="flex justify-between gap-3"><dt className="text-white/48">Risk</dt><dd className="font-semibold text-emerald-100">Lower</dd></div>
+                        </dl>
+                      </div>
+                      <div className="settlement-interactive rounded-xl border border-red-300/8 bg-red-300/[0.045] p-4 hover:border-red-300/16">
+                        <p className="text-xs font-black uppercase tracking-[0.14em] text-red-200">Go To Court</p>
+                        <dl className="mt-3 space-y-2 text-sm">
+                          <div className="flex justify-between gap-3"><dt className="text-white/48">Upside</dt><dd className="font-semibold text-white">Potential full recovery</dd></div>
+                          <div className="flex justify-between gap-3"><dt className="text-white/48">Time</dt><dd className="font-semibold text-white">Months</dd></div>
+                          <div className="flex justify-between gap-3"><dt className="text-white/48">Risk</dt><dd className="font-semibold text-red-100">Medium / High</dd></div>
+                        </dl>
+                      </div>
+                    </div>
+
+                    <div className="settlement-interactive rounded-xl border border-amber-200/8 bg-amber-200/[0.045] p-4 hover:border-amber-200/16">
+                      <p className="flex items-center gap-2 text-sm font-semibold text-amber-100">
+                        <HeroIcons.LightBulbIcon className="h-5 w-5" aria-hidden="true" />
+                        Recommended next move
+                      </p>
+                      <p className="mt-2 text-sm leading-6 text-white/72">{recommendedNextMove}</p>
+                    </div>
+                  </div>
+                ) : null}
+
+                {activeSettlementTab === "messages" ? (
+                  <div className="arena-scroll max-h-[26rem] space-y-3 overflow-y-auto p-4">
+                    {settlementTranscript.length ? (
+                      settlementTranscript.map((entry, index) => (
+                        <details key={`${entry.createdAt || index}-summary`} className="settlement-interactive group rounded-xl border border-white/[0.024] bg-white/[0.016] p-3 hover:border-amber-200/10 hover:bg-amber-200/[0.025]">
+                          <summary className="cursor-pointer list-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-200/45">
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                              <div>
+                                <p className="text-xs font-black uppercase tracking-[0.14em] text-white/72">
+                                  {entry.role === "player" ? "You" : entry.speaker}
+                                  {formatSettlementEntryTime(entry.createdAt) ? (
+                                    <span className="ml-2 font-semibold text-white/35">{formatSettlementEntryTime(entry.createdAt)}</span>
+                                  ) : null}
+                                </p>
+                                <p className="mt-2 text-sm leading-5 text-white/70">{summarizeSettlementEntry(entry)}</p>
+                              </div>
+                              <div className="flex gap-2 text-[0.65rem] font-bold">
+                                <span className="rounded-full border border-amber-200/8 bg-amber-200/[0.05] px-2 py-1 text-amber-100">Terms</span>
+                                <span className="rounded-full border border-white/[0.032] bg-white/[0.02] px-2 py-1 text-white/48">Mood impact</span>
+                              </div>
+                            </div>
+                          </summary>
+                          <p className="mt-3 whitespace-pre-wrap border-t border-white/[0.024] pt-3 text-sm leading-6 text-white/68">{entry.text}</p>
+                        </details>
+                      ))
+                    ) : (
+                      <div className="rounded-xl border border-dashed border-amber-200/14 bg-amber-200/[0.035] p-5 text-sm text-white/45">
+                        No settlement messages yet.
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+
+                {activeSettlementTab === "strategy" ? (
+                  <div className="grid gap-3 p-4 md:grid-cols-2">
+                    {[
+                      ["Opponent signal", settlementOpponentMood < 0 ? "They are still resisting price and certainty." : "They are showing room to move if terms are concrete."],
+                      ["Client resistance", settlementClientMood < 0 ? "Your client may reject terms that feel like blame or unrecovered loss." : "Your client appears open if payment and release terms stay practical."],
+                      ["Best concession", "Trade a modest amount adjustment for faster payment, release certainty, or limited corrective work."],
+                      ["Risk if talks fail", "Court may increase upside, but time, proof gaps, and fee exposure become more important."],
+                    ].map(([title, body]) => (
+                      <div key={title} className="settlement-interactive rounded-xl border border-white/[0.024] bg-black/22 p-4 hover:border-amber-200/10 hover:bg-amber-200/[0.02]">
+                        <p className="text-xs font-black uppercase tracking-[0.14em] text-amber-100">{title}</p>
+                        <p className="mt-2 text-sm leading-6 text-white/68">{body}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+
+                {!settlementIsTerminal ? (
+                  <form className="border-t border-white/[0.024] p-4" onSubmit={handleSettlementMessageSubmit}>
+                    <div className="overflow-hidden rounded-xl border border-white/[0.024] bg-black/34 transition duration-150 focus-within:-translate-y-0.5 focus-within:border-amber-200/22 focus-within:shadow-[0_18px_40px_rgba(0,0,0,0.28)] hover:border-white/[0.055]">
+                      <textarea
+                        value={settlementMessage}
+                        onChange={(event) => setSettlementMessage(event.target.value)}
+                        rows={3}
+                        className="block min-h-20 w-full resize-none border-0 bg-transparent px-4 py-4 text-sm leading-6 text-white outline-none placeholder:text-white/34"
+                        placeholder="Type your negotiation message..."
+                        disabled={working}
+                      />
+                      <div className="flex items-center justify-between gap-3 border-t border-white/[0.024] px-4 py-3">
+                        <span className="text-xs font-semibold text-white/34">{settlementMessage.trim().length} / 2500</span>
+                        <button
+                          type="submit"
+                          className="arena-btn-light settlement-interactive inline-flex min-h-0 items-center gap-2 rounded-lg px-4 py-2 text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-200/45"
+                          onPointerDown={triggerSettlementHaptic}
+                          disabled={working || !settlementMessage.trim()}
+                        >
+                          {pendingAction === "settlement" ? "Sending..." : "Send Negotiation Message"}
+                          <HeroIcons.PaperAirplaneIcon className="h-4 w-4" aria-hidden="true" />
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+                ) : null}
+              </section>
+
+              {renderSettlementSideRail({
+                title: "Opponent",
+                party: settlementOpponentName,
+                role: opponentRoleLabel,
+                wants: opponentSettlementWants,
+                moodItem: settlementMoodItems[1],
+                tone: "opponent",
+              })}
+            </div>
           </div>
         </section>
-      ) : null}
 
-      <section className="arena-surface p-4 sm:p-6">
-        <p className="arena-kicker">Negotiation Transcript</p>
-        <div className="arena-scroll mt-4 max-h-[28rem] space-y-3 overflow-y-auto pr-1">
-          {settlementTranscript.length ? (
-            settlementTranscript.map((entry, index) => {
-              const isPlayer = entry.role === "player";
+        <section className="arena-surface settlement-cockpit-surface p-4 sm:p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="arena-kicker text-amber-200">Build Formal Offer</p>
+              <p className="mt-2 text-sm text-white/52">Shape the offer that both simulated clients must accept.</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="arena-btn-dark settlement-interactive min-h-0 px-4 py-2 text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-200/45"
+                onPointerDown={triggerSettlementHaptic}
+                onClick={() => setSettlementMessage((current) =>
+                  current.trim() || `A workable compromise may be ${settlementAmountOption}, ${settlementTimingOption}, and limited corrective work with mutual releases.`
+                )}
+              >
+                Suggest Compromise
+              </button>
+              <button
+                type="button"
+                className="arena-btn-dark settlement-interactive min-h-0 px-4 py-2 text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-200/45"
+                onPointerDown={triggerSettlementHaptic}
+                onClick={() => setShowSettlementOfferPreview((current) => !current)}
+              >
+                Preview Formal Offer
+              </button>
+            </div>
+          </div>
+          <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              ["Settlement Amount", settlementAmountOption],
+              ["Payment Timeline", settlementTimingOption],
+              ["Payment Method", "Bank transfer"],
+              ["Corrective Work / Credit", currentOfferTerms[2][1]],
+              ["Release Terms", settlementRelationshipOption],
+              ["Costs", currentOfferTerms[4][1]],
+              ["Confidentiality", settlementConfidentialityOption],
+              ["No Admission of Fault", "Included"],
+            ].map(([label, value]) => (
+              <div key={label} className="settlement-interactive rounded-xl border border-white/[0.024] bg-black/24 p-3 hover:border-amber-200/10 hover:bg-amber-200/[0.025]">
+                <p className="text-[0.65rem] font-bold uppercase tracking-[0.12em] text-white/38">{label}</p>
+                <p className="mt-2 line-clamp-2 text-sm font-semibold text-white/80">{value}</p>
+              </div>
+            ))}
+          </div>
+          {showSettlementOfferPreview ? (
+            <div className="mt-4 rounded-xl border border-amber-200/8 bg-amber-200/[0.045] p-4">
+              <p className="text-xs font-black uppercase tracking-[0.14em] text-amber-100">Formal Offer Preview</p>
+              <ul className="mt-3 grid gap-2 text-sm text-white/70 md:grid-cols-2">
+                {currentOfferTerms.map(([label, value]) => (
+                  <li key={`preview-${label}`} className="rounded-lg border border-white/[0.024] bg-black/22 p-3">
+                    <span className="font-semibold text-white">{label}:</span> {value}
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-3 grid gap-2 md:grid-cols-2">
+                <p className={`rounded-lg border border-white/[0.024] bg-black/22 p-3 text-sm ${clientAcceptance.tone}`}>
+                  Client reaction: {clientAcceptance.label}
+                </p>
+                <p className={`rounded-lg border border-white/[0.024] bg-black/22 p-3 text-sm ${opponentAcceptance.tone}`}>
+                  Opponent reaction: {opponentAcceptance.label}
+                </p>
+              </div>
+            </div>
+          ) : null}
+          <div className="mt-4 flex flex-col gap-3 rounded-xl border border-amber-200/8 bg-amber-200/[0.05] p-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="flex items-center gap-2 text-sm font-semibold text-amber-100">
+              <HeroIcons.ShieldCheckIcon className="h-5 w-5" aria-hidden="true" />
+              Both parties must agree to all terms for the settlement to be finalized.
+            </p>
+            {!settlementIsTerminal ? (
+              <button
+                type="button"
+                className="arena-btn-light settlement-interactive min-h-0 px-5 py-2 text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-200/45"
+                onPointerDown={triggerSettlementHaptic}
+                onClick={() => setSettlementMessage((current) =>
+                  current.trim() || `Formal settlement offer: ${currentOfferTerms.map(([label, value]) => `${label}: ${value}`).join("; ")}.`
+                )}
+              >
+                Send Formal Offer
+              </button>
+            ) : null}
+          </div>
+        </section>
+
+        <section className="arena-surface settlement-cockpit-surface p-4 sm:p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="arena-kicker text-amber-200">Case Reference</p>
+              <p className="mt-2 text-sm text-white/52">Compact reference only. Open the full file when needed.</p>
+            </div>
+            <a href="#fact-sheet-details" className="arena-btn-dark settlement-interactive inline-flex min-h-0 items-center gap-2 px-4 py-2 text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-200/45" onPointerDown={triggerSettlementHaptic}>
+              <HeroIcons.FolderOpenIcon className="h-4 w-4" aria-hidden="true" />
+              Open Full Case File
+            </a>
+          </div>
+          <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
+            {settlementEvidenceTiles.map((tile) => {
+              const Icon = tile.icon;
+              const count = cleanDraftList(tile.items).length;
+
               return (
-                <div
-                  key={`${entry.createdAt || index}-${index}`}
-                  className={`rounded-2xl border p-4 ${
-                    isPlayer
-                      ? "border-sky-300/20 bg-sky-300/[0.055]"
-                      : entry.role === "client"
-                      ? "border-emerald-300/18 bg-emerald-300/[0.05]"
-                      : "border-white/10 bg-white/[0.025]"
-                  }`}
-                >
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/42">
-                    {isPlayer ? "You" : entry.speaker}
-                  </p>
-                  <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-white/76">
-                    {entry.text}
-                  </p>
+                <div key={tile.title} className="settlement-interactive rounded-xl border border-white/[0.024] bg-white/[0.016] p-3 hover:border-emerald-300/10 hover:bg-emerald-300/[0.025]">
+                  <Icon className="h-6 w-6 text-emerald-200/80" aria-hidden="true" />
+                  <p className="mt-3 text-sm font-semibold text-white">{tile.title}</p>
+                  <p className="mt-1 text-xs text-white/40">{count ? `${count} item${count === 1 ? "" : "s"}` : tile.subtitle}</p>
                 </div>
               );
-            })
-          ) : (
-            <div className="rounded-xl border border-dashed border-white/10 bg-black/20 p-5 text-sm text-white/45">
-              No settlement messages yet.
-            </div>
-          )}
-        </div>
-      </section>
-
-      {settlement.outcomeSummary || settlement.failureReason ? (
-        <section className="arena-surface p-4 sm:p-6">
-          <p className="arena-kicker">{isSettled ? "Outcome" : "Status"}</p>
-          <p className="mt-3 text-sm leading-6 text-white/72">
-            {settlement.outcomeSummary || settlement.failureReason}
-          </p>
+            })}
+          </div>
         </section>
-      ) : null}
 
-      {!settlementIsTerminal ? (
-        <section className="rounded-2xl border border-emerald-300/24 bg-emerald-300/[0.055] p-4 sm:p-5">
-          <form className="space-y-4" onSubmit={handleSettlementMessageSubmit}>
-            <textarea
-              value={settlementMessage}
-              onChange={(event) => setSettlementMessage(event.target.value)}
-              rows={5}
-              className="w-full resize-none rounded-2xl border border-white/10 bg-black/24 p-4 text-sm leading-6 text-white outline-none placeholder:text-white/32 focus:border-emerald-200/50"
-              placeholder="Send a settlement proposal, concession, or counteroffer..."
-              disabled={working}
-            />
-            <button
-              type="submit"
-              className="arena-btn-light w-full px-5 py-3"
-              disabled={working || !settlementMessage.trim()}
-            >
-              {pendingAction === "settlement" ? "Sending..." : "Send Settlement Message"}
-            </button>
-          </form>
-        </section>
-      ) : null}
-    </div>
-  );
+        {settlement.outcomeSummary || settlement.failureReason ? (
+          <section className="arena-surface p-4 sm:p-6">
+            <p className="arena-kicker">{isSettled ? "Outcome" : "Status"}</p>
+            <p className="mt-3 text-sm leading-6 text-white/72">
+              {settlement.outcomeSummary || settlement.failureReason}
+            </p>
+          </section>
+        ) : null}
+      </div>
+    );
+  };
 
   const renderLawbookFilters = () => (
     <div className="mt-4 flex min-w-0 max-w-full flex-wrap gap-1.5 sm:mt-5 sm:gap-2">
@@ -2208,7 +2736,7 @@ export default function CaseWorkspace({
             <span className="shrink-0 rounded-lg border border-white/10 bg-white/[0.035] px-2.5 py-1 text-xs font-semibold text-white/72">
               {isCourtroom ? courtroomRoundLabel : courtroomStageLabel}
             </span>
-            {Number.isFinite(Number(displayedSuccessChance)) ? (
+            {!isSettlement && !isSettled && Number.isFinite(Number(displayedSuccessChance)) ? (
               <span
                 className="shrink-0 rounded-lg border border-emerald-300/25 bg-emerald-300/10 px-2.5 py-1 text-xs font-semibold text-emerald-100"
                 data-tooltip-id="success-chance-tooltip"
@@ -2294,7 +2822,7 @@ export default function CaseWorkspace({
                 >
                   {isCourtroom ? courtroomRoundLabel : courtroomStageLabel}
                 </span>
-                {Number.isFinite(Number(displayedSuccessChance)) ? (
+                {!isSettlement && !isSettled && Number.isFinite(Number(displayedSuccessChance)) ? (
                   <span
                     className="shrink-0 rounded-lg border border-emerald-300/25 bg-emerald-300/10 px-2.5 py-1 text-xs font-semibold text-emerald-100"
                     data-tooltip-id="success-chance-tooltip"
@@ -2320,29 +2848,31 @@ export default function CaseWorkspace({
               </div>
             </div>
 
-            <div className="mt-4 grid grid-cols-3 border-y border-white/10 text-xs font-semibold text-white/62">
-              <a
-                href="#case-brief-desktop"
-                className="flex items-center justify-center gap-1.5 py-3 transition hover:text-white"
-              >
-                <HeroIcons.DocumentTextIcon className="h-4 w-4" aria-hidden="true" />
-                Brief
-              </a>
-              <a
-                href="#fact-sheet-details"
-                className="flex items-center justify-center gap-1.5 py-3 transition hover:text-white"
-              >
-                <HeroIcons.ClipboardDocumentListIcon className="h-4 w-4" aria-hidden="true" />
-                Fact Sheet
-              </a>
-              <a
-                href="#desktop-lawbook-details"
-                className="flex items-center justify-center gap-1.5 py-3 transition hover:text-white"
-              >
-                <HeroIcons.BookOpenIcon className="h-4 w-4" aria-hidden="true" />
-                Lawbook
-              </a>
-            </div>
+            {!isSettlement && !isSettled ? (
+              <div className="mt-4 grid grid-cols-3 border-y border-white/10 text-xs font-semibold text-white/62">
+                <a
+                  href="#case-brief-desktop"
+                  className="flex items-center justify-center gap-1.5 py-3 transition hover:text-white"
+                >
+                  <HeroIcons.DocumentTextIcon className="h-4 w-4" aria-hidden="true" />
+                  Brief
+                </a>
+                <a
+                  href="#fact-sheet-details"
+                  className="flex items-center justify-center gap-1.5 py-3 transition hover:text-white"
+                >
+                  <HeroIcons.ClipboardDocumentListIcon className="h-4 w-4" aria-hidden="true" />
+                  Fact Sheet
+                </a>
+                <a
+                  href="#desktop-lawbook-details"
+                  className="flex items-center justify-center gap-1.5 py-3 transition hover:text-white"
+                >
+                  <HeroIcons.BookOpenIcon className="h-4 w-4" aria-hidden="true" />
+                  Lawbook
+                </a>
+              </div>
+            ) : null}
 
             {!isInterview ? (
               <div className="mt-4 grid gap-3 text-sm text-white/62 lg:grid-cols-[minmax(0,1fr)_minmax(260px,0.5fr)]">
@@ -2375,7 +2905,13 @@ export default function CaseWorkspace({
           </div>
         </div>
 
-        <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(360px,0.75fr)]">
+            <div
+              className={`grid min-w-0 gap-6 ${
+                isSettlement || isSettled
+                  ? "mx-auto w-full max-w-[1600px]"
+                  : "xl:grid-cols-[minmax(0,1.45fr)_minmax(360px,0.75fr)]"
+              }`}
+            >
           <section className="min-w-0 space-y-6">
             {isInterview ? (
               <>
@@ -3050,6 +3586,8 @@ export default function CaseWorkspace({
                 </section>
               </div>
               </>
+            ) : isSettlement || isSettled ? (
+              renderSettlementPanel()
             ) : isExited ? (
               <div className="arena-surface">
                 <div className="p-4 sm:p-6">
@@ -3082,7 +3620,7 @@ export default function CaseWorkspace({
                           <span className="ml-1 text-white/38">({opponentRoleLabel})</span>
                         </p>
                       </div>
-                      {Number.isFinite(Number(displayedSuccessChance)) ? (
+                      {!isSettlement && !isSettled && Number.isFinite(Number(displayedSuccessChance)) ? (
                         <span
                           className="shrink-0 rounded-xl border border-emerald-300/25 bg-emerald-300/10 px-3 py-2 text-sm font-semibold text-emerald-100"
                           data-tooltip-id="success-chance-tooltip"
@@ -3691,8 +4229,6 @@ export default function CaseWorkspace({
               </>
             )}
 
-            {(isSettlement || isSettled) && renderSettlementPanel()}
-
             {(isInterview || isCourtroom) &&
               renderLawbookPanel("hidden xl:block", "desktop-lawbook-details")}
 
@@ -4054,7 +4590,7 @@ export default function CaseWorkspace({
                     >
                       {caseSession.factSheet.ready ? "Court-ready" : "Draft"}
                     </span>
-                    {Number.isFinite(Number(displayedSuccessChance)) ? (
+                    {!isSettlement && !isSettled && Number.isFinite(Number(displayedSuccessChance)) ? (
                       <span
                         className="badge border border-sky-300/35 bg-sky-300/10 px-3 py-3 text-sky-100"
                         data-tooltip-id="success-chance-tooltip"
@@ -4180,7 +4716,7 @@ export default function CaseWorkspace({
                     <p className="arena-kicker">Intake Progress</p>
                     <div className="mt-2 flex flex-wrap items-center gap-3">
                       <h2 className="arena-headline text-2xl">Build the record</h2>
-                      {Number.isFinite(Number(displayedSuccessChance)) ? (
+                      {!isSettlement && !isSettled && Number.isFinite(Number(displayedSuccessChance)) ? (
                         <span
                           className="badge border border-sky-300/35 bg-sky-300/10 px-3 py-3 text-sky-100"
                           data-tooltip-id="success-chance-tooltip"
@@ -4237,7 +4773,7 @@ export default function CaseWorkspace({
                   </div>
                 </div>
               </>
-            ) : isCourtroom ? null : (
+            ) : isSettlement || isSettled || isCourtroom ? null : (
               <div id="lawbook-details" className="arena-surface">
                 <details className="group" open>
                   <summary className="list-none cursor-pointer p-6">
@@ -4655,6 +5191,11 @@ export default function CaseWorkspace({
                     <p className="mt-1 text-sm leading-6 text-white/62">
                       Keep gathering facts or move the dispute into court.
                     </p>
+                    {isSettlementCooldownActive ? (
+                      <p className="mt-2 inline-flex rounded-full border border-white/10 bg-black/22 px-3 py-1 text-xs font-semibold text-white/72">
+                        Settlement retry opens in {settlementCooldownLabel}
+                      </p>
+                    ) : null}
                   </div>
                 </div>
                 <div className="grid gap-2 p-4 sm:grid-cols-2 sm:p-5">
@@ -4697,16 +5238,18 @@ export default function CaseWorkspace({
                     rows={7}
                     className="block min-h-48 w-full resize-none border-0 bg-transparent px-4 py-4 text-sm leading-7 text-white outline-none placeholder:text-white/34 focus:outline-none"
                     placeholder="Example: My client is prepared to resolve this now if your side can agree to..."
-                    disabled={working}
+                    disabled={working || isSettlementCooldownActive}
                   />
                 </div>
                 <button
                   type="submit"
                   className="arena-btn-light flex w-full items-center justify-center gap-2 px-5 py-3.5 shadow-lg shadow-amber-950/20 disabled:cursor-not-allowed disabled:opacity-55"
-                  disabled={working || !settlementMessage.trim()}
+                  disabled={working || isSettlementCooldownActive || !settlementMessage.trim()}
                 >
                   <HeroIcons.PaperAirplaneIcon className="h-4 w-4" aria-hidden="true" />
-                  {pendingAction === "settlement-start"
+                  {isSettlementCooldownActive
+                    ? `Retry in ${settlementCooldownLabel}`
+                    : pendingAction === "settlement-start"
                     ? "Sending..."
                     : "Send Settlement Message"}
                 </button>
@@ -4728,7 +5271,7 @@ export default function CaseWorkspace({
         isOpen={showIntakeTour && isInterview}
         onComplete={() => setShowIntakeTour(false)}
       />
-      {Number.isFinite(Number(displayedSuccessChance)) ? (
+      {!isSettlement && !isSettled && Number.isFinite(Number(displayedSuccessChance)) ? (
         <Tooltip
           id="success-chance-tooltip"
           className="z-[70] !max-w-none !rounded-lg !border !border-white/10 !bg-[#141414] !px-4 !py-3 !opacity-100 shadow-xl"

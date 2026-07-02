@@ -146,6 +146,78 @@ progress::-webkit-progress-value {
     backdrop-filter: blur(16px);
   }
 
+  .settlement-cockpit-surface {
+    border-color: rgba(251, 191, 36, 0.055) !important;
+    background:
+      linear-gradient(180deg, rgba(15, 15, 15, 0.965), rgba(5, 5, 5, 0.945)),
+      radial-gradient(circle at top left, rgba(251, 191, 36, 0.045), transparent 38%),
+      radial-gradient(circle at top right, rgba(255, 255, 255, 0.035), transparent 42%) !important;
+    box-shadow:
+      inset 0 1px 0 rgba(251, 191, 36, 0.025),
+      0 22px 58px rgba(0, 0, 0, 0.44) !important;
+    transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+  }
+
+  .settlement-cockpit-surface:hover {
+    border-color: rgba(251, 191, 36, 0.09) !important;
+    box-shadow:
+      inset 0 1px 0 rgba(251, 191, 36, 0.035),
+      0 26px 70px rgba(0, 0, 0, 0.5) !important;
+  }
+
+  .settlement-cockpit [class*="border-white"] {
+    border-color: rgba(251, 191, 36, 0.04) !important;
+  }
+
+  .settlement-cockpit [class*="hover:border-white"]:hover {
+    border-color: rgba(251, 191, 36, 0.085) !important;
+  }
+
+  .settlement-cockpit [class*="border-amber"] {
+    border-color: rgba(251, 191, 36, 0.105) !important;
+  }
+
+  .settlement-cockpit [class*="border-emerald"] {
+    border-color: rgba(110, 231, 183, 0.105) !important;
+  }
+
+  .settlement-cockpit [class*="border-red"] {
+    border-color: rgba(252, 165, 165, 0.105) !important;
+  }
+
+  .settlement-cockpit .settlement-interactive:hover {
+    border-color: rgba(251, 191, 36, 0.13) !important;
+  }
+
+  .settlement-interactive {
+    transition:
+      transform 150ms ease,
+      border-color 150ms ease,
+      background-color 150ms ease,
+      box-shadow 150ms ease,
+      color 150ms ease;
+  }
+
+  .settlement-interactive:hover {
+    transform: translateY(-2px);
+  }
+
+  .settlement-interactive:active {
+    transform: translateY(0) scale(0.985);
+  }
+
+  .settlement-interactive:disabled,
+  .settlement-interactive[aria-disabled="true"] {
+    cursor: not-allowed;
+    opacity: 0.58;
+    transform: none;
+  }
+
+  .settlement-interactive:disabled:hover,
+  .settlement-interactive[aria-disabled="true"]:hover {
+    transform: none;
+  }
+
   .arena-surface-soft {
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 1.35rem;

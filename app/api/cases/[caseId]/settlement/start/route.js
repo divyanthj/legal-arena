@@ -6,7 +6,10 @@ import {
   buildCasePayload,
   getCaseSessionDocumentForUser,
 } from "@/libs/game/store";
-import { runSettlementExchange } from "@/libs/game/settlement";
+import {
+  getSettlementCooldownState,
+  runSettlementExchange,
+} from "@/libs/game/settlement";
 import { appendUsageEntriesToCaseSession } from "@/libs/game/sessionUsage";
 import { applySettlementToProgression } from "@/libs/game/progression";
 
@@ -60,6 +63,17 @@ export async function POST(req, { params }) {
       return NextResponse.json(
         { error: "Settlements can only be opened during intake." },
         { status: 400 }
+      );
+    }
+
+    const cooldown = getSettlementCooldownState(caseSession.settlement || {});
+    if (cooldown.active) {
+      return NextResponse.json(
+        {
+          error: "Settlement talks are cooling down after the last rejection.",
+          cooldownUntil: cooldown.cooldownUntil?.toISOString() || null,
+        },
+        { status: 429 }
       );
     }
 

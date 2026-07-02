@@ -37,6 +37,12 @@ export async function POST(req, { params }) {
     return NextResponse.json({ challenge });
   } catch (error) {
     console.error(error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: error.message,
+        cooldownUntil: error.cooldownUntil || null,
+      },
+      { status: error.status || 500 }
+    );
   }
 }

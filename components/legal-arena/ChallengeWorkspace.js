@@ -526,6 +526,8 @@ export default function ChallengeWorkspace({ initialChallenge }) {
       apiConfig={{
         analyticsMode: "pvp",
         basePath: `/challenges/${challengeRef}`,
+        workspaceHref: `/dashboard/challenges/${challengeRef}`,
+        settlementHref: `/dashboard/challenges/${challengeRef}/settlement`,
         finalizePath: "ready",
         finalizeSuccessMessage:
           viewer.side === "client" || challenge.opponent?.status === "ready"

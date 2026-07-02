@@ -19,8 +19,30 @@ const SETTLEMENT_MODEL =
   process.env.OPENAI_GAMEPLAY_MODEL?.trim() ||
   "gpt-5.4-mini";
 
+const SETTLEMENT_REJECTION_BASE_COOLDOWN_MS = 60 * 1000;
+
 export const clampMood = (value) =>
   Math.max(-100, Math.min(100, Math.round(Number(value) || 0)));
+
+export const calculateSettlementRejectionCooldownMs = (rejectionCount = 1) =>
+  SETTLEMENT_REJECTION_BASE_COOLDOWN_MS *
+  2 ** Math.max(0, (Number(rejectionCount) || 1) - 1);
+
+export const getSettlementCooldownState = (settlement = {}, now = new Date()) => {
+  const cooldownUntil = settlement?.cooldownUntil
+    ? new Date(settlement.cooldownUntil)
+    : null;
+  const remainingMs =
+    cooldownUntil && Number.isFinite(cooldownUntil.getTime())
+      ? Math.max(0, cooldownUntil.getTime() - new Date(now).getTime())
+      : 0;
+
+  return {
+    active: remainingMs > 0,
+    remainingMs,
+    cooldownUntil: remainingMs > 0 ? cooldownUntil : null,
+  };
+};
 
 const coerceString = (value = "") => (typeof value === "string" ? value.trim() : "");
 
@@ -59,6 +81,8 @@ export const normalizeSettlement = (settlement = {}, caseSession = {}) => ({
   finalTerms: coerceStringList(settlement?.finalTerms, 6),
   outcomeSummary: coerceString(settlement?.outcomeSummary),
   failureReason: coerceString(settlement?.failureReason),
+  rejectionCount: Math.max(0, Number(settlement?.rejectionCount) || 0),
+  cooldownUntil: settlement?.cooldownUntil || null,
   startedAt: settlement?.startedAt || null,
   completedAt: settlement?.completedAt || null,
 });
@@ -241,6 +265,14 @@ export const runSettlementExchange = async ({
     result.status = "rejected";
   }
 
+  const rejected = result.status === "rejected";
+  const rejectionCount = rejected
+    ? (Number(activeSettlement.rejectionCount) || 0) + 1
+    : Number(activeSettlement.rejectionCount) || 0;
+  const cooldownUntil = rejected
+    ? new Date(Date.now() + calculateSettlementRejectionCooldownMs(rejectionCount))
+    : null;
+
   const nextSettlement = {
     ...activeSettlement,
     status: result.status,
@@ -249,6 +281,8 @@ export const runSettlementExchange = async ({
     finalTerms: result.finalTerms,
     outcomeSummary: result.outcomeSummary,
     failureReason: result.failureReason,
+    rejectionCount,
+    cooldownUntil,
     completedAt: ["settled", "failed"].includes(result.status) ? new Date() : null,
     transcript: [
       ...activeSettlement.transcript,
@@ -280,7 +314,7 @@ export const runSettlementExchange = async ({
   return {
     settlement: nextSettlement,
     usageEntries: usageCollector.entries,
-    rejected: result.status === "rejected",
+    rejected,
     settled: result.status === "settled",
     failed: result.status === "failed",
   };

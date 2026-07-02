@@ -160,6 +160,14 @@ const settlementSchema = mongoose.Schema(
       type: String,
       default: "",
     },
+    rejectionCount: {
+      type: Number,
+      default: 0,
+    },
+    cooldownUntil: {
+      type: Date,
+      default: null,
+    },
     startedAt: {
       type: Date,
       default: null,

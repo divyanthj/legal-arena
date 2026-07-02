@@ -51,7 +51,7 @@ import {
   buildMemoryClaimFactSheetPatch,
   normalizeMemoryClaims,
 } from "./memoryClaims";
-import { runSettlementExchange } from "./settlement";
+import { getSettlementCooldownState, runSettlementExchange } from "./settlement";
 
 const MONGO_ID_PATTERN = /^[a-f0-9]{24}$/i;
 const CHALLENGE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
@@ -1194,6 +1194,13 @@ export const startChallengeSettlement = async ({ userId, challengeId, message })
   if (challenge.primaryCategory === "criminal") {
     throw new Error("Criminal cases cannot be settled.");
   }
+  const cooldown = getSettlementCooldownState(challenge.settlement || {});
+  if (cooldown.active) {
+    const error = new Error("Settlement talks are cooling down after the last rejection.");
+    error.status = 429;
+    error.cooldownUntil = cooldown.cooldownUntil?.toISOString() || null;
+    throw error;
+  }
 
   const participant = getParticipant(challenge, userId);
   const otherParticipant = getOtherParticipant(challenge, userId);
@@ -1824,6 +1831,8 @@ export const buildChallengePayload = async ({ challenge, viewerUserId }) => {
       finalTerms: settlement.finalTerms || [],
       outcomeSummary: settlement.outcomeSummary || "",
       failureReason: settlement.failureReason || "",
+      rejectionCount: settlement.rejectionCount || 0,
+      cooldownUntil: settlement.cooldownUntil || null,
       startedAt: settlement.startedAt || null,
       completedAt: settlement.completedAt || null,
     },
