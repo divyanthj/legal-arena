@@ -1,5 +1,6 @@
 import { createLemonSqueezyCheckout } from "@/libs/lemonsqueezy";
 import config from "@/config";
+import { getActiveIndependenceDayDiscountCode } from "@/libs/independenceDayPromo";
 import connectMongo from "@/libs/mongoose";
 import { authOptions } from "@/libs/next-auth";
 import User from "@/models/User";
@@ -38,6 +39,7 @@ export async function POST(req) {
       redirectUrl,
       userId: session?.user?.id,
       email: user?.email,
+      discountCode: getActiveIndependenceDayDiscountCode() || undefined,
       datafastVisitorId: cookieStore.get("datafast_visitor_id")?.value,
       datafastSessionId: cookieStore.get("datafast_session_id")?.value,
     });

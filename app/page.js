@@ -10,8 +10,11 @@ import {
 } from "@/libs/adminOps";
 import { getSEOTags } from "@/libs/seo";
 import config from "@/config";
+import {
+  isIndependenceDayPromoActive,
+} from "@/libs/independenceDayPromo";
+import IndependenceDayPromoBanner from "@/components/legal-arena/IndependenceDayPromoBanner";
 import LandingCategoryCarousel from "@/components/legal-arena/LandingCategoryCarousel";
-import WhatsNewDialog from "@/components/legal-arena/WhatsNewDialog";
 
 export const dynamic = "force-dynamic";
 
@@ -274,6 +277,7 @@ export default async function Page() {
     adminOpsConfig?.freeGameplayCampaign
   );
   const freeGameplayCampaignActive = freeGameplayCampaignStatus.active;
+  const independenceDayPromoActive = isIndependenceDayPromoActive();
   const campaignCtaLabel =
     freeGameplayAnnouncement?.ctaLabel ||
     (freeGameplayCampaignActive ? "Play Free Case" : "Start Free");
@@ -376,23 +380,7 @@ export default async function Page() {
               </Link>
             </div>
           ) : null}
-          <div className="arena-surface-soft mx-auto mb-8 flex max-w-5xl flex-col gap-4 border-amber-200/22 bg-amber-200/[0.055] px-5 py-4 text-left md:flex-row md:items-center md:justify-between">
-            <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-amber-100/72">
-                Brand new UI
-              </p>
-              <h2 className="mt-2 text-xl font-semibold leading-tight text-white">
-                Legal Arena has a brand new interface.
-              </h2>
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-amber-50/78">
-                The arena is cleaner, faster to scan, and easier to navigate,
-                with the same case-building and courtroom flow underneath.
-              </p>
-            </div>
-            <div className="flex w-full shrink-0 flex-col gap-3 md:w-auto">
-              <WhatsNewDialog buttonLabel="See what's new" />
-            </div>
-          </div>
+          {independenceDayPromoActive ? <IndependenceDayPromoBanner /> : null}
           <div className="mx-auto max-w-6xl">
             <div className="mx-auto max-w-4xl text-center">
               <p className="arena-kicker">A first-of-its-kind AI lawyer game</p>
