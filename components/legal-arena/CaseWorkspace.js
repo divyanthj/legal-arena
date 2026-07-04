@@ -10,6 +10,7 @@ import ButtonAccount from "@/components/ButtonAccount";
 import { useNavigationLoading } from "@/components/NavigationLoadingProvider";
 import apiClient from "@/libs/api";
 import { trackGoal } from "@/libs/datafast";
+import { hasClientSettlementAuthority } from "@/libs/game/settlementAuthority";
 import {
   LAWBOOK_ALL_CATEGORIES,
   legalArenaLawbook,
@@ -612,26 +613,7 @@ const VoiceWaveform = ({ level = 0 }) => {
 const PresentingArgumentIndicator = ({ captionClassName = "text-black/62" }) => (
   <span className="flex flex-col items-center justify-center gap-1.5">
     <span className="inline-flex items-center justify-center gap-2">
-      <span className="arena-presenting-gavel" aria-hidden="true">
-        <svg viewBox="0 0 48 48" className="arena-presenting-gavel-icon" focusable="false">
-          <g className="arena-presenting-gavel-swing">
-            <rect x="8" y="10" width="18" height="8" rx="2.5" fill="currentColor" />
-            <rect x="5" y="8" width="7" height="12" rx="2" fill="currentColor" opacity="0.88" />
-            <rect x="23" y="8" width="7" height="12" rx="2" fill="currentColor" opacity="0.88" />
-            <rect
-              x="23"
-              y="19"
-              width="23"
-              height="6"
-              rx="3"
-              fill="currentColor"
-              transform="rotate(43 23 19)"
-            />
-          </g>
-          <ellipse cx="14" cy="39" rx="12" ry="3.2" fill="currentColor" opacity="0.42" />
-          <rect x="5" y="34" width="18" height="5" rx="2.5" fill="currentColor" opacity="0.58" />
-        </svg>
-      </span>
+      <HeroIcons.ScaleIcon className="h-5 w-5 animate-pulse" aria-hidden="true" />
       <span>Presenting</span>
       <span className="loading loading-dots loading-xs" aria-hidden="true" />
     </span>
@@ -956,6 +938,9 @@ export default function CaseWorkspace({
   const isExited = caseSession.status === "exited";
   const isIntakeLocked = Boolean(apiConfig.intakeLocked);
   const canSettleCase = caseSession.primaryCategory !== "criminal";
+  const hasSettlementAuthority = hasClientSettlementAuthority(
+    visibleInterviewTranscript
+  );
   const settlementCaseContextLine = `${getPlayerPartyName(caseSession)} vs ${getOpponentPartyName(caseSession)} · You represent ${caseSession.playerSide === "opponent" ? "Defendant" : "Plaintiff"}`;
   const viewerSubmittedCurrentRound = Boolean(caseSession.score.viewerSubmittedCurrentRound);
   const opponentSubmittedCurrentRound = Boolean(
@@ -1276,6 +1261,37 @@ export default function CaseWorkspace({
   const handleSettlementStartSubmit = async (event) => {
     event.preventDefault();
     await submitSettlementMessage({ initial: true });
+  };
+
+  const handleOpenSettlementDialog = async ({ openDialog = true } = {}) => {
+    if (
+      working ||
+      isIntakeLocked ||
+      !canSettleCase ||
+      isSettlementCooldownActive ||
+      !hasSettlementAuthority
+    ) {
+      return;
+    }
+
+    setSettlementRejected(false);
+    setSettlementMessage("");
+    if (openDialog) {
+      setShowSettlementDialog(true);
+    }
+    setWorking(true);
+    setPendingAction("settlement-draft");
+
+    try {
+      const response = await apiClient.post(`${getApiBasePath(caseSession)}/settlement/draft`);
+      setSettlementMessage(response?.message || "");
+    } catch (error) {
+      toast.error(error?.message || "Could not draft a settlement message.");
+      console.error(error);
+    } finally {
+      setPendingAction("");
+      setWorking(false);
+    }
   };
 
   const handleSettlementMessageSubmit = async (event) => {
@@ -1947,24 +1963,49 @@ export default function CaseWorkspace({
     ["Fault", "No admission of fault"],
   ];
 
-  const renderSettleButton = (className = "arena-btn-dark w-full px-5 py-3") =>
-    canSettleCase ? (
-      <button
-        type="button"
-        className={className}
-        onClick={() => {
-          setSettlementRejected(false);
-          setShowSettlementDialog(true);
-        }}
-        disabled={working || isIntakeLocked || isSettlementCooldownActive}
+  const renderSettleButton = (className = "arena-btn-dark w-full px-5 py-3") => {
+    if (!canSettleCase) {
+      return null;
+    }
+
+    const disabled =
+      working ||
+      isIntakeLocked ||
+      isSettlementCooldownActive ||
+      !hasSettlementAuthority;
+    const tooltip = !hasSettlementAuthority
+      ? "Ask your client if they are willing to settle this out of court. This unlocks once they agree."
+      : "";
+
+    return (
+      <span
+        className="block w-full"
+        data-tooltip-id={!hasSettlementAuthority ? "settlement-authority-tooltip" : undefined}
+        data-tooltip-content={tooltip || undefined}
       >
-        {pendingAction === "settlement-start"
-          ? "Sending Offer..."
-          : isSettlementCooldownActive
-          ? `Settle in ${settlementCooldownLabel}`
-          : "Settle"}
-      </button>
-    ) : null;
+        <button
+          type="button"
+          className={className}
+          onClick={() => {
+            if (disabled) {
+              return;
+            }
+
+            handleOpenSettlementDialog();
+          }}
+          disabled={disabled}
+        >
+          {pendingAction === "settlement-start"
+            ? "Sending Offer..."
+            : pendingAction === "settlement-draft"
+            ? "Drafting Offer..."
+            : isSettlementCooldownActive
+            ? `Settle in ${settlementCooldownLabel}`
+            : "Settle"}
+        </button>
+      </span>
+    );
+  };
 
   const renderSettlementPanel = () => {
     const ClientIcon = clientAcceptance.icon;
@@ -2140,6 +2181,324 @@ export default function CaseWorkspace({
         text: "text-amber-200",
       },
     };
+    const sidePanelTermRows = currentOfferTerms.map(([label, value]) => ({
+      label,
+      value: shortenSettlementTerm(value),
+      icon:
+        label === "Settlement Amount"
+          ? HeroIcons.CurrencyDollarIcon
+          : label === "Payment Timeline"
+          ? HeroIcons.CalendarDaysIcon
+          : label === "Corrective Work"
+          ? HeroIcons.WrenchScrewdriverIcon
+          : label === "Release Terms"
+          ? HeroIcons.DocumentTextIcon
+          : label === "Costs"
+          ? HeroIcons.ScaleIcon
+          : HeroIcons.ShieldCheckIcon,
+    }));
+
+    const useSplitSettlementLayout = true;
+    if (useSplitSettlementLayout) {
+      return (
+      <div id="settlement" className="mx-auto w-full max-w-[1600px] space-y-4">
+        <section className="arena-surface overflow-hidden">
+          <div className="flex flex-col gap-4 p-4 sm:p-6 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex min-w-0 items-start gap-4">
+              <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl border border-amber-200/18 bg-amber-200/[0.07] text-amber-200">
+                <HeroIcons.ScaleIcon className="h-8 w-8" aria-hidden="true" />
+              </span>
+              <div className="min-w-0">
+                <p className="arena-kicker text-amber-200">Settlement Negotiation</p>
+                <h2 className="mt-2 text-2xl font-black leading-tight text-white sm:text-3xl">
+                  Compare both sides
+                </h2>
+                <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-white/58">
+                  Review positions, adjust the proposal, and send the next move.
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2 lg:justify-end">
+              <button
+                type="button"
+                className="btn btn-ghost min-h-0 rounded-xl border border-amber-200/12 bg-white/[0.02] px-4 py-2 text-sm font-black normal-case text-amber-100 hover:border-amber-200/24 hover:bg-white/[0.04]"
+                onClick={() => {
+                  setIsSettlementInfoModalOpen(false);
+                  setShowSettlementTour(true);
+                }}
+                onPointerDown={triggerSettlementHaptic}
+              >
+                <HeroIcons.QuestionMarkCircleIcon className="h-4 w-4" aria-hidden="true" />
+                Tour
+              </button>
+              <button
+                type="button"
+                className="arena-btn-dark inline-flex min-h-0 items-center gap-2 px-4 py-2 text-sm"
+                onClick={handleSettlementExit}
+                onPointerDown={triggerSettlementHaptic}
+                disabled={working || settlementIsTerminal}
+              >
+                Return to Intake
+                <HeroIcons.ArrowRightIcon className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_240px_minmax(0,1fr)]">
+          <div className="rounded-2xl border border-emerald-300/22 bg-emerald-300/[0.045] p-4 sm:p-5">
+            <div className="flex items-center gap-3">
+              <span className="grid h-14 w-14 shrink-0 place-items-center rounded-full border border-emerald-300/22 bg-emerald-300/10 text-emerald-200">
+                <HeroIcons.UserIcon className="h-8 w-8" aria-hidden="true" />
+              </span>
+              <div className="min-w-0">
+                <p className="arena-kicker text-emerald-200">Your Side</p>
+                <h3 className="mt-1 truncate text-2xl font-black text-white">
+                  {playerPartyName}
+                </h3>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-emerald-300/14 bg-black/18 p-4">
+              <p className="arena-kicker text-emerald-200">Your Client&apos;s Position</p>
+              <p className="mt-2 text-sm leading-6 text-white/72">{clientAcceptanceReason}</p>
+            </div>
+
+            <div className="mt-5 flex items-center justify-between gap-3">
+              <p className="arena-kicker text-emerald-200">Your Counteroffer</p>
+              <button
+                type="button"
+                className="inline-flex items-center gap-2 rounded-lg border border-emerald-300/18 bg-black/20 px-3 py-1.5 text-xs font-semibold text-emerald-100 transition hover:border-emerald-300/35"
+                onPointerDown={triggerSettlementHaptic}
+                onClick={() =>
+                  setSettlementMessage((current) =>
+                    current.trim() ||
+                    `Formal settlement offer: ${currentOfferTerms
+                      .map(([label, value]) => `${label}: ${shortenSettlementTerm(value)}`)
+                      .join("; ")}.`
+                  )
+                }
+              >
+                <HeroIcons.PencilSquareIcon className="h-4 w-4" aria-hidden="true" />
+                Edit all
+              </button>
+            </div>
+
+            <div className="mt-3 space-y-2">
+              {sidePanelTermRows.map((term) => {
+                const Icon = term.icon;
+
+                return (
+                  <div
+                    key={`your-${term.label}`}
+                    className="grid grid-cols-[2.25rem_minmax(0,0.85fr)_minmax(0,1fr)] items-center gap-3 rounded-xl border border-white/10 bg-black/20 px-3 py-2.5"
+                  >
+                    <span className="grid h-9 w-9 place-items-center rounded-full border border-emerald-300/16 bg-emerald-300/8 text-emerald-200">
+                      <Icon className="h-5 w-5" aria-hidden="true" />
+                    </span>
+                    <span className="min-w-0 truncate text-[0.65rem] font-black uppercase tracking-[0.13em] text-white/52">
+                      {term.label}
+                    </span>
+                    <span className="min-w-0 truncate text-sm font-semibold text-white/82">
+                      {term.value}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="mt-4 rounded-xl border border-amber-200/22 bg-amber-200/[0.075] p-3">
+              <div className="flex gap-3">
+                <HeroIcons.LightBulbIcon className="mt-0.5 h-5 w-5 shrink-0 text-amber-200" aria-hidden="true" />
+                <p className="text-sm leading-5 text-amber-50">
+                  <span className="font-black">Recommended:</span> {actionableNextMove}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-amber-200/30 bg-amber-200/[0.05] p-4 text-center">
+            <p className="arena-kicker text-amber-200">Settlement Outlook</p>
+            <p className="mt-3 text-2xl font-black text-amber-100">{dealViabilityLabel}</p>
+            <p className="mt-2 text-sm leading-5 text-white/58">{dealViabilityReason}</p>
+            <div
+              className="mx-auto mt-5 grid h-32 w-32 place-items-center rounded-full p-2"
+              style={{
+                background: `conic-gradient(#f8d979 ${
+                  settlementChance * 3.6
+                }deg, rgba(255,255,255,0.12) 0deg)`,
+              }}
+            >
+              <div className="grid h-full w-full place-items-center rounded-full bg-[#111]">
+                <p className="text-3xl font-black text-white">{settlementChance}%</p>
+              </div>
+            </div>
+            <div className="my-5 h-px bg-amber-200/18" />
+            <p className="arena-kicker text-amber-200">Stage</p>
+            <p className="mt-2 text-lg font-black text-white">{settlementStageLabel}</p>
+            <p className="mt-5 rounded-xl border border-amber-200/14 bg-black/18 px-3 py-2 text-sm font-semibold text-white/62">
+              Main blocker: {blockerText}
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-red-300/20 bg-red-300/[0.04] p-4 sm:p-5">
+            <div className="flex items-center gap-3">
+              <span className="grid h-14 w-14 shrink-0 place-items-center rounded-full border border-red-300/20 bg-red-300/10 text-red-200">
+                <HeroIcons.BuildingOffice2Icon className="h-8 w-8" aria-hidden="true" />
+              </span>
+              <div className="min-w-0">
+                <p className="arena-kicker text-red-200">Opponent</p>
+                <h3 className="mt-1 truncate text-2xl font-black text-white">
+                  {opponentPartyName}
+                </h3>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-red-300/14 bg-black/18 p-4">
+              <p className="arena-kicker text-red-200">Opponent&apos;s Position</p>
+              <p className="mt-2 text-sm leading-6 text-white/72">{opponentAcceptanceReason}</p>
+            </div>
+
+            <p className="arena-kicker mt-5 text-red-200">Opponent&apos;s Latest Offer</p>
+            <div className="mt-3 space-y-2">
+              {sidePanelTermRows.map((term) => {
+                const Icon = term.icon;
+
+                return (
+                  <div
+                    key={`opponent-${term.label}`}
+                    className="grid grid-cols-[2.25rem_minmax(0,0.85fr)_minmax(0,1fr)] items-center gap-3 rounded-xl border border-white/10 bg-black/20 px-3 py-2.5"
+                  >
+                    <span className="grid h-9 w-9 place-items-center rounded-full border border-red-300/16 bg-red-300/8 text-red-200">
+                      <Icon className="h-5 w-5" aria-hidden="true" />
+                    </span>
+                    <span className="min-w-0 truncate text-[0.65rem] font-black uppercase tracking-[0.13em] text-white/52">
+                      {term.label}
+                    </span>
+                    <span className="min-w-0 truncate text-sm font-semibold text-white/82">
+                      {term.value}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="mt-4 rounded-xl border border-red-300/28 bg-red-300/[0.075] p-3">
+              <div className="flex gap-3">
+                <HeroIcons.ExclamationTriangleIcon className="mt-0.5 h-5 w-5 shrink-0 text-red-200" aria-hidden="true" />
+                <p className="text-sm leading-5 text-red-50">
+                  <span className="font-black">Main blocker:</span> {blockerText}
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {!settlementIsTerminal ? (
+          <section className="arena-surface overflow-hidden">
+            <div className="border-b border-amber-200/10 p-4 sm:p-5">
+              <p className="arena-kicker text-amber-200">Your Next Move</p>
+              <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                {[
+                  ["Accept settlement", "Accept the opponent's latest offer.", HeroIcons.CheckCircleIcon, "emerald"],
+                  ["Make counteroffer", "Propose different terms and send your response.", HeroIcons.PencilSquareIcon, "amber"],
+                  ["Ask a question", "Request clarification or additional information.", HeroIcons.QuestionMarkCircleIcon, "amber"],
+                  ["Return to intake", "End settlement discussions and gather more facts.", HeroIcons.ArrowUturnLeftIcon, "red"],
+                ].map(([title, body, Icon, tone]) => (
+                  <button
+                    key={title}
+                    type="button"
+                    className={`min-h-[5.5rem] rounded-xl border p-4 text-left transition ${
+                      title === "Make counteroffer"
+                        ? "border-amber-200/60 bg-amber-200/[0.08]"
+                        : tone === "red"
+                        ? "border-red-300/14 bg-red-300/[0.035] hover:border-red-300/25"
+                        : tone === "emerald"
+                        ? "border-emerald-300/14 bg-emerald-300/[0.035] hover:border-emerald-300/25"
+                        : "border-amber-200/12 bg-amber-200/[0.035] hover:border-amber-200/24"
+                    }`}
+                    onClick={() => {
+                      if (title === "Return to intake") {
+                        handleSettlementExit();
+                      }
+                    }}
+                    disabled={title === "Accept settlement" || working}
+                  >
+                    <div className="flex gap-3">
+                      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full border border-white/12 bg-black/20 text-amber-100">
+                        <Icon className="h-5 w-5" aria-hidden="true" />
+                      </span>
+                      <span>
+                        <span className="block font-black text-white">{title}</span>
+                        <span className="mt-1 block text-sm leading-5 text-white/56">{body}</span>
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <form className="grid gap-4 p-4 sm:p-5 xl:grid-cols-[minmax(0,1fr)_330px]" onSubmit={handleSettlementMessageSubmit}>
+              <div>
+                <label className="block text-sm font-black uppercase tracking-[0.12em] text-white">
+                  Message to opponent
+                  <span className="ml-2 text-xs font-semibold normal-case tracking-normal text-white/42">
+                    Your message will include the terms above.
+                  </span>
+                </label>
+                <div className="mt-3 overflow-hidden rounded-xl border border-white/10 bg-black/26">
+                  <textarea
+                    value={settlementMessage}
+                    onChange={(event) => setSettlementMessage(event.target.value)}
+                    rows={4}
+                    className="block min-h-32 w-full resize-none border-0 bg-transparent px-4 py-4 text-sm leading-6 text-white outline-none placeholder:text-white/34"
+                    placeholder="Write your negotiation message..."
+                    disabled={working}
+                  />
+                  <div className="border-t border-white/[0.06] px-4 py-2 text-right text-xs font-semibold text-white/38">
+                    {settlementMessage.trim().length} / 2500
+                  </div>
+                </div>
+              </div>
+              <div className="flex flex-col justify-end gap-3">
+                <button
+                  type="button"
+                  className="arena-btn-dark min-h-0 w-full px-4 py-3 text-sm"
+                  onPointerDown={triggerSettlementHaptic}
+                  onClick={() => handleOpenSettlementDialog({ openDialog: false })}
+                  disabled={working}
+                >
+                  Regenerate draft
+                  <HeroIcons.ArrowPathIcon className="h-4 w-4" aria-hidden="true" />
+                </button>
+                <button
+                  type="submit"
+                  className="arena-btn-light inline-flex w-full items-center justify-center gap-2 px-5 py-4 text-base font-black disabled:cursor-not-allowed disabled:opacity-60"
+                  onPointerDown={triggerSettlementHaptic}
+                  disabled={working || !settlementMessage.trim()}
+                >
+                  {pendingAction === "settlement" ? "Sending..." : "Send Counteroffer"}
+                  <HeroIcons.PaperAirplaneIcon className="h-5 w-5" aria-hidden="true" />
+                </button>
+                <p className="text-center text-xs font-semibold text-white/42">
+                  Your message is private and secure
+                </p>
+              </div>
+            </form>
+          </section>
+        ) : null}
+
+        {settlement.outcomeSummary || settlement.failureReason ? (
+          <section className="arena-surface p-4 sm:p-6">
+            <p className="arena-kicker">{isSettled ? "Outcome" : "Status"}</p>
+            <p className="mt-3 text-sm leading-6 text-white/72">
+              {settlement.outcomeSummary || settlement.failureReason}
+            </p>
+          </section>
+        ) : null}
+      </div>
+      );
+    }
 
     return (
       <div id="settlement" className="settlement-cockpit mx-auto w-full max-w-[1600px]">
@@ -5189,7 +5548,6 @@ export default function CaseWorkspace({
                       activeMobileFactSheetSection.key,
                       item
                     );
-
                     return (
                       <div
                         key={`${activeMobileFactSheetSection.key}-dialog-${itemIndex}`}
@@ -5429,7 +5787,11 @@ export default function CaseWorkspace({
                     onChange={(event) => setSettlementMessage(event.target.value)}
                     rows={7}
                     className="block min-h-48 w-full resize-none border-0 bg-transparent px-4 py-4 text-sm leading-7 text-white outline-none placeholder:text-white/34 focus:outline-none"
-                    placeholder="Example: My client is prepared to resolve this now if your side can agree to..."
+                    placeholder={
+                      pendingAction === "settlement-draft"
+                        ? "Drafting an opening settlement message..."
+                        : "Example: My client is prepared to resolve this now if your side can agree to..."
+                    }
                     disabled={working || isSettlementCooldownActive}
                   />
                 </div>
@@ -5441,6 +5803,8 @@ export default function CaseWorkspace({
                   <HeroIcons.PaperAirplaneIcon className="h-4 w-4" aria-hidden="true" />
                   {isSettlementCooldownActive
                     ? `Retry in ${settlementCooldownLabel}`
+                    : pendingAction === "settlement-draft"
+                    ? "Drafting..."
                     : pendingAction === "settlement-start"
                     ? "Sending..."
                     : "Send Settlement Message"}
@@ -5475,6 +5839,10 @@ export default function CaseWorkspace({
           <SuccessChanceTooltip reasons={successChanceReasons} isInterview={isInterview} />
         </Tooltip>
       ) : null}
+      <Tooltip
+        id="settlement-authority-tooltip"
+        className="z-[70] !max-w-xs !rounded-lg !border !border-white/10 !bg-[#141414] !px-4 !py-3 !text-sm !leading-5 !text-white !opacity-100 shadow-xl"
+      />
     </main>
   );
 }

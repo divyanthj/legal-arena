@@ -296,7 +296,7 @@ const caseSessionSchema = mongoose.Schema(
     caseTemplateId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "CaseTemplate",
-      required: true,
+      default: null,
     },
     templateSlug: {
       type: String,

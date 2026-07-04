@@ -10,6 +10,7 @@ import {
   getSettlementCooldownState,
   runSettlementExchange,
 } from "@/libs/game/settlement";
+import { hasClientSettlementAuthority } from "@/libs/game/settlementAuthority";
 import { appendUsageEntriesToCaseSession } from "@/libs/game/sessionUsage";
 import { applySettlementToProgression } from "@/libs/game/progression";
 
@@ -62,6 +63,16 @@ export async function POST(req, { params }) {
     if (caseSession.status !== "interview") {
       return NextResponse.json(
         { error: "Settlements can only be opened during intake." },
+        { status: 400 }
+      );
+    }
+
+    if (!hasClientSettlementAuthority(caseSession.interviewTranscript)) {
+      return NextResponse.json(
+        {
+          error:
+            "Ask your client if they are willing to settle this out of court before opening settlement talks.",
+        },
         { status: 400 }
       );
     }

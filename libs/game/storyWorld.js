@@ -263,6 +263,7 @@ export const buildSessionTemplateSnapshot = (template = {}) => ({
   interviewBlueprint: template.interviewBlueprint || {},
   canonicalFacts: template.canonicalFacts || [],
   evidenceItems: template.evidenceItems || [],
+  dynamicCase: template.dynamicCase || null,
   canonicalStory: getCanonicalStoryWorld(template),
 });
 

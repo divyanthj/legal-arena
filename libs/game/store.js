@@ -21,6 +21,10 @@ import {
   getCanonicalStoryWorld,
 } from "./storyWorld";
 import {
+  buildDynamicCaseTemplateSnapshot,
+  generateDynamicCaseState,
+} from "./dynamicCase";
+import {
   buildPublicLeaderboardEntry,
   ensureUserProfile,
   getEligibleComplexityForCategory,
@@ -58,6 +62,45 @@ const stripUsageEntries = (usage = {}) => {
     result[key] = totals;
     return result;
   }, {});
+};
+
+const getPlayerLevelFromProgression = (progression = {}) =>
+  Math.max(1, Math.floor((Number(progression.overallXp) || 0) / 250) + 1);
+
+const getDynamicComplexityCapForPlayerLevel = (playerLevel = 1) => {
+  const level = Math.max(1, Number(playerLevel) || 1);
+
+  if (level <= 2) return 1;
+  if (level <= 5) return 2;
+  if (level <= 8) return 3;
+  if (level <= 12) return 4;
+  return 5;
+};
+
+const getEffectiveDynamicComplexity = ({
+  progression,
+  categorySlug = DEFAULT_CATEGORY_SLUG,
+  requestedComplexity = 1,
+} = {}) => {
+  const normalizedProgression = normalizeProgression(progression);
+  const eligibleComplexity = getEligibleComplexityForCategory(
+    normalizedProgression,
+    categorySlug
+  );
+  const playerLevel = getPlayerLevelFromProgression(normalizedProgression);
+  const playerLevelCap = getDynamicComplexityCapForPlayerLevel(playerLevel);
+  const requested = Math.max(1, Math.min(5, Number(requestedComplexity) || 1));
+  const capableComplexity = Math.min(eligibleComplexity, playerLevelCap);
+  const challengeComplexityCap = Math.min(5, capableComplexity + 1);
+
+  return {
+    complexity: Math.min(requested, challengeComplexityCap),
+    eligibleComplexity,
+    playerLevel,
+    playerLevelCap,
+    capableComplexity,
+    challengeComplexityCap,
+  };
 };
 const factSheetHasVisibleContent = (factSheet = {}) =>
   [
@@ -479,7 +522,7 @@ const getActiveCompletedCooldowns = async (userId) => {
   const completedTemplateLocks = new Map();
 
   completedSessions.forEach((session) => {
-    const templateId = String(session.caseTemplateId);
+    const templateId = String(session.caseTemplateId || "");
 
     if (templateId) {
       completedTemplateLocks.set(templateId, true);
@@ -718,9 +761,133 @@ export const createCaseSession = async ({
   userId,
   userProfile = null,
   caseTemplateId,
+  categorySlug = DEFAULT_CATEGORY_SLUG,
+  complexity = 1,
   freeGameplayCampaignAccess = null,
 }) => {
   await connectMongo();
+
+  if (!caseTemplateId) {
+    const user = await ensureUserProfile(userId, userProfile);
+    const progression = normalizeProgression(user?.progression);
+    const requestedCategorySlug = categorySlug || DEFAULT_CATEGORY_SLUG;
+    const dynamicDifficulty = getEffectiveDynamicComplexity({
+      progression,
+      categorySlug: requestedCategorySlug,
+      requestedComplexity: complexity,
+    });
+    const usageCollector = createUsageCollector("intake");
+    const dynamicCase = await generateDynamicCaseState({
+      categorySlug: requestedCategorySlug,
+      complexity: dynamicDifficulty.complexity,
+      playerLevel: dynamicDifficulty.playerLevel,
+      userId,
+      onUsage: usageCollector.record,
+    });
+    const template = buildDynamicCaseTemplateSnapshot(dynamicCase);
+    template.dynamicDifficulty = dynamicDifficulty;
+    const playerSide = Math.random() < 0.5 ? "client" : "opponent";
+    const representedParty = getPartyName(template, playerSide);
+    const representedStory =
+      playerSide === "opponent"
+        ? dynamicCase.defendantStory
+        : dynamicCase.plaintiffStory;
+    const openingStatement =
+      playerSide === "opponent"
+        ? dynamicCase.defendantOpeningStatement
+        : dynamicCase.plaintiffOpeningStatement;
+    const starterQuestions =
+      playerSide === "opponent"
+        ? dynamicCase.starterQuestions?.defendant || []
+        : dynamicCase.starterQuestions?.plaintiff || [];
+
+    const caseSession = new CaseSession({
+      userId,
+      title: dynamicCase.title,
+      templateSlug: template.slug,
+      scenarioId: template.slug,
+      practiceArea: dynamicCase.practiceArea,
+      primaryCategory: dynamicCase.primaryCategory,
+      complexity: dynamicCase.complexity,
+      playerSide,
+      status: "interview",
+      playerImage: user?.image || "",
+      freeGameplayCampaignAccess: freeGameplayCampaignAccess || undefined,
+      lawbookVersion: LAWBOOK_VERSION,
+      maxCourtRounds: Math.max(3, dynamicCase.complexity + 1),
+      templateSnapshot: template,
+      canonicalStory: template.canonicalStory,
+      clientMemory: {
+        clientStory: representedStory,
+        memoryClaims: [],
+      },
+      clientMemoryExcerpt: openingStatement,
+      premise: {
+        clientName: dynamicCase.plaintiffName,
+        opponentName: dynamicCase.defendantName,
+        courtName: dynamicCase.courtName,
+        overview: buildOverviewForSide(template, playerSide),
+        desiredRelief: buildDesiredReliefForSide(template, playerSide),
+        openingStatement,
+      },
+      interviewTranscript: [
+        {
+          role: "party",
+          speaker: representedParty,
+          text: openingStatement,
+          sourceType: "claim",
+          relatedFactIds: [],
+        },
+      ],
+      factSheet: {
+        summary: [],
+        timeline: [],
+        supportingFacts: [],
+        risks: [],
+        theory: [],
+        desiredRelief: [],
+        openQuestions: starterQuestions,
+        knownFacts: [],
+        knownClaims: [],
+        disputedFacts: [],
+        corroboratedFacts: [],
+        sourceLinks: [],
+        missingEvidence: [],
+        discoveredFactIds: [],
+        discoveredClaimIds: [],
+        discoveredEvidenceIds: [],
+        ready: false,
+      },
+      score: {
+        player: 0,
+        opponent: 0,
+        roundsCompleted: 0,
+        lastBenchSignal: "",
+        highlights: [],
+        weaknesses: [],
+      },
+      verdict: {
+        winner: "",
+        summary: "",
+        highlights: [],
+        concerns: [],
+        finalScore: {
+          player: 0,
+          opponent: 0,
+        },
+      },
+    });
+
+    ensureCaseSessionSlug(caseSession);
+    caseSession.judgeProfile = buildJudgeProfile({
+      caseSessionId: caseSession._id || caseSession.id || caseSession.slug,
+      complexity: dynamicCase.complexity,
+    });
+    appendUsageEntriesToCaseSession(caseSession, usageCollector.entries);
+    await caseSession.save();
+
+    return buildCasePayload(caseSession, template);
+  }
 
   const templateDocument = await CaseTemplate.findOne({
     _id: caseTemplateId,

@@ -191,6 +191,111 @@ const buildPortfolioEvidencePacket = (item = {}) => ({
   linkedFactIds: item.linkedFactIds || [],
 });
 
+const normalizeDynamicEvidenceOwner = (value = "") =>
+  String(value || "").trim().toLowerCase();
+
+const dynamicEvidenceSupportsSide = (item = {}, templateSide = "plaintiff") => {
+  const owner = normalizeDynamicEvidenceOwner(item.owner || item.holderSide);
+  const supportsSide = normalizeDynamicEvidenceOwner(item.supportsSide);
+
+  return (
+    owner === templateSide ||
+    owner === "shared" ||
+    supportsSide === templateSide ||
+    supportsSide === "both"
+  );
+};
+
+const buildDynamicEvidencePacket = (item = {}) => ({
+  id: item.id || item.label,
+  label: item.label || item.id || "Evidence",
+  detail: item.detail || item.evidenceQuality || "",
+  type: item.type || "other",
+  availabilityStatus: item.accessibility || item.availabilityStatus || "discoverable",
+  holderSide: item.owner || item.holderSide || "unknown",
+  linkedFactIds: [],
+  strength: item.strength || "",
+  contradiction: item.contradiction || "",
+});
+
+const buildDynamicOpponentCourtroomPortfolio = ({
+  safeTemplate,
+  opponentSide = DEFAULT_PLAYER_SIDE,
+  complexity = 3,
+  profile,
+} = {}) => {
+  const dynamicCase = safeTemplate.dynamicCase;
+
+  if (!dynamicCase || typeof dynamicCase !== "object") {
+    return null;
+  }
+
+  const templateSide = getTemplatePartyForSessionSide(opponentSide);
+  const isDefendant = templateSide === "defendant";
+  const partyName = getPartyName(safeTemplate, opponentSide);
+  const sideKey = isDefendant ? "defendant" : "plaintiff";
+  const story = coerceString(
+    isDefendant ? dynamicCase.defendantStory : dynamicCase.plaintiffStory
+  );
+  const theory = coerceString(
+    isDefendant
+      ? dynamicCase.theorySeeds?.defendant || dynamicCase.defendantObjective
+      : dynamicCase.theorySeeds?.plaintiff || dynamicCase.desiredRelief
+  );
+  const evidenceLimit =
+    OPPONENT_EVIDENCE_LIMITS[complexity] || OPPONENT_EVIDENCE_LIMITS[3];
+  const evidence = (dynamicCase.evidencePool || [])
+    .filter((item) => dynamicEvidenceSupportsSide(item, templateSide))
+    .slice(0, evidenceLimit)
+    .map(buildDynamicEvidencePacket);
+  const evidenceLeads = (dynamicCase.evidencePool || [])
+    .filter((item) => !dynamicEvidenceSupportsSide(item, templateSide))
+    .slice(0, Math.max(1, complexity - 2))
+    .map(buildDynamicEvidencePacket);
+  const facts = uniqueList([
+    story,
+    theory,
+    dynamicCase.coreDispute,
+    ...(dynamicCase.legalIssues || []),
+    ...(dynamicCase.courtroomOpportunities || []),
+  ])
+    .filter(Boolean)
+    .slice(0, OPPONENT_FACT_LIMITS[complexity] || OPPONENT_FACT_LIMITS[3])
+    .map((position, index) => ({
+      factId: `dynamic-${sideKey}-${index + 1}`,
+      label: index === 0 ? `${partyName} story` : `Dynamic point ${index + 1}`,
+      kind: index === 0 ? "supporting" : "dispute",
+      priority: Math.max(1, 5 - index),
+      position,
+      claimId: `${opponentSide}:dynamic-${index + 1}`,
+      linkedEvidenceIds: evidence.map((item) => item.id).slice(0, 2),
+    }));
+
+  return {
+    side: templateSide,
+    partyName,
+    preparationLevel: profile.counselPosture,
+    summary: uniqueList([buildOverviewForSide(safeTemplate, opponentSide)]),
+    theory: uniqueList([theory || buildTheoryForSide(safeTemplate, opponentSide)]),
+    desiredRelief: uniqueList([buildDesiredReliefForSide(safeTemplate, opponentSide)]),
+    supportingFacts: uniqueList(facts.map((fact) => fact.position)),
+    risks: uniqueList(dynamicCase.contradictionRules || []),
+    disputedFacts: uniqueList([dynamicCase.dramaticQuestion, dynamicCase.coreDispute].filter(Boolean)),
+    knownClaims: uniqueList(facts.map((fact) => fact.position)),
+    corroboratedFacts: uniqueList(evidence.map((item) => item.detail || item.label)),
+    sourceLinks: uniqueList(evidence.map((item) => item.label || item.id)),
+    missingEvidence: uniqueList(
+      evidenceLeads.map((item) => `${item.label || item.id} remains unresolved or contested.`)
+    ),
+    preparedFactIds: facts.map((fact) => fact.factId),
+    preparedClaimIds: facts.map((fact) => fact.claimId),
+    preparedEvidenceIds: evidence.map((item) => item.id),
+    facts,
+    evidence,
+    evidenceLeads,
+  };
+};
+
 const sortFactsForOpponentPortfolio = (template, opponentSide) =>
   (template.canonicalFacts || [])
     .map((fact) => {
@@ -222,6 +327,17 @@ export const buildOpponentCourtroomPortfolio = ({
   const safeTemplate = ensureTemplate(template);
   const profile = getCourtroomDifficultyProfile(complexity);
   const normalizedComplexity = profile.complexity;
+  const dynamicPortfolio = buildDynamicOpponentCourtroomPortfolio({
+    safeTemplate,
+    opponentSide,
+    complexity: normalizedComplexity,
+    profile,
+  });
+
+  if (dynamicPortfolio) {
+    return dynamicPortfolio;
+  }
+
   const templateSide = getTemplatePartyForSessionSide(opponentSide);
   const factLimit = OPPONENT_FACT_LIMITS[normalizedComplexity] || OPPONENT_FACT_LIMITS[3];
   const evidenceLimit =

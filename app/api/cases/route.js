@@ -66,6 +66,8 @@ export async function POST(req) {
       userId: session.user.id,
       userProfile: session.user,
       caseTemplateId: body?.caseTemplateId,
+      categorySlug: body?.categorySlug,
+      complexity: body?.complexity,
       freeGameplayCampaignAccess: access.freeGameplayCampaignAccess,
     });
 

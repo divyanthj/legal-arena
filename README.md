@@ -12,8 +12,9 @@ A legal training app where users interview clients, build case files, argue simu
 ## Notes
 
 - The dashboard contains the playable case workflow.
-- `/dashboard/admin` is the admin lab for creating and generating case templates.
-- Generated and manually authored case templates are stored in MongoDB.
+- `/dashboard/admin` is the current admin lab for creating and generating case templates.
+- Current gameplay is template-backed, with generated and manually authored case templates stored in MongoDB.
+- Roadmap direction: future playable cases should move toward dynamic case generation, where a new case is generated once, stored on the session, and then used as stable gameplay state. See `roadmap.md`.
 - `POST /api/internal/email-nudges/run` runs retention nudges. Pass `dryRun=true` and `limit=<n>` in the query string or JSON body when validating a run.
 
 ## Reset User Data

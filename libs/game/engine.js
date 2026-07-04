@@ -765,6 +765,7 @@ export const generatePlaintiffCourtOpeningStatement = async ({
   const rules = getLawbookRules();
   const playerSide = getPlayerSide(caseSession);
   const plaintiffSide = getOpposingSide(playerSide);
+  const difficultyProfile = getCourtroomDifficultyProfile(caseSession.complexity);
   const aiResult = await requestStructuredCompletion({
     userId,
     model: GAMEPLAY_MODEL,
@@ -794,7 +795,12 @@ export const generatePlaintiffCourtOpeningStatement = async ({
       }),
       styleRules: [
         "Write as plaintiff-side counsel speaking aloud to the judge.",
-        "Keep it concise: 2 to 5 short paragraphs.",
+        difficultyProfile.complexity <= 2
+          ? "Keep it beginner-playable: 1 to 2 short paragraphs, one clear theory, and no more than two attacks."
+          : "Keep it concise: 2 to 5 short paragraphs.",
+        difficultyProfile.complexity <= 2
+          ? "Use plain language and argue from visible facts rather than procedural technicalities."
+          : "Use the strongest legal and factual pressure available at this difficulty.",
         "Sound human and adversarial, not like a generated checklist.",
         "Argue from the plaintiff-side record and requested relief.",
         "Do not use repeated formula lines like 'The evidence will show' for every point.",

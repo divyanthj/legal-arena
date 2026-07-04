@@ -626,6 +626,49 @@ const difficultyOptions = [
   { value: "hard", label: "Hard" },
 ];
 
+const dynamicDifficultyOptions = [
+  {
+    value: 1,
+    label: "Level 1",
+    name: "Intro",
+    time: "10-15 min",
+    summary: "One clear dispute with obvious records and a forgiving opponent.",
+    skills: ["Spot the issue", "Ask for proof", "Make a plain argument"],
+  },
+  {
+    value: 2,
+    label: "Level 2",
+    name: "Beginner",
+    time: "15-20 min",
+    summary: "Two connected issues with a little ambiguity and a beatable weakness.",
+    skills: ["Find contradictions", "Frame a theory", "Handle one risk"],
+  },
+  {
+    value: 3,
+    label: "Level 3",
+    name: "Medium",
+    time: "20-25 min",
+    summary: "A moderate case with competing facts and several useful evidence paths.",
+    skills: ["Prioritize facts", "Pressure weak proof", "Use lawbook rules"],
+  },
+  {
+    value: 4,
+    label: "Level 4",
+    name: "Advanced",
+    time: "25-35 min",
+    summary: "Layered facts, stronger opposition, and more ways to lose focus.",
+    skills: ["Control scope", "Weigh credibility", "Concede safely"],
+  },
+  {
+    value: 5,
+    label: "Level 5",
+    name: "Expert",
+    time: "35+ min",
+    summary: "Dense proof conflicts with a polished opponent and little room for fluff.",
+    skills: ["Build a full theory", "Exploit nuance", "Win hard calls"],
+  },
+];
+
 const getDifficultyMeta = (complexity = 1) => {
   if (complexity >= 4) {
     return { value: "hard", label: "Hard", className: "text-rose-300 border-rose-300/25 bg-rose-400/10" };
@@ -636,6 +679,20 @@ const getDifficultyMeta = (complexity = 1) => {
   }
 
   return { value: "easy", label: "Easy", className: "text-emerald-300 border-emerald-300/25 bg-emerald-400/10" };
+};
+
+const getDynamicDifficultyMeta = (complexity = 1) =>
+  dynamicDifficultyOptions.find((option) => option.value === Number(complexity)) ||
+  dynamicDifficultyOptions[0];
+
+const getPlayerComplexityCap = (playerLevel = 1) => {
+  const level = Math.max(1, Number(playerLevel) || 1);
+
+  if (level <= 2) return 1;
+  if (level <= 5) return 2;
+  if (level <= 8) return 3;
+  if (level <= 12) return 4;
+  return 5;
 };
 
 const getCaseProgress = (caseSession = null) => {
@@ -1015,7 +1072,7 @@ export default function DashboardHub({
   const [showPaywallModal, setShowPaywallModal] = useState(false);
   const [creating, setCreating] = useState(false);
   const [caseLibrarySearch, setCaseLibrarySearch] = useState("");
-  const [selectedDifficulty, setSelectedDifficulty] = useState("all");
+  const [selectedDifficulty, setSelectedDifficulty] = useState(1);
   const [caseArchiveTab, setCaseArchiveTab] = useState("ongoing");
   const [pvpDocketTab, setPvpDocketTab] = useState("needs-response");
   const [showAllCaseCategories, setShowAllCaseCategories] = useState(false);
@@ -1137,6 +1194,14 @@ export default function DashboardHub({
   const playerLevel = Math.max(1, Math.floor((progression.overallXp || 0) / 250) + 1);
   const currentLevelXp = (progression.overallXp || 0) % 250;
   const nextLevelProgressPercent = Math.max(8, Math.min(100, currentLevelXp / 2.5));
+  const playerComplexityCap = getPlayerComplexityCap(playerLevel);
+  const selectedCategoryProgress = categoryProgress || { unlockedComplexity: 1, completedCases: 0 };
+  const selectedCategoryCap = Math.max(1, selectedCategoryProgress.unlockedComplexity || 1);
+  const selectedCapableComplexity = Math.min(playerComplexityCap, selectedCategoryCap);
+  const selectedChallengeComplexityCap = Math.min(5, selectedCapableComplexity + 1);
+  const selectedDynamicDifficulty = Math.max(1, Math.min(5, Number(selectedDifficulty) || 1));
+  const selectedDynamicDifficultyMeta = getDynamicDifficultyMeta(selectedDynamicDifficulty);
+  const selectedDifficultyAvailable = selectedDynamicDifficulty <= selectedChallengeComplexityCap;
   const playerRankLabel = currentLeaderboardEntry ? `#${currentLeaderboardEntry.rank}` : "Unranked";
   const playerRecordLabel = `${progression.wins || 0}-${progression.losses || 0}-${
     progression.draws || 0
@@ -1207,39 +1272,75 @@ export default function DashboardHub({
     setActiveTemplateIndex(firstUnlockedIndex >= 0 ? firstUnlockedIndex : 0);
   }, [filteredTemplates, selectedCategory, showPlayableOnly]);
 
-  const handleCreateCase = async (caseTemplateId) => {
-    if (!caseTemplateId) return;
+  useEffect(() => {
+    if (selectedDynamicDifficulty > selectedChallengeComplexityCap) {
+      setSelectedDifficulty(selectedChallengeComplexityCap);
+    }
+  }, [selectedChallengeComplexityCap, selectedDynamicDifficulty]);
+
+  const handleCreateCase = async (caseTemplateId, options = {}) => {
+    const dynamicStart = Boolean(options.dynamic || !caseTemplateId);
     const selectedTemplateForAnalytics =
       templates.find((template) => template.id === caseTemplateId) || activeTemplate;
+    const dynamicCategory = options.categorySlug || selectedCategory || selectedTemplateForAnalytics?.primaryCategory;
+    const dynamicCategoryProgress =
+      progression.categoryStats.find((item) => item.categorySlug === dynamicCategory) || null;
+    const dynamicComplexity =
+      options.complexity ||
+      selectedDynamicDifficulty ||
+      dynamicCategoryProgress?.unlockedComplexity ||
+      selectedTemplateForAnalytics?.complexity ||
+      1;
+
+    if (!dynamicStart && !caseTemplateId) return;
+
     if (!canStartSoloCases) {
       trackGoal("paywall_prompt_viewed", {
         source: "case_start",
         template_id: caseTemplateId,
-        category: selectedTemplateForAnalytics?.primaryCategory,
+        category: dynamicStart ? dynamicCategory : selectedTemplateForAnalytics?.primaryCategory,
+        generation_mode: dynamicStart ? "dynamic" : "template",
       });
       setShowPaywallModal(true);
       return;
     }
 
     trackGoal("case_start_clicked", {
-      template_id: caseTemplateId,
-      category: selectedTemplateForAnalytics?.primaryCategory,
-      complexity: selectedTemplateForAnalytics?.complexity,
-      unlocked: selectedTemplateForAnalytics?.unlocked,
+      template_id: caseTemplateId || "",
+      category: dynamicStart ? dynamicCategory : selectedTemplateForAnalytics?.primaryCategory,
+      complexity: dynamicStart ? dynamicComplexity : selectedTemplateForAnalytics?.complexity,
+      unlocked: dynamicStart ? true : selectedTemplateForAnalytics?.unlocked,
+      generation_mode: dynamicStart ? "dynamic" : "template",
     });
     setCreating(true);
-    startNavigationLoading("Preparing your client intake", { failsafeMs: 60000 });
+    startNavigationLoading(
+      dynamicStart ? "Starting your case" : "Preparing your client intake",
+      { failsafeMs: 60000 }
+    );
 
     try {
-      const { caseSession } = await apiClient.post("/cases", {
-        caseTemplateId,
-      });
+      const { caseSession } = await apiClient.post(
+        "/cases",
+        dynamicStart
+          ? {
+              categorySlug: dynamicCategory,
+              complexity: dynamicComplexity,
+            }
+          : {
+              caseTemplateId,
+            }
+      );
 
       trackGoal("case_created", {
-        template_id: caseTemplateId,
-        category: caseSession.primaryCategory || selectedTemplateForAnalytics?.primaryCategory,
-        complexity: caseSession.complexity || selectedTemplateForAnalytics?.complexity,
+        template_id: caseTemplateId || "",
+        category:
+          caseSession.primaryCategory ||
+          (dynamicStart ? dynamicCategory : selectedTemplateForAnalytics?.primaryCategory),
+        complexity:
+          caseSession.complexity ||
+          (dynamicStart ? dynamicComplexity : selectedTemplateForAnalytics?.complexity),
         side: caseSession.playerSide,
+        generation_mode: dynamicStart ? "dynamic" : "template",
       });
       startNavigationLoading("Creating courtroom portraits", { failsafeMs: 60000 });
       const caseRef = caseSession.slug || caseSession.id;
@@ -1258,9 +1359,10 @@ export default function DashboardHub({
     } catch (error) {
       stopNavigationLoading();
       trackGoal("case_create_failed", {
-        template_id: caseTemplateId,
-        category: selectedTemplateForAnalytics?.primaryCategory,
-        complexity: selectedTemplateForAnalytics?.complexity,
+        template_id: caseTemplateId || "",
+        category: dynamicStart ? dynamicCategory : selectedTemplateForAnalytics?.primaryCategory,
+        complexity: dynamicStart ? dynamicComplexity : selectedTemplateForAnalytics?.complexity,
+        generation_mode: dynamicStart ? "dynamic" : "template",
       });
       console.error(error);
     } finally {
@@ -1372,6 +1474,33 @@ export default function DashboardHub({
     }
   };
 
+  const handleGenerateCategoryCase = (category) => {
+    if (!category?.slug) {
+      return;
+    }
+
+    setSelectedCategory(category.slug);
+    handleCreateCase(null, {
+      dynamic: true,
+      source: "category_generate",
+      categorySlug: category.slug,
+      complexity: selectedDynamicDifficulty,
+    });
+  };
+
+  const handleGenerateSelectedCategoryCase = () => {
+    if (selectedCategoryMeta) {
+      handleGenerateCategoryCase(selectedCategoryMeta);
+      return;
+    }
+
+    handleCreateCase(null, {
+      dynamic: true,
+      source: "library_generate",
+      complexity: selectedDynamicDifficulty,
+    });
+  };
+
   const goToNextTemplate = () => {
     if (!canNavigateTemplates) return;
     setActiveTemplateIndex((current) =>
@@ -1389,13 +1518,14 @@ export default function DashboardHub({
   const desktopHeroCase = ongoingCases[0] || null;
   const desktopHeroCaseProgress = getCaseProgress(desktopHeroCase);
   const canContinueDesktopHeroCase = Boolean(desktopHeroCase) && !shouldSellLifetimeAccess;
-  const primaryTemplateId =
-    (activeTemplate?.unlocked ? activeTemplate : firstUnlockedTemplate)?.id || "";
   const primaryCtaLabel = shouldSellLifetimeAccess
     ? "Unlock Lifetime Access"
     : canResumeLastCase
     ? "Continue Case"
-    : "Start This Case";
+    : "Start New Case";
+  const categoryGenerateLabel = selectedCategoryMeta
+    ? `Start ${compactCategoryLabel[selectedCategoryMeta.slug] || selectedCategoryMeta.title} Case`
+    : "Start New Case";
   const desktopFeaturedTemplate = activeTemplate || firstUnlockedTemplate;
   const desktopFeatureTitle = canContinueDesktopHeroCase
     ? desktopHeroCase.title
@@ -1602,9 +1732,9 @@ export default function DashboardHub({
                               return;
                             }
 
-                            handleCreateCase(primaryTemplateId);
+                            handleCreateCase(null, { dynamic: true, source: "quick_start_mobile" });
                           }}
-                          disabled={creating || (!shouldSellLifetimeAccess && !primaryTemplateId)}
+                          disabled={creating}
                         >
                           <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-black/20 text-amber-100">
                             {creating && !shouldSellLifetimeAccess ? (
@@ -1863,16 +1993,16 @@ export default function DashboardHub({
                                 if (shouldSellLifetimeAccess) {
                                   trackGoal("paywall_prompt_viewed", {
                                     source: "featured_case_mobile",
-                                    template_id: featuredLibraryTemplate.id,
-                                    category: featuredLibraryTemplate.primaryCategory,
+                                    template_id: featuredLibraryTemplate?.id || "",
+                                    category: featuredLibraryTemplate?.primaryCategory || selectedCategory,
                                   });
                                   setShowPaywallModal(true);
                                   return;
                                 }
 
-                                handleCreateCase(primaryTemplateId);
+                                handleCreateCase(null, { dynamic: true, source: "quick_start_desktop" });
                               }}
-                              disabled={creating || (!shouldSellLifetimeAccess && !primaryTemplateId)}
+                              disabled={creating}
                             >
                               {creating && !shouldSellLifetimeAccess ? (
                                 <span className="loading loading-spinner loading-sm" />
@@ -2074,6 +2204,217 @@ export default function DashboardHub({
 
               <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.65fr)]">
                 <section id="case-library" data-onboarding-target="case-library" className="arena-surface min-w-0 overflow-hidden">
+                  <div className="p-4 md:p-6">
+                    <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="min-w-0">
+                        <p className="arena-kicker text-amber-200">Case Library</p>
+                        <h2 className="mt-2 text-2xl font-semibold leading-tight text-white md:text-3xl">
+                          Pick a case
+                        </h2>
+                        <p className="mt-2 max-w-2xl text-sm leading-6 text-white/58">
+                          Choose a practice area, pick a pressure level, then step into intake.
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 rounded-2xl border border-white/10 bg-white/[0.025] p-3 text-center">
+                        <div className="min-w-[5rem]">
+                          <p className="text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-white/38">
+                            Player Level
+                          </p>
+                          <p className="mt-1 text-lg font-semibold text-white">{playerLevel}</p>
+                        </div>
+                        <div className="min-w-[5rem]">
+                          <p className="text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-white/38">
+                            Comfort
+                          </p>
+                          <p className="mt-1 text-lg font-semibold text-emerald-200">
+                            {selectedCapableComplexity}
+                          </p>
+                        </div>
+                        <div className="min-w-[5rem]">
+                          <p className="text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-white/38">
+                            Challenge
+                          </p>
+                          <p className="mt-1 text-lg font-semibold text-amber-200">
+                            {selectedChallengeComplexityCap}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-6">
+                      <p className="arena-kicker">Practice Area</p>
+                      <h3 className="mt-2 text-xl font-semibold text-white">
+                        Pick where the dispute starts
+                      </h3>
+                    </div>
+
+                    <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                      {categories.map((category) => {
+                        const Icon = categoryIconMap[category.slug] || HeroIcons.Squares2X2Icon;
+                        const selected = selectedCategory === category.slug;
+                        const stat =
+                          progression.categoryStats.find((item) => item.categorySlug === category.slug) ||
+                          { unlockedComplexity: 1, completedCases: 0 };
+                        const categoryCap = Math.min(
+                          getPlayerComplexityCap(playerLevel),
+                          stat.unlockedComplexity || 1
+                        );
+
+                        return (
+                          <button
+                            key={category.slug}
+                            type="button"
+                            className={`min-h-[6.25rem] rounded-2xl border p-3 text-left transition ${
+                              selected
+                                ? "border-emerald-300/70 bg-emerald-300/10 shadow-[0_0_24px_rgba(52,211,153,0.12)]"
+                                : "border-white/10 bg-white/[0.025] hover:border-white/20"
+                            }`}
+                            onClick={() => selectCaseCategory(category.slug)}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <Icon
+                                className={`h-6 w-6 shrink-0 ${
+                                  selected ? "text-emerald-200" : "text-white/62"
+                                }`}
+                                aria-hidden="true"
+                              />
+                              <span className="rounded-full border border-white/10 bg-black/24 px-2 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-white/48">
+                                Skill {categoryCap}
+                              </span>
+                            </div>
+                            <p className="mt-3 text-sm font-semibold leading-5 text-white">
+                              {compactCategoryLabel[category.slug] || category.title}
+                            </p>
+                            <p className="mt-1 text-xs text-white/45">
+                              {stat.completedCases || 0} played by you
+                            </p>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(280px,0.42fr)]">
+                      <div>
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                          <div>
+                            <p className="arena-kicker">Difficulty</p>
+                            <h3 className="mt-2 text-xl font-semibold text-white">
+                              Pick pressure level
+                            </h3>
+                            <p className="mt-2 max-w-xl text-sm leading-6 text-white/56">
+                              Recommended: pick your comfort level, or go one level higher for a challenge.
+                            </p>
+                          </div>
+                        </div>
+                        <div className="mt-4 grid gap-3 md:grid-cols-5">
+                          {dynamicDifficultyOptions.map((option) => {
+                            const selected = selectedDynamicDifficulty === option.value;
+                            const locked = option.value > selectedChallengeComplexityCap;
+                            const stretch =
+                              option.value === selectedCapableComplexity + 1 &&
+                              option.value <= selectedChallengeComplexityCap;
+                            const status = locked ? "Locked" : stretch ? "Stretch" : "Ready";
+
+                            return (
+                              <button
+                                key={option.value}
+                                type="button"
+                                disabled={locked}
+                                className={`flex min-h-[11.25rem] flex-col rounded-2xl border p-4 text-left transition ${
+                                  selected
+                                    ? "border-amber-200/70 bg-amber-200/[0.11] shadow-[0_0_28px_rgba(251,191,36,0.14)]"
+                                    : locked
+                                    ? "cursor-not-allowed border-white/8 bg-white/[0.015] opacity-45"
+                                    : "border-white/10 bg-white/[0.025] hover:border-white/22"
+                                }`}
+                                onClick={() => setSelectedDifficulty(option.value)}
+                              >
+                                <p className="text-xs font-black uppercase tracking-[0.12em] text-white/42">
+                                  {option.label}
+                                </p>
+                                <p className="mt-1 min-h-[1.75rem] text-lg font-semibold leading-7 text-white">
+                                  {option.name}
+                                </p>
+                                <span
+                                  className={`mt-2 inline-flex w-fit rounded-full border px-2 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.08em] ${
+                                    locked
+                                      ? "border-white/10 text-white/42"
+                                      : stretch
+                                      ? "border-amber-200/35 bg-amber-200/10 text-amber-100"
+                                      : "border-emerald-300/30 bg-emerald-300/10 text-emerald-200"
+                                  }`}
+                                >
+                                  {status}
+                                </span>
+                                <p className="mt-3 line-clamp-3 text-xs leading-5 text-white/56">
+                                  {option.summary}
+                                </p>
+                                <p className="mt-auto pt-3 text-xs font-semibold text-white/42">
+                                  {option.time}
+                                </p>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <aside className="rounded-2xl border border-white/10 bg-white/[0.025] p-5">
+                        <p className="arena-kicker">Preview</p>
+                        <h3 className="mt-3 text-2xl font-semibold leading-tight text-white">
+                          {selectedCategoryTitle}
+                        </h3>
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          <span className="rounded-full border border-amber-200/30 bg-amber-200/10 px-3 py-1 text-xs font-semibold text-amber-100">
+                            {selectedDynamicDifficultyMeta.label}
+                          </span>
+                          <span className="rounded-full border border-white/10 bg-black/24 px-3 py-1 text-xs font-semibold text-white/58">
+                            {selectedDynamicDifficultyMeta.time}
+                          </span>
+                          {selectedDynamicDifficulty === selectedCapableComplexity + 1 ? (
+                            <span className="rounded-full border border-rose-200/25 bg-rose-300/10 px-3 py-1 text-xs font-semibold text-rose-100">
+                              Stretch pick
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className="mt-4 text-sm leading-6 text-white/58">
+                          {selectedDynamicDifficultyMeta.summary}
+                        </p>
+                        <p className="mt-3 rounded-xl border border-white/8 bg-black/20 px-3 py-2 text-xs leading-5 text-white/48">
+                          You may represent either side. Facts and proof will vary.
+                        </p>
+                        <div className="mt-5 space-y-2">
+                          {selectedDynamicDifficultyMeta.skills.map((skill) => (
+                            <div
+                              key={skill}
+                              className="flex items-center gap-2 rounded-xl border border-white/8 bg-black/20 px-3 py-2 text-sm text-white/64"
+                            >
+                              <HeroIcons.CheckCircleIcon
+                                className="h-4 w-4 shrink-0 text-emerald-300/80"
+                                aria-hidden="true"
+                              />
+                              <span>{skill}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <button
+                          type="button"
+                          className="mt-5 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-amber-200/35 bg-amber-200 px-4 py-3 text-sm font-black uppercase tracking-[0.08em] text-black shadow-[0_16px_38px_rgba(251,191,36,0.16)] transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                          onClick={handleGenerateSelectedCategoryCase}
+                          disabled={creating || !selectedDifficultyAvailable}
+                        >
+                          {creating ? (
+                            <span className="loading loading-spinner loading-xs" />
+                          ) : (
+                            <HeroIcons.BoltIcon className="h-4 w-4" aria-hidden="true" />
+                          )}
+                          <span>{creating ? "Starting" : "Start Case"}</span>
+                        </button>
+                      </aside>
+                    </div>
+                  </div>
+                </section>
+
+                <section id="legacy-case-library" className="hidden">
                   <div className="md:hidden">
                     <div className="border-b border-white/10 px-4 py-4">
                       <div className="flex items-center justify-between gap-3">
@@ -2211,6 +2552,20 @@ export default function DashboardHub({
                           ))}
                         </div>
                       </div>
+
+                      <button
+                        type="button"
+                        className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-amber-200/35 bg-amber-200 px-4 py-3 text-sm font-black uppercase tracking-[0.08em] text-black shadow-[0_16px_38px_rgba(251,191,36,0.16)] transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                        onClick={handleGenerateSelectedCategoryCase}
+                        disabled={creating}
+                      >
+                        {creating ? (
+                          <span className="loading loading-spinner loading-xs" />
+                        ) : (
+                          <HeroIcons.BoltIcon className="h-4 w-4" aria-hidden="true" />
+                        )}
+                        <span>{creating ? "Generating" : categoryGenerateLabel}</span>
+                      </button>
 
                       <div className="mt-5 flex items-center justify-between gap-3">
                         <p className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-white/42">
@@ -2498,9 +2853,24 @@ export default function DashboardHub({
                           ))}
                         </div>
                       </div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/42">
-                        {searchedLibraryTemplates.length} matches
-                      </p>
+                      <div className="flex flex-col items-start gap-2 lg:items-end">
+                        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/42">
+                          {searchedLibraryTemplates.length} matches
+                        </p>
+                        <button
+                          type="button"
+                          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-amber-200/35 bg-amber-200 px-4 py-3 text-sm font-black uppercase tracking-[0.08em] text-black shadow-[0_16px_38px_rgba(251,191,36,0.16)] transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                          onClick={handleGenerateSelectedCategoryCase}
+                          disabled={creating}
+                        >
+                          {creating ? (
+                            <span className="loading loading-spinner loading-xs" />
+                          ) : (
+                            <HeroIcons.BoltIcon className="h-4 w-4" aria-hidden="true" />
+                          )}
+                          <span>{creating ? "Generating" : categoryGenerateLabel}</span>
+                        </button>
+                      </div>
                     </div>
 
                     {featuredLibraryTemplate ? (
@@ -3262,8 +3632,8 @@ export default function DashboardHub({
                     <button
                       data-onboarding-target="quick-start-case"
                       className="arena-btn-light flex w-full items-center justify-center gap-2 px-5 py-4"
-                      onClick={() => handleCreateCase(activeTemplate?.id)}
-                      disabled={creating || !activeTemplate?.unlocked}
+                      onClick={() => handleCreateCase(null, { dynamic: true, source: "activation_quick_start" })}
+                      disabled={creating}
                     >
                       {creating && <span className="loading loading-spinner loading-xs" />}
                       <span>{lastActiveCase ? "Start New Case" : "Open First Case"}</span>

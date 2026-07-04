@@ -51,7 +51,12 @@ import {
   buildMemoryClaimFactSheetPatch,
   normalizeMemoryClaims,
 } from "./memoryClaims";
-import { getSettlementCooldownState, runSettlementExchange } from "./settlement";
+import {
+  generateOpeningSettlementMessage,
+  getSettlementCooldownState,
+  runSettlementExchange,
+} from "./settlement";
+import { hasClientSettlementAuthority } from "./settlementAuthority";
 
 const MONGO_ID_PATTERN = /^[a-f0-9]{24}$/i;
 const CHALLENGE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
@@ -1207,6 +1212,13 @@ export const startChallengeSettlement = async ({ userId, challengeId, message })
   if (!participant || !otherParticipant) {
     throw new Error("Challenge participant not found.");
   }
+  if (!hasClientSettlementAuthority(participant.interviewTranscript)) {
+    const error = new Error(
+      "Ask your client if they are willing to settle this out of court before opening settlement talks."
+    );
+    error.status = 400;
+    throw error;
+  }
 
   const caseSession = buildParticipantCaseSession({
     challenge,
@@ -1225,6 +1237,40 @@ export const startChallengeSettlement = async ({ userId, challengeId, message })
   await challenge.save();
 
   return buildChallengePayload({ challenge, viewerUserId: userId });
+};
+
+export const draftChallengeSettlementMessage = async ({ userId, challengeId }) => {
+  const challenge = await getChallengeDocumentForUser({ userId, challengeId });
+  if (!challenge) {
+    return null;
+  }
+  if (challenge.status !== "active") {
+    throw new Error("Settlement drafts can only be prepared during private intake.");
+  }
+  if (challenge.primaryCategory === "criminal") {
+    throw new Error("Criminal cases cannot be settled.");
+  }
+
+  const participant = getParticipant(challenge, userId);
+  const otherParticipant = getOtherParticipant(challenge, userId);
+  if (!participant || !otherParticipant) {
+    throw new Error("Challenge participant not found.");
+  }
+  if (!hasClientSettlementAuthority(participant.interviewTranscript)) {
+    const error = new Error(
+      "Ask your client if they are willing to settle this out of court before drafting settlement terms."
+    );
+    error.status = 400;
+    throw error;
+  }
+
+  const caseSession = buildParticipantCaseSession({
+    challenge,
+    participant,
+    otherParticipant,
+  });
+
+  return generateOpeningSettlementMessage({ caseSession, userId });
 };
 
 export const continueChallengeSettlement = async ({ userId, challengeId, message }) => {

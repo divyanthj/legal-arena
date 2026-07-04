@@ -189,6 +189,75 @@ const fallbackSettlementResult = ({ settlement, message }) => {
   );
 };
 
+const fallbackOpeningSettlementMessage = ({ caseSession }) => {
+  const template = ensureTemplate(getTemplate(caseSession));
+  const playerSide = getPlayerSide(caseSession);
+  const clientName = getPartyName(template, playerSide);
+  const desiredRelief =
+    caseSession.premise?.desiredRelief || buildDesiredReliefForSide(template, playerSide);
+
+  return [
+    `My client, ${clientName}, is willing to discuss resolving this without court.`,
+    `A practical resolution should address ${desiredRelief || "the main relief at issue"} while avoiding more time and cost for both sides.`,
+    "If your side is open to that, please respond with concrete terms we can review with our client.",
+  ].join(" ");
+};
+
+export const generateOpeningSettlementMessage = async ({ caseSession, userId }) => {
+  const usageCollector = createUsageCollector("settlement");
+  const currentSettlement = normalizeSettlement(caseSession.settlement || {}, caseSession);
+  const playerSide = getPlayerSide(caseSession);
+
+  try {
+    const aiResult = await requestStructuredCompletion({
+      userId,
+      model: SETTLEMENT_MODEL,
+      temperature: 0.55,
+      maxTokens: 500,
+      retryAttempts: 1,
+      usageLabel: "settlement.openingDraft",
+      onUsage: usageCollector.record,
+      systemPrompt:
+        "You draft editable opening settlement messages for a legal strategy game. Write as the player's counsel to opposing counsel. The player already has client authority to explore settlement. Output valid JSON only.",
+      userPrompt: JSON.stringify({
+        task: "Draft one concise opening settlement message. It should be practical, calm, and specific enough to start negotiation without conceding liability.",
+        rules: [
+          "Write in first person plural as counsel: 'my client' or 'we'.",
+          "Do not claim facts that are not in the case file or intake transcript.",
+          "Do not say the case is weak unless the fact sheet clearly supports that.",
+          "Include a concrete settlement frame, but leave room for counteroffer.",
+          "Keep it under 120 words.",
+        ],
+        outputSchema: {
+          message: "string",
+        },
+        context: {
+          ...buildSettlementPromptContext({
+            caseSession,
+            settlement: currentSettlement,
+            message: "",
+            actorSide: playerSide,
+          }),
+          factSheet: caseSession.factSheet || {},
+          recentIntake: (caseSession.interviewTranscript || []).slice(-10),
+        },
+      }),
+    });
+    const message = coerceString(aiResult?.message);
+
+    return {
+      message: message || fallbackOpeningSettlementMessage({ caseSession }),
+      usageEntries: usageCollector.entries,
+    };
+  } catch (error) {
+    console.error("settlement opening draft failed", error);
+    return {
+      message: fallbackOpeningSettlementMessage({ caseSession }),
+      usageEntries: usageCollector.entries,
+    };
+  }
+};
+
 export const runSettlementExchange = async ({
   caseSession,
   message,
