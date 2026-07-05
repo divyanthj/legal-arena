@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Tooltip } from "react-tooltip";
 import * as HeroIcons from "@heroicons/react/24/outline";
 import ButtonAccount from "@/components/ButtonAccount";
 import { useNavigationLoading } from "@/components/NavigationLoadingProvider";
@@ -2314,12 +2315,15 @@ export default function DashboardHub({
                               option.value === selectedCapableComplexity + 1 &&
                               option.value <= selectedChallengeComplexityCap;
                             const status = locked ? "Locked" : stretch ? "Stretch" : "Ready";
+                            const tooltipContent = `${option.label} - ${option.name}\n${option.summary}\nPractice: ${option.skills.join(", ")}\nEstimated time: ${option.time}`;
 
                             return (
                               <button
                                 key={option.value}
                                 type="button"
-                                disabled={locked}
+                                aria-disabled={locked}
+                                data-tooltip-id="dashboard-difficulty-tooltip"
+                                data-tooltip-content={tooltipContent}
                                 className={`flex min-h-[11.25rem] flex-col rounded-2xl border p-4 text-left transition ${
                                   selected
                                     ? "border-amber-200/70 bg-amber-200/[0.11] shadow-[0_0_28px_rgba(251,191,36,0.14)]"
@@ -2327,7 +2331,13 @@ export default function DashboardHub({
                                     ? "cursor-not-allowed border-white/8 bg-white/[0.015] opacity-45"
                                     : "border-white/10 bg-white/[0.025] hover:border-white/22"
                                 }`}
-                                onClick={() => setSelectedDifficulty(option.value)}
+                                onClick={() => {
+                                  if (locked) {
+                                    return;
+                                  }
+
+                                  setSelectedDifficulty(option.value);
+                                }}
                               >
                                 <p className="text-xs font-black uppercase tracking-[0.12em] text-white/42">
                                   {option.label}
@@ -4209,6 +4219,11 @@ export default function DashboardHub({
           onClose={() => setShowPaywallModal(false)}
         />
       ) : null}
+      <Tooltip
+        id="dashboard-difficulty-tooltip"
+        place="top"
+        className="z-[80] max-w-xs whitespace-pre-line rounded-xl border border-white/10 bg-[#111] px-3 py-2 text-xs leading-5 text-white shadow-2xl shadow-black/45"
+      />
     </main>
   );
 }

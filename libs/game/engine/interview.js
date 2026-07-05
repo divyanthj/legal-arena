@@ -14,6 +14,12 @@ import {
 } from "./shared";
 import { normalizeMemoryClaims } from "../memoryClaims";
 
+const cleanPartyResponseAddress = (value = "") =>
+  String(value || "")
+    .replace(/\s+/g, " ")
+    .replace(/^(your\s+honou?r|judge|court)\s*[:,.-]?\s*/i, "")
+    .trim();
+
 export const normalizeInterviewResult = ({
   aiResult,
   template,
@@ -27,7 +33,7 @@ export const normalizeInterviewResult = ({
     throw new Error("Interview response generation failed.");
   }
 
-  const partyResponse = coerceString(aiResult.partyResponse);
+  const partyResponse = cleanPartyResponseAddress(coerceString(aiResult.partyResponse));
   if (!partyResponse) {
     throw new Error("Interview response generation returned no answer.");
   }

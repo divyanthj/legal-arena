@@ -35,6 +35,7 @@ export const normalizeClientMemoryText = (clientMemory) => {
 const cleanGeneratedExcerpt = (value = "") =>
   String(value || "")
     .replace(/\s+/g, " ")
+    .replace(/^(your\s+honou?r|judge|court)\s*[:,.-]?\s*/i, "")
     .trim();
 
 export const generateClientMemoryExcerpt = async ({
@@ -62,7 +63,7 @@ export const generateClientMemoryExcerpt = async ({
       promptCacheKey,
       onUsage,
       systemPrompt:
-        "You write active-intake hero excerpts from a private client memory story. Write only a concise first-person excerpt in the interview subject's voice. Use the client's subjective truth, not a neutral case summary. Do not add objective facts, documents, witnesses, outcomes, legal advice, headings, labels, or JSON-looking prose. Avoid generic setup lines like 'I need to walk through this' and choose concrete story content instead. Output valid JSON only.",
+        "You write active-intake hero excerpts from a private client memory story. Write only a concise first-person excerpt in the interview subject's voice. The excerpt is spoken privately to the party's own lawyer, not to a judge or courtroom. Never address the listener as Your Honor, Judge, Court, counsel, sir, or ma'am. Use the client's subjective truth, not a neutral case summary. Do not add objective facts, documents, witnesses, outcomes, legal advice, headings, labels, or JSON-looking prose. Avoid generic setup lines like 'I need to walk through this' and choose concrete story content instead. Output valid JSON only.",
       userPrompt: JSON.stringify({
         task: "Generate the hero excerpt shown to the player before intake questioning.",
         representedPartyName: partyName,
@@ -71,6 +72,7 @@ export const generateClientMemoryExcerpt = async ({
         styleRules: [
           "First person only.",
           "Two to four sentences.",
+          "No courtroom address; do not say Your Honor.",
           "No third-person reporting voice.",
           "No legal-summary scaffolding.",
           "Keep it under 520 characters.",

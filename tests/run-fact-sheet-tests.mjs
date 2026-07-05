@@ -186,6 +186,11 @@ assert.doesNotMatch(mergeSource, /buildTheoryForSide/);
 assert.doesNotMatch(mergeSource, /buildDesiredReliefForSide/);
 
 const engineSource = await readFile(new URL("../libs/game/engine.js", import.meta.url), "utf8");
+const caseWorkspaceSource = await readFile(
+  new URL("../components/legal-arena/CaseWorkspace.js", import.meta.url),
+  "utf8"
+);
+const globalsCssSource = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
 const clientMemorySource = await readFile(
   new URL("../libs/game/clientMemory.js", import.meta.url),
   "utf8"
@@ -277,6 +282,17 @@ assert.match(engineSource, /usageLabel:\s*"intake\.factSheetPatch"/);
 assert.match(engineSource, /usageLabel:\s*"intake\.assessment"/);
 assert.match(engineSource, /usageLabel:\s*"courtroom\.counselAnalysis"/);
 assert.match(engineSource, /usageLabel:\s*shouldReturnVerdict \? "courtroom\.roundWithVerdict" : "courtroom\.round"/);
+assert.match(caseWorkspaceSource, /const getFactSheetSectionCounts = \(factSheet = \{\}\) =>/);
+assert.match(caseWorkspaceSource, /const getFactSheetProgressDelta = \(previousFactSheet = \{\}, nextFactSheet = \{\}\) =>/);
+assert.match(caseWorkspaceSource, /const previousFactSheet = caseSession\.factSheet/);
+assert.match(caseWorkspaceSource, /const nextCase = updateCaseFromResponse\(response\)/);
+assert.match(caseWorkspaceSource, /triggerFactSheetProgress\(progressDelta\)/);
+assert.match(caseWorkspaceSource, /recentFactSheetProgress\[sectionKey\]/);
+assert.match(caseWorkspaceSource, /renderFactSheetProgressBadge\(section\.key\)/);
+assert.doesNotMatch(caseWorkspaceSource, /factSheetProgressTimeoutRef/);
+assert.doesNotMatch(caseWorkspaceSource, /setTimeout\(\(\) => \{\s*setRecentFactSheetProgress\(\{\}\)/);
+assert.match(globalsCssSource, /\.arena-fact-progress-pop/);
+assert.match(globalsCssSource, /\.arena-fact-progress-glow/);
 assert.match(interviewRouteSource, /appendUsageEntriesToCaseSession\(caseSession, result\.usageEntries\)/);
 assert.match(courtroomRouteSource, /appendUsageEntriesToCaseSession\(caseSession, result\.usageEntries\)/);
 assert.match(finalizeRouteSource, /createUsageCollector\("courtroom"\)/);

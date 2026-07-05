@@ -33,6 +33,10 @@ const clientMemorySource = await readFile(
   new URL("../libs/game/clientMemory.js", import.meta.url),
   "utf8"
 );
+const interviewEngineSource = await readFile(
+  new URL("../libs/game/engine/interview.js", import.meta.url),
+  "utf8"
+);
 const caseWorkspaceSource = await readFile(
   new URL("../components/legal-arena/CaseWorkspace.js", import.meta.url),
   "utf8"
@@ -73,6 +77,8 @@ assert.match(engineSource, /invented details are party claims, not new documents
 assert.match(engineSource, /treat the latest question as a continuation/);
 assert.match(engineSource, /Retell the stored client memory only if the lawyer explicitly asks/);
 assert.match(engineSource, /Never answer a proof-possession question by retelling the full memory story/);
+assert.match(engineSource, /speaking privately to the lawyer/);
+assert.match(engineSource, /Never address the lawyer as Your Honor/);
 assert.match(engineSource, /memoryClaims:\s*getClientMemoryClaims\(clientMemoryResult\.clientMemory, playerSide\)/);
 assert.match(engineSource, /newMemoryClaims:\s*\[/);
 assert.match(engineSource, /If an amount, date, name, location, or count question asks for a central case detail/);
@@ -179,11 +185,17 @@ assert.match(caseWorkspaceSource, /getPlayerInterviewSubjectName/);
 assert.match(caseWorkspaceSource, /Interview \{playerInterviewSubjectName\}/);
 assert.match(caseWorkspaceSource, /const heroNarrativeExcerpt =/);
 assert.match(caseWorkspaceSource, /caseSession\.clientMemoryExcerpt/);
+assert.match(caseWorkspaceSource, /const cleanIntakePartySpeech = \(value = ""\) =>/);
+assert.match(caseWorkspaceSource, /cleanIntakePartySpeech\(caseSession\.clientMemoryExcerpt\)/);
 assert.match(caseWorkspaceSource, /\{heroNarrativeExcerpt\}/);
 assert.match(clientMemorySource, /export const generateClientMemoryExcerpt = async/);
 assert.match(clientMemorySource, /requestStructuredCompletion/);
 assert.match(clientMemorySource, /usageLabel:\s*"intake\.clientMemoryExcerpt"/);
 assert.match(clientMemorySource, /Avoid generic setup lines/);
+assert.match(clientMemorySource, /Never address the listener as Your Honor/);
+assert.match(clientMemorySource, /No courtroom address; do not say Your Honor/);
+assert.match(interviewEngineSource, /const cleanPartyResponseAddress = \(value = ""\) =>/);
+assert.match(interviewEngineSource, /cleanPartyResponseAddress\(coerceString\(aiResult\.partyResponse\)\)/);
 assert.doesNotMatch(clientMemorySource, /buildSafeClientMemoryExcerpt/);
 assert.doesNotMatch(clientMemorySource, /normalizePartySpeechToFirstPerson/);
 assert.doesNotMatch(clientMemorySource, /hasThirdPersonSelfReference/);

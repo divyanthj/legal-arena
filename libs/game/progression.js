@@ -9,6 +9,9 @@ import {
   getDefaultDashboardEncouragementNote,
   getDefaultLawyerProfileSummary,
 } from "./profileSummary";
+import { calculateSettlementXp } from "./settlementQuality";
+
+export { calculateSettlementXp } from "./settlementQuality";
 
 const DEFAULT_RATING = 1000;
 
@@ -157,23 +160,6 @@ export const applyChallengeVerdictToPvpProgression = async ({
   return progression;
 };
 
-export const calculateSettlementXp = ({ complexity = 1, finalMoods = {} } = {}) => {
-  const baseXp = 55 + (Number(complexity) || 1) * 15;
-  const playerMood = Number(finalMoods.player ?? 0);
-  const opponentMood = Number(finalMoods.opponent ?? 0);
-  const averageMood = Math.max(-100, Math.min(100, (playerMood + opponentMood) / 2));
-  const cooperationBonus = Math.max(
-    0,
-    Math.min(25, Math.round(((averageMood + 100) / 200) * 25))
-  );
-
-  return {
-    baseXp,
-    cooperationBonus,
-    totalXp: baseXp + cooperationBonus,
-  };
-};
-
 export const applySettlementToProgression = async ({
   userId,
   userProfile = null,
@@ -216,7 +202,8 @@ export const applySettlementToProgression = async ({
   );
   categoryStat.recentPerformance = uniqueList([
     `Settled a level ${complexity} matter`,
-    xp.cooperationBonus ? `Earned ${xp.cooperationBonus} cooperation XP` : "",
+    `${xp.quality.label}: ${xp.quality.score}/100`,
+    xp.satisfactionBonus ? `Earned ${xp.satisfactionBonus} settlement quality XP` : "",
     ...categoryStat.recentPerformance,
   ]).slice(0, 5);
 
@@ -265,7 +252,10 @@ export const applySettlementToProgression = async ({
       complexity,
       outcome: "settled",
       summary: outcomeSummary,
-      highlights: ["You resolved the matter through settlement."],
+      highlights: [
+        `Settlement quality: ${xp.quality.label} (${xp.quality.score}/100).`,
+        `XP earned: ${xp.totalXp}.`,
+      ],
     },
   });
 

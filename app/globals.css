@@ -473,6 +473,22 @@ progress::-webkit-progress-value {
     animation: arena-round 500ms ease both;
   }
 
+  .arena-fact-progress-pop {
+    animation: arena-fact-progress-pop 760ms cubic-bezier(0.2, 0.9, 0.22, 1.2) both;
+    will-change: transform, box-shadow;
+  }
+
+  .arena-fact-progress-glow {
+    box-shadow:
+      0 0 0 1px rgba(167, 243, 208, 0.42),
+      0 0 24px rgba(52, 211, 153, 0.34),
+      inset 0 0 18px rgba(52, 211, 153, 0.12);
+    animation:
+      arena-fact-progress-pop 760ms cubic-bezier(0.2, 0.9, 0.22, 1.2) both,
+      arena-fact-progress-glow 1200ms ease-out both;
+    will-change: transform, box-shadow;
+  }
+
   .arena-loading-bar {
     animation: arena-loading-bar 1250ms ease-in-out infinite;
     transform-origin: left center;
@@ -647,6 +663,45 @@ progress::-webkit-progress-value {
   }
 }
 
+@keyframes arena-fact-progress-pop {
+  0% {
+    transform: translateY(0) scale(1) rotate(0deg);
+  }
+  24% {
+    transform: translateY(-5px) scale(1.06) rotate(-1deg);
+  }
+  48% {
+    transform: translateY(1px) scale(0.99) rotate(1deg);
+  }
+  72% {
+    transform: translateY(-2px) scale(1.025) rotate(0deg);
+  }
+  100% {
+    transform: translateY(0) scale(1) rotate(0deg);
+  }
+}
+
+@keyframes arena-fact-progress-glow {
+  0% {
+    box-shadow:
+      0 0 0 0 rgba(167, 243, 208, 0),
+      0 0 0 rgba(52, 211, 153, 0),
+      inset 0 0 0 rgba(52, 211, 153, 0);
+  }
+  28% {
+    box-shadow:
+      0 0 0 1px rgba(167, 243, 208, 0.68),
+      0 0 30px rgba(52, 211, 153, 0.46),
+      inset 0 0 22px rgba(52, 211, 153, 0.18);
+  }
+  100% {
+    box-shadow:
+      0 0 0 1px rgba(167, 243, 208, 0.28),
+      0 0 14px rgba(52, 211, 153, 0.12),
+      inset 0 0 10px rgba(52, 211, 153, 0.08);
+  }
+}
+
 @keyframes arena-loading-bar {
   0% {
     transform: translateX(-120%);
@@ -695,6 +750,8 @@ progress::-webkit-progress-value {
   .arena-reveal,
   .arena-pulse,
   .arena-round-transition,
+  .arena-fact-progress-pop,
+  .arena-fact-progress-glow,
   .arena-loading-bar,
   .arena-typing-dot,
   .motion-safe\:animate-\[arena-orbit_2\.8s_linear_infinite\],

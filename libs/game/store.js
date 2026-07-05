@@ -205,6 +205,136 @@ const transcriptShowsOpponentControlsProof = ({
   return false;
 };
 
+const cleanOpeningText = (value = "") =>
+  String(value || "")
+    .replace(/\s+/g, " ")
+    .replace(/^(your\s+honou?r|judge|court)\s*[:,.-]?\s*/i, "")
+    .trim();
+
+const splitOpeningSentences = (value = "") =>
+  cleanOpeningText(value)
+    .split(/(?<=[.!?])\s+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+const uniqueOpeningNotes = (items = []) => {
+  const seen = new Set();
+
+  return items
+    .map((item) => String(item || "").trim())
+    .filter(Boolean)
+    .filter((item) => {
+      const key = item.toLowerCase();
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
+};
+
+const buildTheorySeedFromOpening = (opening = "") => {
+  const text = cleanOpeningText(opening);
+
+  if (!text) {
+    return [];
+  }
+
+  if (/\bsecurity deposit|deposit\b/i.test(text)) {
+    if (/\b(withheld|kept|deduct|deduction|deductions|charged|charges)\b/i.test(text)) {
+      return ["Deposit withholding appears unsupported by documented damage."];
+    }
+
+    return ["Deposit return turns on whether deductions were justified."];
+  }
+
+  if (/\b(invoice|unpaid|final payment|balance|payment)\b/i.test(text)) {
+    if (/\b(site|work|project|completed|launched|delivered)\b/i.test(text)) {
+      return ["Completed work supports the requested payment."];
+    }
+
+    return ["Payment claim turns on the agreement and performance record."];
+  }
+
+  if (/\bnotice|deadline|terminated|evict|eviction\b/i.test(text)) {
+    return ["Notice and timing will likely control the dispute."];
+  }
+
+  return [];
+};
+
+const buildTimelineSeedsFromOpening = (opening = "") => {
+  const sentences = splitOpeningSentences(opening);
+  const notes = [];
+
+  sentences.forEach((sentence) => {
+    const amounts = sentence.match(/\$[\d,]+(?:\.\d{2})?/g) || [];
+
+    if (/\bsecurity deposit|deposit\b/i.test(sentence) && /\bpaid\b/i.test(sentence)) {
+      if (/\b(got back|returned|refund|refunded)\b/i.test(sentence) && amounts.length >= 2) {
+        notes.push(`Security deposit paid (${amounts[0]}); partial return received (${amounts[1]}).`);
+        return;
+      }
+
+      notes.push(amounts[0] ? `Security deposit paid (${amounts[0]}).` : "Security deposit paid.");
+      return;
+    }
+
+    if (/\b(cleaned|cleaning)\b/i.test(sentence) && /\bmoved out|move-?out|keys?\b/i.test(sentence)) {
+      notes.push("Move-out: apartment cleaned before surrender.");
+      return;
+    }
+
+    if (/\blandlord\b/i.test(sentence) && /\b(charged|deducted|kept|withheld)\b/i.test(sentence)) {
+      notes.push("Landlord asserted cleaning or repair deductions.");
+      return;
+    }
+
+    if (/\b(records?|receipts?|invoices?|breakdown)\b/i.test(sentence) && /\b(thin|unclear|not clearly|missing|unsupported)\b/i.test(sentence)) {
+      notes.push("Deduction records received but appear thin.");
+      return;
+    }
+
+    if (/\b(invoice|final payment|balance)\b/i.test(sentence) && /\b(sent|issued|unpaid|not paid|withheld)\b/i.test(sentence)) {
+      notes.push("Payment dispute arose after invoice or balance request.");
+      return;
+    }
+
+    if (/\b(site|project|work)\b/i.test(sentence) && /\b(live|launched|completed|delivered)\b/i.test(sentence)) {
+      notes.push("Work reached launch or completion point.");
+      return;
+    }
+
+    if (/\bnotice\b/i.test(sentence) && /\b(gave|sent|received|deadline)\b/i.test(sentence)) {
+      notes.push("Notice or deadline became part of the timeline.");
+    }
+  });
+
+  return uniqueOpeningNotes(notes).slice(0, 4);
+};
+
+export const buildInitialFactSheetFromOpening = ({
+  openingStatement = "",
+  factSheet = {},
+  replaceExisting = false,
+} = {}) => {
+  const currentFactSheet = sanitizeFactSheet(factSheet || {});
+  const theorySeed = buildTheorySeedFromOpening(openingStatement);
+  const timelineSeed = buildTimelineSeedsFromOpening(openingStatement);
+  const theory = (!replaceExisting && currentFactSheet.theory?.length) || !theorySeed.length
+    ? currentFactSheet.theory
+    : theorySeed;
+  const timeline = (!replaceExisting && currentFactSheet.timeline?.length) || !timelineSeed.length
+    ? currentFactSheet.timeline
+    : timelineSeed;
+
+  return sanitizeFactSheet({
+    ...currentFactSheet,
+    theory,
+    timeline,
+  });
+};
+
 const refineFactSheetFromTranscript = ({
   factSheet,
   transcript = [],
@@ -318,6 +448,7 @@ export const applyClientMemoryOpeningToCaseSession = (
 
   const transcript = caseSession.interviewTranscript || [];
   const firstPartyEntry = transcript.find((entry) => entry?.role === "party" || entry?.role === "client");
+  const hasPlayerQuestions = transcript.some((entry) => entry?.role === "player");
 
   if (caseSession.premise) {
     caseSession.premise.openingStatement = opening;
@@ -327,8 +458,15 @@ export const applyClientMemoryOpeningToCaseSession = (
     firstPartyEntry.text = opening;
   }
 
+  caseSession.factSheet = buildInitialFactSheetFromOpening({
+    openingStatement: opening,
+    factSheet: caseSession.factSheet || {},
+    replaceExisting: !hasPlayerQuestions,
+  });
+
   caseSession.markModified?.("premise");
   caseSession.markModified?.("interviewTranscript");
+  caseSession.markModified?.("factSheet");
   return true;
 };
 
@@ -839,25 +977,28 @@ export const createCaseSession = async ({
           relatedFactIds: [],
         },
       ],
-      factSheet: {
-        summary: [],
-        timeline: [],
-        supportingFacts: [],
-        risks: [],
-        theory: [],
-        desiredRelief: [],
-        openQuestions: starterQuestions,
-        knownFacts: [],
-        knownClaims: [],
-        disputedFacts: [],
-        corroboratedFacts: [],
-        sourceLinks: [],
-        missingEvidence: [],
-        discoveredFactIds: [],
-        discoveredClaimIds: [],
-        discoveredEvidenceIds: [],
-        ready: false,
-      },
+      factSheet: buildInitialFactSheetFromOpening({
+        openingStatement,
+        factSheet: {
+          summary: [],
+          timeline: [],
+          supportingFacts: [],
+          risks: [],
+          theory: [],
+          desiredRelief: [],
+          openQuestions: starterQuestions,
+          knownFacts: [],
+          knownClaims: [],
+          disputedFacts: [],
+          corroboratedFacts: [],
+          sourceLinks: [],
+          missingEvidence: [],
+          discoveredFactIds: [],
+          discoveredClaimIds: [],
+          discoveredEvidenceIds: [],
+          ready: false,
+        },
+      }),
       score: {
         player: 0,
         opponent: 0,
@@ -956,25 +1097,28 @@ export const createCaseSession = async ({
         relatedFactIds: [],
       },
     ],
-    factSheet: {
-      summary: [],
-      timeline: [],
-      supportingFacts: [],
-      risks: [],
-      theory: [],
-      desiredRelief: [],
-      openQuestions: defaultOpenQuestions(template, playerSide),
-      knownFacts: [],
-      knownClaims: [],
-      disputedFacts: [],
-      corroboratedFacts: [],
-      sourceLinks: [],
-      missingEvidence: [],
-      discoveredFactIds: [],
-      discoveredClaimIds: [],
-      discoveredEvidenceIds: [],
-      ready: false,
-    },
+    factSheet: buildInitialFactSheetFromOpening({
+      openingStatement,
+      factSheet: {
+        summary: [],
+        timeline: [],
+        supportingFacts: [],
+        risks: [],
+        theory: [],
+        desiredRelief: [],
+        openQuestions: defaultOpenQuestions(template, playerSide),
+        knownFacts: [],
+        knownClaims: [],
+        disputedFacts: [],
+        corroboratedFacts: [],
+        sourceLinks: [],
+        missingEvidence: [],
+        discoveredFactIds: [],
+        discoveredClaimIds: [],
+        discoveredEvidenceIds: [],
+        ready: false,
+      },
+    }),
     score: {
       player: 0,
       opponent: 0,

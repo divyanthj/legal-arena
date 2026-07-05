@@ -18,6 +18,11 @@ const SETTLEMENT_MODEL =
   process.env.OPENAI_SETTLEMENT_MODEL?.trim() ||
   process.env.OPENAI_GAMEPLAY_MODEL?.trim() ||
   "gpt-5.4-mini";
+const SETTLEMENT_PREVIEW_MODEL =
+  process.env.OPENAI_SETTLEMENT_PREVIEW_MODEL?.trim() ||
+  process.env.OPENAI_SETTLEMENT_MODEL?.trim() ||
+  process.env.OPENAI_GAMEPLAY_MODEL?.trim() ||
+  "gpt-5.4-mini";
 
 const SETTLEMENT_REJECTION_BASE_COOLDOWN_MS = 60 * 1000;
 
@@ -48,6 +53,48 @@ const coerceString = (value = "") => (typeof value === "string" ? value.trim() :
 
 const coerceStringList = (value = [], limit = 5) =>
   uniqueList((Array.isArray(value) ? value : []).map(coerceString)).slice(0, limit);
+
+const normalizeDraftTerms = (terms = {}) => {
+  if (Array.isArray(terms)) {
+    return terms
+      .map((term) => {
+        if (Array.isArray(term)) {
+          return {
+            label: coerceString(term[0]),
+            value: coerceString(term[1]),
+          };
+        }
+
+        return {
+          label: coerceString(term?.label),
+          value: coerceString(term?.value),
+        };
+      })
+      .filter((term) => term.label && term.value)
+      .slice(0, 8);
+  }
+
+  return Object.entries(terms || {})
+    .map(([label, value]) => ({
+      label: coerceString(label),
+      value: coerceString(value),
+    }))
+    .filter((term) => term.label && term.value)
+    .slice(0, 8);
+};
+
+const devFacingSettlementPreviewPattern =
+  /\b(ai|model|generated|schema|deterministic|scoring|preview)\b/i;
+
+const cleanClientPreviewCopy = (value = "", fallback = "") => {
+  const text = coerceString(value);
+
+  if (!text || devFacingSettlementPreviewPattern.test(text)) {
+    return fallback;
+  }
+
+  return text;
+};
 
 const hashInt = (value = "") =>
   parseInt(createHash("sha256").update(String(value)).digest("hex").slice(0, 8), 16);
@@ -201,6 +248,138 @@ const fallbackOpeningSettlementMessage = ({ caseSession }) => {
     `A practical resolution should address ${desiredRelief || "the main relief at issue"} while avoiding more time and cost for both sides.`,
     "If your side is open to that, please respond with concrete terms we can review with our client.",
   ].join(" ");
+};
+
+const fallbackAiSettlementPreview = () => ({
+  label: "Client is still thinking",
+  tone: "amber",
+  score: 0,
+  note:
+    "The huddle is not ready yet. You can still send a clear, concrete proposal.",
+  drivers: ["Keep the amount, timing, release, costs, and fault language concrete."],
+  privateClientLine: "Walk me through why this protects me before you offer it.",
+  suggestedRevision: "Make the amount, timing, release, costs, and fault language concrete.",
+  model: SETTLEMENT_PREVIEW_MODEL,
+  source: "fallback",
+});
+
+const normalizeAiSettlementPreview = (aiResult = {}) => {
+  const score = clampMood(aiResult?.score);
+  const rawTone = coerceString(aiResult?.tone).toLowerCase();
+  const tone = ["emerald", "amber", "red"].includes(rawTone)
+    ? rawTone
+    : score >= 35
+    ? "emerald"
+    : score < -15
+    ? "red"
+    : "amber";
+  const drivers = coerceStringList(aiResult?.drivers, 4);
+  const clientFacingDrivers = drivers
+    .map((driver) => cleanClientPreviewCopy(driver))
+    .filter(Boolean)
+    .slice(0, 4);
+
+  return {
+    label: cleanClientPreviewCopy(aiResult?.label, "Client reaction ready"),
+    tone,
+    score,
+    note:
+      cleanClientPreviewCopy(
+        aiResult?.note,
+        "The client has a private reaction to these terms."
+      ),
+    drivers: clientFacingDrivers.length
+      ? clientFacingDrivers
+      : ["The client is weighing the practical tradeoffs."],
+    privateClientLine: cleanClientPreviewCopy(aiResult?.privateClientLine),
+    suggestedRevision: cleanClientPreviewCopy(aiResult?.suggestedRevision),
+    model: SETTLEMENT_PREVIEW_MODEL,
+    source: "ai",
+  };
+};
+
+export const previewSettlementDraftForClient = async ({
+  caseSession,
+  draftTerms,
+  message = "",
+  userId,
+}) => {
+  const usageCollector = createUsageCollector("settlement");
+  const currentSettlement = normalizeSettlement(caseSession.settlement || {}, caseSession);
+  const playerSide = getPlayerSide(caseSession);
+  const normalizedDraftTerms = normalizeDraftTerms(draftTerms);
+  const representedClientMoneyPosture =
+    playerSide === "opponent"
+      ? "If the draft makes the represented client pay money, lower payment is normally better. Treat a higher payment only as a pragmatic concession for certainty, speed, or risk control."
+      : "If the draft gives the represented client money, a refund, or recovery, higher recovery is normally better. Treat a lower recovery only as an acceptable floor or close-now compromise, not as the client's preferred goal.";
+
+  try {
+    const aiResult = await requestStructuredCompletion({
+      userId,
+      model: SETTLEMENT_PREVIEW_MODEL,
+      temperature: 0.35,
+      maxTokens: 550,
+      retryAttempts: 0,
+      usageLabel: "settlement.clientPreview",
+      onUsage: usageCollector.record,
+      systemPrompt:
+        "You simulate the represented client privately during settlement negotiations in a legal strategy game. The player is the lawyer. Evaluate the draft terms as a private client huddle before opposing counsel hears them. Output valid JSON only.",
+      userPrompt: JSON.stringify({
+        task: "Give a concise private client reaction to the lawyer's draft settlement terms before they are presented to the other side.",
+        rules: [
+          "Speak from the represented client's practical perspective, not as a judge and not as opposing counsel.",
+          "Do not decide whether the opponent accepts. Only evaluate whether the represented client can live with the draft.",
+          "Preserve the represented client's economic interest. Do not tell a money-seeking client they prefer less money, or a paying client they prefer paying more.",
+          "When recommending a worse monetary term for the represented client, frame it as an acceptable floor, risk-adjusted compromise, or close-now authority, not as the client's goal.",
+          "For a claimant, refund-seeker, or recovery-seeker, say the client can live with a lower amount if it closes now rather than saying they would rather ask for less.",
+          "For a payer, say the client can stretch to a higher amount to avoid risk rather than saying they prefer paying more.",
+          "Do not ask the lawyer to weaken the monetary position unless you explain the tradeoff: faster payment, certainty, narrow release, fee or cost waiver, or litigation risk.",
+          "Use the case facts, requested relief, current settlement moods, current public terms, and recent transcript.",
+          "Flag unclear or risky wording. Reward concrete timing, protected fault language, clear release scope, and terms that match client priorities.",
+          "Do not invent new facts or legal outcomes.",
+          "Keep label under 7 words, note under 24 words, each driver under 12 words, and privateClientLine under 20 words.",
+          "Never mention AI, models, prompts, previews, scoring, schemas, or generation.",
+          "Tone must be one of: emerald, amber, red.",
+          "Score must be a number from -100 to 100.",
+        ],
+        outputSchema: {
+          label: "string",
+          tone: "emerald | amber | red",
+          score: "number",
+          note: "string",
+          drivers: ["string"],
+          privateClientLine: "string",
+          suggestedRevision: "string",
+        },
+        context: {
+          ...buildSettlementPromptContext({
+            caseSession,
+            settlement: currentSettlement,
+            message,
+            actorSide: playerSide,
+          }),
+          representedSide: playerSide,
+          clientMoneyPosture: representedClientMoneyPosture,
+          draftTerms: normalizedDraftTerms,
+          factSheet: caseSession.factSheet || {},
+          recentIntake: (caseSession.interviewTranscript || []).slice(-8),
+        },
+      }),
+    });
+
+    return {
+      preview: aiResult
+        ? normalizeAiSettlementPreview(aiResult)
+        : fallbackAiSettlementPreview(),
+      usageEntries: usageCollector.entries,
+    };
+  } catch (error) {
+    console.error("settlement client preview failed", error);
+    return {
+      preview: fallbackAiSettlementPreview(),
+      usageEntries: usageCollector.entries,
+    };
+  }
 };
 
 export const generateOpeningSettlementMessage = async ({ caseSession, userId }) => {

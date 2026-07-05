@@ -22,7 +22,6 @@ import {
   buildDesiredReliefForSide,
   buildOverviewForSide,
   buildSummaryForSide,
-  buildTheoryForSide,
   getOpposingSide,
   getPartyName,
   mergeFactSheet,
@@ -34,7 +33,7 @@ import {
   applySettlementToProgression,
   ensureUserProfile,
 } from "./progression";
-import { listScenarioOptions } from "./store";
+import { buildInitialFactSheetFromOpening, listScenarioOptions } from "./store";
 import {
   buildJudgeProfile,
   buildSessionTemplateSnapshot,
@@ -54,6 +53,7 @@ import {
 import {
   generateOpeningSettlementMessage,
   getSettlementCooldownState,
+  previewSettlementDraftForClient,
   runSettlementExchange,
 } from "./settlement";
 import { hasClientSettlementAuthority } from "./settlementAuthority";
@@ -93,6 +93,7 @@ const applyClientMemoryOpeningToParticipant = (
   const transcript = participant.interviewTranscript || [];
   const firstPartyEntry = transcript.find((entry) => entry?.role === "party" || entry?.role === "client");
   const previousOpening = firstPartyEntry?.text || "";
+  const hasPlayerQuestions = transcript.some((entry) => entry?.role === "player");
 
   if (firstPartyEntry) {
     firstPartyEntry.text = opening;
@@ -105,8 +106,12 @@ const applyClientMemoryOpeningToParticipant = (
     factSheet.supportingFacts = factSheet.supportingFacts.map((item) =>
       item === previousOpening ? opening : item
     );
-    participant.factSheet = factSheet;
   }
+  participant.factSheet = buildInitialFactSheetFromOpening({
+    openingStatement: opening,
+    factSheet,
+    replaceExisting: !hasPlayerQuestions,
+  });
 
   return Boolean(firstPartyEntry);
 };
@@ -127,28 +132,32 @@ const uniqueTextList = (items = []) => {
     });
 };
 
-const blankFactSheet = (template, side, openingStatement = "") => ({
-  summary: uniqueTextList([buildSummaryForSide(template, side)]),
-  timeline: [],
-  supportingFacts: uniqueTextList([
-    buildOverviewForSide(template, side),
+const blankFactSheet = (template, side, openingStatement = "") =>
+  buildInitialFactSheetFromOpening({
     openingStatement,
-  ]),
-  risks: [],
-  theory: uniqueTextList([buildTheoryForSide(template, side)]),
-  desiredRelief: uniqueTextList([buildDesiredReliefForSide(template, side)]),
-  openQuestions: buildSuggestedQuestionsForSide(template, side),
-  knownFacts: [],
-  knownClaims: [],
-  disputedFacts: [],
-  corroboratedFacts: [],
-  sourceLinks: [],
-  missingEvidence: [],
-  discoveredFactIds: [],
-  discoveredClaimIds: [],
-  discoveredEvidenceIds: [],
-  ready: false,
-});
+    factSheet: {
+      summary: uniqueTextList([buildSummaryForSide(template, side)]),
+      timeline: [],
+      supportingFacts: uniqueTextList([
+        buildOverviewForSide(template, side),
+        openingStatement,
+      ]),
+      risks: [],
+      theory: [],
+      desiredRelief: uniqueTextList([buildDesiredReliefForSide(template, side)]),
+      openQuestions: buildSuggestedQuestionsForSide(template, side),
+      knownFacts: [],
+      knownClaims: [],
+      disputedFacts: [],
+      corroboratedFacts: [],
+      sourceLinks: [],
+      missingEvidence: [],
+      discoveredFactIds: [],
+      discoveredClaimIds: [],
+      discoveredEvidenceIds: [],
+      ready: false,
+    },
+  });
 
 const seededFactSheetFields = [
   "summary",
@@ -1307,6 +1316,43 @@ export const continueChallengeSettlement = async ({ userId, challengeId, message
   await challenge.save();
 
   return buildChallengePayload({ challenge, viewerUserId: userId });
+};
+
+export const previewChallengeSettlementDraft = async ({
+  userId,
+  challengeId,
+  terms,
+  message = "",
+}) => {
+  const challenge = await getChallengeDocumentForUser({ userId, challengeId });
+  if (!challenge) {
+    return null;
+  }
+  if (challenge.status !== "settlement") {
+    throw new Error("This challenge is not in settlement negotiations.");
+  }
+  if (challenge.primaryCategory === "criminal") {
+    throw new Error("Criminal cases cannot be settled.");
+  }
+
+  const participant = getParticipant(challenge, userId);
+  const otherParticipant = getOtherParticipant(challenge, userId);
+  if (!participant || !otherParticipant) {
+    throw new Error("Challenge participant not found.");
+  }
+
+  const caseSession = buildParticipantCaseSession({
+    challenge,
+    participant,
+    otherParticipant,
+  });
+
+  return previewSettlementDraftForClient({
+    caseSession,
+    draftTerms: terms,
+    message,
+    userId,
+  });
 };
 
 export const exitChallengeSettlement = async ({ userId, challengeId }) => {
