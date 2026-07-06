@@ -7,6 +7,7 @@ import * as HeroIcons from "@heroicons/react/24/outline";
 import { toast } from "react-hot-toast";
 import apiClient from "@/libs/api";
 import { trackGoal } from "@/libs/datafast";
+import { hasClientSettlementAuthority } from "@/libs/game/settlementAuthority";
 import CaseWorkspace from "./CaseWorkspace";
 
 const statusLabel = {
@@ -247,12 +248,23 @@ const OpponentStageNotice = ({ challenge }) => {
   const viewerParty = viewer.partyName || viewerRole;
   const opponentParty = opponent.partyName || opponentRole;
   const viewerStage = getViewerStage(challenge);
+  const settlementIntent = challenge.settlement?.status === "proposed"
+    ? challenge.settlement
+    : null;
+  const settlementIntentFromViewer = Boolean(settlementIntent?.proposedByViewer);
+  const viewerHasSettlementAuthority = hasClientSettlementAuthority(
+    viewer.interviewTranscript || []
+  );
   const openRound = (challenge.courtroomRounds || []).find(
     (round) => round.status === "open"
   );
   const detail =
-    viewerStage === "active" && challenge.status === "courtroom"
-      ? `${opponent.name} is already in court for ${opponentParty}. Finish intake for ${viewerParty} to join the round.`
+    settlementIntent
+      ? settlementIntentFromViewer
+        ? `Your settlement intent was sent to ${opponent.name}. Waiting for them to ask ${opponentParty} for authority.`
+        : `${settlementIntent.proposedByName || opponent.name} wants to discuss settlement. Ask ${viewerParty} if they are interested before you respond.`
+      : viewerStage === "active" && challenge.status === "courtroom"
+      ? `The court phase has opened. Finish intake for ${viewerParty} before you file for this round.`
       : viewerStage === "active"
       ? opponent.status === "ready"
         ? `${opponent.name} is ready for court as counsel for ${opponentParty}.`
@@ -291,6 +303,25 @@ const OpponentStageNotice = ({ challenge }) => {
           </div>
         </div>
         <p className="mt-4 text-sm leading-6 text-white/70">{detail}</p>
+        {settlementIntent ? (
+          <div className="mt-4 rounded-2xl border border-amber-200/22 bg-amber-200/[0.07] p-4">
+            <p className="arena-kicker text-amber-200">
+              {settlementIntentFromViewer ? "Settlement Intent Sent" : "Settlement Intent Received"}
+            </p>
+            <p className="mt-2 text-sm font-semibold leading-6 text-white/72">
+              {settlementIntentFromViewer
+                ? "Opposing counsel needs to speak with their client before settlement talks open."
+                : viewerHasSettlementAuthority
+                ? "Your client has given authority. Use Respond to Settlement when you are ready."
+                : "Ask your client whether they are willing to explore settlement before you respond."}
+            </p>
+            {settlementIntent.proposalMessage ? (
+              <p className="mt-3 rounded-xl border border-white/10 bg-black/22 p-3 text-sm leading-6 text-white/68">
+                {settlementIntent.proposalMessage}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </div>
   );

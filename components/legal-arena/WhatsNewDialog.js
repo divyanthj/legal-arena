@@ -5,16 +5,20 @@ import * as HeroIcons from "@heroicons/react/24/outline";
 
 const updates = [
   {
-    title: "Case library doubled",
-    body: "Playable cases increased from 150 to 300, giving players more disputes and courtroom situations to work through.",
+    title: "Infinite legal matters",
+    body: "The case library no longer feels capped. Keep opening fresh disputes with new clients, facts, stakes, and courtroom pressure.",
+  },
+  {
+    title: "Settlement strategy",
+    body: "Not every win needs a verdict. Make offers, read the other side's leverage, and decide when a deal is better than a courtroom fight.",
   },
   {
     title: "Smarter client intake",
-    body: "Clients now build a first-person memory from the case world instead of only echoing a canonical story. The facts still get checked against the case record in court.",
+    body: "Clients remember the dispute in their own voice, so interviews feel more natural while the important facts stay tied to the matter.",
   },
   {
     title: "PVP challenges",
-    body: "Players can challenge each other, prepare privately with their own AI client, and argue in court in a real-time-feeling flow that still works asynchronously.",
+    body: "Challenge another player, prepare privately with your own AI client, then meet in court and see whose strategy holds up.",
   },
   {
     title: "Bar Association",
@@ -22,7 +26,7 @@ const updates = [
   },
   {
     title: "Progression and leaderboards",
-    body: "Ratings, XP, specialty boards, category progress, and player standing are now visible as you complete matters.",
+    body: "Build your record across wins, losses, draws, settlements, ratings, XP, specialty boards, and category progress.",
   },
   {
     title: "Richer verdict feedback",
@@ -85,8 +89,9 @@ export default function WhatsNewDialog({ buttonLabel = dialogTitle }) {
                   {dialogTitle}
                 </h2>
                 <p id={descriptionId} className="mt-3 max-w-xl text-sm leading-6 text-white/60">
-                  The early-access build has grown into a deeper courtroom game with more
-                  cases, better intake, PVP, and clearer player progression.
+                  Legal Arena now plays like a bigger legal battleground: fresh
+                  matters, settlement talks, smarter clients, PVP challenges,
+                  and clearer feedback after every result.
                 </p>
               </div>
               <button

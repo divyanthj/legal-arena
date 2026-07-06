@@ -40,6 +40,8 @@ export async function POST(req) {
       initiatorProfile: session.user,
       challengedId: body?.challengedId,
       caseTemplateId: body?.caseTemplateId,
+      categorySlug: body?.categorySlug,
+      complexity: body?.complexity,
     });
 
     return NextResponse.json({ challenge });

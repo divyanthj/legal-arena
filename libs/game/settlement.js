@@ -117,6 +117,12 @@ export const getInitialSettlementMoods = (caseSession = {}) => ({
   opponent: deterministicMood(getSettlementSeed(caseSession), "opponent"),
 });
 
+const getSettlementMoodKeyForSide = (side) =>
+  side === "opponent" ? "opponent" : "player";
+
+const getSettlementMoodForSide = (moods = {}, side = "client") =>
+  Number(moods?.[getSettlementMoodKeyForSide(side)] || 0);
+
 export const normalizeSettlement = (settlement = {}, caseSession = {}) => ({
   status: settlement?.status || "none",
   moods: {
@@ -137,15 +143,18 @@ export const normalizeSettlement = (settlement = {}, caseSession = {}) => ({
 const buildSettlementPromptContext = ({ caseSession, settlement, message, actorSide }) => {
   const template = ensureTemplate(getTemplate(caseSession));
   const playerSide = getPlayerSide(caseSession);
-  const otherSide = getOpposingSide(actorSide);
+  const representedSide = actorSide === "opponent" ? "opponent" : playerSide;
+  const otherSide = getOpposingSide(representedSide);
 
   return {
     matter: {
       title: caseSession.title,
       category: caseSession.primaryCategory,
       complexity: caseSession.complexity,
-      overview: caseSession.premise?.overview || buildOverviewForSide(template, playerSide),
-      requestedRelief: caseSession.premise?.desiredRelief || buildDesiredReliefForSide(template, playerSide),
+      overview: caseSession.premise?.overview || buildOverviewForSide(template, representedSide),
+      requestedRelief:
+        caseSession.premise?.desiredRelief ||
+        buildDesiredReliefForSide(template, representedSide),
     },
     parties: {
       client: {
@@ -159,7 +168,19 @@ const buildSettlementPromptContext = ({ caseSession, settlement, message, actorS
         mood: settlement.moods.opponent,
       },
     },
-    actorSide,
+    representedClient: {
+      side: representedSide,
+      name: getPartyName(template, representedSide),
+      objective: buildDesiredReliefForSide(template, representedSide),
+      mood: getSettlementMoodForSide(settlement.moods, representedSide),
+    },
+    opposingClient: {
+      side: otherSide,
+      name: getPartyName(template, otherSide),
+      objective: buildDesiredReliefForSide(template, otherSide),
+      mood: getSettlementMoodForSide(settlement.moods, otherSide),
+    },
+    actorSide: representedSide,
     respondingSide: otherSide,
     currentTerms: settlement.currentTerms,
     recentTranscript: settlement.transcript.slice(-8),
@@ -167,13 +188,23 @@ const buildSettlementPromptContext = ({ caseSession, settlement, message, actorS
   };
 };
 
-const normalizeAiSettlementResult = (aiResult = {}, currentSettlement = {}) => {
+const normalizeAiSettlementResult = (
+  aiResult = {},
+  currentSettlement = {},
+  { actorSide = "client" } = {}
+) => {
+  const representedSide = actorSide === "opponent" ? "opponent" : "client";
+  const otherSide = getOpposingSide(representedSide);
+  const representedMoodKey = getSettlementMoodKeyForSide(representedSide);
+  const otherMoodKey = getSettlementMoodKeyForSide(otherSide);
   const playerDelta = Math.max(-35, Math.min(35, Number(aiResult?.playerMoodDelta || 0)));
   const opponentDelta = Math.max(-35, Math.min(35, Number(aiResult?.opponentMoodDelta || 0)));
   const moods = {
-    player: clampMood((currentSettlement.moods?.player || 0) + playerDelta),
-    opponent: clampMood((currentSettlement.moods?.opponent || 0) + opponentDelta),
+    player: clampMood(currentSettlement.moods?.player || 0),
+    opponent: clampMood(currentSettlement.moods?.opponent || 0),
   };
+  moods[representedMoodKey] = clampMood((moods[representedMoodKey] || 0) + playerDelta);
+  moods[otherMoodKey] = clampMood((moods[otherMoodKey] || 0) + opponentDelta);
   const currentTerms = coerceStringList(
     aiResult?.currentTerms?.length ? aiResult.currentTerms : currentSettlement.currentTerms,
     6
@@ -204,12 +235,14 @@ const normalizeAiSettlementResult = (aiResult = {}, currentSettlement = {}) => {
   };
 };
 
-const fallbackSettlementResult = ({ settlement, message }) => {
+const fallbackSettlementResult = ({ settlement, message, actorSide = "client" }) => {
   const text = String(message || "");
   const cooperative = /\b(settle|resolve|compromise|offer|payment|agreement|terms|without court|avoid court)\b/i.test(text);
   const hostile = /\b(never|refuse|threat|destroy|humiliate|liar|fraud|bad faith)\b/i.test(text);
   const playerDelta = cooperative ? 8 : hostile ? -18 : -2;
   const opponentDelta = cooperative ? 12 : hostile ? -24 : -4;
+  const representedSide = actorSide === "opponent" ? "opponent" : "client";
+  const otherSide = getOpposingSide(representedSide);
   const currentTerms = cooperative
     ? uniqueList([
         ...settlement.currentTerms,
@@ -228,11 +261,16 @@ const fallbackSettlementResult = ({ settlement, message }) => {
       playerMoodDelta: playerDelta,
       opponentMoodDelta: opponentDelta,
       currentTerms,
-      clientAccepts: currentTerms.length > 0 && settlement.moods.player + playerDelta >= 60,
-      opponentAccepts: currentTerms.length > 0 && settlement.moods.opponent + opponentDelta >= 60,
+      clientAccepts:
+        currentTerms.length > 0 &&
+        getSettlementMoodForSide(settlement.moods, representedSide) + playerDelta >= 60,
+      opponentAccepts:
+        currentTerms.length > 0 &&
+        getSettlementMoodForSide(settlement.moods, otherSide) + opponentDelta >= 60,
       initialRejected: !cooperative,
     },
-    settlement
+    settlement,
+    { actorSide }
   );
 };
 
@@ -477,6 +515,7 @@ export const runSettlementExchange = async ({
           "For the initial message, set initialRejected true if the responding side refuses to enter settlement talks.",
           "Keep responseText in the voice of the responding opposing party or opposing counsel.",
           "Keep clientReaction as a short note from the represented client/party about whether they can live with the proposal.",
+          "playerMoodDelta changes the representedClient mood. opponentMoodDelta changes the opposingClient mood.",
           "Mood deltas must be numbers between -35 and 35.",
         ],
         outputSchema: {
@@ -502,11 +541,11 @@ export const runSettlementExchange = async ({
     });
 
     result = aiResult
-      ? normalizeAiSettlementResult(aiResult, activeSettlement)
-      : fallbackSettlementResult({ settlement: activeSettlement, message });
+      ? normalizeAiSettlementResult(aiResult, activeSettlement, { actorSide: playerSide })
+      : fallbackSettlementResult({ settlement: activeSettlement, message, actorSide: playerSide });
   } catch (error) {
     console.error("settlement exchange failed", error);
-    result = fallbackSettlementResult({ settlement: activeSettlement, message });
+    result = fallbackSettlementResult({ settlement: activeSettlement, message, actorSide: playerSide });
   }
 
   if (initial && result.rejected) {

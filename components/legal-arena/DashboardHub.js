@@ -111,7 +111,7 @@ const getPvpTurnSummary = (challenge = {}) => {
 
   if (challenge.status === "courtroom") {
     if (challenge.viewer?.status !== "ready") {
-      return "Opponent is in court";
+      return "Finish intake to join court";
     }
 
     return getOpenPvpRound(challenge)?.viewerSubmitted

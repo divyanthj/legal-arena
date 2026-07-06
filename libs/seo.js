@@ -1,5 +1,14 @@
 import config from "@/config";
 
+const getMetadataBaseUrl = () => {
+  const configuredUrl =
+    process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
+    process.env.NEXTAUTH_URL?.trim() ||
+    `https://${config.domainName}/`;
+
+  return configuredUrl.endsWith("/") ? configuredUrl : `${configuredUrl}/`;
+};
+
 // These are all the SEO tags you can add to your pages.
 // It prefills data with default title/description/OG, etc. and you can customize it for each page.
 // It's already added in the root layout.js so you don't have to add it to every page.
@@ -21,11 +30,7 @@ export const getSEOTags = ({
     keywords: keywords || [config.appName],
     applicationName: config.appName,
     // set a base URL prefix for other fields that require a fully qualified URL (.e.g og:image: og:image: 'https://yourdomain.com/share.png' => '/share.png')
-    metadataBase: new URL(
-      process.env.NODE_ENV === "development"
-        ? "http://localhost:3000/"
-        : `https://${config.domainName}/`
-    ),
+    metadataBase: new URL(getMetadataBaseUrl()),
 
     openGraph: {
       title: openGraph?.title || config.appName,

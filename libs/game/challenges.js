@@ -32,8 +32,15 @@ import {
   applyChallengeVerdictToPvpProgression,
   applySettlementToProgression,
   ensureUserProfile,
+  getEligibleComplexityForCategory,
+  normalizeProgression,
 } from "./progression";
 import { buildInitialFactSheetFromOpening, listScenarioOptions } from "./store";
+import {
+  buildDynamicCaseTemplateSnapshot,
+  generateDynamicCaseState,
+} from "./dynamicCase";
+import { DEFAULT_CATEGORY_SLUG } from "./categories";
 import {
   buildJudgeProfile,
   buildSessionTemplateSnapshot,
@@ -64,6 +71,41 @@ const CHALLENGE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
 const toPlain = (doc) => (doc?.toJSON ? doc.toJSON() : doc);
 const toObjectIdString = (value) => String(value?._id || value?.id || value || "");
 const isSameId = (left, right) => toObjectIdString(left) === toObjectIdString(right);
+
+const getPlayerLevelFromProgression = (progression = {}) =>
+  Math.max(1, Math.floor((Number(progression.overallXp) || 0) / 250) + 1);
+
+const getDynamicComplexityCapForPlayerLevel = (playerLevel = 1) => {
+  const level = Math.max(1, Number(playerLevel) || 1);
+
+  if (level <= 2) return 1;
+  if (level <= 5) return 2;
+  if (level <= 8) return 3;
+  if (level <= 12) return 4;
+  return 5;
+};
+
+const getEffectivePvpDynamicComplexity = ({
+  progression,
+  categorySlug = DEFAULT_CATEGORY_SLUG,
+  requestedComplexity = 1,
+} = {}) => {
+  const normalizedProgression = normalizeProgression(progression);
+  const eligibleComplexity = getEligibleComplexityForCategory(
+    normalizedProgression,
+    categorySlug
+  );
+  const playerLevel = getPlayerLevelFromProgression(normalizedProgression);
+  const playerLevelCap = getDynamicComplexityCapForPlayerLevel(playerLevel);
+  const requested = Math.max(1, Math.min(5, Number(requestedComplexity) || 1));
+  const capableComplexity = Math.min(eligibleComplexity, playerLevelCap);
+  const challengeComplexityCap = Math.min(5, capableComplexity + 1);
+
+  return {
+    complexity: Math.min(requested, challengeComplexityCap),
+    playerLevel,
+  };
+};
 
 const slugify = (value = "") =>
   String(value || "")
@@ -709,6 +751,8 @@ export const createChallenge = async ({
   initiatorProfile = null,
   challengedId,
   caseTemplateId,
+  categorySlug = DEFAULT_CATEGORY_SLUG,
+  complexity = 1,
 }) => {
   await connectMongo();
 
@@ -725,27 +769,53 @@ export const createChallenge = async ({
     throw new Error("Challenged player not found.");
   }
 
-  const availableTemplates = await listScenarioOptions(initiatorId, initiatorProfile);
-  const selectedTemplate = availableTemplates.find(
-    (template) => isSameId(template.id, caseTemplateId) && template.unlocked
-  );
+  let templateDocument = null;
+  let template = null;
+  let templateSnapshot = null;
+  let canonicalStory = null;
 
-  if (!selectedTemplate) {
-    throw new Error("Choose an unlocked case before sending a challenge.");
+  if (caseTemplateId) {
+    const availableTemplates = await listScenarioOptions(initiatorId, initiatorProfile);
+    const selectedTemplate = availableTemplates.find(
+      (option) => isSameId(option.id, caseTemplateId) && option.unlocked
+    );
+
+    if (!selectedTemplate) {
+      throw new Error("Choose an unlocked case before sending a challenge.");
+    }
+
+    templateDocument = await CaseTemplate.findOne({
+      _id: caseTemplateId,
+      status: "active",
+    });
+
+    if (!templateDocument) {
+      throw new Error("Case template not found.");
+    }
+
+    template = enrichTemplateForGameplay(toPlain(templateDocument));
+    templateSnapshot = buildSessionTemplateSnapshot(template);
+    canonicalStory = getCanonicalStoryWorld(template);
+  } else {
+    const progression = normalizeProgression(initiator?.progression);
+    const requestedCategorySlug = categorySlug || DEFAULT_CATEGORY_SLUG;
+    const dynamicDifficulty = getEffectivePvpDynamicComplexity({
+      progression,
+      categorySlug: requestedCategorySlug,
+      requestedComplexity: complexity,
+    });
+    const dynamicCase = await generateDynamicCaseState({
+      categorySlug: requestedCategorySlug,
+      complexity: dynamicDifficulty.complexity,
+      playerLevel: dynamicDifficulty.playerLevel,
+      userId: initiatorId,
+    });
+
+    template = buildDynamicCaseTemplateSnapshot(dynamicCase);
+    template.dynamicDifficulty = dynamicDifficulty;
+    templateSnapshot = template;
+    canonicalStory = template.canonicalStory;
   }
-
-  const templateDocument = await CaseTemplate.findOne({
-    _id: caseTemplateId,
-    status: "active",
-  });
-
-  if (!templateDocument) {
-    throw new Error("Case template not found.");
-  }
-
-  const template = enrichTemplateForGameplay(toPlain(templateDocument));
-  const templateSnapshot = buildSessionTemplateSnapshot(template);
-  const canonicalStory = getCanonicalStoryWorld(template);
   const initiatorSide = Math.random() < 0.5 ? "client" : "opponent";
   const challengedSide = getOpposingSide(initiatorSide);
   const participantInputs = [
@@ -785,7 +855,7 @@ export const createChallenge = async ({
     sponsorUserId: initiator._id,
     status: "pending",
     title: template.title,
-    caseTemplateId: templateDocument._id,
+    caseTemplateId: templateDocument?._id || null,
     templateSlug: template.slug,
     practiceArea: template.practiceArea,
     primaryCategory: template.primaryCategory,
@@ -1221,12 +1291,69 @@ export const startChallengeSettlement = async ({ userId, challengeId, message })
   if (!participant || !otherParticipant) {
     throw new Error("Challenge participant not found.");
   }
+  if (
+    challenge.settlement?.status === "proposed" &&
+    challenge.settlement?.proposedByUserId &&
+    isSameId(challenge.settlement.proposedByUserId, userId)
+  ) {
+    const error = new Error(
+      "Settlement intent has already been sent. Wait for opposing counsel to ask their client."
+    );
+    error.status = 409;
+    throw error;
+  }
   if (!hasClientSettlementAuthority(participant.interviewTranscript)) {
     const error = new Error(
       "Ask your client if they are willing to settle this out of court before opening settlement talks."
     );
     error.status = 400;
     throw error;
+  }
+
+  const existingSettlementStatus = challenge.settlement?.status || "none";
+  const proposedByUserId = challenge.settlement?.proposedByUserId
+    ? toObjectIdString(challenge.settlement.proposedByUserId)
+    : "";
+  const isRespondingToOtherProposal =
+    existingSettlementStatus === "proposed" &&
+    proposedByUserId &&
+    !isSameId(proposedByUserId, userId);
+
+  if (existingSettlementStatus === "proposed" && !isRespondingToOtherProposal) {
+    const error = new Error(
+      "Settlement intent has already been sent. Wait for opposing counsel to ask their client."
+    );
+    error.status = 409;
+    throw error;
+  }
+
+  if (!isRespondingToOtherProposal) {
+    const now = new Date();
+    challenge.settlement = {
+      ...(challenge.settlement || {}),
+      status: "proposed",
+      proposedByUserId: participant.userId,
+      proposedBySide: participant.side,
+      proposalMessage: message,
+      proposedAt: now,
+      startedAt: now,
+      transcript: [
+        ...((challenge.settlement && challenge.settlement.transcript) || []),
+        {
+          role: "player",
+          userId: participant.userId,
+          side: participant.side,
+          speaker: "Settlement intent",
+          text: message,
+          moodSnapshot: challenge.settlement?.moods || { player: 0, opponent: 0 },
+          createdAt: now,
+        },
+      ],
+    };
+    challenge.markModified?.("settlement");
+    await challenge.save();
+
+    return buildChallengePayload({ challenge, viewerUserId: userId });
   }
 
   const caseSession = buildParticipantCaseSession({
@@ -1264,6 +1391,17 @@ export const draftChallengeSettlementMessage = async ({ userId, challengeId }) =
   const otherParticipant = getOtherParticipant(challenge, userId);
   if (!participant || !otherParticipant) {
     throw new Error("Challenge participant not found.");
+  }
+  if (
+    challenge.settlement?.status === "proposed" &&
+    challenge.settlement?.proposedByUserId &&
+    isSameId(challenge.settlement.proposedByUserId, userId)
+  ) {
+    const error = new Error(
+      "Settlement intent has already been sent. Wait for opposing counsel to ask their client."
+    );
+    error.status = 409;
+    throw error;
   }
   if (!hasClientSettlementAuthority(participant.interviewTranscript)) {
     const error = new Error(
@@ -1847,6 +1985,7 @@ export const buildChallengePayload = async ({ challenge, viewerUserId }) => {
     };
   });
   const settlement = plainChallenge.settlement || {};
+  const proposedByUserId = toObjectIdString(settlement.proposedByUserId);
   const settlementTranscript = (settlement.transcript || []).map((entry) => ({
     ...entry,
     userId: toObjectIdString(entry.userId),
@@ -1921,6 +2060,14 @@ export const buildChallengePayload = async ({ challenge, viewerUserId }) => {
       transcript: settlementTranscript,
       currentTerms: settlement.currentTerms || [],
       finalTerms: settlement.finalTerms || [],
+      proposedByUserId,
+      proposedBySide: settlement.proposedBySide || "",
+      proposedByViewer: proposedByUserId ? isSameId(proposedByUserId, viewerUserId) : false,
+      proposedByName: proposedByUserId
+        ? getPlayerDisplayName(usersById.get(proposedByUserId))
+        : "",
+      proposalMessage: settlement.proposalMessage || "",
+      proposedAt: settlement.proposedAt || null,
       outcomeSummary: settlement.outcomeSummary || "",
       failureReason: settlement.failureReason || "",
       rejectionCount: settlement.rejectionCount || 0,

@@ -17,6 +17,10 @@ const caseWorkspaceSource = await readFile(
   new URL("../components/legal-arena/CaseWorkspace.js", import.meta.url),
   "utf8"
 );
+const challengeWorkspaceSource = await readFile(
+  new URL("../components/legal-arena/ChallengeWorkspace.js", import.meta.url),
+  "utf8"
+);
 const soloSettlementStartRouteSource = await readFile(
   new URL("../app/api/cases/[caseId]/settlement/start/route.js", import.meta.url),
   "utf8"
@@ -110,6 +114,11 @@ assert.match(
 );
 assert.match(
   settlementSource,
+  /representedClient[\s\S]*opposingClient[\s\S]*playerMoodDelta changes the representedClient mood/,
+  "Settlement prompts should distinguish represented and opposing AI clients."
+);
+assert.match(
+  settlementSource,
   /export const calculateSettlementRejectionCooldownMs/,
   "Settlement rejections should use a shared cooldown calculator."
 );
@@ -132,6 +141,11 @@ assert.match(
   challengeModelSource,
   /rejectionCount:\s*\{\s*type:\s*Number,\s*default:\s*0,?\s*\}[\s\S]*cooldownUntil:\s*\{\s*type:\s*Date,\s*default:\s*null,?\s*\}/,
   "PVP settlement schema should persist rejection cooldown state."
+);
+assert.match(
+  challengeModelSource,
+  /proposedByUserId:[\s\S]*proposedBySide:[\s\S]*proposalMessage:[\s\S]*proposedAt:/,
+  "PVP settlement schema should persist pending settlement intent metadata."
 );
 
 assert.match(
@@ -156,7 +170,7 @@ assert.match(
 );
 assert.match(
   caseWorkspaceSource,
-  /Your Client[\s\S]*Opponent[\s\S]*Main Blocker[\s\S]*Stage/,
+  /Your Client Mood[\s\S]*Opposing Client Mood[\s\S]*Main Blocker[\s\S]*Stage/,
   "Settlement room should summarize negotiation state at the top."
 );
 assert.doesNotMatch(
@@ -166,8 +180,18 @@ assert.doesNotMatch(
 );
 assert.match(
   caseWorkspaceSource,
-  /Current Offer[\s\S]*Will this settle\?[\s\S]*Recommended next move[\s\S]*Message to opponent[\s\S]*Recent exchanges/,
-  "Settlement room should prioritize offer, viability, next move, composer, and recent exchanges."
+  /getSettlementMoodEmoji[\s\S]*😊[\s\S]*🙂[\s\S]*😐[\s\S]*😟[\s\S]*😡/,
+  "Settlement moods should be represented with emoji states."
+);
+assert.doesNotMatch(
+  caseWorkspaceSource,
+  /settlementChance|Deal viability|Outlook|Will this settle\?/,
+  "Settlement mode should not collapse client moods into a success-chance style metric."
+);
+assert.match(
+  caseWorkspaceSource,
+  /Current Offer[\s\S]*Client moods[\s\S]*Recommended next move[\s\S]*Message to opposing counsel[\s\S]*Recent exchanges/,
+  "Settlement room should prioritize offer, client moods, next move, composer, and recent exchanges."
 );
 assert.match(
   caseWorkspaceSource,
@@ -361,7 +385,7 @@ assert.match(
 );
 assert.match(
   caseWorkspaceSource,
-  /Client priorities[\s\S]*Opponent priorities[\s\S]*Compare with court[\s\S]*Case facts[\s\S]*Full negotiation history/,
+  /Client priorities[\s\S]*Opposing client priorities[\s\S]*Compare with court[\s\S]*Case facts[\s\S]*Full negotiation history/,
   "Settlement mode should expose compact supporting info actions."
 );
 assert.match(
@@ -478,6 +502,31 @@ assert.match(
   challengeSource,
   /getSettlementCooldownState\(challenge\.settlement \|\| \{\}\)/,
   "PVP settlement flows should enforce rejection cooldowns."
+);
+assert.match(
+  challengeSource,
+  /status: "proposed"[\s\S]*proposedByUserId: participant\.userId[\s\S]*proposalMessage: message[\s\S]*return buildChallengePayload/,
+  "PVP settlement start should first create a pending intent instead of immediately opening talks."
+);
+assert.match(
+  challengeSource,
+  /isRespondingToOtherProposal[\s\S]*runSettlementExchange/,
+  "PVP settlement should open only when the other lawyer responds after client authority."
+);
+assert.match(
+  challengeWorkspaceSource,
+  /Settlement Intent Received[\s\S]*Ask your client whether they are willing to explore settlement/,
+  "PVP receiver should see a prompt to ask their client about settlement intent."
+);
+assert.match(
+  challengeWorkspaceSource,
+  /Your client has given authority\. Use Respond to Settlement/,
+  "PVP receiver prompt should change once their client has given settlement authority."
+);
+assert.match(
+  caseWorkspaceSource,
+  /Settlement Intent Sent[\s\S]*Respond to Settlement[\s\S]*Send Settlement Response[\s\S]*Send Settlement Intent/,
+  "PVP settlement CTA should distinguish sent intents from response actions."
 );
 assert.match(
   soloSettlementDashboardRouteSource,

@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import Image from "next/image";
 import connectMongo from "@/libs/mongoose";
 import CaseTemplate from "@/models/CaseTemplate";
@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
 export const metadata = getSEOTags({
   title: "Legal Arena | AI Lawyer Game",
   description:
-    "Play a first-of-its-kind AI lawyer game where you interview AI clients, build your case, and fight it out in court.",
+    "Play an AI lawyer game with endless legal matters, client interviews, settlement talks, courtroom arguments, and player challenges.",
   keywords: [
     "lawyer game",
     "online lawyer game",
@@ -31,7 +31,7 @@ export const metadata = getSEOTags({
   openGraph: {
     title: "Legal Arena | AI Lawyer Game",
     description:
-      "Interview AI clients, build your case, argue in court, and see whether your legal strategy wins.",
+      "Interview AI clients, negotiate settlements, build your case, and argue in court before an AI judge.",
   },
 });
 
@@ -53,6 +53,10 @@ const featureHighlights = [
   {
     title: "AI Courtroom",
     description: "Face pushback from the other side, adapt your theory, and try to persuade the judge.",
+  },
+  {
+    title: "Settlements",
+    description: "Make offers, test leverage, and resolve matters before the fight reaches a verdict.",
   },
   {
     title: "Verdicts",
@@ -77,8 +81,8 @@ const steps = [
   },
   {
     number: "3",
-    title: "Fight It Out in Court",
-    description: "Turn what you learned into arguments, answer the other side, and try to win the judge over.",
+    title: "Negotiate or Fight",
+    description: "Push for a settlement when the leverage is right, or take the dispute into court and argue it through.",
   },
   {
     number: "4",
@@ -90,8 +94,9 @@ const steps = [
 const skillPoints = [
   "Talk to AI clients in your own words",
   "Uncover facts, contradictions, and missing details",
+  "Negotiate settlements before the case reaches a ruling",
   "Argue against an AI opponent or another player",
-  "Get judged by an AI court that reacts to your case",
+  "Play fresh legal matters without running out of cases",
 ];
 
 const practiceCards = [
@@ -109,6 +114,11 @@ const practiceCards = [
     title: "Court Fight",
     detail:
       "Argue against AI opposition, respond to attacks, and get a ruling that tells you whether your strategy held up.",
+  },
+  {
+    title: "Settlement Talks",
+    detail:
+      "Send offers, read the other side, and decide whether a deal is smarter than risking everything in court.",
   },
   {
     title: "PVP Gameplay",
@@ -268,13 +278,19 @@ export default async function Page() {
     (freeGameplayCampaignActive ? "Play Free Case" : "Start Free");
   const totalCasesLabel =
     totalActiveCases > 0 ? totalActiveCases.toLocaleString("en-US") : "Growing";
+  const infiniteCasesStat = (
+    <span className="inline-flex items-baseline gap-2">
+      <span className="text-white/34 line-through decoration-2">{totalCasesLabel}</span>
+      <span aria-label="Infinite">&infin;</span>
+    </span>
+  );
   const homepageSchema = {
     "@context": "https://schema.org",
     "@type": "VideoGame",
     name: config.appName,
     url: `https://${config.domainName}/`,
     description:
-      "Legal Arena is a first-of-its-kind AI lawyer game where players interview AI clients, build cases, argue in court, and receive rulings.",
+      "Legal Arena is a first-of-its-kind AI lawyer game where players interview AI clients, negotiate settlements, build cases, argue in court, and receive rulings.",
     gamePlatform: "Web browser",
     genre: ["AI lawyer game", "Courtroom game", "Legal strategy game"],
     applicationCategory: "GameApplication",
@@ -359,14 +375,14 @@ export default async function Page() {
           <div className="arena-surface-soft mx-auto mb-8 flex max-w-5xl flex-col gap-4 border-amber-200/22 bg-amber-200/[0.055] px-5 py-4 text-left md:flex-row md:items-center md:justify-between">
             <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-amber-100/72">
-                Brand new UI
+                Infinite cases are live
               </p>
               <h2 className="mt-2 text-xl font-semibold leading-tight text-white">
-                Legal Arena has a brand new interface.
+                More disputes. More strategy. More ways to win.
               </h2>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-amber-50/78">
-                The arena is cleaner, faster to scan, and easier to navigate,
-                with the same case-building and courtroom flow underneath.
+                Play fresh legal matters, negotiate settlements, build stronger
+                case files, and decide whether to deal or fight in court.
               </p>
             </div>
             <div className="flex w-full shrink-0 flex-col gap-3 md:w-auto">
@@ -380,7 +396,7 @@ export default async function Page() {
                 Be the lawyer.
               </h1>
               <p className="mx-auto mt-6 max-w-3xl text-lg leading-8 text-white/72 md:text-2xl md:leading-10">
-                Interview AI clients. Build your case from what they tell you. Fight it out in court before an AI judge — against an AI opponent, or challenge another player in PvP.
+                Interview AI clients. Negotiate when the deal is worth it. Build your case and fight it out in court before an AI judge, against the AI or another player.
               </p>
 
               <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
@@ -398,9 +414,9 @@ export default async function Page() {
                 </a>
               </div>
 
-              <div className="mt-10 grid gap-6 border-t border-white/10 pt-8 sm:grid-cols-2 xl:grid-cols-5">
+              <div className="mt-10 grid gap-6 border-t border-white/10 pt-8 sm:grid-cols-2 xl:grid-cols-6">
                 {featureHighlights.map((item, index) => {
-                  const iconKinds = ["spark", "bolt", "trophy", "brief"];
+                  const iconKinds = ["spark", "bolt", "trophy", "scale", "brief", "users"];
                   return (
                     <div
                       key={item.title}
@@ -463,7 +479,7 @@ export default async function Page() {
               AI makes lawyer games possible.
             </h2>
             <p className="mt-6 max-w-lg text-lg leading-8 text-white/66">
-              For years, legal games had to be scripted: fixed clues, fixed dialogue, fixed outcomes. Legal Arena is different. You interview AI clients, ask your own questions, discover facts in your own way, and argue before an AI judge. No dialogue trees. No preset path. Just your words, your strategy, and the case you build.
+              For years, legal games had to be scripted: fixed clues, fixed dialogue, fixed outcomes. Legal Arena is different. You interview AI clients, ask your own questions, discover facts in your own way, negotiate when the pressure shifts, and argue before an AI judge. No dialogue trees. No preset path. Just your words, your strategy, and the matter in front of you.
             </p>
             <div className="mt-8 max-w-md space-y-4">
               {skillPoints.map((point) => (
@@ -505,7 +521,7 @@ export default async function Page() {
             Cases You Can Play
           </p>
           <p className="mx-auto mt-4 max-w-2xl text-center text-lg leading-8 text-white/62">
-            Each case gives you a client, a dispute, an opponent, and a courtroom fight. The AI turns the same structure into an open-ended legal battle.
+            Each matter gives you a client, a dispute, an opponent, and a choice: negotiate a settlement or take the fight to court. New legal stories keep opening up as you play.
           </p>
           <LandingCategoryCarousel />
 
@@ -522,12 +538,12 @@ export default async function Page() {
                 <p className="mt-4 text-sm leading-7 text-white/62">
                   {trimStatement(
                     template.subtitle || template.overview,
-                    "A playable legal matter with intake, argument pressure, lawbook rules, and judge feedback."
+                    "A playable legal matter with client interviews, negotiation pressure, courtroom strategy, and judge feedback."
                   )}
                 </p>
                 <div className="mt-6 flex items-center justify-between text-sm text-white/45">
                   <span>{template.practiceArea || "Live matter"}</span>
-              <span>Playable case</span>
+              <span>Ready to play</span>
                 </div>
               </div>
             ))}
@@ -539,9 +555,9 @@ export default async function Page() {
           <p className="text-center text-sm font-semibold uppercase tracking-[0.28em] text-white/45">
             What You Actually Do
         </p>
-          <div className="mt-12 grid gap-5 lg:grid-cols-4">
+          <div className="mt-12 grid gap-5 md:grid-cols-2 xl:grid-cols-5">
           {practiceCards.map((item, index) => {
-            const iconKinds = ["users", "gavel", "star"];
+            const iconKinds = ["users", "folder", "gavel", "scale", "star"];
 
             return (
             <div key={item.title} className="arena-surface-soft p-6">
@@ -551,7 +567,7 @@ export default async function Page() {
                 </div>
                 <div>
                   <p className="font-medium text-white">{item.title}</p>
-                  <p className="text-sm text-white/45">In the current game loop</p>
+                  <p className="text-sm text-white/45">Part of every legal battle</p>
                 </div>
               </div>
               <p className="mt-6 text-base leading-8 text-white/68">{item.detail}</p>
@@ -560,10 +576,11 @@ export default async function Page() {
           })}
         </div>
 
-        <div className="mt-12 grid gap-6 border-t border-white/10 pt-8 text-center sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-12 grid gap-6 border-t border-white/10 pt-8 text-center sm:grid-cols-2 xl:grid-cols-5">
           {[
-            { icon: "brief", value: totalCasesLabel, label: "Playable Cases" },
+            { icon: "brief", value: infiniteCasesStat, label: "Legal Matters" },
             { icon: "users", value: "AI", label: "Client Interviews" },
+            { icon: "scale", value: "Deal", label: "Settlement Talks" },
             { icon: "gavel", value: "Court", label: "Argument Battles" },
             { icon: "star", value: "PVP", label: "Player Challenges" },
           ].map((stat) => (
@@ -586,10 +603,10 @@ export default async function Page() {
             Ready to step into the arena?
           </p>
           <h2 className="arena-headline mx-auto mt-5 max-w-4xl text-4xl uppercase md:text-6xl">
-            Interview the client. Build the case. Challenge players. Win the argument.
+            Interview the client. Make the deal. Win the argument.
           </h2>
           <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-white/62">
-            This is not a quiz about law. It is a playable legal battle where your questions, facts, and arguments decide the outcome against AI opponents or another player in PVP.
+            This is not a law quiz. It is a playable legal battle where your questions, offers, facts, and arguments shape the outcome against AI opponents or another player.
           </p>
           <Link
             href="/dashboard"

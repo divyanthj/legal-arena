@@ -63,7 +63,7 @@ assert.match(dashboardHubSource, /Open PVP Docket/);
 assert.match(dashboardHubSource, /PVP docket is still loading/);
 assert.match(dashboardHubSource, /challengesLoadTimedOut/);
 assert.doesNotMatch(dashboardHubSource, /No PVP docket yet/);
-assert.match(challengeButtonSource, /Creating invite\.\.\./);
+assert.match(challengeButtonSource, /Generating case\.\.\./);
 assert.match(challengeModelSource, /quitByUserId/);
 assert.match(challengeModelSource, /stayBonus/);
 assert.match(challengeStoreSource, /export const quitChallengeForUser/);

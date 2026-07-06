@@ -259,6 +259,43 @@ Rules:
 - Every meaningful skill gain or skill effect should be explainable in UI.
 - Skills should amplify demonstrated behavior, not replace it.
 
+## Case-Win Blog Publishing Loop
+
+Legal Arena should eventually turn strong player wins into promotional, SEO-friendly blog content.
+
+When a user wins a case, the system may generate a publishable article under `/blog` that presents the player's victory as a polished legal case note. The article should be authored by AI on behalf of that user, using the user's display name and portrait as the author identity.
+
+This is both a retention loop and a growth loop:
+
+- The player gets a prestige artifact from a good win.
+- The app gains fresh long-form content around legal strategy and courtroom gameplay.
+- Users are naturally encouraged to share their best victories.
+- The blog becomes a public showcase of how Legal Arena cases are argued, won, and learned from.
+
+Generated win articles should read more like a law journal case note than a generic game recap. They should explain the dispute, legal theory, evidentiary turning points, courtroom strategy, opposing weaknesses, and why the player's argument prevailed.
+
+SEO requirements should include:
+
+- Search-aligned titles and descriptions.
+- Stable unique slugs.
+- Internal links to relevant Legal Arena pages and related blog posts.
+- Structured author metadata for the winning user.
+- Clear category tagging for lawyer games, courtroom strategy, case analysis, and related topics.
+- A disclaimer that Legal Arena is a game/training simulator and not legal advice.
+
+The article should not expose private, unsafe, or low-quality session details. Publication should require quality gates, user consent, and moderation controls before anything becomes public.
+
+AI-generated imagery should support the article. Images may include the player's avatar or portrait in appropriate legal poses, such as reviewing evidence, presenting argument, addressing the court, studying a case file, or standing in a courtroom setting. These images should match the user's avatar identity while remaining tasteful, professional, and consistent with Legal Arena's brand.
+
+Future implementation questions:
+
+- Whether publishing is automatic, opt-in, or suggested after eligible wins.
+- How to score whether a win is interesting enough to become a post.
+- How to preserve the player's avatar likeness across generated article images.
+- How to store generated author profiles and per-article media.
+- How to prevent duplicate, thin, or spammy SEO content.
+- How to let users share, unpublish, or edit generated victory articles.
+
 ## Fun Design Constraints
 
 Generated cases must not merely be coherent legal scenarios.

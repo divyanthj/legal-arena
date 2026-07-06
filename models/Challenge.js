@@ -226,6 +226,18 @@ const settlementSchema = mongoose.Schema(
     },
     currentTerms: { type: [String], default: [] },
     finalTerms: { type: [String], default: [] },
+    proposedByUserId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    proposedBySide: {
+      type: String,
+      enum: ["client", "opponent", ""],
+      default: "",
+    },
+    proposalMessage: { type: String, default: "" },
+    proposedAt: { type: Date, default: null },
     outcomeSummary: { type: String, default: "" },
     failureReason: { type: String, default: "" },
     rejectionCount: { type: Number, default: 0 },
@@ -267,7 +279,7 @@ const challengeSchema = mongoose.Schema(
     caseTemplateId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "CaseTemplate",
-      required: true,
+      default: null,
     },
     templateSlug: { type: String, required: true, trim: true },
     practiceArea: { type: String, required: true, trim: true },
