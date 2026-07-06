@@ -25,9 +25,10 @@ export default function EarlyAccessCheckoutButton({
     });
 
     try {
+      const purchaseSuccessUrl = new URL("/purchase-success", window.location.origin).toString();
       const response = await apiClient.post("/lemonsqueezy/create-checkout", {
         variantId,
-        redirectUrl: window.location.href,
+        redirectUrl: purchaseSuccessUrl,
       });
 
       if (response?.url) {
