@@ -71,6 +71,26 @@ assert.match(challengeModelSource, /quitByUserId/);
 assert.match(challengeModelSource, /stayBonus/);
 assert.match(challengeStoreSource, /export const quitChallengeForUser/);
 assert.match(challengeStoreSource, /staying bonus/);
+assert.match(
+  challengeStoreSource,
+  /const intakeForfeit = challenge\.status === "active"/,
+  "PVP quit should detect intake-stage forfeits separately from courtroom quits."
+);
+assert.match(
+  challengeStoreSource,
+  /intakeForfeit[\s\S]*Math\.max\(12, challenge\.complexity \* 6,[\s\S]*quittingParticipant\.score[\s\S]*baseStayingScore \+ 1\)/,
+  "Intake-stage PVP quit should force the staying player ahead on score."
+);
+assert.match(
+  challengeStoreSource,
+  /const winnerParticipant = intakeForfeit[\s\S]*\? stayingParticipant[\s\S]*court still considered the judged rounds/,
+  "Intake-stage PVP quit should award the verdict directly to the player who stayed."
+);
+assert.match(
+  challengeStoreSource,
+  /wins immediately by forfeit because the other player quit during intake/,
+  "Intake-stage PVP quit verdict should explain that the other player quit during intake."
+);
 assert.match(challengeStoreSource, /sendChallengeAcceptedEmail/);
 assert.match(challengeStoreSource, /challenge accepted email failed/);
 assert.match(challengeStoreSource, /User\.findById\(challenge\.initiatorId\)\.select\("name email"\)/);

@@ -20,6 +20,8 @@ const statusLabel = {
   declined: "Declined",
   expired: "Expired",
   ready: "Ready for court",
+  "waiting-response": "Waiting for response",
+  "settlement-intent": "Settlement intent",
 };
 
 const getChallengeRef = (challenge) => challenge.slug || challenge.id;
@@ -27,6 +29,17 @@ const getChallengeRef = (challenge) => challenge.slug || challenge.id;
 const sideRoleLabel = (side) => (side === "opponent" ? "Defendant" : "Plaintiff");
 
 const getChallengeDisplayStatus = (challenge = {}) => {
+  const settlement = challenge.settlement || {};
+  const settlementEnded = Boolean(
+    settlement.resolution === "failed" ||
+      settlement.resolution === "rejected" ||
+      ["failed", "rejected"].includes(settlement.status)
+  );
+
+  if (settlementEnded && challenge.status === "settlement") {
+    return "active";
+  }
+
   if (challenge.status === "settlement") {
     return "settlement";
   }
@@ -80,6 +93,19 @@ const normalizeFeedbackForViewer = ({ items = [], viewer = {} }) => {
 
 const getViewerStage = (challenge = {}) => {
   const displayStatus = getChallengeDisplayStatus(challenge);
+  const settlement = challenge.settlement || {};
+  const hasPendingIntent =
+    settlement.intentPending === true ||
+    settlement.intentStatus === "pending" ||
+    settlement.status === "proposed";
+
+  if (hasPendingIntent) {
+    return settlement.intentSentByViewer ||
+      settlement.awaitingSettlementResponse ||
+      settlement.proposedByViewer
+      ? "waiting-response"
+      : "settlement-intent";
+  }
 
   if (displayStatus === "verdict") {
     return "verdict";
@@ -282,7 +308,7 @@ const OpponentStageNotice = ({ challenge }) => {
     settlementIntent
       ? settlementIntentFromViewer
         ? `Your settlement intent was sent to ${opponent.name}. Waiting for them to ask ${opponentParty} for authority.`
-        : `${settlementIntent.proposedByName || opponent.name} wants to discuss settlement. Ask ${viewerParty} if they are interested before you respond.`
+        : `${settlementIntent.proposedByName || opponent.name} says the opposite side is willing to settle. Ask ${viewerParty} whether they consent before you respond.`
       : viewerStage === "active" && challenge.status === "courtroom"
       ? `The court phase has opened. Finish intake for ${viewerParty} before you file for this round.`
       : viewerStage === "active"
@@ -335,9 +361,9 @@ const OpponentStageNotice = ({ challenge }) => {
                 ? "Your client has given authority. Use Respond to Settlement when you are ready."
                 : "Ask your client whether they are willing to explore settlement before you respond."}
             </p>
-            {settlementIntent.proposalMessage ? (
+            {settlementIntent.proposalMessage || settlementIntent.intentMessage ? (
               <p className="mt-3 rounded-xl border border-white/10 bg-black/22 p-3 text-sm leading-6 text-white/68">
-                {settlementIntent.proposalMessage}
+                {settlementIntent.proposalMessage || settlementIntent.intentMessage}
               </p>
             ) : null}
           </div>

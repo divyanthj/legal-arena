@@ -663,6 +663,9 @@ export const runSettlementExchange = async ({
   const cooldownUntil = rejected
     ? new Date(Date.now() + calculateSettlementRejectionCooldownMs(rejectionCount))
     : null;
+  const terminal = ["settled", "failed"].includes(result.status);
+  const settled = result.status === "settled";
+  const completedAt = terminal ? new Date() : null;
 
   const nextSettlement = {
     ...activeSettlement,
@@ -670,11 +673,18 @@ export const runSettlementExchange = async ({
     moods: result.moods,
     currentTerms: result.currentTerms,
     finalTerms: result.finalTerms,
+    resolved: terminal,
+    resolution: settled ? "settled" : result.status === "failed" ? "failed" : "",
+    resolvedAt: completedAt,
+    accepted: settled,
+    acceptedAt: settled ? completedAt : null,
+    acceptedByUserId: settled ? userId : null,
+    acceptedBySide: settled ? playerSide : "",
     outcomeSummary: result.outcomeSummary,
     failureReason: result.failureReason,
     rejectionCount,
     cooldownUntil,
-    completedAt: ["settled", "failed"].includes(result.status) ? new Date() : null,
+    completedAt,
     transcript: [
       ...activeSettlement.transcript,
       {

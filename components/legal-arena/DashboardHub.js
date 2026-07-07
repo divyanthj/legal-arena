@@ -51,6 +51,17 @@ const hasOpenSettlementStatus = (challenge = {}) =>
   ["proposed", "active"].includes(challenge.settlement?.status);
 
 const getPvpDisplayStatus = (challenge = {}) => {
+  const settlement = challenge.settlement || {};
+  const settlementEnded = Boolean(
+    settlement.resolution === "failed" ||
+      settlement.resolution === "rejected" ||
+      ["failed", "rejected"].includes(settlement.status)
+  );
+
+  if (settlementEnded && challenge.status === "settlement") {
+    return "active";
+  }
+
   if (challenge.status === "settlement" || hasOpenSettlementStatus(challenge)) {
     return "settlement";
   }

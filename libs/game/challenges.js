@@ -381,6 +381,8 @@ const normalizeChallengeForRead = (challenge) => {
   changed = ensureChallengeSlug(challenge) || changed;
   changed = updateExpiredChallenge(challenge) || changed;
   changed = syncChallengeSettlementIntentFields(challenge) || changed;
+  changed = syncChallengeSettlementTerminalStage(challenge) || changed;
+  changed = syncChallengeSettlementMoodFailure(challenge) || changed;
   changed = syncChallengeSettlementNegotiationTurnFields(challenge) || changed;
   changed = seedChallengeFactSheetsIfNeeded(challenge) || changed;
   changed = backfillChallengeFactSheetsFromTranscript(challenge) || changed;
@@ -451,6 +453,64 @@ const hasPendingSettlementIntent = (settlement = {}) =>
   settlement.intentPending === true ||
   settlement.intentStatus === "pending" ||
   settlement.status === "proposed";
+
+const hasPendingSettlementIntentFromUser = (settlement = {}, userId) => {
+  if (!hasPendingSettlementIntent(settlement)) {
+    return false;
+  }
+
+  return isSameId(settlement.intentSenderUserId || settlement.proposedByUserId, userId);
+};
+
+const getClearedSettlementIntentFields = () => ({
+  "settlement.intentPending": false,
+  "settlement.intentStatus": "none",
+  "settlement.intentSenderUserId": null,
+  "settlement.intentSenderSide": "",
+  "settlement.intentReceiverUserId": null,
+  "settlement.intentReceiverSide": "",
+  "settlement.intentMessage": "",
+  "settlement.intentSentAt": null,
+  "settlement.intentResponse": "",
+  "settlement.intentRespondedAt": null,
+  "settlement.proposedByUserId": null,
+  "settlement.proposedBySide": "",
+  "settlement.proposalMessage": "",
+  "settlement.proposedAt": null,
+});
+
+const clearSettlementIntentState = (settlement) => {
+  if (!settlement) {
+    return false;
+  }
+
+  let changed = false;
+  const setValue = (key, value, same = (left, right) => left === right) => {
+    if (same(settlement[key], value)) {
+      return;
+    }
+
+    settlement[key] = value;
+    changed = true;
+  };
+
+  setValue("intentPending", false);
+  setValue("intentStatus", "none");
+  setValue("intentSenderUserId", null, isSameId);
+  setValue("intentSenderSide", "");
+  setValue("intentReceiverUserId", null, isSameId);
+  setValue("intentReceiverSide", "");
+  setValue("intentMessage", "");
+  setValue("intentSentAt", null, (left, right) => String(left || "") === String(right || ""));
+  setValue("intentResponse", "");
+  setValue("intentRespondedAt", null, (left, right) => String(left || "") === String(right || ""));
+  setValue("proposedByUserId", null, isSameId);
+  setValue("proposedBySide", "");
+  setValue("proposalMessage", "");
+  setValue("proposedAt", null, (left, right) => String(left || "") === String(right || ""));
+
+  return changed;
+};
 
 const syncChallengeSettlementIntentFields = (challenge) => {
   const settlement = challenge?.settlement;
@@ -543,6 +603,115 @@ const syncChallengeSettlementNegotiationTurnFields = (challenge) => {
     latestPlayerMessage.createdAt || new Date(),
     (left, right) => String(left || "") === String(right || "")
   );
+
+  if (changed) {
+    challenge.markModified?.("settlement");
+  }
+
+  return changed;
+};
+
+const getSettlementFailureParticipantForMoodKey = (challenge, moodKey) => {
+  const failedSide = moodKey === "opponent" ? "opponent" : "client";
+  return (
+    (challenge.participants || []).find((participant) => participant.side === failedSide) ||
+    null
+  );
+};
+
+const syncChallengeSettlementMoodFailure = (challenge) => {
+  const settlement = challenge?.settlement;
+  if (
+    !settlement ||
+    settlement.accepted ||
+    settlement.resolution === "settled" ||
+    settlement.resolution === "failed" ||
+    ["settled", "failed", "rejected"].includes(settlement.status)
+  ) {
+    return false;
+  }
+
+  const playerMood = Number(settlement.moods?.player);
+  const opponentMood = Number(settlement.moods?.opponent);
+  const failedMoodKey =
+    Number.isFinite(playerMood) && playerMood <= -100
+      ? "player"
+      : Number.isFinite(opponentMood) && opponentMood <= -100
+      ? "opponent"
+      : "";
+
+  if (!failedMoodKey) {
+    return false;
+  }
+
+  const failedParticipant = getSettlementFailureParticipantForMoodKey(
+    challenge,
+    failedMoodKey
+  );
+  const endedAt = settlement.endedAt || settlement.resolvedAt || new Date();
+
+  challenge.status = "active";
+  settlement.status = "failed";
+  settlement.resolved = true;
+  settlement.resolution = "failed";
+  settlement.resolvedAt = endedAt;
+  settlement.accepted = false;
+  settlement.acceptedAt = null;
+  settlement.acceptedByUserId = null;
+  settlement.acceptedBySide = "";
+  settlement.endedNegotiations = true;
+  settlement.endedByUserId = failedParticipant?.userId || null;
+  settlement.endedBySide = failedParticipant?.side || "";
+  settlement.endedAt = endedAt;
+  settlement.failureReason =
+    settlement.failureReason ||
+    "Negotiations broke down because a client wants to walk out.";
+  settlement.awaitingNegotiationResponseUserId = null;
+  settlement.negotiationTurnUserId = null;
+  settlement.negotiationTurnSide = "";
+  clearSettlementIntentState(settlement);
+
+  challenge.markModified?.("settlement");
+  return true;
+};
+
+const syncChallengeSettlementTerminalStage = (challenge) => {
+  const settlement = challenge?.settlement;
+  if (!settlement) {
+    return false;
+  }
+
+  const failed = Boolean(
+    settlement.resolution === "failed" || settlement.status === "failed"
+  );
+  const rejected = Boolean(
+    settlement.resolution === "rejected" || settlement.status === "rejected"
+  );
+
+  if (!failed && !rejected) {
+    return false;
+  }
+
+  let changed = false;
+  if (challenge.status === "settlement") {
+    challenge.status = "active";
+    changed = true;
+  }
+
+  changed = clearSettlementIntentState(settlement) || changed;
+
+  if (settlement.awaitingNegotiationResponseUserId) {
+    settlement.awaitingNegotiationResponseUserId = null;
+    changed = true;
+  }
+  if (settlement.negotiationTurnUserId) {
+    settlement.negotiationTurnUserId = null;
+    changed = true;
+  }
+  if (settlement.negotiationTurnSide) {
+    settlement.negotiationTurnSide = "";
+    changed = true;
+  }
 
   if (changed) {
     challenge.markModified?.("settlement");
@@ -681,7 +850,12 @@ const userMapForChallenge = async (challenge) => {
     challenge.initiatorId,
     challenge.challengedId,
     ...(challenge.participants || []).map((participant) => participant.userId),
-  ].map(toObjectIdString);
+  ].map(toObjectIdString).filter(Boolean);
+
+  if (!userIds.length) {
+    return new Map();
+  }
+
   const users = await User.find({ _id: { $in: [...new Set(userIds)] } }).select(
     "name email image progression"
   );
@@ -1099,6 +1273,20 @@ export const getChallengeRealtimeVersionForUser = async ({ userId, challengeId }
       status: 1,
       updatedAt: 1,
       "settlement.status": 1,
+      "settlement.intentPending": 1,
+      "settlement.intentStatus": 1,
+      "settlement.intentSenderUserId": 1,
+      "settlement.intentReceiverUserId": 1,
+      "settlement.intentSentAt": 1,
+      "settlement.intentRespondedAt": 1,
+      "settlement.resolved": 1,
+      "settlement.resolution": 1,
+      "settlement.resolvedAt": 1,
+      "settlement.accepted": 1,
+      "settlement.acceptedAt": 1,
+      "settlement.acceptedByUserId": 1,
+      "settlement.acceptedBySide": 1,
+      "settlement.completedAt": 1,
       "settlement.latestNegotiationMessageAt": 1,
       "settlement.latestNegotiationMessageUserId": 1,
       "settlement.awaitingNegotiationResponseUserId": 1,
@@ -1117,6 +1305,21 @@ export const getChallengeRealtimeVersionForUser = async ({ userId, challengeId }
     status: challenge.status || "",
     updatedAt: challenge.updatedAt || null,
     settlementStatus: settlement.status || "",
+    settlementIntentPending: hasPendingSettlementIntent(settlement),
+    settlementIntentStatus:
+      settlement.intentStatus || (settlement.status === "proposed" ? "pending" : ""),
+    settlementIntentSenderUserId: toObjectIdString(settlement.intentSenderUserId),
+    settlementIntentReceiverUserId: toObjectIdString(settlement.intentReceiverUserId),
+    settlementIntentSentAt: settlement.intentSentAt || null,
+    settlementIntentRespondedAt: settlement.intentRespondedAt || null,
+    settlementResolved: Boolean(settlement.resolved),
+    settlementResolution: settlement.resolution || "",
+    settlementResolvedAt: settlement.resolvedAt || null,
+    settlementAccepted: Boolean(settlement.accepted),
+    settlementAcceptedAt: settlement.acceptedAt || null,
+    settlementAcceptedByUserId: toObjectIdString(settlement.acceptedByUserId),
+    settlementAcceptedBySide: settlement.acceptedBySide || "",
+    settlementCompletedAt: settlement.completedAt || null,
     latestNegotiationMessageAt: settlement.latestNegotiationMessageAt || null,
     latestNegotiationMessageUserId: toObjectIdString(
       settlement.latestNegotiationMessageUserId
@@ -1284,6 +1487,13 @@ export const continueChallengeInterview = async ({ userId, challengeId, question
   if (!participant || participant.status === "ready") {
     throw new Error("This intake file is already locked.");
   }
+  if (hasPendingSettlementIntentFromUser(challenge.settlement, userId)) {
+    const error = new Error(
+      "Settlement intent has been sent. Wait for opposing counsel to respond before continuing intake."
+    );
+    error.status = 409;
+    throw error;
+  }
 
   const caseSession = buildParticipantCaseSession({
     challenge,
@@ -1331,6 +1541,13 @@ export const markChallengeReady = async ({ userId, challengeId, factSheet }) => 
 
   const participant = getParticipant(challenge, userId);
   const otherParticipant = getOtherParticipant(challenge, userId);
+  if (hasPendingSettlementIntentFromUser(challenge.settlement, userId)) {
+    const error = new Error(
+      "Settlement intent has been sent. Wait for opposing counsel to respond before finalizing the fact sheet."
+    );
+    error.status = 409;
+    throw error;
+  }
   const finalized = finalizeFactSheetInput({
     factSheet: factSheet || participant.factSheet,
     caseTemplate: challenge.templateSnapshot,
@@ -1471,6 +1688,71 @@ const coerceSettlementProposalTerms = (terms = {}) => {
 const flattenSettlementProposalTerms = (terms = []) =>
   coerceSettlementProposalTerms(terms).map((term) => `${term.label}: ${term.value}`);
 
+const normalizeSettlementTermKey = (value = "") =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const normalizeSettlementTermValue = (value = "") =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\b(?:usd|us dollars|dollars)\b/g, "")
+    .replace(/[$,]/g, "")
+    .replace(/[.;]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const getStoredOrParsedSettlementProposalTerms = (entry) => {
+  const storedTerms = coerceSettlementProposalTerms(entry?.terms || []);
+  if (storedTerms.length) {
+    return storedTerms;
+  }
+
+  return extractSettlementTermsFromMessage(entry?.text || "");
+};
+
+const settlementProposalTermsMatch = (leftTerms = [], rightTerms = []) => {
+  const left = coerceSettlementProposalTerms(leftTerms);
+  const right = coerceSettlementProposalTerms(rightTerms);
+
+  if (!left.length || left.length !== right.length) {
+    return false;
+  }
+
+  const rightByLabel = new Map(
+    right.map((term) => [
+      normalizeSettlementTermKey(term.label),
+      normalizeSettlementTermValue(term.value),
+    ])
+  );
+
+  return left.every((term) => {
+    const label = normalizeSettlementTermKey(term.label);
+    return (
+      label &&
+      rightByLabel.has(label) &&
+      rightByLabel.get(label) === normalizeSettlementTermValue(term.value)
+    );
+  });
+};
+
+const isSettlementAcceptanceMessage = (message = "") => {
+  const text = String(message || "").trim().toLowerCase();
+  if (!text) {
+    return false;
+  }
+
+  const rejectsAcceptance = /\b(?:do not|don't|cannot|can't|will not|won't|not|never)\s+(?:accept|agree|approve|settle)\b|\b(?:reject|rejected|decline|declined|counteroffer|counter offer|counter)\b|\bno deal\b/.test(text);
+  const conditionalAcceptance = /\b(?:if|provided that|provided|subject to|as long as|unless|but only|only if|on condition)\b/.test(text);
+  const acceptsTerms = /\b(?:we|i|my client|our client)\s+(?:accept|agree|approve|will take|can take)\b|\b(?:accepted|agreed|deal|we have a deal|that works|those terms work|your terms are acceptable|their terms are acceptable)\b/.test(text);
+
+  return acceptsTerms && !rejectsAcceptance && !conditionalAcceptance;
+};
+
 const getPvpSettlementRecipientMoodDelta = (message = "") => {
   const text = String(message || "");
   const insultPatterns = [
@@ -1511,6 +1793,7 @@ export const startChallengeSettlement = async ({
   challengeId,
   message,
   terms = {},
+  acceptTerms = false,
   clientPreviewTone = "",
   clientPreviewScore = 0,
 }) => {
@@ -1574,41 +1857,81 @@ export const startChallengeSettlement = async ({
 
   if (!isRespondingToOtherProposal) {
     const now = new Date();
-    challenge.settlement = {
-      ...(challenge.settlement || {}),
-      status: "proposed",
-      intentPending: true,
-      intentStatus: "pending",
-      intentSenderUserId: participant.userId,
-      intentSenderSide: participant.side,
-      intentReceiverUserId: otherParticipant.userId,
-      intentReceiverSide: otherParticipant.side,
-      intentMessage: message,
-      intentSentAt: now,
-      intentResponse: "",
-      intentRespondedAt: null,
-      proposedByUserId: participant.userId,
-      proposedBySide: participant.side,
-      proposalMessage: message,
-      proposedAt: now,
-      startedAt: now,
-      transcript: [
-        ...((challenge.settlement && challenge.settlement.transcript) || []),
-        {
-          role: "player",
-          userId: participant.userId,
-          side: participant.side,
-          speaker: "Settlement intent",
-          text: message,
-          moodSnapshot: challenge.settlement?.moods || { player: 0, opponent: 0 },
-          createdAt: now,
-        },
-      ],
+    const settlementIntentEntry = {
+      role: "player",
+      userId: participant.userId,
+      side: participant.side,
+      speaker: "Settlement intent",
+      text: message,
+      terms: coerceSettlementProposalTerms(terms),
+      moodSnapshot: challenge.settlement?.moods || { player: 0, opponent: 0 },
+      createdAt: now,
     };
-    challenge.markModified?.("settlement");
-    await challenge.save();
+    const updatedChallenge = await Challenge.findOneAndUpdate(
+      {
+        _id: challenge._id,
+        "participants.userId": participant.userId,
+        status: { $in: ["active", "courtroom"] },
+        $or: [
+          { "settlement.status": { $in: ["none", "rejected", "failed"] } },
+          { "settlement.status": { $exists: false } },
+          { settlement: null },
+        ],
+      },
+      {
+        $set: {
+          "settlement.status": "proposed",
+          "settlement.intentPending": true,
+          "settlement.intentStatus": "pending",
+          "settlement.intentSenderUserId": participant.userId,
+          "settlement.intentSenderSide": participant.side,
+          "settlement.intentReceiverUserId": otherParticipant.userId,
+          "settlement.intentReceiverSide": otherParticipant.side,
+          "settlement.intentMessage": message,
+          "settlement.intentSentAt": now,
+          "settlement.intentResponse": "",
+          "settlement.intentRespondedAt": null,
+          "settlement.proposedByUserId": participant.userId,
+          "settlement.proposedBySide": participant.side,
+          "settlement.proposalMessage": message,
+          "settlement.proposedAt": now,
+          "settlement.startedAt": now,
+          "settlement.resolved": false,
+          "settlement.resolution": "",
+          "settlement.resolvedAt": null,
+          "settlement.accepted": false,
+          "settlement.acceptedAt": null,
+          "settlement.acceptedByUserId": null,
+          "settlement.acceptedBySide": "",
+          "settlement.endedNegotiations": false,
+          "settlement.endedByUserId": null,
+          "settlement.endedBySide": "",
+          "settlement.endedAt": null,
+          updatedAt: now,
+        },
+        $push: {
+          "settlement.transcript": settlementIntentEntry,
+        },
+      },
+      { new: true, returnDocument: "after" }
+    );
 
-    return buildChallengePayload({ challenge, viewerUserId: userId });
+    if (!updatedChallenge) {
+      const error = new Error(
+        "Settlement intent could not be sent because this challenge state changed. Refresh and try again."
+      );
+      error.status = 409;
+      throw error;
+    }
+    if (!hasPendingSettlementIntent(updatedChallenge.settlement || {})) {
+      const error = new Error(
+        "Settlement intent write did not return a pending settlement state."
+      );
+      error.status = 500;
+      throw error;
+    }
+
+    return buildChallengePayload({ challenge: updatedChallenge, viewerUserId: userId });
   }
 
   const intentSnapshot = {
@@ -1674,6 +1997,17 @@ export const startChallengeSettlement = async ({
     intentSentAt: intentSnapshot.sentAt,
     intentResponse: "accepted",
     intentRespondedAt: now,
+    resolved: false,
+    resolution: "",
+    resolvedAt: null,
+    accepted: false,
+    acceptedAt: null,
+    acceptedByUserId: null,
+    acceptedBySide: "",
+    endedNegotiations: false,
+    endedByUserId: null,
+    endedBySide: "",
+    endedAt: null,
   };
   challenge.status = "settlement";
   challenge.markModified?.("settlement");
@@ -1787,8 +2121,39 @@ export const continueChallengeSettlement = async ({
     otherParticipant,
   });
   const activeSettlement = normalizeSettlement(challenge.settlement || {}, caseSession);
-  const proposalTerms = extractSettlementTermsFromMessage(message);
-  const flatProposalTerms = flattenSettlementProposalTerms(proposalTerms);
+  const requestProposalTerms = coerceSettlementProposalTerms(terms);
+  const parsedProposalTerms = extractSettlementTermsFromMessage(message);
+  const proposalTerms = requestProposalTerms.length ? requestProposalTerms : parsedProposalTerms;
+  const latestOtherProposalEntry = [...transcript]
+    .reverse()
+    .find(
+      (entry) =>
+        entry?.role === "player" &&
+        entry?.userId &&
+        !isSameId(entry.userId, userId)
+    );
+  const latestOtherProposalTerms =
+    getStoredOrParsedSettlementProposalTerms(latestOtherProposalEntry);
+  const latestOtherProposalText = String(latestOtherProposalEntry?.text || "").trim();
+  const acceptedByPlainLanguage = Boolean(
+    latestOtherProposalEntry && (acceptTerms || isSettlementAcceptanceMessage(message))
+  );
+  const acceptedMatchingTerms = settlementProposalTermsMatch(
+    proposalTerms,
+    latestOtherProposalTerms
+  );
+  const acceptedTerms = acceptedByPlainLanguage ? latestOtherProposalTerms : proposalTerms;
+  const flatAcceptedTerms = flattenSettlementProposalTerms(acceptedTerms);
+  const finalAcceptedTerms =
+    flatAcceptedTerms.length > 0
+      ? flatAcceptedTerms
+      : acceptedByPlainLanguage
+      ? [
+          latestOtherProposalText
+            ? `Accepted proposal: ${latestOtherProposalText.slice(0, 500)}`
+            : "Accepted the other side's latest settlement proposal.",
+        ]
+      : [];
   const moods = {
     player: clampMood(activeSettlement.moods?.player || 0),
     opponent: clampMood(activeSettlement.moods?.opponent || 0),
@@ -1802,14 +2167,30 @@ export const continueChallengeSettlement = async ({
     (moods[senderMoodKey] || 0) +
       getPvpSettlementSenderMoodDelta({ clientPreviewTone, clientPreviewScore })
   );
-  const failed = moods.player <= -100 || moods.opponent <= -100;
+  const failedMoodKey =
+    moods[senderMoodKey] <= -100
+      ? senderMoodKey
+      : moods[recipientMoodKey] <= -100
+      ? recipientMoodKey
+      : "";
+  const failed = Boolean(failedMoodKey);
+  const failedParticipant =
+    failedMoodKey === senderMoodKey
+      ? participant
+      : failedMoodKey === recipientMoodKey
+      ? otherParticipant
+      : null;
+  const settled =
+    (acceptedMatchingTerms || acceptedByPlainLanguage) &&
+    finalAcceptedTerms.length > 0 &&
+    !failed;
   const now = new Date();
   const negotiationTurnFields = {
     latestNegotiationMessageUserId: participant.userId,
     latestNegotiationMessageSide: participant.side,
-    awaitingNegotiationResponseUserId: failed ? null : participant.userId,
-    negotiationTurnUserId: failed ? null : otherParticipant.userId,
-    negotiationTurnSide: failed ? "" : otherParticipant.side,
+    awaitingNegotiationResponseUserId: failed || settled ? null : participant.userId,
+    negotiationTurnUserId: failed || settled ? null : otherParticipant.userId,
+    negotiationTurnSide: failed || settled ? "" : otherParticipant.side,
     latestNegotiationMessageAt: now,
   };
   const playerMessageEntry = {
@@ -1818,6 +2199,7 @@ export const continueChallengeSettlement = async ({
     side: participant.side,
     speaker: getPartyName(challenge.templateSnapshot, participant.side),
     text: message,
+    terms: settled ? acceptedTerms : proposalTerms,
     moodSnapshot: moods,
     createdAt: now,
   };
@@ -1832,9 +2214,27 @@ export const continueChallengeSettlement = async ({
   }
 
   const settlementSetFields = {
-    status: "settlement",
-    "settlement.status": failed ? "failed" : "active",
+    status: settled ? "settled" : failed ? "active" : "settlement",
+    "settlement.status": settled ? "settled" : failed ? "failed" : "active",
     "settlement.moods": moods,
+    "settlement.finalTerms": settled ? finalAcceptedTerms : [],
+    "settlement.resolved": settled || failed,
+    "settlement.resolution": settled ? "settled" : failed ? "failed" : "",
+    "settlement.resolvedAt": settled || failed ? now : null,
+    "settlement.accepted": settled,
+    "settlement.acceptedAt": settled ? now : null,
+    "settlement.acceptedByUserId": settled ? participant.userId : null,
+    "settlement.acceptedBySide": settled ? participant.side : "",
+    "settlement.endedNegotiations": settled || failed,
+    "settlement.endedByUserId":
+      settled ? participant.userId : failed ? failedParticipant?.userId || null : null,
+    "settlement.endedBySide":
+      settled ? participant.side : failed ? failedParticipant?.side || "" : "",
+    "settlement.endedAt": settled || failed ? now : null,
+    "settlement.outcomeSummary": settled
+      ? "Both players accepted the same settlement terms."
+      : "",
+    "settlement.completedAt": settled ? now : null,
     "settlement.latestNegotiationMessageUserId":
       negotiationTurnFields.latestNegotiationMessageUserId,
     "settlement.latestNegotiationMessageSide":
@@ -1848,12 +2248,23 @@ export const continueChallengeSettlement = async ({
     updatedAt: now,
   };
 
-  if (failed) {
-    settlementSetFields["settlement.failureReason"] =
-      "Negotiations broke down because at least one client has no remaining willingness to negotiate.";
+  if (settled || failed) {
+    Object.assign(settlementSetFields, getClearedSettlementIntentFields());
+  } else {
+    settlementSetFields["settlement.intentPending"] = false;
+    settlementSetFields["settlement.intentStatus"] = "accepted";
   }
 
-  const updatedChallenge = await Challenge.collection.findOneAndUpdate(
+  if (failed) {
+    settlementSetFields["settlement.failureReason"] =
+      "Negotiations broke down because a client wants to walk out.";
+  }
+
+  if (settled) {
+    settlementSetFields.completedAt = now;
+  }
+
+  const updatedChallenge = await Challenge.findOneAndUpdate(
     atomicSettlementFilter,
     {
       $set: settlementSetFields,
@@ -1864,13 +2275,17 @@ export const continueChallengeSettlement = async ({
         "settlement.currentTerms": "",
       },
     },
-    { returnDocument: "after" }
+    { new: true, returnDocument: "after" }
   );
 
   if (!updatedChallenge) {
     const error = new Error("Waiting for the other player to respond.");
     error.status = 409;
     throw error;
+  }
+
+  if (settled) {
+    await applyChallengeSettlementProgression(updatedChallenge);
   }
 
   return buildChallengePayload({ challenge: updatedChallenge, viewerUserId: userId });
@@ -1934,9 +2349,6 @@ export const exitChallengeSettlement = async ({ userId, challengeId }) => {
   challenge.status = "active";
   if (challenge.settlement) {
     const isRejectingPendingIntent = hasPendingSettlementIntent(challenge.settlement);
-    const intentSenderUserId =
-      challenge.settlement.intentSenderUserId || challenge.settlement.proposedByUserId || null;
-    const intentSender = intentSenderUserId ? getParticipant(challenge, intentSenderUserId) : null;
     challenge.settlement.status =
       challenge.settlement.status === "failed" ? "failed" : "rejected";
     if (wasActiveSettlement && !isRejectingPendingIntent) {
@@ -1948,26 +2360,7 @@ export const exitChallengeSettlement = async ({ userId, challengeId }) => {
       challenge.settlement.negotiationTurnUserId = null;
       challenge.settlement.negotiationTurnSide = "";
     }
-    if (isRejectingPendingIntent) {
-      challenge.settlement.intentPending = false;
-      challenge.settlement.intentStatus = "rejected";
-      challenge.settlement.intentSenderUserId = intentSenderUserId;
-      challenge.settlement.intentSenderSide =
-        challenge.settlement.intentSenderSide ||
-        intentSender?.side ||
-        challenge.settlement.proposedBySide ||
-        "";
-      challenge.settlement.intentReceiverUserId =
-        challenge.settlement.intentReceiverUserId || participant.userId;
-      challenge.settlement.intentReceiverSide =
-        challenge.settlement.intentReceiverSide || participant.side;
-      challenge.settlement.intentMessage =
-        challenge.settlement.intentMessage || challenge.settlement.proposalMessage || "";
-      challenge.settlement.intentSentAt =
-        challenge.settlement.intentSentAt || challenge.settlement.proposedAt || null;
-      challenge.settlement.intentResponse = "rejected";
-      challenge.settlement.intentRespondedAt = endedAt;
-    }
+    clearSettlementIntentState(challenge.settlement);
     challenge.markModified?.("settlement");
   }
   await challenge.save();
@@ -2195,14 +2588,18 @@ export const quitChallengeForUser = async ({ userId, challengeId }) => {
   const judgedRounds = (challenge.courtroomRounds || []).filter(
     (round) => round.status === "judged"
   );
+  const intakeForfeit = challenge.status === "active";
+  const baseStayingScore = stayingParticipant.score || 0;
   const stayBonus =
-    judgedRounds.length === 0
-      ? Math.max(12, challenge.complexity * 6)
+    intakeForfeit
+      ? Math.max(12, challenge.complexity * 6, (quittingParticipant.score || 0) - baseStayingScore + 1)
       : Math.max(8, challenge.complexity * 3 + judgedRounds.length * 2);
   const quitterScore = quittingParticipant.score || 0;
-  const stayingScore = (stayingParticipant.score || 0) + stayBonus;
-  const isDraw = judgedRounds.length > 0 && stayingScore === quitterScore;
-  const winnerParticipant = isDraw
+  const stayingScore = baseStayingScore + stayBonus;
+  const isDraw = !intakeForfeit && judgedRounds.length > 0 && stayingScore === quitterScore;
+  const winnerParticipant = intakeForfeit
+    ? stayingParticipant
+    : isDraw
     ? null
     : stayingScore > quitterScore
     ? stayingParticipant
@@ -2215,11 +2612,11 @@ export const quitChallengeForUser = async ({ userId, challengeId }) => {
     winnerUserId: winnerParticipant?.userId || null,
     winner: isDraw ? "draw" : getParticipantLabel(challenge, winnerParticipant.userId),
     summary:
-      judgedRounds.length === 0
+      intakeForfeit
         ? `${getPartyName(
             challenge.templateSnapshot,
             stayingParticipant.side
-          )}'s counsel wins by forfeit because the other player quit before court.`
+          )}'s counsel wins immediately by forfeit because the other player quit during intake.`
         : `One player quit before the challenge was complete. The court still considered the judged rounds so far, then awarded a staying bonus for the player who remained available.`,
     finalScore: {
       initiator: isSameId(stayingParticipant.userId, challenge.initiatorId)
@@ -2512,15 +2909,42 @@ export const buildChallengePayload = async ({ challenge, viewerUserId }) => {
   const derivedCurrentTerms = latestSettlementPlayerMessage
     ? flattenSettlementProposalTerms(getTermsFromSettlementMessage(latestSettlementPlayerMessage))
     : [];
+  const settlementAccepted = Boolean(
+    settlement.accepted ||
+      settlement.resolution === "settled" ||
+      settlement.status === "settled" ||
+      plainChallenge.status === "settled"
+  );
+  const settlementFailed = Boolean(
+    !settlementAccepted &&
+      (settlement.resolution === "failed" || settlement.status === "failed")
+  );
+  const settlementResolved = Boolean(
+    settlement.resolved ||
+      settlementAccepted ||
+      settlementFailed ||
+      settlement.resolution ||
+      settlement.completedAt ||
+      settlement.status === "failed"
+  );
+  const settlementTerminal = Boolean(
+    settlementResolved || settlement.endedNegotiations || plainChallenge.status === "settled"
+  );
   const endedByUserId = toObjectIdString(settlement.endedByUserId);
   const latestNegotiationMessageUserId = toObjectIdString(
-    settlement.latestNegotiationMessageUserId || latestSettlementPlayerMessage?.userId
+    settlementTerminal
+      ? ""
+      : settlement.latestNegotiationMessageUserId || latestSettlementPlayerMessage?.userId
   );
   const awaitingNegotiationResponseUserId = toObjectIdString(
-    settlement.awaitingNegotiationResponseUserId || latestNegotiationMessageUserId
+    settlementTerminal
+      ? ""
+      : settlement.awaitingNegotiationResponseUserId || latestNegotiationMessageUserId
   );
   const negotiationTurnUserId = toObjectIdString(
-    settlement.negotiationTurnUserId ||
+    settlementTerminal
+      ? ""
+      : settlement.negotiationTurnUserId ||
       (latestNegotiationMessageUserId
         ? (plainChallenge.participants || []).find(
             (challengeParticipant) =>
@@ -2541,6 +2965,7 @@ export const buildChallengePayload = async ({ challenge, viewerUserId }) => {
 
   return {
     ...publicChallenge,
+    status: settlementAccepted ? "settled" : settlementFailed ? "active" : publicChallenge.status,
     id: plainChallenge.id || toObjectIdString(plainChallenge._id),
     slug,
     viewer: participant
@@ -2603,13 +3028,23 @@ export const buildChallengePayload = async ({ challenge, viewerUserId }) => {
     },
     courtroomRounds: rounds,
     settlement: {
-      status: settlement.status || "none",
+      status: settlementAccepted ? "settled" : settlement.status || "none",
       moods: settlement.moods || { player: 0, opponent: 0 },
       transcript: settlementTranscript,
       currentTerms: derivedCurrentTerms,
       latestOpponentTerms: latestOpponentSettlementTerms,
       latestViewerTerms: latestViewerSettlementTerms,
       finalTerms: settlement.finalTerms || [],
+      resolved: settlementResolved,
+      resolution:
+        settlementAccepted
+          ? "settled"
+          : settlement.resolution || (settlement.status === "failed" ? "failed" : ""),
+      resolvedAt: settlement.resolvedAt || settlement.completedAt || null,
+      accepted: settlementAccepted,
+      acceptedAt: settlement.acceptedAt || settlement.completedAt || null,
+      acceptedByUserId: toObjectIdString(settlement.acceptedByUserId),
+      acceptedBySide: settlement.acceptedBySide || "",
       intentPending,
       intentStatus,
       intentSenderUserId,

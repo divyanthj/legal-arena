@@ -235,6 +235,25 @@ const settlementSchema = mongoose.Schema(
     },
     currentTerms: { type: [String], default: [] },
     finalTerms: { type: [String], default: [] },
+    resolved: { type: Boolean, default: false },
+    resolution: {
+      type: String,
+      enum: ["", "settled", "failed", "rejected"],
+      default: "",
+    },
+    resolvedAt: { type: Date, default: null },
+    accepted: { type: Boolean, default: false },
+    acceptedAt: { type: Date, default: null },
+    acceptedByUserId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    acceptedBySide: {
+      type: String,
+      enum: ["client", "opponent", ""],
+      default: "",
+    },
     intentPending: { type: Boolean, default: false },
     intentStatus: {
       type: String,

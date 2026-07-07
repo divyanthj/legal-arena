@@ -26,6 +26,7 @@ export async function POST(req, { params }) {
       challengeId: params.challengeId,
       message,
       terms: body?.terms || {},
+      acceptTerms: body?.acceptTerms === true,
       clientPreviewTone: body?.clientPreviewTone || "",
       clientPreviewScore: body?.clientPreviewScore || 0,
     });

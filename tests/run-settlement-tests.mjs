@@ -21,6 +21,10 @@ const challengeWorkspaceSource = await readFile(
   new URL("../components/legal-arena/ChallengeWorkspace.js", import.meta.url),
   "utf8"
 );
+const dashboardHubSource = await readFile(
+  new URL("../components/legal-arena/DashboardHub.js", import.meta.url),
+  "utf8"
+);
 const soloSettlementStartRouteSource = await readFile(
   new URL("../app/api/cases/[caseId]/settlement/start/route.js", import.meta.url),
   "utf8"
@@ -35,6 +39,10 @@ const soloSettlementPreviewRouteSource = await readFile(
 );
 const pvpSettlementPreviewRouteSource = await readFile(
   new URL("../app/api/challenges/[challengeId]/settlement/preview/route.js", import.meta.url),
+  "utf8"
+);
+const pvpSettlementMessageRouteSource = await readFile(
+  new URL("../app/api/challenges/[challengeId]/settlement/message/route.js", import.meta.url),
   "utf8"
 );
 const pvpChallengePortraitRouteSource = await readFile(
@@ -77,6 +85,16 @@ assert.match(
   userModelSource,
   /settlements:\s*\{\s*type:\s*Number,\s*default:\s*0,\s*\}/s,
   "User progression schemas should persist settlement counts with a zero default."
+);
+assert.match(
+  challengeModelSource,
+  /resolved:\s*\{\s*type:\s*Boolean,\s*default:\s*false[\s\S]*resolution:\s*\{[\s\S]*enum:\s*\["", "settled", "failed", "rejected"\][\s\S]*accepted:\s*\{\s*type:\s*Boolean,\s*default:\s*false[\s\S]*acceptedByUserId/s,
+  "PVP settlement schema should persist explicit resolved and accepted closeout flags."
+);
+assert.match(
+  caseSessionModelSource,
+  /resolved:\s*\{[\s\S]*type:\s*Boolean,[\s\S]*default:\s*false[\s\S]*resolution:\s*\{[\s\S]*enum:\s*\["", "settled", "failed", "rejected"\][\s\S]*accepted:\s*\{[\s\S]*type:\s*Boolean,[\s\S]*default:\s*false[\s\S]*acceptedByUserId/s,
+  "Solo settlement schema should persist explicit resolved and accepted closeout flags."
 );
 
 assert.match(
@@ -228,7 +246,7 @@ assert.doesNotMatch(
 );
 assert.match(
   caseWorkspaceSource,
-  /Private Client Huddle[\s\S]*SettlementMoodMeter[\s\S]*Other Side&apos;s Last Offer[\s\S]*SettlementMoodMeter/,
+  /Private Client Huddle[\s\S]*getSettlementMoodEmoji\(settlementClientMood\)[\s\S]*Other Side&apos;s Last Offer[\s\S]*SettlementMoodMeter/,
   "Settlement room should place moods beside each party."
 );
 assert.match(
@@ -284,7 +302,7 @@ assert.match(
 assert.match(
   caseWorkspaceSource,
   /const draftClientReaction =\s*settlementClientPreviewLoading\s*\?\s*\{[\s\S]*\$\{playerPartyName\} is considering/,
-  "Settlement client huddle should show the client considering as soon as draft terms change."
+  "Settlement client huddle should show the client considering while private feedback loads."
 );
 assert.doesNotMatch(
   caseWorkspaceSource,
@@ -328,8 +346,8 @@ assert.match(
 );
 assert.match(
   caseWorkspaceSource,
-  /Private Client Huddle[\s\S]*Client reaction to draft[\s\S]*Private Draft Terms/,
-  "Settlement UI should frame draft editing as a private client huddle."
+  /Private Client Huddle[\s\S]*\{playerPartyName\} says[\s\S]*Private huddle/,
+  "Settlement UI should frame the player side as a private client huddle."
 );
 assert.match(
   caseWorkspaceSource,
@@ -338,18 +356,33 @@ assert.match(
 );
 assert.match(
   caseWorkspaceSource,
-  /Talk to your client[\s\S]*handleSettlementClientInstructionVoiceInput[\s\S]*Update draft with client/,
-  "Settlement huddle should let the lawyer privately instruct the client by text or voice and apply returned draft terms."
+  /Private huddle[\s\S]*handleSettlementClientInstructionVoiceInput[\s\S]*Ask client privately/,
+  "Settlement huddle should let the lawyer privately talk with the client by text or voice."
 );
 assert.match(
   caseWorkspaceSource,
-  /Message opposing counsel[\s\S]*Review and send the proposal from the message modal/,
+  /Message opposing counsel/,
   "Settlement center column should open the opposing-counsel message modal without pretending the message was already sent."
 );
+assert.doesNotMatch(
+  caseWorkspaceSource,
+  /Review and send the proposal from the message modal/,
+  "Settlement center column should not add explanatory copy under the opposing-counsel button."
+);
 assert.match(
   caseWorkspaceSource,
-  /disabled=\{settlementActionsLocked\}[\s\S]*Waiting for response[\s\S]*Your message is with the other player\. Wait for their formal response before messaging opposing counsel again/,
+  /disabled=\{settlementActionsLocked\}[\s\S]*Waiting for response/,
   "Settlement center message button should clearly lock opposing-counsel messaging while waiting for the other player."
+);
+assert.match(
+  caseWorkspaceSource,
+  /isSettlementAccepted[\s\S]*caseSession\.settlement\?\.accepted === true[\s\S]*caseSession\.settlement\?\.resolution === "settled"[\s\S]*const isSettlement = caseSession\.status === "settlement" && !isSettlementAccepted[\s\S]*const isSettled = isSettlementAccepted/,
+  "Settlement workspace should leave negotiation mode when accepted closeout flags are present."
+);
+assert.match(
+  caseWorkspaceSource,
+  /version\.settlementResolved === true[\s\S]*version\.settlementAccepted === true[\s\S]*version\.settlementAcceptedAt[\s\S]*version\.settlementCompletedAt/,
+  "Settlement realtime version key should include accepted closeout flags."
 );
 assert.match(
   caseWorkspaceSource,
@@ -358,13 +391,13 @@ assert.match(
 );
 assert.match(
   caseWorkspaceSource,
-  /aria-label="Message opposing counsel"[\s\S]*<textarea[\s\S]*disabled=\{settlementActionsLocked\}[\s\S]*Use terms in message[\s\S]*submitSettlementMessage\(\{[\s\S]*messageOverride: settlementMessage\.trim\(\) \|\| settlementDraftMessage[\s\S]*disabled=\{settlementActionsLocked \|\| !getSettlementOutgoingMessage\(\)\.trim\(\)\}/,
+  /aria-label="Message opposing counsel"[\s\S]*<textarea[\s\S]*disabled=\{settlementActionsLocked\}[\s\S]*submitSettlementMessage\(\{[\s\S]*messageOverride: settlementMessage\.trim\(\) \|\| settlementDraftMessage[\s\S]*disabled=\{settlementActionsLocked \|\| !getSettlementOutgoingMessage\(\)\.trim\(\)\}/,
   "The opposing-counsel composer should be locked while waiting for the other player's response."
 );
-assert.match(
+assert.doesNotMatch(
   caseWorkspaceSource,
-  /Use in message[\s\S]*disabled=\{settlementActionsLocked\}/,
-  "Private draft shortcuts should not bypass the PVP opposing-counsel turn lock."
+  /Use in message|Use terms in message/,
+  "Private draft shortcuts should stay removed from the settlement UI."
 );
 assert.match(
   caseWorkspaceSource,
@@ -391,10 +424,10 @@ assert.match(
   /filledEditableSettlementTerms[\s\S]*const settlementDraftMessage = filledEditableSettlementTerms\.length[\s\S]*Counteroffer:/,
   "Generated settlement messages should serialize only filled optional draft terms."
 );
-assert.match(
+assert.doesNotMatch(
   caseWorkspaceSource,
-  /editableSidePanelTermRows\.map[\s\S]*<textarea[\s\S]*updateSettlementDraftTerm[\s\S]*<input[\s\S]*updateSettlementDraftTerm/,
-  "Player-side settlement terms should render editable fields."
+  /editableSidePanelTermRows|updateSettlementDraftTerm|Private Draft Terms/,
+  "Player-side settlement terms should not render an editable breakdown."
 );
 assert.match(
   caseWorkspaceSource,
@@ -428,8 +461,23 @@ assert.match(
 );
 assert.match(
   caseWorkspaceSource,
-  /settlementAcceptMessage[\s\S]*submitSettlementMessage\(\{ messageOverride: settlementAcceptMessage \}\)/,
-  "Accept settlement action should send an acceptance message instead of doing nothing."
+  /settlementAcceptMessage[\s\S]*submitSettlementMessage\(\{[\s\S]*messageOverride: settlementAcceptMessage,[\s\S]*acceptTerms: true/,
+  "Accept settlement action should send an explicit accepted-terms request instead of a normal counteroffer."
+);
+assert.match(
+  pvpSettlementMessageRouteSource,
+  /acceptTerms:\s*body\?\.acceptTerms === true/,
+  "PVP settlement message route should pass the explicit accept-terms flag to the challenge service."
+);
+assert.match(
+  challengeSource,
+  /acceptTerms = false[\s\S]*acceptedByPlainLanguage[\s\S]*acceptTerms \|\| isSettlementAcceptanceMessage\(message\)/,
+  "PVP settlement service should treat the accept-terms flag as acceptance of the latest opponent proposal."
+);
+assert.match(
+  caseWorkspaceSource,
+  /bg-emerald-300[\s\S]*Accept terms[\s\S]*pendingAction === "settlement-accept"/,
+  "Settlement UI should expose a green Accept terms button with its own pending state."
 );
 assert.match(
   caseWorkspaceSource,
@@ -443,28 +491,33 @@ assert.match(
 );
 assert.match(
   caseWorkspaceSource,
-  /Do This Next[\s\S]*nextActionTitle[\s\S]*nextActionBody[\s\S]*nextActionChecklist/,
-  "Settlement outlook should give a concrete next action instead of only a stage label."
+  /Do This Next[\s\S]*Message opposing counsel[\s\S]*End negotiations/,
+  "Settlement action rail should keep the next move focused on the available buttons."
+);
+assert.doesNotMatch(
+  caseWorkspaceSource,
+  /nextActionChecklist/,
+  "Settlement action rail should not reintroduce explanatory checklist clutter."
 );
 assert.match(
   caseWorkspaceSource,
-  /clientReactionNeedsFix[\s\S]*Client dislikes this draft[\s\S]*Client concerns must be fixed before presenting/,
-  "Settlement blocker copy should become actionable when the client dislikes the draft."
+  /clientReactionNeedsFix[\s\S]*Client dislikes this draft[\s\S]*I need you to tighten this before you send it/,
+  "Settlement blocker copy should be framed as the client speaking when the client dislikes the draft."
 );
-assert.match(
+assert.doesNotMatch(
   caseWorkspaceSource,
-  /Suggested revision[\s\S]*clientSuggestedRevision/,
-  "Client huddle should show the suggested revision from the client reaction."
+  /Suggested revision/,
+  "Client huddle should not show a separate AI-style suggested revision block."
 );
-assert.match(
+assert.doesNotMatch(
   caseWorkspaceSource,
   /Optional deal points\. Leave any section blank/,
-  "Settlement draft terms should explain that sections are optional."
+  "Settlement draft terms guidance should stay removed from the player side."
 );
 assert.match(
   caseWorkspaceSource,
   /getSettlementOutgoingMessage\(messageOverride = ""\)[\s\S]*messageOverride[\s\S]*settlementMessage\.trim\(\) \|\| settlementDraftMessage[\s\S]*message: submittedMessage/,
-  "Sending a settlement message should support action overrides and fall back to serialized edited draft terms."
+  "Sending a settlement message should support action overrides and fall back to a generated message."
 );
 assert.match(
   caseWorkspaceSource,
@@ -523,13 +576,18 @@ assert.match(
 );
 assert.match(
   caseWorkspaceSource,
-  /Start in the client huddle[\s\S]*Check your client's reaction[\s\S]*Edit the private terms[\s\S]*Check the public proposal[\s\S]*Present the offer[\s\S]*Read the reply[\s\S]*Choose what to do next/,
+  /Start in the client huddle[\s\S]*Check your client's reaction[\s\S]*Check the public proposal[\s\S]*Message opposing counsel[\s\S]*Read the reply[\s\S]*Choose what to do next/,
   "Settlement tour should guide the user through the negotiation loop step by step."
 );
 assert.match(
   caseWorkspaceSource,
-  /settlement-client-reaction[\s\S]*settlement-draft-terms[\s\S]*settlement-public-terms[\s\S]*settlement-message[\s\S]*settlement-latest-response[\s\S]*settlement-next-move/,
-  "Settlement tour should target client reaction, draft terms, public terms, message, latest response, and next-move controls."
+  /settlement-client-reaction[\s\S]*settlement-public-terms[\s\S]*settlement-message[\s\S]*settlement-latest-response[\s\S]*settlement-next-move/,
+  "Settlement tour should target client reaction, public terms, message, latest response, and next-move controls."
+);
+assert.doesNotMatch(
+  caseWorkspaceSource,
+  /settlement-draft-terms/,
+  "Settlement tour should not target removed private draft term controls."
 );
 assert.match(
   caseWorkspaceSource,
@@ -601,20 +659,20 @@ assert.match(
   /Settle in \$\{settlementCooldownLabel\}/,
   "Settlement action should show a live retry cooldown label."
 );
-assert.match(
+assert.doesNotMatch(
   caseWorkspaceSource,
   /arena-btn-dark inline-flex min-h-0 items-center justify-center gap-2 px-4 py-3 text-sm[\s\S]*Use terms in message/,
-  "Settlement draft terms button should align its icon and label as a single centered action."
+  "Settlement draft terms shortcut button should stay removed."
 );
 assert.match(
   caseWorkspaceSource,
   /const focusSettlementMessageComposer = useCallback\(\(\) => \{[\s\S]*setShowSettlementComposeModal\(true\)[\s\S]*settlementMessageTextareaRef\.current\?\.focus\(\{ preventScroll: true \}\)/,
   "Using settlement draft terms should open and focus the message composer modal."
 );
-assert.match(
+assert.doesNotMatch(
   caseWorkspaceSource,
-  /const useSettlementDraftMessage = \(\) => \{[\s\S]*setSettlementMessageAndFocus\(settlementDraftMessage\)/,
-  "The Use in message button should populate the composer through the scroll-and-focus helper."
+  /const useSettlementDraftMessage = \(\)/,
+  "The removed Use in message helper should not remain in the component."
 );
 assert.match(
   caseWorkspaceSource,
@@ -688,7 +746,7 @@ assert.match(
 );
 assert.match(
   challengeSource,
-  /status: "proposed"[\s\S]*intentPending: true[\s\S]*intentStatus: "pending"[\s\S]*intentSenderUserId: participant\.userId[\s\S]*intentReceiverUserId: otherParticipant\.userId[\s\S]*proposedByUserId: participant\.userId[\s\S]*proposalMessage: message[\s\S]*return buildChallengePayload/,
+  /"settlement\.status": "proposed"[\s\S]*"settlement\.intentPending": true[\s\S]*"settlement\.intentStatus": "pending"[\s\S]*"settlement\.intentSenderUserId": participant\.userId[\s\S]*"settlement\.intentReceiverUserId": otherParticipant\.userId[\s\S]*"settlement\.proposedByUserId": participant\.userId[\s\S]*"settlement\.proposalMessage": message[\s\S]*return buildChallengePayload/,
   "PVP settlement start should first create a database-backed pending intent instead of immediately opening talks."
 );
 assert.match(
@@ -708,8 +766,33 @@ assert.match(
 );
 assert.match(
   challengeSource,
-  /playerMessageEntry[\s\S]*text: message[\s\S]*"settlement\.negotiationTurnUserId": negotiationTurnFields\.negotiationTurnUserId[\s\S]*Challenge\.collection\.findOneAndUpdate[\s\S]*\$push:[\s\S]*"settlement\.transcript": playerMessageEntry/,
+  /playerMessageEntry[\s\S]*text: message[\s\S]*terms: settled \? acceptedTerms : proposalTerms[\s\S]*"settlement\.negotiationTurnUserId": negotiationTurnFields\.negotiationTurnUserId[\s\S]*Challenge\.findOneAndUpdate[\s\S]*\$push:[\s\S]*"settlement\.transcript": playerMessageEntry/,
   "PVP settlement sends should atomically append the raw message and persist explicit negotiation turn ownership."
+);
+assert.match(
+  challengeSource,
+  /latestOtherProposalEntry[\s\S]*acceptedByPlainLanguage[\s\S]*latestOtherProposalEntry && \(acceptTerms \|\| isSettlementAcceptanceMessage\(message\)\)[\s\S]*finalAcceptedTerms[\s\S]*Accepted proposal:[\s\S]*status: settled \? "settled" : failed \? "active" : "settlement"[\s\S]*"settlement\.finalTerms": settled \? finalAcceptedTerms : \[\]/,
+  "PVP settlement sends should settle immediately when the reply matches, plainly accepts, or uses the explicit accept button."
+);
+assert.match(
+  challengeSource,
+  /"settlement\.resolved": settled \|\| failed[\s\S]*"settlement\.resolution": settled \? "settled" : failed \? "failed" : ""[\s\S]*"settlement\.accepted": settled[\s\S]*"settlement\.acceptedByUserId": settled \? participant\.userId : null[\s\S]*"settlement\.endedNegotiations": settled \|\| failed/,
+  "PVP settlement closeout should persist explicit terminal database flags."
+);
+assert.match(
+  challengeSource,
+  /settlementAccepted[\s\S]*settlementFailed[\s\S]*settlementResolved[\s\S]*settlementTerminal[\s\S]*status: settlementAccepted \? "settled" : settlementFailed \? "active" : publicChallenge\.status[\s\S]*accepted: settlementAccepted/,
+  "PVP settlement payload should treat accepted flags as settled and failed flags as active intake even if top-level status lags."
+);
+assert.match(
+  challengeSource,
+  /settlementResolved: Boolean\(settlement\.resolved\)[\s\S]*settlementResolution: settlement\.resolution[\s\S]*settlementAccepted: Boolean\(settlement\.accepted\)[\s\S]*settlementAcceptedAt: settlement\.acceptedAt/,
+  "PVP realtime version payload should include settlement closeout flags."
+);
+assert.match(
+  challengeSource,
+  /const isSettlementAcceptanceMessage[\s\S]*acceptsTerms[\s\S]*!rejectsAcceptance[\s\S]*!conditionalAcceptance/,
+  "PVP settlement acceptance language should accept clear agreement while avoiding conditional counters."
 );
 assert.match(
   challengeSource,
@@ -763,13 +846,63 @@ assert.match(
 );
 assert.match(
   challengeSource,
+  /export const exitChallengeSettlement[\s\S]*clearSettlementIntentState\(challenge\.settlement\)[\s\S]*challenge\.markModified\?\.\("settlement"\)/,
+  "PVP settlement exit should clear stale settlement intent flags before returning to intake."
+);
+assert.match(
+  challengeSource,
   /endedByUserId[\s\S]*endedByViewer[\s\S]*endedByOther[\s\S]*endedAt/,
   "PVP settlement payload should expose viewer-relative walkout flags."
 );
 assert.match(
   caseWorkspaceSource,
-  /settlementEndedByOther[\s\S]*renderSettlementWalkoutNoticePanel[\s\S]*Opposing counsel walked away from settlement negotiations[\s\S]*renderSettlementWalkoutNoticePanel\(\)/,
+  /settlementEndedByOther[\s\S]*\["rejected", "failed"\]\.includes\(settlement\.status\)[\s\S]*renderSettlementWalkoutNoticePanel[\s\S]*Opponent walked out of settlement negotiations[\s\S]*renderSettlementWalkoutNoticePanel\(\)/,
   "PVP intake should show a small note when the other side ended settlement talks."
+);
+assert.match(
+  challengeSource,
+  /failedMoodKey[\s\S]*moods\[senderMoodKey\] <= -100[\s\S]*moods\[recipientMoodKey\] <= -100[\s\S]*status: settled \? "settled" : failed \? "active" : "settlement"[\s\S]*"settlement\.resolution": settled \? "settled" : failed \? "failed" : ""/,
+  "PVP settlement sends should exit settlement and persist failed resolution when either client reaches -100 mood."
+);
+assert.match(
+  challengeSource,
+  /getClearedSettlementIntentFields[\s\S]*"settlement\.intentPending": false[\s\S]*"settlement\.intentStatus": "none"[\s\S]*"settlement\.intentSenderUserId": null[\s\S]*"settlement\.intentReceiverUserId": null[\s\S]*"settlement\.proposedByUserId": null[\s\S]*"settlement\.proposalMessage": ""/,
+  "Terminal PVP settlement states should clear old settlement intent and proposal metadata."
+);
+assert.match(
+  challengeSource,
+  /if \(settled \|\| failed\) \{[\s\S]*Object\.assign\(settlementSetFields, getClearedSettlementIntentFields\(\)\)/,
+  "Accepted or failed PVP settlement messages should clear settlement intent flags in the database."
+);
+assert.match(
+  challengeSource,
+  /failedParticipant[\s\S]*settlement\.endedByUserId"[\s\S]*failedParticipant\?\.userId[\s\S]*settlement\.endedBySide"[\s\S]*failedParticipant\?\.side/,
+  "PVP settlement failure should record which party's client walked out."
+);
+assert.match(
+  caseWorkspaceSource,
+  /clientWalkoutActive[\s\S]*isSettlement[\s\S]*settlementClientMood <= -100[\s\S]*settlement\.resolution === "failed"[\s\S]*setShowClientWalkoutModal\(true\)[\s\S]*setShowSettlementComposeModal\(false\)/,
+  "Own-client walkout should open a blocking modal only while still in settlement mode."
+);
+assert.match(
+  caseWorkspaceSource,
+  /if \(isSettlement \|\| !showClientWalkoutModal\)[\s\S]*setShowClientWalkoutModal\(false\)[\s\S]*setClientWalkoutCountdown\(0\)/,
+  "Walkout modal should be cleared once the workspace is already back in intake."
+);
+assert.match(
+  caseWorkspaceSource,
+  /Your client wants to walk out[\s\S]*You can return to intake in \{clientWalkoutCountdown\}s[\s\S]*disabled=\{clientWalkoutCountdown > 0\}[\s\S]*Return to intake/,
+  "Own-client walkout modal should show the requested message, timer, and return-to-intake button."
+);
+assert.match(
+  caseWorkspaceSource,
+  /clientWalkoutCountdown > 0[\s\S]*window\.setTimeout\(\(\) => \{[\s\S]*handleClientWalkoutReturnToIntake\(\)/,
+  "Own-client walkout modal should automatically return to intake after the countdown reaches zero."
+);
+assert.match(
+  caseWorkspaceSource,
+  /disabled=\{[\s\S]*clientWalkoutActive[\s\S]*settlementClientInstructionWorking[\s\S]*transcribingSettlementClientInstruction[\s\S]*\}/,
+  "Private client huddle controls should be disabled after own-client walkout."
 );
 assert.match(
   challengeSource,
@@ -788,8 +921,28 @@ assert.match(
 );
 assert.match(
   challengeSource,
-  /normalizeChallengeForRead[\s\S]*syncChallengeSettlementIntentFields\(challenge\)[\s\S]*syncChallengeSettlementNegotiationTurnFields\(challenge\)/,
-  "PVP challenge reads should run settlement intent and negotiation turn normalizers."
+  /syncChallengeSettlementMoodFailure[\s\S]*settlement\.moods\?\.player[\s\S]*settlement\.moods\?\.opponent[\s\S]*challenge\.status = "active"[\s\S]*settlement\.status = "failed"[\s\S]*settlement\.resolution = "failed"[\s\S]*clearSettlementIntentState\(settlement\)/,
+  "PVP settlement reads should repair old active settlement records and clear stale intent flags when a stored mood is already -100."
+);
+assert.match(
+  challengeSource,
+  /syncChallengeSettlementTerminalStage[\s\S]*settlement\.resolution === "failed"[\s\S]*challenge\.status = "active"[\s\S]*clearSettlementIntentState\(settlement\)[\s\S]*challenge\.markModified\?\.\("settlement"\)/,
+  "PVP settlement reads should repair terminal settlement records back to active intake and save the cleared intent state."
+);
+assert.match(
+  challengeSource,
+  /normalizeChallengeForRead[\s\S]*syncChallengeSettlementIntentFields\(challenge\)[\s\S]*syncChallengeSettlementTerminalStage\(challenge\)[\s\S]*syncChallengeSettlementMoodFailure\(challenge\)[\s\S]*syncChallengeSettlementNegotiationTurnFields\(challenge\)/,
+  "PVP challenge reads should run settlement intent, terminal-stage, mood-failure, and negotiation turn normalizers."
+);
+assert.match(
+  dashboardHubSource,
+  /getPvpDisplayStatus[\s\S]*settlementEnded[\s\S]*settlement\.resolution === "failed"[\s\S]*challenge\.status === "settlement"[\s\S]*return "active"/,
+  "Dashboard should display terminal failed settlement challenges as active intake."
+);
+assert.match(
+  challengeWorkspaceSource,
+  /getChallengeDisplayStatus[\s\S]*settlementEnded[\s\S]*settlement\.resolution === "failed"[\s\S]*challenge\.status === "settlement"[\s\S]*return "active"/,
+  "Challenge workspace wrapper should map terminal failed settlement challenges back to intake."
 );
 assert.match(
   challengeSource,

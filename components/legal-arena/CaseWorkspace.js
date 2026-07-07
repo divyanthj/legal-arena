@@ -89,6 +89,19 @@ const buildRealtimeVersionKey = (version = {}) =>
     version.updatedAt || "",
     version.status || "",
     version.settlementStatus || "",
+    version.settlementResolved === true ? "settlement-resolved" : "",
+    version.settlementResolution || "",
+    version.settlementResolvedAt || "",
+    version.settlementAccepted === true ? "settlement-accepted" : "",
+    version.settlementAcceptedAt || "",
+    version.settlementAcceptedByUserId || "",
+    version.settlementCompletedAt || "",
+    version.settlementIntentPending === true ? "intent-pending" : "",
+    version.settlementIntentStatus || "",
+    version.settlementIntentSenderUserId || "",
+    version.settlementIntentReceiverUserId || "",
+    version.settlementIntentSentAt || "",
+    version.settlementIntentRespondedAt || "",
     version.latestNegotiationMessageAt || "",
     version.latestNegotiationMessageUserId || "",
     version.awaitingNegotiationResponseUserId || "",
@@ -230,35 +243,29 @@ const settlementTourSteps = [
     target: "settlement-client-reaction",
     eyebrow: "Step 2",
     title: "Check your client's reaction",
-    body: "As you edit terms, your client considers the draft. Wait for this reaction before presenting the offer.",
-  },
-  {
-    target: "settlement-draft-terms",
-    eyebrow: "Step 3",
-    title: "Edit the private terms",
-    body: "These are optional deal points, not required fields. Leave a section blank if that term does not belong in your offer.",
+    body: "Use the private huddle to ask what your client will accept before you speak across the table.",
   },
   {
     target: "settlement-public-terms",
-    eyebrow: "Step 4",
+    eyebrow: "Step 3",
     title: "Check the public proposal",
-    body: "This is the current proposal record both sides are discussing. Use it to see what your private draft would change.",
+    body: "This is the proposal record both sides are discussing. Compare it with what your client told you privately.",
   },
   {
     target: "settlement-message",
-    eyebrow: "Step 5",
-    title: "Present the offer",
-    body: "Use the draft terms, add a short note if needed, then send. This is the moment your private draft becomes public.",
+    eyebrow: "Step 4",
+    title: "Message opposing counsel",
+    body: "Write the response you want the other player to receive.",
   },
   {
     target: "settlement-latest-response",
-    eyebrow: "Step 6",
+    eyebrow: "Step 5",
     title: "Read the reply",
     body: "After you send, the other side's latest response appears here. Read it before choosing your next move.",
   },
   {
     target: "settlement-next-move",
-    eyebrow: "Step 7",
+    eyebrow: "Step 6",
     title: "Choose what to do next",
     body: "Now decide: revise the offer, ask a clarifying question, accept if the terms work, or return to intake for more facts.",
   },
@@ -958,6 +965,8 @@ export default function CaseWorkspace({
   const [settlementRejected, setSettlementRejected] = useState(false);
   const [settlementCooldownNow, setSettlementCooldownNow] = useState(() => Date.now());
   const [showSettlementMatterSummary, setShowSettlementMatterSummary] = useState(false);
+  const [showClientWalkoutModal, setShowClientWalkoutModal] = useState(false);
+  const [clientWalkoutCountdown, setClientWalkoutCountdown] = useState(5);
   const [activeSettlementInfo, setActiveSettlementInfo] = useState(null);
   const [isSettlementInfoModalOpen, setIsSettlementInfoModalOpen] = useState(false);
   const [working, setWorking] = useState(false);
@@ -989,7 +998,10 @@ export default function CaseWorkspace({
   const settlementMessageComposerRef = useRef(null);
   const settlementMessageTextareaRef = useRef(null);
   const settlementResolvedRef = useRef(
-    initialCase.status === "settled" || initialCase.settlement?.status === "settled"
+    initialCase.status === "settled" ||
+      initialCase.settlement?.status === "settled" ||
+      initialCase.settlement?.accepted === true ||
+      initialCase.settlement?.resolution === "settled"
   );
   const requestedOpponentPortraitRef = useRef(new Set());
   const workingRef = useRef(false);
@@ -999,6 +1011,19 @@ export default function CaseWorkspace({
       updatedAt: initialCase.updatedAt,
       status: initialCase.status,
       settlementStatus: initialCase.settlement?.status,
+      settlementResolved: initialCase.settlement?.resolved,
+      settlementResolution: initialCase.settlement?.resolution,
+      settlementResolvedAt: initialCase.settlement?.resolvedAt,
+      settlementAccepted: initialCase.settlement?.accepted,
+      settlementAcceptedAt: initialCase.settlement?.acceptedAt,
+      settlementAcceptedByUserId: initialCase.settlement?.acceptedByUserId,
+      settlementCompletedAt: initialCase.settlement?.completedAt,
+      settlementIntentPending: initialCase.settlement?.intentPending,
+      settlementIntentStatus: initialCase.settlement?.intentStatus,
+      settlementIntentSenderUserId: initialCase.settlement?.intentSenderUserId,
+      settlementIntentReceiverUserId: initialCase.settlement?.intentReceiverUserId,
+      settlementIntentSentAt: initialCase.settlement?.intentSentAt,
+      settlementIntentRespondedAt: initialCase.settlement?.intentRespondedAt,
       latestNegotiationMessageAt: initialCase.settlement?.latestNegotiationMessageAt,
       latestNegotiationMessageUserId: initialCase.settlement?.latestNegotiationMessageUserId,
       awaitingNegotiationResponseUserId:
@@ -1117,6 +1142,19 @@ export default function CaseWorkspace({
       updatedAt: nextCase.updatedAt,
       status: nextCase.status,
       settlementStatus: nextCase.settlement?.status,
+      settlementResolved: nextCase.settlement?.resolved,
+      settlementResolution: nextCase.settlement?.resolution,
+      settlementResolvedAt: nextCase.settlement?.resolvedAt,
+      settlementAccepted: nextCase.settlement?.accepted,
+      settlementAcceptedAt: nextCase.settlement?.acceptedAt,
+      settlementAcceptedByUserId: nextCase.settlement?.acceptedByUserId,
+      settlementCompletedAt: nextCase.settlement?.completedAt,
+      settlementIntentPending: nextCase.settlement?.intentPending,
+      settlementIntentStatus: nextCase.settlement?.intentStatus,
+      settlementIntentSenderUserId: nextCase.settlement?.intentSenderUserId,
+      settlementIntentReceiverUserId: nextCase.settlement?.intentReceiverUserId,
+      settlementIntentSentAt: nextCase.settlement?.intentSentAt,
+      settlementIntentRespondedAt: nextCase.settlement?.intentRespondedAt,
       latestNegotiationMessageAt: nextCase.settlement?.latestNegotiationMessageAt,
       latestNegotiationMessageUserId: nextCase.settlement?.latestNegotiationMessageUserId,
       awaitingNegotiationResponseUserId:
@@ -1197,9 +1235,15 @@ export default function CaseWorkspace({
   );
   const normalizedCourtroomTranscript =
     visibleCourtroomTranscript.map(normalizeCourtroomEntry);
+  const isSettlementAccepted = Boolean(
+    caseSession.status === "settled" ||
+      caseSession.settlement?.accepted === true ||
+      caseSession.settlement?.resolution === "settled" ||
+      caseSession.settlement?.status === "settled"
+  );
   const isInterview = caseSession.status === "interview";
-  const isSettlement = caseSession.status === "settlement";
-  const isSettled = caseSession.status === "settled";
+  const isSettlement = caseSession.status === "settlement" && !isSettlementAccepted;
+  const isSettled = isSettlementAccepted;
   const isVerdict = caseSession.status === "verdict";
   const isExited = caseSession.status === "exited";
   const isIntakeLocked = Boolean(apiConfig.intakeLocked);
@@ -1580,7 +1624,11 @@ export default function CaseWorkspace({
     return String(messageOverride || "").trim() || settlementMessage.trim() || settlementDraftMessage;
   }
 
-  const submitSettlementMessage = async ({ initial = false, messageOverride = "" } = {}) => {
+  const submitSettlementMessage = async ({
+    initial = false,
+    messageOverride = "",
+    acceptTerms = false,
+  } = {}) => {
     const outgoingMessage = getSettlementOutgoingMessage(messageOverride).trim();
     if (
       working ||
@@ -1607,7 +1655,7 @@ export default function CaseWorkspace({
     const submittedMessage = outgoingMessage;
     setSettlementRejected(false);
     setWorking(true);
-    setPendingAction(initial ? "settlement-start" : "settlement");
+    setPendingAction(acceptTerms ? "settlement-accept" : initial ? "settlement-start" : "settlement");
     trackGoal("settlement_message_submit_started", caseAnalyticsParams({
       initial,
       message_chars: submittedMessage.length,
@@ -1615,6 +1663,7 @@ export default function CaseWorkspace({
       awaiting_negotiation_response: awaitingNegotiationResponse,
       negotiation_turn_user_id: settlement.negotiationTurnUserId || "",
       viewer_user_id: caseSession.playerUserId || "",
+      accept_terms: acceptTerms,
     }));
 
     try {
@@ -1623,15 +1672,54 @@ export default function CaseWorkspace({
         {
           message: submittedMessage,
           terms: Object.fromEntries(editableSettlementTerms),
+          acceptTerms,
           clientPreviewTone: draftClientReaction.tone,
           clientPreviewScore: settlementClientPreview?.score || 0,
         }
       );
-      const serverStatus = response?.challenge?.status || response?.caseSession?.status;
+      let responseForState = response;
+      let serverSettlement =
+        response?.challenge?.settlement || response?.caseSession?.settlement || {};
+      const missingPendingIntentConfirmation =
+        initial &&
+        analyticsMode === "pvp" &&
+        !(
+          serverSettlement.intentPending === true ||
+          serverSettlement.intentStatus === "pending" ||
+          serverSettlement.status === "proposed"
+        );
+
+      if (missingPendingIntentConfirmation && realtimeRefreshPath) {
+        const refreshedResponse = await apiClient.get(realtimeRefreshPath);
+        const refreshedSettlement =
+          refreshedResponse?.challenge?.settlement ||
+          refreshedResponse?.caseSession?.settlement ||
+          {};
+
+        if (
+          refreshedSettlement.intentPending === true ||
+          refreshedSettlement.intentStatus === "pending" ||
+          refreshedSettlement.status === "proposed"
+        ) {
+          responseForState = refreshedResponse;
+          serverSettlement = refreshedSettlement;
+        } else {
+          throw new Error(
+            "Settlement intent was not saved. Please try sending it again."
+          );
+        }
+      }
+
+      const serverStatus =
+        responseForState?.challenge?.status || responseForState?.caseSession?.status;
       const serverSettlementStatus =
-        response?.challenge?.settlement?.status || response?.caseSession?.settlement?.status;
+        serverSettlement.status ||
+        responseForState?.challenge?.settlement?.status ||
+        responseForState?.caseSession?.settlement?.status;
       const responseCaseStatus =
-        response?.challenge?.displayStatus || response?.caseSession?.status || "";
+        responseForState?.challenge?.displayStatus ||
+        responseForState?.caseSession?.status ||
+        "";
       const shouldOptimisticallyWaitForPvpResponse =
         analyticsMode === "pvp" &&
         !initial &&
@@ -1647,42 +1735,49 @@ export default function CaseWorkspace({
         awaitingNegotiationResponseUserId: caseSession.playerUserId || "",
         negotiationTurnUserId: caseSession.opponentUserId || "",
       };
-      const responseForState =
+      responseForState =
         shouldOptimisticallyWaitForPvpResponse
           ? {
-              ...response,
-              ...(response?.challenge
+              ...responseForState,
+              ...(responseForState?.challenge
                 ? {
                     challenge: {
-                      ...response.challenge,
+                      ...responseForState.challenge,
                       settlement: {
-                        ...(response.challenge.settlement || {}),
-                        status: response.challenge.settlement?.status || "active",
+                        ...(responseForState.challenge.settlement || {}),
+                        status: responseForState.challenge.settlement?.status || "active",
                         ...optimisticNegotiationTurnFields,
                       },
                     },
                   }
                 : {}),
-              ...(response?.caseSession
+              ...(responseForState?.caseSession
                 ? {
                     caseSession: {
-                      ...response.caseSession,
+                      ...responseForState.caseSession,
                       settlement: {
-                        ...(response.caseSession.settlement || {}),
-                        status: response.caseSession.settlement?.status || "active",
+                        ...(responseForState.caseSession.settlement || {}),
+                        status: responseForState.caseSession.settlement?.status || "active",
                         ...optimisticNegotiationTurnFields,
                       },
                     },
                   }
                 : {}),
             }
-          : response;
+          : responseForState;
       const nextCase = updateCaseFromResponse(responseForState);
       setSettlementMessage("");
       setSettlementDraftState((current) => ({
         ...current,
         dirty: false,
       }));
+      if (
+        nextCase?.settlement?.resolution === "failed" &&
+        nextCase?.settlement?.endedByViewer
+      ) {
+        setShowClientWalkoutModal(true);
+        setClientWalkoutCountdown(5);
+      }
 
       if (response?.rejected || nextCase?.settlement?.status === "rejected") {
         setSettlementRejected(true);
@@ -1695,6 +1790,10 @@ export default function CaseWorkspace({
         toast.success(
           nextCase?.status === "settled"
             ? "Settlement reached."
+            : nextCase?.settlement?.resolution === "failed"
+            ? nextCase?.settlement?.endedByViewer
+              ? "Your client wants to walk out."
+              : "Opponent walked out. Intake is open again."
             : shouldOptimisticallyWaitForPvpResponse
             ? "Settlement message sent. Waiting for opposing counsel."
             : nextCase?.status === "settlement"
@@ -2404,7 +2503,8 @@ export default function CaseWorkspace({
     isInterview &&
     settlement.endedNegotiations === true &&
     settlement.endedByOther === true &&
-    settlement.status === "rejected";
+    (["rejected", "failed"].includes(settlement.status) ||
+      settlement.resolution === "failed");
   const viewerUserId = normalizeIdForCompare(caseSession.playerUserId);
   const negotiationTurnUserId = normalizeIdForCompare(settlement.negotiationTurnUserId);
   const awaitingNegotiationResponseUserId = normalizeIdForCompare(
@@ -2447,7 +2547,13 @@ export default function CaseWorkspace({
     analyticsMode === "pvp"
       ? settlementTranscript.filter((entry) => entry?.role === "player")
       : settlementTranscript;
-  const settlementIsTerminal = isSettled || ["settled", "failed"].includes(settlement.status);
+  const settlementIsTerminal = Boolean(
+    isSettled ||
+      settlement.resolved ||
+      settlement.accepted ||
+      settlement.resolution ||
+      ["settled", "failed"].includes(settlement.status)
+  );
   const settlementCaseRouteRef = getCaseRouteRef(caseSession);
   const opponentPortraitImage = caseSession.opponentPortrait?.image;
   useEffect(() => {
@@ -2661,6 +2767,58 @@ export default function CaseWorkspace({
   ];
   const settlementClientMood = getSettlementMoodValueForSide(settlementOwnSide);
   const settlementOpponentMood = getSettlementMoodValueForSide(settlementOtherSide);
+  const clientWalkoutActive = Boolean(
+    isSettlement &&
+      (settlementClientMood <= -100 ||
+        (settlement.resolution === "failed" &&
+          (settlement.endedByViewer === true || settlement.endedBySide === settlementOwnSide)))
+  );
+  useEffect(() => {
+    if (!clientWalkoutActive) {
+      return;
+    }
+
+    setShowClientWalkoutModal(true);
+    setShowSettlementDialog(false);
+    setShowSettlementComposeModal(false);
+    setSettlementClientInstruction("");
+    setClientWalkoutCountdown(5);
+  }, [clientWalkoutActive]);
+  useEffect(() => {
+    if (isSettlement || !showClientWalkoutModal) {
+      return;
+    }
+
+    setShowClientWalkoutModal(false);
+    setClientWalkoutCountdown(0);
+  }, [isSettlement, showClientWalkoutModal]);
+  useEffect(() => {
+    if (!showClientWalkoutModal || clientWalkoutCountdown <= 0) {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setClientWalkoutCountdown((current) => Math.max(0, current - 1));
+    }, 1000);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [clientWalkoutCountdown, showClientWalkoutModal]);
+  const handleClientWalkoutReturnToIntake = useCallback(() => {
+    setShowClientWalkoutModal(false);
+    setClientWalkoutCountdown(0);
+    router.replace(apiConfig.workspaceHref || `/dashboard/cases/${getCaseRouteRef(caseSession)}`);
+  }, [apiConfig.workspaceHref, caseSession, router]);
+  useEffect(() => {
+    if (!showClientWalkoutModal || clientWalkoutCountdown > 0) {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      handleClientWalkoutReturnToIntake();
+    }, 250);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [clientWalkoutCountdown, handleClientWalkoutReturnToIntake, showClientWalkoutModal]);
   const describeSettlementMood = (value) => {
     if (value >= 45) return "Cooperative";
     if (value >= 10) return "Open";
@@ -2843,6 +3001,7 @@ export default function CaseWorkspace({
     event?.preventDefault();
 
     if (
+      clientWalkoutActive ||
       settlementClientInstructionWorking ||
       working ||
       !settlementClientInstruction.trim()
@@ -2963,7 +3122,7 @@ export default function CaseWorkspace({
           label: `${playerPartyName} is considering...`,
           tone: "amber",
           icon: HeroIcons.ArrowPathIcon,
-          note: "They are weighing the draft terms against what they want from the case.",
+          note: "They are weighing what they want from the case.",
         }
       : settlementClientPreviewError
       ? {
@@ -3000,18 +3159,6 @@ export default function CaseWorkspace({
       : Array.isArray(settlementClientPreview?.drivers) && settlementClientPreview.drivers.length
       ? settlementClientPreview.drivers.slice(0, 3)
       : [`${playerPartyName}'s reaction will appear here.`];
-  const updateSettlementDraftTerm = (label, value) => {
-    setSettlementDraftState((current) => ({
-      sourceSignature: settlementDraftSignature,
-      values: {
-        ...Object.fromEntries(settlementDraftDefaultEntries),
-        ...(current.sourceSignature === settlementDraftSignature ? current.values : {}),
-        [label]: value,
-      },
-      dirty: true,
-    }));
-  };
-
   const renderSettlementIntentNoticePanel = (className = "") =>
     isPendingSettlementIntent || settlementAuthorityReady ? (
       <div
@@ -3119,7 +3266,7 @@ export default function CaseWorkspace({
           <div className="min-w-0">
             <p className="arena-kicker text-amber-200">Settlement talks ended</p>
             <p className="mt-1 text-white/70">
-              Opposing counsel walked away from settlement negotiations. Intake is open again.
+              Opponent walked out of settlement negotiations. Intake is open again.
             </p>
           </div>
         </div>
@@ -3204,7 +3351,6 @@ export default function CaseWorkspace({
 
   const renderSettlementPanel = () => {
     const settlementStageLabel = settlementStages[settlementStageIndex] || settlementStages[0];
-    const clientSuggestedRevision = String(settlementClientPreview?.suggestedRevision || "").trim();
     const clientPrivateLine = String(settlementClientPreview?.privateClientLine || "").trim();
     const clientReactionNeedsFix = draftClientReaction.tone === "red";
     const blockerText =
@@ -3217,23 +3363,19 @@ export default function CaseWorkspace({
         : settlementClientMood < -25
         ? "Client needs more certainty"
         : "Next reply needed";
-    const clientMoodAlignmentLabel = bothSettlementClientsLikely
-      ? "Both clients are open"
-      : settlementClientMood <= -35 || settlementOpponentMood <= -35
-      ? "One client is resisting"
-      : "Client moods are mixed";
-    const clientMoodAlignmentReason =
-      clientReactionNeedsFix
-        ? "Client concerns must be fixed before presenting."
-      : settlementOpponentMood < settlementClientMood
-        ? "The opposing client needs a more concrete concession."
-      : settlementClientMood < -20
-        ? "Client wants tighter terms"
-        : "Awaiting the next concrete move";
     const clientAcceptanceReason =
       settlementClientMood < 0
         ? "Open to resolution, wants fair amount and certainty."
         : "Constructive if payment and release terms stay practical.";
+    const clientSpokenLine = clientPrivateLine
+      ? clientPrivateLine
+      : settlementClientPreviewLoading
+      ? "I am thinking through the amount, timing, and release."
+      : settlementClientPreviewError
+      ? "I need the offer spelled out more clearly before I can react."
+      : clientReactionNeedsFix
+      ? "I need you to tighten this before you send it."
+      : "I can work with this if the terms protect what matters most.";
     const opponentAcceptanceReason =
       settlementOpponentMood < 0
         ? "Open to compromise, but amount feels high."
@@ -3252,44 +3394,6 @@ export default function CaseWorkspace({
         : settlementOpponentMood < -20
         ? "The opposing client is the constraint. Consider a cleaner payment timeline or a limited corrective-work option before lowering the amount."
         : recommendedNextMove;
-    const nextActionTitle = clientReactionNeedsFix
-      ? "Fix client concerns first"
-      : awaitingNegotiationResponse
-      ? "Waiting for opposing counsel"
-      : latestSettlementResponse
-      ? "Respond to the latest reply"
-      : "Prepare the next offer";
-    const nextActionBody = clientReactionNeedsFix
-      ? clientSuggestedRevision ||
-        "Revise the private draft until the amount and vague terms are safer for your client."
-      : awaitingNegotiationResponse
-      ? "Your message was sent. The other player needs to review it with their client and respond."
-      : latestSettlementResponse
-      ? "Read the reply, then either clarify one point or adjust the draft terms before sending."
-      : "Edit the private draft, wait for your client reaction, then present the offer.";
-    const nextActionChecklist = clientReactionNeedsFix
-      ? [
-          "Improve or justify the amount.",
-          "Clarify any vague release or corrective-work language.",
-          "Send only after the client reaction improves.",
-        ]
-      : awaitingNegotiationResponse
-      ? [
-          "Wait for the other player's response.",
-          "Review your private draft while they decide.",
-          "You can continue once they send a formal reply.",
-        ]
-      : latestSettlementResponse
-      ? [
-          "Read the other side's latest response.",
-          "Choose counteroffer or question.",
-          "Send one concrete next move.",
-        ]
-      : [
-          "Edit the draft terms.",
-          "Wait for your client reaction.",
-          "Use terms in message, then send.",
-        ];
     const statusCards = [
       {
         title: "Your Client Mood",
@@ -3454,7 +3558,14 @@ export default function CaseWorkspace({
     const publicTermSummary = sidePanelTermRows
       .map((term) => `${term.label}: ${term.value}`)
       .join("; ");
-    const settlementAcceptMessage = `My client accepts the current settlement terms: ${publicTermSummary}. Please confirm we have agreement.`;
+    const settlementAcceptMessage = publicTermSummary
+      ? `My client accepts the current settlement terms: ${publicTermSummary}. Please confirm we have agreement.`
+      : "My client accepts your latest settlement proposal. Please confirm we have agreement.";
+    const handleAcceptSettlementTerms = () =>
+      submitSettlementMessage({
+        messageOverride: settlementAcceptMessage,
+        acceptTerms: true,
+      });
     const settlementPressureMessage = [
       "We have stayed at the table and made concrete terms available.",
       "If your side cannot move meaningfully now, we are prepared to end settlement discussions and proceed on the record we have.",
@@ -3465,26 +3576,17 @@ export default function CaseWorkspace({
       "Is the issue the amount, payment deadline, corrective-work scope, release language, costs, or fault language?",
     ].join(" ");
     const settlementClientWarningText = `${playerPartyName}, I need to be direct: if the other side keeps repeating positions without improving the terms, settlement may be wasting time. We can apply pressure once more, or walk away and return to building the case.`;
-    const editableSidePanelTermRows = editableSettlementTerms.map(([label, value]) => ({
-      label,
-      value,
-      icon: getSettlementTermIcon(label),
-      multiline: ["Corrective Work", "Release Terms", "Costs"].includes(label),
-    }));
-    const useSettlementDraftMessage = () => {
-      setSettlementMessageAndFocus(settlementDraftMessage);
-    };
     const settlementNextMoveActions = [
       {
-        title: "Accept settlement",
+        title: "Accept terms",
         body: "Accept the current public terms and ask the other side to confirm agreement.",
         icon: HeroIcons.CheckCircleIcon,
         tone: "emerald",
-        onClick: () => submitSettlementMessage({ messageOverride: settlementAcceptMessage }),
+        onClick: handleAcceptSettlementTerms,
       },
       {
         title: "Make counteroffer",
-        body: "Change the private draft terms, then present a new offer.",
+        body: "Use what your client told you privately, then present a new offer.",
         icon: HeroIcons.PencilSquareIcon,
         tone: "amber",
         featured: true,
@@ -3523,6 +3625,7 @@ export default function CaseWorkspace({
       },
     ];
     const settlementActionsLocked =
+      clientWalkoutActive ||
       working ||
       awaitingNegotiationResponse ||
       (analyticsMode === "pvp" &&
@@ -3545,7 +3648,7 @@ export default function CaseWorkspace({
                       <p className="arena-kicker text-amber-200">Message to opposing counsel</p>
                       <h3 className="mt-2 text-xl font-black leading-tight text-white">Send negotiation message</h3>
                       <p className="mt-1 text-sm leading-5 text-white/48">
-                        Empty message sends the edited draft terms.
+                        Write the exact response you want the other side to receive.
                       </p>
                     </div>
                     <button
@@ -3579,16 +3682,7 @@ export default function CaseWorkspace({
                     </div>
                   </div>
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <button
-                      type="button"
-                      className="arena-btn-dark inline-flex min-h-0 items-center justify-center gap-2 px-4 py-3 text-sm"
-                      onPointerDown={triggerSettlementHaptic}
-                      onClick={useSettlementDraftMessage}
-                      disabled={settlementActionsLocked}
-                    >
-                      <HeroIcons.DocumentDuplicateIcon className="h-4 w-4" aria-hidden="true" />
-                      Use terms in message
-                    </button>
+                    <div aria-hidden="true" />
                     <button
                       type="button"
                       className="arena-btn-light inline-flex items-center justify-center gap-2 px-5 py-3 text-sm font-black disabled:cursor-not-allowed disabled:opacity-60"
@@ -3891,7 +3985,7 @@ export default function CaseWorkspace({
             className="rounded-2xl border border-emerald-300/[0.08] bg-emerald-300/[0.045] p-4 sm:p-5"
             data-settlement-tour-target="settlement-offer"
           >
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="flex min-w-0 items-center gap-3">
                 <SettlementPartyPortrait
                   image={caseSession.clientPortrait?.image}
@@ -3906,55 +4000,48 @@ export default function CaseWorkspace({
                   </h3>
                 </div>
               </div>
-              <div className="w-full sm:w-56">
-                <SettlementMoodMeter
-                  value={settlementClientMood}
-                  label="Your client"
-                  moodLabel={describeSettlementMood(settlementClientMood)}
-                  compact
-                />
+              <div className="flex shrink-0 items-center gap-2 rounded-xl border border-emerald-300/[0.08] bg-black/22 px-3 py-2">
+                <span className="text-lg" aria-hidden="true">{getSettlementMoodEmoji(settlementClientMood)}</span>
+                <div className="min-w-0">
+                  <p className="text-xs font-black leading-4 text-white">
+                    {describeSettlementMood(settlementClientMood)}
+                    <span className="ml-1 text-white/48">{formatSettlementMoodScore(settlementClientMood)}</span>
+                  </p>
+                  <div className="mt-1 h-1.5 w-28 overflow-hidden rounded-full bg-white/[0.08]">
+                    <span
+                      className={`block h-full rounded-full ${
+                        settlementClientMood >= 0 ? "bg-emerald-300" : "bg-red-300"
+                      }`}
+                      style={{ width: `${Math.max(8, Math.min(100, Math.abs(settlementClientMood)))}%` }}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div className="mt-4 rounded-xl border border-emerald-300/[0.055] bg-black/18 p-4">
-              <p className="arena-kicker text-emerald-200">Client Priorities</p>
-              <p className="mt-2 text-sm leading-6 text-white/72">{clientAcceptanceReason}</p>
-            </div>
-
             <div
-              className={`mt-3 rounded-xl border p-4 ${clientReactionTone.card}`}
+              className={`mt-4 rounded-xl border p-4 ${clientReactionTone.card}`}
               data-settlement-tour-target="settlement-client-reaction"
             >
               <div className="flex items-start gap-3">
-                <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-full border ${clientReactionTone.icon}`}>
+                <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full border ${clientReactionTone.icon}`}>
                   <ClientReactionIcon className="h-5 w-5" aria-hidden="true" />
                 </span>
                 <div className="min-w-0">
                   <p className={`text-xs font-black uppercase tracking-[0.14em] ${clientReactionTone.text}`}>
-                    Client reaction to draft
+                    {playerPartyName} says
                   </p>
-                  <p className="mt-1 text-lg font-black text-white">{draftClientReaction.label}</p>
-                  <p className="mt-1 text-sm leading-5 text-white/62">{draftClientReaction.note}</p>
-                  {clientPrivateLine ? (
-                    <p className="mt-2 rounded-lg border border-white/[0.045] bg-black/18 px-3 py-2 text-sm font-semibold leading-5 text-white/68">
-                      {clientPrivateLine}
-                    </p>
-                  ) : null}
-                  {clientSuggestedRevision ? (
-                    <div className="mt-3 rounded-lg border border-amber-200/[0.07] bg-amber-200/[0.055] px-3 py-2 text-left">
-                      <p className="text-[0.65rem] font-black uppercase tracking-[0.14em] text-amber-200">
-                        Suggested revision
-                      </p>
-                      <p className="mt-1 text-sm font-semibold leading-5 text-amber-50">
-                        {clientSuggestedRevision}
-                      </p>
-                    </div>
-                  ) : null}
-                  <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                    {draftClientReactionDrivers.map((driver) => (
+                  <p className="mt-2 text-xl font-black leading-snug text-white">
+                    &quot;{clientSpokenLine}&quot;
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <span className="rounded-full border border-emerald-300/[0.075] bg-black/18 px-3 py-1.5 text-xs font-semibold text-white/58">
+                      {clientAcceptanceReason}
+                    </span>
+                    {draftClientReactionDrivers.slice(0, 2).map((driver) => (
                       <span
                         key={driver}
-                        className="rounded-lg border border-white/[0.04] bg-black/18 px-2.5 py-2 text-xs font-semibold leading-4 text-white/58"
+                        className="rounded-full border border-white/[0.045] bg-black/18 px-3 py-1.5 text-xs font-semibold text-white/52"
                       >
                         {driver}
                       </span>
@@ -3970,9 +4057,9 @@ export default function CaseWorkspace({
             >
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="arena-kicker text-emerald-200">Talk to your client</p>
-                  <p className="mt-1 text-xs font-semibold leading-5 text-white/42">
-                    Private note. The draft terms below can update from this huddle.
+                  <p className="arena-kicker text-emerald-200">Private huddle</p>
+                  <p className="mt-1 text-sm font-semibold leading-5 text-white/62">
+                    Ask your client privately before you reply.
                   </p>
                 </div>
                 <button
@@ -3981,21 +4068,42 @@ export default function CaseWorkspace({
                     recordingSettlementClientInstruction ? "animate-pulse border-red-300/40 text-red-100" : ""
                   }`}
                   onClick={handleSettlementClientInstructionVoiceInput}
-                  disabled={settlementClientInstructionWorking || transcribingSettlementClientInstruction}
+                  disabled={
+                    clientWalkoutActive ||
+                    settlementClientInstructionWorking ||
+                    transcribingSettlementClientInstruction
+                  }
                   aria-label={recordingSettlementClientInstruction ? "Stop client voice note" : "Record client voice note"}
                   title={recordingSettlementClientInstruction ? "Stop recording" : "Record voice note"}
                 >
                   <HeroIcons.MicrophoneIcon className="h-4 w-4" aria-hidden="true" />
                 </button>
               </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {[
+                  "What amount would you actually accept?",
+                  "Can we trade timing for a lower amount?",
+                  "What term is non-negotiable?",
+                ].map((prompt) => (
+                  <button
+                    key={prompt}
+                    type="button"
+                    className="rounded-full border border-emerald-300/[0.08] bg-emerald-300/[0.045] px-3 py-1.5 text-xs font-semibold text-emerald-50 transition hover:border-emerald-200/20 hover:bg-emerald-300/[0.08]"
+                    onClick={() => setSettlementClientInstruction(prompt)}
+                    disabled={clientWalkoutActive || settlementClientInstructionWorking}
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </div>
               <div className="mt-3 overflow-hidden rounded-lg border border-white/[0.04] bg-black/22">
                 <textarea
                   value={settlementClientInstruction}
                   onChange={(event) => setSettlementClientInstruction(event.target.value)}
-                  rows={3}
-                  className="block min-h-24 w-full resize-none border-0 bg-transparent px-3 py-3 text-sm font-semibold leading-5 text-white outline-none placeholder:text-white/32"
-                  placeholder={`Tell ${playerPartyName} anything privately...`}
-                  disabled={settlementClientInstructionWorking}
+                  rows={2}
+                  className="block min-h-20 w-full resize-none border-0 bg-transparent px-3 py-3 text-sm font-semibold leading-5 text-white outline-none placeholder:text-white/32"
+                  placeholder={`Ask ${playerPartyName} privately...`}
+                  disabled={clientWalkoutActive || settlementClientInstructionWorking}
                 />
                 <div className="flex items-center justify-between gap-3 border-t border-white/[0.035] px-3 py-2">
                   <div className="h-1.5 w-24 overflow-hidden rounded-full bg-white/[0.08]">
@@ -4019,91 +4127,18 @@ export default function CaseWorkspace({
               </div>
               <button
                 type="submit"
-                className="arena-btn-dark mt-3 inline-flex min-h-0 items-center justify-center gap-2 px-4 py-2 text-sm"
+                className="arena-btn-light mt-3 inline-flex min-h-0 w-full items-center justify-center gap-2 px-4 py-2.5 text-sm"
                 disabled={
                   settlementClientInstructionWorking ||
+                  clientWalkoutActive ||
                   transcribingSettlementClientInstruction ||
                   !settlementClientInstruction.trim()
                 }
               >
-                {settlementClientInstructionWorking ? "Updating draft..." : "Update draft with client"}
+                {settlementClientInstructionWorking ? "Asking client..." : "Ask client privately"}
                 <HeroIcons.ArrowPathIcon className="h-4 w-4" aria-hidden="true" />
               </button>
             </form>
-
-            <div className="mt-5 flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="arena-kicker text-emerald-200">Private Draft Terms</p>
-                <p className="mt-1 text-xs font-semibold leading-5 text-white/46">
-                  Optional deal points. Leave any section blank if it does not belong in this offer.
-                </p>
-              </div>
-              <button
-                type="button"
-                className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-emerald-300/[0.075] bg-black/20 px-3 py-1.5 text-xs font-semibold text-emerald-100 transition hover:border-emerald-300/18 disabled:cursor-not-allowed disabled:opacity-55"
-                onPointerDown={triggerSettlementHaptic}
-                onClick={useSettlementDraftMessage}
-                disabled={settlementActionsLocked}
-              >
-                <HeroIcons.PaperAirplaneIcon className="h-4 w-4" aria-hidden="true" />
-                Use in message
-              </button>
-            </div>
-
-            <div className="mt-3 space-y-2" data-settlement-tour-target="settlement-draft-terms">
-              {editableSidePanelTermRows.map((term) => {
-                const Icon = term.icon;
-                const fieldId = `settlement-draft-${term.label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
-
-                return (
-                  <label
-                    key={`your-${term.label}`}
-                    htmlFor={fieldId}
-                    className="grid grid-cols-[2rem_minmax(7rem,0.75fr)_minmax(0,1.25fr)] items-center gap-3 rounded-xl border border-emerald-300/[0.055] bg-black/20 px-3 py-2 transition focus-within:border-emerald-200/20 focus-within:bg-emerald-300/[0.045]"
-                  >
-                    <span className="grid h-8 w-8 place-items-center rounded-full border border-emerald-300/[0.07] bg-emerald-300/8 text-emerald-200">
-                      <Icon className="h-4 w-4" aria-hidden="true" />
-                    </span>
-                    <span className="min-w-0 truncate text-[0.65rem] font-black uppercase tracking-[0.13em] text-white/52">
-                      {term.label}
-                    </span>
-                    {term.multiline ? (
-                      <textarea
-                        id={fieldId}
-                        value={term.value}
-                        onChange={(event) => updateSettlementDraftTerm(term.label, event.target.value)}
-                        rows={2}
-                        className="block min-h-10 w-full resize-none rounded-md border border-transparent bg-transparent px-2 py-1.5 text-sm font-semibold leading-5 text-white outline-none [color-scheme:dark] placeholder:text-white/28 focus:border-emerald-200/20 focus:bg-black/30 disabled:opacity-60"
-                        placeholder={`Set ${term.label.toLowerCase()}`}
-                        disabled={working}
-                      />
-                    ) : (
-                      <input
-                        id={fieldId}
-                        type="text"
-                        value={term.value}
-                        onChange={(event) => updateSettlementDraftTerm(term.label, event.target.value)}
-                        className="block h-9 min-w-0 rounded-md border border-transparent bg-transparent px-2 text-sm font-semibold text-white outline-none [color-scheme:dark] placeholder:text-white/28 focus:border-emerald-200/20 focus:bg-black/30 disabled:opacity-60"
-                        placeholder={`Set ${term.label.toLowerCase()}`}
-                        disabled={working}
-                      />
-                    )}
-                  </label>
-                );
-              })}
-            </div>
-
-            <div
-              className="mt-4 rounded-xl border border-amber-200/[0.08] bg-amber-200/[0.075] p-3"
-              data-settlement-tour-target="settlement-recommendation"
-            >
-              <div className="flex gap-3">
-                <HeroIcons.LightBulbIcon className="mt-0.5 h-5 w-5 shrink-0 text-amber-200" aria-hidden="true" />
-                <p className="text-sm leading-5 text-amber-50">
-                  <span className="font-black">{nextActionTitle}:</span> {nextActionBody}
-                </p>
-              </div>
-            </div>
           </div>
 
           <div
@@ -4111,21 +4146,19 @@ export default function CaseWorkspace({
             data-settlement-tour-target="settlement-viability"
           >
             <p className="arena-kicker text-amber-200">Do This Next</p>
-            <p className="mt-3 text-xl font-black leading-tight text-amber-100">{nextActionTitle}</p>
-            <p className="mt-2 text-sm leading-5 text-white/62">{nextActionBody}</p>
-            <div className="mt-4 space-y-2 text-left">
-              {nextActionChecklist.map((item) => (
-                <div
-                  key={item}
-                  className="rounded-lg border border-amber-200/[0.055] bg-black/18 px-3 py-2 text-xs font-semibold leading-4 text-white/64"
-                >
-                  {item}
-                </div>
-              ))}
-            </div>
             <button
               type="button"
-              className="arena-btn-light mt-4 inline-flex w-full items-center justify-center gap-2 px-4 py-3 text-sm font-black disabled:cursor-not-allowed disabled:opacity-60"
+              className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-300 px-4 py-3 text-sm font-black text-black shadow-[0_12px_28px_rgba(16,185,129,0.16)] transition hover:bg-emerald-200 disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={handleAcceptSettlementTerms}
+              onPointerDown={triggerSettlementHaptic}
+              disabled={settlementActionsLocked || !latestOpponentOfferEntry}
+            >
+              {pendingAction === "settlement-accept" ? "Accepting terms..." : "Accept terms"}
+              <HeroIcons.CheckCircleIcon className="h-4 w-4" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className="arena-btn-light mt-3 inline-flex w-full items-center justify-center gap-2 px-4 py-3 text-sm font-black disabled:cursor-not-allowed disabled:opacity-60"
               onClick={() => setSettlementMessageAndFocus((current) => current.trim() || settlementDraftMessage)}
               onPointerDown={triggerSettlementHaptic}
               disabled={settlementActionsLocked}
@@ -4137,11 +4170,6 @@ export default function CaseWorkspace({
                 <HeroIcons.PaperAirplaneIcon className="h-4 w-4" aria-hidden="true" />
               )}
             </button>
-            <p className="mt-2 text-xs font-semibold leading-4 text-white/42">
-              {awaitingNegotiationResponse
-                ? "Your message is with the other player. Wait for their formal response before messaging opposing counsel again."
-                : "Review and send the proposal from the message modal."}
-            </p>
             {analyticsMode === "pvp" ? (
               <button
                 type="button"
@@ -4154,13 +4182,6 @@ export default function CaseWorkspace({
                 <HeroIcons.ArrowUturnLeftIcon className="h-4 w-4" aria-hidden="true" />
               </button>
             ) : null}
-            <div className="my-5 h-px bg-amber-200/18" />
-            <p className="arena-kicker text-amber-200">Why</p>
-            <p className="mt-2 text-sm font-black leading-5 text-amber-100">{clientMoodAlignmentLabel}</p>
-            <p className="mt-2 text-sm font-semibold leading-5 text-white/62">{clientMoodAlignmentReason}</p>
-            <p className="mt-5 rounded-xl border border-amber-200/[0.06] bg-black/18 px-3 py-2 text-sm font-semibold text-white/62">
-              Watch: {blockerText}
-            </p>
           </div>
 
           <div
@@ -7763,6 +7784,41 @@ export default function CaseWorkspace({
           </button>
         </div>
       </div>
+      {showClientWalkoutModal ? (
+        <div
+          className="modal modal-middle modal-open"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="client-walkout-title"
+        >
+          <div className="modal-box max-w-md rounded-2xl border border-red-300/15 bg-[#090707] p-0 text-white shadow-2xl shadow-black/70">
+            <div className="border-b border-red-300/10 p-5">
+              <p className="arena-kicker text-red-200">Settlement ended</p>
+              <h3 id="client-walkout-title" className="mt-2 text-2xl font-black text-white">
+                Your client wants to walk out
+              </h3>
+              <p className="mt-3 text-sm font-semibold leading-6 text-white/64">
+                Settlement talks are over for now. Return to intake and keep building the case.
+              </p>
+            </div>
+            <div className="p-5">
+              <div className="rounded-xl border border-red-300/[0.08] bg-red-300/[0.055] p-4 text-sm font-semibold leading-6 text-red-50">
+                You can return to intake in {clientWalkoutCountdown}s.
+              </div>
+              <button
+                type="button"
+                className="arena-btn-light mt-4 flex w-full items-center justify-center gap-2 px-4 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={handleClientWalkoutReturnToIntake}
+                disabled={clientWalkoutCountdown > 0}
+              >
+                Return to intake
+                <HeroIcons.ArrowRightIcon className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+          <div className="modal-backdrop bg-black/65 backdrop-blur-[2px]" />
+        </div>
+      ) : null}
       <IntakeTourOverlay
         isOpen={showIntakeTour && isInterview}
         onComplete={() => setShowIntakeTour(false)}
