@@ -13,7 +13,11 @@ const resolveLikeNext = (base) => {
     path.join(base, "index.mjs"),
   ];
 
-  return candidates.find((candidate) => fs.existsSync(candidate)) || null;
+  return (
+    candidates.find(
+      (candidate) => fs.existsSync(candidate) && fs.statSync(candidate).isFile()
+    ) || null
+  );
 };
 
 const resolveAliasPath = (specifier) => {

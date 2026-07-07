@@ -58,10 +58,12 @@ import {
   normalizeMemoryClaims,
 } from "./memoryClaims";
 import {
+  clampMood,
   generateOpeningSettlementMessage,
   getSettlementCooldownState,
+  normalizeSettlement,
   previewSettlementDraftForClient,
-  runSettlementExchange,
+  extractSettlementTermsFromMessage,
 } from "./settlement";
 import { hasClientSettlementAuthority } from "./settlementAuthority";
 
@@ -378,6 +380,8 @@ const normalizeChallengeForRead = (challenge) => {
 
   changed = ensureChallengeSlug(challenge) || changed;
   changed = updateExpiredChallenge(challenge) || changed;
+  changed = syncChallengeSettlementIntentFields(challenge) || changed;
+  changed = syncChallengeSettlementNegotiationTurnFields(challenge) || changed;
   changed = seedChallengeFactSheetsIfNeeded(challenge) || changed;
   changed = backfillChallengeFactSheetsFromTranscript(challenge) || changed;
   changed = advanceChallengeToCourtIfPlaintiffReady(challenge) || changed;
@@ -442,6 +446,110 @@ const getOtherParticipant = (challenge, userId) =>
   (challenge.participants || []).find(
     (participant) => !isSameId(participant.userId, userId)
   ) || null;
+
+const hasPendingSettlementIntent = (settlement = {}) =>
+  settlement.intentPending === true ||
+  settlement.intentStatus === "pending" ||
+  settlement.status === "proposed";
+
+const syncChallengeSettlementIntentFields = (challenge) => {
+  const settlement = challenge?.settlement;
+  if (!settlement || settlement.status !== "proposed") {
+    return false;
+  }
+
+  const senderUserId = settlement.intentSenderUserId || settlement.proposedByUserId;
+  if (!senderUserId) {
+    return false;
+  }
+
+  const sender = getParticipant(challenge, senderUserId);
+  const receiver = getOtherParticipant(challenge, senderUserId);
+  const sentAt = settlement.intentSentAt || settlement.proposedAt || new Date();
+  let changed = false;
+
+  const setValue = (key, value, same = (left, right) => left === right) => {
+    if (same(settlement[key], value)) {
+      return;
+    }
+
+    settlement[key] = value;
+    changed = true;
+  };
+
+  setValue("intentPending", true);
+  setValue("intentStatus", "pending");
+  setValue("intentSenderUserId", senderUserId, isSameId);
+  setValue("intentSenderSide", settlement.intentSenderSide || sender?.side || settlement.proposedBySide || "");
+  if (receiver?.userId) {
+    setValue("intentReceiverUserId", receiver.userId, isSameId);
+    setValue("intentReceiverSide", settlement.intentReceiverSide || receiver.side || "");
+  }
+  setValue("intentMessage", settlement.intentMessage || settlement.proposalMessage || "");
+  setValue(
+    "intentSentAt",
+    sentAt,
+    (left, right) => String(left || "") === String(right || "")
+  );
+  setValue("intentResponse", "");
+  setValue("intentRespondedAt", null);
+
+  if (changed) {
+    challenge.markModified?.("settlement");
+  }
+
+  return changed;
+};
+
+const syncChallengeSettlementNegotiationTurnFields = (challenge) => {
+  const settlement = challenge?.settlement;
+  if (!settlement || settlement.status !== "active") {
+    return false;
+  }
+
+  const latestPlayerMessage = Array.isArray(settlement.transcript)
+    ? [...settlement.transcript]
+        .reverse()
+        .find((entry) => entry?.role === "player" && entry?.userId)
+    : null;
+
+  if (!latestPlayerMessage?.userId) {
+    return false;
+  }
+
+  const sender = getParticipant(challenge, latestPlayerMessage.userId);
+  const receiver = getOtherParticipant(challenge, latestPlayerMessage.userId);
+  if (!sender || !receiver) {
+    return false;
+  }
+
+  let changed = false;
+  const setValue = (key, value, same = isSameId) => {
+    if (same(settlement[key], value)) {
+      return;
+    }
+
+    settlement[key] = value;
+    changed = true;
+  };
+
+  setValue("latestNegotiationMessageUserId", sender.userId);
+  setValue("latestNegotiationMessageSide", sender.side, (left, right) => left === right);
+  setValue("awaitingNegotiationResponseUserId", sender.userId);
+  setValue("negotiationTurnUserId", receiver.userId);
+  setValue("negotiationTurnSide", receiver.side, (left, right) => left === right);
+  setValue(
+    "latestNegotiationMessageAt",
+    latestPlayerMessage.createdAt || new Date(),
+    (left, right) => String(left || "") === String(right || "")
+  );
+
+  if (changed) {
+    challenge.markModified?.("settlement");
+  }
+
+  return changed;
+};
 
 const getParticipantLabel = (challenge, userId) =>
   isSameId(challenge.initiatorId, userId) ? "initiator" : "challenged";
@@ -583,6 +691,33 @@ const userMapForChallenge = async (challenge) => {
 const getPlayerDisplayName = (user) =>
   user?.name || user?.email?.split("@")[0] || "Counsel";
 
+const getStableChallengePortraitImage = ({ challenge, participant, image = "" }) => {
+  const currentImage = String(image || "").trim();
+
+  if (!currentImage || !currentImage.includes("/client-portrait")) {
+    return currentImage;
+  }
+
+  const challengeRef =
+    challenge.slug || buildChallengeSlug(challenge.title, challenge.id || challenge._id);
+  return `/api/challenges/${challengeRef}/client-portrait?participantId=${toObjectIdString(
+    participant.userId
+  )}`;
+};
+
+const getStableChallengePortrait = ({ challenge, participant }) => {
+  const portrait = participant?.clientPortrait || {};
+
+  return {
+    ...portrait,
+    image: getStableChallengePortraitImage({
+      challenge,
+      participant,
+      image: portrait.image,
+    }),
+  };
+};
+
 const buildParticipantCaseSession = ({ challenge, participant, otherParticipant }) => {
   const judgedRounds = (challenge.courtroomRounds || []).filter(
     (round) => round.status === "judged"
@@ -623,6 +758,10 @@ const buildParticipantCaseSession = ({ challenge, participant, otherParticipant 
     factSheet: participant.factSheet,
     caseAssessment: participant.caseAssessment,
     clientMemory: participant.clientMemory || null,
+    clientPortrait: getStableChallengePortrait({ challenge, participant }),
+    opponentPortrait: otherParticipant
+      ? getStableChallengePortrait({ challenge, participant: otherParticipant })
+      : {},
     settlement: challenge.settlement || {},
     courtroomTranscript: judgedRounds.flatMap((round) =>
       (round.submissions || []).map((submission) => ({
@@ -950,6 +1089,45 @@ export const getChallengeForUser = async ({ userId, challengeId }) => {
   return buildChallengePayload({ challenge, viewerUserId: userId });
 };
 
+export const getChallengeRealtimeVersionForUser = async ({ userId, challengeId }) => {
+  await connectMongo();
+  const challenge = await Challenge.findOne(
+    getChallengeLookupQuery({ userId, challengeId })
+  )
+    .select({
+      _id: 1,
+      status: 1,
+      updatedAt: 1,
+      "settlement.status": 1,
+      "settlement.latestNegotiationMessageAt": 1,
+      "settlement.latestNegotiationMessageUserId": 1,
+      "settlement.awaitingNegotiationResponseUserId": 1,
+      "settlement.negotiationTurnUserId": 1,
+    })
+    .lean();
+
+  if (!challenge) {
+    return null;
+  }
+
+  const settlement = challenge.settlement || {};
+
+  return {
+    id: toObjectIdString(challenge._id),
+    status: challenge.status || "",
+    updatedAt: challenge.updatedAt || null,
+    settlementStatus: settlement.status || "",
+    latestNegotiationMessageAt: settlement.latestNegotiationMessageAt || null,
+    latestNegotiationMessageUserId: toObjectIdString(
+      settlement.latestNegotiationMessageUserId
+    ),
+    awaitingNegotiationResponseUserId: toObjectIdString(
+      settlement.awaitingNegotiationResponseUserId
+    ),
+    negotiationTurnUserId: toObjectIdString(settlement.negotiationTurnUserId),
+  };
+};
+
 export const getChallengeDocumentForUser = async ({ userId, challengeId }) => {
   await connectMongo();
   const challenge = await Challenge.findOne(
@@ -1267,12 +1445,85 @@ const applySettlementResultToChallenge = async ({
   }
 };
 
-export const startChallengeSettlement = async ({ userId, challengeId, message }) => {
+const isParticipantInPrivateChallengeIntake = ({ challenge, participant }) =>
+  ["active", "courtroom"].includes(challenge?.status) &&
+  participant?.status === "active";
+
+const getSettlementMoodKeyForChallengeSide = (side) =>
+  side === "opponent" ? "opponent" : "player";
+
+const coerceSettlementProposalTerms = (terms = {}) => {
+  const entries = Array.isArray(terms)
+    ? terms.map((term) => ({
+        label: String(term?.label || term?.[0] || "").trim(),
+        value: String(term?.value || term?.[1] || "").trim(),
+      }))
+    : Object.entries(terms || {}).map(([label, value]) => ({
+        label: String(label || "").trim(),
+        value: String(value || "").trim(),
+      }));
+
+  return entries
+    .filter((term) => term.label && term.value)
+    .slice(0, 8);
+};
+
+const flattenSettlementProposalTerms = (terms = []) =>
+  coerceSettlementProposalTerms(terms).map((term) => `${term.label}: ${term.value}`);
+
+const getPvpSettlementRecipientMoodDelta = (message = "") => {
+  const text = String(message || "");
+  const insultPatterns = [
+    /\b(idiot|idiots|moron|morons|stupid|dumb|clown|loser|pathetic|worthless|trash|garbage)\b/i,
+    /\b(liar|fraud|cheat|scam|scammer)\b/i,
+    /\b(fuck|fucking|shit|bullshit|asshole|bastard|damn)\b/i,
+    /\bshut up\b/i,
+  ];
+  const insultCount = insultPatterns.filter((pattern) => pattern.test(text)).length;
+  const concreteSignals = [
+    /\$\s?\d+/i,
+    /\b\d+\s?(day|days|week|weeks|business days)\b/i,
+    /\b(payment|pay|refund|return|release|waive|costs|fault|deadline|timeline|corrective work|scope)\b/i,
+  ].filter((pattern) => pattern.test(text)).length;
+  const cooperative = /\b(settle|resolve|compromise|offer|agree|agreement|terms|without court|avoid court|mutual|practical)\b/i.test(text);
+  const hostile = /\b(never|refuse|threat|destroy|humiliate|liar|fraud|bad faith|walk away|wasting time)\b/i.test(text);
+
+  if (insultCount >= 2) return -70;
+  if (insultCount === 1) return -45;
+  if (hostile) return concreteSignals > 1 ? -8 : -18;
+  if (concreteSignals >= 2 && cooperative) return 14;
+  if (concreteSignals >= 2) return 9;
+  if (cooperative) return 5;
+  return -4;
+};
+
+const getPvpSettlementSenderMoodDelta = ({ clientPreviewTone = "", clientPreviewScore = 0 } = {}) => {
+  const tone = String(clientPreviewTone || "").toLowerCase();
+  const score = Number(clientPreviewScore) || 0;
+
+  if (tone === "red" || score < -15) return -14;
+  if (tone === "amber" || score < 15) return -4;
+  return 0;
+};
+
+export const startChallengeSettlement = async ({
+  userId,
+  challengeId,
+  message,
+  terms = {},
+  clientPreviewTone = "",
+  clientPreviewScore = 0,
+}) => {
   const challenge = await getChallengeDocumentForUser({ userId, challengeId });
   if (!challenge) {
     return null;
   }
-  if (challenge.status !== "active") {
+  const participant = getParticipant(challenge, userId);
+  const otherParticipant = getOtherParticipant(challenge, userId);
+  if (!participant || !otherParticipant) {
+    throw new Error("Challenge participant not found.");
+  }
+  if (!isParticipantInPrivateChallengeIntake({ challenge, participant })) {
     throw new Error("Settlements can only be opened during private intake.");
   }
   if (challenge.primaryCategory === "criminal") {
@@ -1284,12 +1535,6 @@ export const startChallengeSettlement = async ({ userId, challengeId, message })
     error.status = 429;
     error.cooldownUntil = cooldown.cooldownUntil?.toISOString() || null;
     throw error;
-  }
-
-  const participant = getParticipant(challenge, userId);
-  const otherParticipant = getOtherParticipant(challenge, userId);
-  if (!participant || !otherParticipant) {
-    throw new Error("Challenge participant not found.");
   }
   if (
     challenge.settlement?.status === "proposed" &&
@@ -1332,6 +1577,16 @@ export const startChallengeSettlement = async ({ userId, challengeId, message })
     challenge.settlement = {
       ...(challenge.settlement || {}),
       status: "proposed",
+      intentPending: true,
+      intentStatus: "pending",
+      intentSenderUserId: participant.userId,
+      intentSenderSide: participant.side,
+      intentReceiverUserId: otherParticipant.userId,
+      intentReceiverSide: otherParticipant.side,
+      intentMessage: message,
+      intentSentAt: now,
+      intentResponse: "",
+      intentRespondedAt: null,
       proposedByUserId: participant.userId,
       proposedBySide: participant.side,
       proposalMessage: message,
@@ -1356,21 +1611,84 @@ export const startChallengeSettlement = async ({ userId, challengeId, message })
     return buildChallengePayload({ challenge, viewerUserId: userId });
   }
 
+  const intentSnapshot = {
+    senderUserId: challenge.settlement?.intentSenderUserId || proposedByUserId,
+    senderSide: challenge.settlement?.intentSenderSide || challenge.settlement?.proposedBySide || "",
+    receiverUserId: challenge.settlement?.intentReceiverUserId || participant.userId,
+    receiverSide: challenge.settlement?.intentReceiverSide || participant.side,
+    message: challenge.settlement?.intentMessage || challenge.settlement?.proposalMessage || "",
+    sentAt: challenge.settlement?.intentSentAt || challenge.settlement?.proposedAt || null,
+  };
   const caseSession = buildParticipantCaseSession({
     challenge,
     participant,
     otherParticipant,
   });
-  const result = await runSettlementExchange({
-    caseSession,
-    message,
-    userId,
-    actorSide: participant.side,
-    initial: true,
-  });
-
-  await applySettlementResultToChallenge({ challenge, participant, result });
+  const activeSettlement = normalizeSettlement(challenge.settlement || {}, caseSession);
+  const moods = {
+    player: clampMood(activeSettlement.moods?.player || 0),
+    opponent: clampMood(activeSettlement.moods?.opponent || 0),
+  };
+  const recipientMoodKey = getSettlementMoodKeyForChallengeSide(otherParticipant.side);
+  const senderMoodKey = getSettlementMoodKeyForChallengeSide(participant.side);
+  moods[recipientMoodKey] = clampMood(
+    (moods[recipientMoodKey] || 0) + getPvpSettlementRecipientMoodDelta(message)
+  );
+  moods[senderMoodKey] = clampMood(
+    (moods[senderMoodKey] || 0) +
+      getPvpSettlementSenderMoodDelta({ clientPreviewTone, clientPreviewScore })
+  );
+  const now = new Date();
+  const openingNegotiationTurnFields = {
+    latestNegotiationMessageUserId: participant.userId,
+    latestNegotiationMessageSide: participant.side,
+    awaitingNegotiationResponseUserId: participant.userId,
+    negotiationTurnUserId: otherParticipant.userId,
+    negotiationTurnSide: otherParticipant.side,
+    latestNegotiationMessageAt: now,
+  };
+  challenge.settlement = {
+    ...(challenge.settlement || {}),
+    status: "active",
+    moods,
+    ...openingNegotiationTurnFields,
+    transcript: [
+      ...((challenge.settlement && challenge.settlement.transcript) || []),
+      {
+        role: "player",
+        userId: participant.userId,
+        side: participant.side,
+        speaker: getPartyName(challenge.templateSnapshot, participant.side),
+        text: message,
+        moodSnapshot: moods,
+        createdAt: now,
+      },
+    ],
+    intentPending: false,
+    intentStatus: "accepted",
+    intentSenderUserId: intentSnapshot.senderUserId,
+    intentSenderSide: intentSnapshot.senderSide,
+    intentReceiverUserId: intentSnapshot.receiverUserId,
+    intentReceiverSide: intentSnapshot.receiverSide,
+    intentMessage: intentSnapshot.message,
+    intentSentAt: intentSnapshot.sentAt,
+    intentResponse: "accepted",
+    intentRespondedAt: now,
+  };
+  challenge.status = "settlement";
+  challenge.markModified?.("settlement");
   await challenge.save();
+  await Challenge.collection.updateOne(
+    { _id: challenge._id },
+    {
+      $set: Object.fromEntries(
+        Object.entries(openingNegotiationTurnFields).map(([key, value]) => [
+          `settlement.${key}`,
+          value,
+        ])
+      ),
+    }
+  );
 
   return buildChallengePayload({ challenge, viewerUserId: userId });
 };
@@ -1380,17 +1698,16 @@ export const draftChallengeSettlementMessage = async ({ userId, challengeId }) =
   if (!challenge) {
     return null;
   }
-  if (challenge.status !== "active") {
-    throw new Error("Settlement drafts can only be prepared during private intake.");
-  }
-  if (challenge.primaryCategory === "criminal") {
-    throw new Error("Criminal cases cannot be settled.");
-  }
-
   const participant = getParticipant(challenge, userId);
   const otherParticipant = getOtherParticipant(challenge, userId);
   if (!participant || !otherParticipant) {
     throw new Error("Challenge participant not found.");
+  }
+  if (!isParticipantInPrivateChallengeIntake({ challenge, participant })) {
+    throw new Error("Settlement drafts can only be prepared during private intake.");
+  }
+  if (challenge.primaryCategory === "criminal") {
+    throw new Error("Criminal cases cannot be settled.");
   }
   if (
     challenge.settlement?.status === "proposed" &&
@@ -1420,7 +1737,14 @@ export const draftChallengeSettlementMessage = async ({ userId, challengeId }) =
   return generateOpeningSettlementMessage({ caseSession, userId });
 };
 
-export const continueChallengeSettlement = async ({ userId, challengeId, message }) => {
+export const continueChallengeSettlement = async ({
+  userId,
+  challengeId,
+  message,
+  terms = {},
+  clientPreviewTone = "",
+  clientPreviewScore = 0,
+}) => {
   const challenge = await getChallengeDocumentForUser({ userId, challengeId });
   if (!challenge) {
     return null;
@@ -1438,22 +1762,118 @@ export const continueChallengeSettlement = async ({ userId, challengeId, message
     throw new Error("Challenge participant not found.");
   }
 
+  const transcript = Array.isArray(challenge.settlement?.transcript)
+    ? challenge.settlement.transcript
+    : [];
+  const negotiationTurnUserId = challenge.settlement?.negotiationTurnUserId;
+  if (negotiationTurnUserId && !isSameId(negotiationTurnUserId, userId)) {
+    const error = new Error("Waiting for the other player to respond.");
+    error.status = 409;
+    throw error;
+  }
+  const latestPlayerMessage = [...transcript]
+    .reverse()
+    .find((entry) => entry?.role === "player" && entry?.userId);
+
+  if (!negotiationTurnUserId && latestPlayerMessage && isSameId(latestPlayerMessage.userId, userId)) {
+    const error = new Error("Waiting for the other player to respond.");
+    error.status = 409;
+    throw error;
+  }
+
   const caseSession = buildParticipantCaseSession({
     challenge,
     participant,
     otherParticipant,
   });
-  const result = await runSettlementExchange({
-    caseSession,
-    message,
-    userId,
-    actorSide: participant.side,
-  });
+  const activeSettlement = normalizeSettlement(challenge.settlement || {}, caseSession);
+  const proposalTerms = extractSettlementTermsFromMessage(message);
+  const flatProposalTerms = flattenSettlementProposalTerms(proposalTerms);
+  const moods = {
+    player: clampMood(activeSettlement.moods?.player || 0),
+    opponent: clampMood(activeSettlement.moods?.opponent || 0),
+  };
+  const recipientMoodKey = getSettlementMoodKeyForChallengeSide(otherParticipant.side);
+  const senderMoodKey = getSettlementMoodKeyForChallengeSide(participant.side);
+  moods[recipientMoodKey] = clampMood(
+    (moods[recipientMoodKey] || 0) + getPvpSettlementRecipientMoodDelta(message)
+  );
+  moods[senderMoodKey] = clampMood(
+    (moods[senderMoodKey] || 0) +
+      getPvpSettlementSenderMoodDelta({ clientPreviewTone, clientPreviewScore })
+  );
+  const failed = moods.player <= -100 || moods.opponent <= -100;
+  const now = new Date();
+  const negotiationTurnFields = {
+    latestNegotiationMessageUserId: participant.userId,
+    latestNegotiationMessageSide: participant.side,
+    awaitingNegotiationResponseUserId: failed ? null : participant.userId,
+    negotiationTurnUserId: failed ? null : otherParticipant.userId,
+    negotiationTurnSide: failed ? "" : otherParticipant.side,
+    latestNegotiationMessageAt: now,
+  };
+  const playerMessageEntry = {
+    role: "player",
+    userId: participant.userId,
+    side: participant.side,
+    speaker: getPartyName(challenge.templateSnapshot, participant.side),
+    text: message,
+    moodSnapshot: moods,
+    createdAt: now,
+  };
+  const atomicSettlementFilter = {
+    _id: challenge._id,
+    status: "settlement",
+    "participants.userId": participant.userId,
+  };
 
-  await applySettlementResultToChallenge({ challenge, participant, result });
-  await challenge.save();
+  if (negotiationTurnUserId) {
+    atomicSettlementFilter["settlement.negotiationTurnUserId"] = participant.userId;
+  }
 
-  return buildChallengePayload({ challenge, viewerUserId: userId });
+  const settlementSetFields = {
+    status: "settlement",
+    "settlement.status": failed ? "failed" : "active",
+    "settlement.moods": moods,
+    "settlement.latestNegotiationMessageUserId":
+      negotiationTurnFields.latestNegotiationMessageUserId,
+    "settlement.latestNegotiationMessageSide":
+      negotiationTurnFields.latestNegotiationMessageSide,
+    "settlement.awaitingNegotiationResponseUserId":
+      negotiationTurnFields.awaitingNegotiationResponseUserId,
+    "settlement.negotiationTurnUserId": negotiationTurnFields.negotiationTurnUserId,
+    "settlement.negotiationTurnSide": negotiationTurnFields.negotiationTurnSide,
+    "settlement.latestNegotiationMessageAt":
+      negotiationTurnFields.latestNegotiationMessageAt,
+    updatedAt: now,
+  };
+
+  if (failed) {
+    settlementSetFields["settlement.failureReason"] =
+      "Negotiations broke down because at least one client has no remaining willingness to negotiate.";
+  }
+
+  const updatedChallenge = await Challenge.collection.findOneAndUpdate(
+    atomicSettlementFilter,
+    {
+      $set: settlementSetFields,
+      $push: {
+        "settlement.transcript": playerMessageEntry,
+      },
+      $unset: {
+        "settlement.currentTerms": "",
+      },
+    },
+    { returnDocument: "after" }
+  );
+
+  if (!updatedChallenge) {
+    const error = new Error("Waiting for the other player to respond.");
+    error.status = 409;
+    throw error;
+  }
+
+  return buildChallengePayload({ challenge: updatedChallenge, viewerUserId: userId });
 };
 
 export const previewChallengeSettlementDraft = async ({
@@ -1461,6 +1881,7 @@ export const previewChallengeSettlementDraft = async ({
   challengeId,
   terms,
   message = "",
+  clientInstruction = "",
 }) => {
   const challenge = await getChallengeDocumentForUser({ userId, challengeId });
   if (!challenge) {
@@ -1489,6 +1910,7 @@ export const previewChallengeSettlementDraft = async ({
     caseSession,
     draftTerms: terms,
     message,
+    clientInstruction,
     userId,
   });
 };
@@ -1498,14 +1920,54 @@ export const exitChallengeSettlement = async ({ userId, challengeId }) => {
   if (!challenge) {
     return null;
   }
+  const participant = getParticipant(challenge, userId);
+  if (!participant) {
+    throw new Error("Challenge participant not found.");
+  }
   if (!["active", "settlement"].includes(challenge.status)) {
     throw new Error("Only intake-stage settlement talks can return to intake.");
   }
 
+  const wasActiveSettlement =
+    challenge.status === "settlement" || challenge.settlement?.status === "active";
+  const endedAt = new Date();
   challenge.status = "active";
   if (challenge.settlement) {
+    const isRejectingPendingIntent = hasPendingSettlementIntent(challenge.settlement);
+    const intentSenderUserId =
+      challenge.settlement.intentSenderUserId || challenge.settlement.proposedByUserId || null;
+    const intentSender = intentSenderUserId ? getParticipant(challenge, intentSenderUserId) : null;
     challenge.settlement.status =
       challenge.settlement.status === "failed" ? "failed" : "rejected";
+    if (wasActiveSettlement && !isRejectingPendingIntent) {
+      challenge.settlement.endedNegotiations = true;
+      challenge.settlement.endedByUserId = participant.userId;
+      challenge.settlement.endedBySide = participant.side;
+      challenge.settlement.endedAt = endedAt;
+      challenge.settlement.awaitingNegotiationResponseUserId = null;
+      challenge.settlement.negotiationTurnUserId = null;
+      challenge.settlement.negotiationTurnSide = "";
+    }
+    if (isRejectingPendingIntent) {
+      challenge.settlement.intentPending = false;
+      challenge.settlement.intentStatus = "rejected";
+      challenge.settlement.intentSenderUserId = intentSenderUserId;
+      challenge.settlement.intentSenderSide =
+        challenge.settlement.intentSenderSide ||
+        intentSender?.side ||
+        challenge.settlement.proposedBySide ||
+        "";
+      challenge.settlement.intentReceiverUserId =
+        challenge.settlement.intentReceiverUserId || participant.userId;
+      challenge.settlement.intentReceiverSide =
+        challenge.settlement.intentReceiverSide || participant.side;
+      challenge.settlement.intentMessage =
+        challenge.settlement.intentMessage || challenge.settlement.proposalMessage || "";
+      challenge.settlement.intentSentAt =
+        challenge.settlement.intentSentAt || challenge.settlement.proposedAt || null;
+      challenge.settlement.intentResponse = "rejected";
+      challenge.settlement.intentRespondedAt = endedAt;
+    }
     challenge.markModified?.("settlement");
   }
   await challenge.save();
@@ -1986,6 +2448,24 @@ export const buildChallengePayload = async ({ challenge, viewerUserId }) => {
   });
   const settlement = plainChallenge.settlement || {};
   const proposedByUserId = toObjectIdString(settlement.proposedByUserId);
+  const intentSenderUserId = toObjectIdString(
+    settlement.intentSenderUserId || settlement.proposedByUserId
+  );
+  const fallbackIntentReceiver = intentSenderUserId
+    ? (plainChallenge.participants || []).find(
+        (challengeParticipant) => !isSameId(challengeParticipant.userId, intentSenderUserId)
+      )
+    : null;
+  const intentReceiverUserId = toObjectIdString(
+    settlement.intentReceiverUserId || fallbackIntentReceiver?.userId
+  );
+  const intentPending = hasPendingSettlementIntent(settlement);
+  const intentStatus =
+    settlement.intentStatus || (settlement.status === "proposed" ? "pending" : "none");
+  const intentSentByViewer =
+    intentPending && intentSenderUserId && isSameId(intentSenderUserId, viewerUserId);
+  const intentReceivedByViewer =
+    intentPending && intentSenderUserId && !isSameId(intentSenderUserId, viewerUserId);
   const settlementTranscript = (settlement.transcript || []).map((entry) => ({
     ...entry,
     userId: toObjectIdString(entry.userId),
@@ -1996,6 +2476,68 @@ export const buildChallengePayload = async ({ challenge, viewerUserId }) => {
         ? participant?.side === entry.side
         : false,
   }));
+  const latestSettlementPlayerMessage = [...settlementTranscript]
+    .reverse()
+    .find((entry) => entry?.role === "player" && entry?.userId);
+  const getTermsFromSettlementMessage = (entry) => {
+    const storedTerms = coerceSettlementProposalTerms(entry?.terms || []);
+    if (storedTerms.length) {
+      return storedTerms;
+    }
+
+    return extractSettlementTermsFromMessage(entry?.text || "");
+  };
+  const latestOpponentSettlementTerms =
+    getTermsFromSettlementMessage(
+      [...settlementTranscript]
+        .reverse()
+        .find(
+          (entry) =>
+            entry?.role === "player" &&
+            entry?.userId &&
+            !isSameId(entry.userId, viewerUserId)
+        )
+    ) || [];
+  const latestViewerSettlementTerms =
+    getTermsFromSettlementMessage(
+      [...settlementTranscript]
+        .reverse()
+        .find(
+          (entry) =>
+            entry?.role === "player" &&
+            entry?.userId &&
+            isSameId(entry.userId, viewerUserId)
+        )
+    ) || [];
+  const derivedCurrentTerms = latestSettlementPlayerMessage
+    ? flattenSettlementProposalTerms(getTermsFromSettlementMessage(latestSettlementPlayerMessage))
+    : [];
+  const endedByUserId = toObjectIdString(settlement.endedByUserId);
+  const latestNegotiationMessageUserId = toObjectIdString(
+    settlement.latestNegotiationMessageUserId || latestSettlementPlayerMessage?.userId
+  );
+  const awaitingNegotiationResponseUserId = toObjectIdString(
+    settlement.awaitingNegotiationResponseUserId || latestNegotiationMessageUserId
+  );
+  const negotiationTurnUserId = toObjectIdString(
+    settlement.negotiationTurnUserId ||
+      (latestNegotiationMessageUserId
+        ? (plainChallenge.participants || []).find(
+            (challengeParticipant) =>
+              !isSameId(challengeParticipant.userId, latestNegotiationMessageUserId)
+          )?.userId
+        : "")
+  );
+  const awaitingNegotiationResponse = Boolean(
+    (settlement.status || "") === "active" &&
+      awaitingNegotiationResponseUserId &&
+      isSameId(awaitingNegotiationResponseUserId, viewerUserId)
+  );
+  const receivedNegotiationMessage = Boolean(
+    (settlement.status || "") === "active" &&
+      negotiationTurnUserId &&
+      isSameId(negotiationTurnUserId, viewerUserId)
+  );
 
   return {
     ...publicChallenge,
@@ -2014,7 +2556,10 @@ export const buildChallengePayload = async ({ challenge, viewerUserId }) => {
           caseAssessment: participant.caseAssessment,
           interviewTranscript: participant.interviewTranscript || [],
           readyAt: participant.readyAt,
-          clientPortrait: participant.clientPortrait || {},
+          clientPortrait: getStableChallengePortrait({
+            challenge: plainChallenge,
+            participant,
+          }),
           partyName: getPartyName(plainChallenge.templateSnapshot, participant.side),
           clientMemoryExcerpt: participant.clientMemoryExcerpt || "",
           interviewSubjectName:
@@ -2037,7 +2582,10 @@ export const buildChallengePayload = async ({ challenge, viewerUserId }) => {
           score: otherParticipant.score || 0,
           verdict: otherParticipant.verdict || "",
           readyAt: otherParticipant.readyAt,
-          clientPortrait: otherParticipant.clientPortrait || {},
+          clientPortrait: getStableChallengePortrait({
+            challenge: plainChallenge,
+            participant: otherParticipant,
+          }),
           partyName: getPartyName(plainChallenge.templateSnapshot, otherParticipant.side),
           interviewSubjectName:
             opponentInterviewSubject?.name ||
@@ -2058,8 +2606,31 @@ export const buildChallengePayload = async ({ challenge, viewerUserId }) => {
       status: settlement.status || "none",
       moods: settlement.moods || { player: 0, opponent: 0 },
       transcript: settlementTranscript,
-      currentTerms: settlement.currentTerms || [],
+      currentTerms: derivedCurrentTerms,
+      latestOpponentTerms: latestOpponentSettlementTerms,
+      latestViewerTerms: latestViewerSettlementTerms,
       finalTerms: settlement.finalTerms || [],
+      intentPending,
+      intentStatus,
+      intentSenderUserId,
+      intentSenderSide: settlement.intentSenderSide || settlement.proposedBySide || "",
+      intentReceiverUserId,
+      intentReceiverSide: settlement.intentReceiverSide || fallbackIntentReceiver?.side || "",
+      intentMessage: settlement.intentMessage || settlement.proposalMessage || "",
+      intentSentAt: settlement.intentSentAt || settlement.proposedAt || null,
+      intentResponse: settlement.intentResponse || "",
+      intentRespondedAt: settlement.intentRespondedAt || null,
+      intentSentByViewer,
+      intentReceivedByViewer,
+      awaitingSettlementResponse: intentSentByViewer,
+      receivedSettlementIntent: intentReceivedByViewer,
+      awaitingNegotiationResponse,
+      receivedNegotiationMessage,
+      latestNegotiationMessageByViewer: awaitingNegotiationResponse,
+      latestNegotiationMessageUserId,
+      awaitingNegotiationResponseUserId,
+      negotiationTurnUserId,
+      latestNegotiationMessageAt: settlement.latestNegotiationMessageAt || null,
       proposedByUserId,
       proposedBySide: settlement.proposedBySide || "",
       proposedByViewer: proposedByUserId ? isSameId(proposedByUserId, viewerUserId) : false,
@@ -2070,6 +2641,12 @@ export const buildChallengePayload = async ({ challenge, viewerUserId }) => {
       proposedAt: settlement.proposedAt || null,
       outcomeSummary: settlement.outcomeSummary || "",
       failureReason: settlement.failureReason || "",
+      endedNegotiations: Boolean(settlement.endedNegotiations),
+      endedByUserId,
+      endedBySide: settlement.endedBySide || "",
+      endedByViewer: endedByUserId ? isSameId(endedByUserId, viewerUserId) : false,
+      endedByOther: endedByUserId ? !isSameId(endedByUserId, viewerUserId) : false,
+      endedAt: settlement.endedAt || null,
       rejectionCount: settlement.rejectionCount || 0,
       cooldownUntil: settlement.cooldownUntil || null,
       startedAt: settlement.startedAt || null,

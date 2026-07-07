@@ -25,6 +25,9 @@ export async function POST(req, { params }) {
       userId: session.user.id,
       challengeId: params.challengeId,
       message,
+      terms: body?.terms || {},
+      clientPreviewTone: body?.clientPreviewTone || "",
+      clientPreviewScore: body?.clientPreviewScore || 0,
     });
 
     if (!challenge) {
@@ -37,6 +40,9 @@ export async function POST(req, { params }) {
     return NextResponse.json({ challenge });
   } catch (error) {
     console.error(error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { error: error.message },
+      { status: Number(error?.status) || 500 }
+    );
   }
 }

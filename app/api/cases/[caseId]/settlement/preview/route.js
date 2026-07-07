@@ -54,6 +54,7 @@ export async function POST(req, { params }) {
       caseSession,
       draftTerms: body?.terms || {},
       message: body?.message || "",
+      clientInstruction: body?.clientInstruction || "",
       userId: session.user.id,
     });
 

@@ -83,6 +83,97 @@ const normalizeDraftTerms = (terms = {}) => {
     .slice(0, 8);
 };
 
+const SETTLEMENT_TERM_LABELS = [
+  "Settlement Amount",
+  "Payment Timeline",
+  "Corrective Work",
+  "Release Terms",
+  "Costs",
+  "Fault",
+];
+
+const toDisplayTermLabel = (value = "") =>
+  coerceString(value)
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+
+const getCanonicalSettlementTermLabel = (term = "") => {
+  const text = String(term || "");
+
+  if (/\$|payment|pay|amount|refund|return|balance/i.test(text)) return "Settlement Amount";
+  if (/day|week|month|deadline|within|timeline|date|prompt/i.test(text)) return "Payment Timeline";
+  if (/punch|credit|repair|corrective|work|perform|complete/i.test(text)) return "Corrective Work";
+  if (/future|relationship|release|waive|claim|dismiss/i.test(text)) return "Release Terms";
+  if (/cost|fee|fees|interest/i.test(text)) return "Costs";
+  if (/fault|admission|liability/i.test(text)) return "Fault";
+
+  return "";
+};
+
+const normalizeSettlementTermsAsRows = (terms = []) => {
+  const labeledTerms = normalizeDraftTerms(terms);
+
+  if (labeledTerms.length) {
+    return labeledTerms;
+  }
+
+  const byLabel = new Map();
+  for (const term of coerceStringList(terms, 8)) {
+    const [rawLabel, ...rawValueParts] = term.split(":");
+    const parsedLabel =
+      rawValueParts.length > 0 && rawLabel.trim().length <= 28
+        ? rawLabel.trim()
+        : getCanonicalSettlementTermLabel(term);
+    const value = rawValueParts.length > 0 ? rawValueParts.join(":").trim() : term;
+    const canonicalLabel = SETTLEMENT_TERM_LABELS.includes(parsedLabel)
+      ? parsedLabel
+      : getCanonicalSettlementTermLabel(parsedLabel || term);
+    const label =
+      canonicalLabel ||
+      (rawValueParts.length > 0 && parsedLabel ? toDisplayTermLabel(parsedLabel) : "");
+
+    if (label && !byLabel.has(label) && value) {
+      byLabel.set(label, value);
+    }
+  }
+
+  return Array.from(byLabel.entries()).map(([label, value]) => ({ label, value }));
+};
+
+export const extractSettlementTermsFromMessage = (message = "") => {
+  const text = coerceString(message).replace(/\s+/g, " ");
+  if (!text) {
+    return [];
+  }
+
+  const byLabel = new Map();
+  const clauses = text
+    .replace(/^\s*(?:counteroffer|proposal|offer|terms)\s*:\s*/i, "")
+    .split(/(?:\s*;\s*|\s+\u2022\s+|\s+\|\s+|\.\s+)/)
+    .map((clause) => clause.trim())
+    .filter(Boolean)
+    .slice(0, 10);
+
+  for (const clause of clauses) {
+    const [rawLabel, ...rawValueParts] = clause.split(":");
+    const hasExplicitLabel = rawValueParts.length > 0 && rawLabel.trim().length <= 36;
+    const value = hasExplicitLabel ? coerceString(rawValueParts.join(":")) : clause;
+    const label =
+      (hasExplicitLabel &&
+        (SETTLEMENT_TERM_LABELS.includes(toDisplayTermLabel(rawLabel))
+          ? toDisplayTermLabel(rawLabel)
+          : getCanonicalSettlementTermLabel(rawLabel) || toDisplayTermLabel(rawLabel))) ||
+      getCanonicalSettlementTermLabel(clause);
+
+    if (label && value && !byLabel.has(label)) {
+      byLabel.set(label, value);
+    }
+  }
+
+  return Array.from(byLabel.entries()).map(([label, value]) => ({ label, value }));
+};
+
 const devFacingSettlementPreviewPattern =
   /\b(ai|model|generated|schema|deterministic|scoring|preview)\b/i;
 
@@ -238,9 +329,10 @@ const normalizeAiSettlementResult = (
 const fallbackSettlementResult = ({ settlement, message, actorSide = "client" }) => {
   const text = String(message || "");
   const cooperative = /\b(settle|resolve|compromise|offer|payment|agreement|terms|without court|avoid court)\b/i.test(text);
+  const insulting = /\b(idiot|moron|stupid|dumb|clown|loser|pathetic|worthless|trash|garbage|fuck|fucking|shit|bullshit|asshole|bastard|shut up)\b/i.test(text);
   const hostile = /\b(never|refuse|threat|destroy|humiliate|liar|fraud|bad faith)\b/i.test(text);
-  const playerDelta = cooperative ? 8 : hostile ? -18 : -2;
-  const opponentDelta = cooperative ? 12 : hostile ? -24 : -4;
+  const playerDelta = insulting ? -18 : cooperative ? 8 : hostile ? -18 : -2;
+  const opponentDelta = insulting ? -35 : cooperative ? 12 : hostile ? -24 : -4;
   const representedSide = actorSide === "opponent" ? "opponent" : "client";
   const otherSide = getOpposingSide(representedSide);
   const currentTerms = cooperative
@@ -331,6 +423,7 @@ const normalizeAiSettlementPreview = (aiResult = {}) => {
       : ["The client is weighing the practical tradeoffs."],
     privateClientLine: cleanClientPreviewCopy(aiResult?.privateClientLine),
     suggestedRevision: cleanClientPreviewCopy(aiResult?.suggestedRevision),
+    draftTerms: normalizeDraftTerms(aiResult?.draftTerms || {}),
     model: SETTLEMENT_PREVIEW_MODEL,
     source: "ai",
   };
@@ -340,6 +433,7 @@ export const previewSettlementDraftForClient = async ({
   caseSession,
   draftTerms,
   message = "",
+  clientInstruction = "",
   userId,
 }) => {
   const usageCollector = createUsageCollector("settlement");
@@ -363,7 +457,9 @@ export const previewSettlementDraftForClient = async ({
       systemPrompt:
         "You simulate the represented client privately during settlement negotiations in a legal strategy game. The player is the lawyer. Evaluate the draft terms as a private client huddle before opposing counsel hears them. Output valid JSON only.",
       userPrompt: JSON.stringify({
-        task: "Give a concise private client reaction to the lawyer's draft settlement terms before they are presented to the other side.",
+        task: clientInstruction
+          ? "The lawyer is privately talking to the represented client. Respond with a concise client reaction and revise the draft settlement terms to reflect that private instruction where appropriate."
+          : "Give a concise private client reaction to the lawyer's draft settlement terms before they are presented to the other side.",
         rules: [
           "Speak from the represented client's practical perspective, not as a judge and not as opposing counsel.",
           "Do not decide whether the opponent accepts. Only evaluate whether the represented client can live with the draft.",
@@ -374,6 +470,8 @@ export const previewSettlementDraftForClient = async ({
           "Do not ask the lawyer to weaken the monetary position unless you explain the tradeoff: faster payment, certainty, narrow release, fee or cost waiver, or litigation risk.",
           "Use the case facts, requested relief, current settlement moods, current public terms, and recent transcript.",
           "Flag unclear or risky wording. Reward concrete timing, protected fault language, clear release scope, and terms that match client priorities.",
+          "If the lawyer privately asks the client for authority, preferences, reassurance, or a new settlement direction, use that message to revise draftTerms while preserving the client's interests.",
+          "Return draftTerms as labeled rows only when the private client huddle should update the lawyer's draft.",
           "Do not invent new facts or legal outcomes.",
           "Keep label under 7 words, note under 24 words, each driver under 12 words, and privateClientLine under 20 words.",
           "Never mention AI, models, prompts, previews, scoring, schemas, or generation.",
@@ -388,6 +486,7 @@ export const previewSettlementDraftForClient = async ({
           drivers: ["string"],
           privateClientLine: "string",
           suggestedRevision: "string",
+          draftTerms: [{ label: "string", value: "string" }],
         },
         context: {
           ...buildSettlementPromptContext({
@@ -399,6 +498,7 @@ export const previewSettlementDraftForClient = async ({
           representedSide: playerSide,
           clientMoneyPosture: representedClientMoneyPosture,
           draftTerms: normalizedDraftTerms,
+          privateLawyerMessageToClient: coerceString(clientInstruction),
           factSheet: caseSession.factSheet || {},
           recentIntake: (caseSession.interviewTranscript || []).slice(-8),
         },
@@ -479,6 +579,7 @@ export const runSettlementExchange = async ({
   caseSession,
   message,
   userId,
+  terms = {},
   actorSide = null,
   initial = false,
 }) => {
@@ -490,6 +591,7 @@ export const runSettlementExchange = async ({
     startedAt: currentSettlement.startedAt || new Date(),
   };
   const playerSide = actorSide || getPlayerSide(caseSession);
+  const playerProposalTerms = extractSettlementTermsFromMessage(message);
   let result = null;
 
   try {
@@ -511,6 +613,8 @@ export const runSettlementExchange = async ({
           "Do not decide outcomes by legal merit alone; willingness, face-saving, risk, and concrete terms matter.",
           "If the message is hostile, vague, or one-sided, reduce mood and do not accept.",
           "If the message offers concrete reciprocal terms, improve mood and update currentTerms.",
+          "If the lawyer presents terms that are materially worse than the represented client's priorities, unclear, outside the client's authority, or not privately aligned with the client, reduce the represented client's mood even if the other side might like the move.",
+          "Clients should dislike being talked over. A lawyer can still send the message, but the represented client may lose trust when the public proposal ignores their private reaction.",
           "Both clientAccepts and opponentAccepts must be true only when both simulated parties accept the same currentTerms.",
           "For the initial message, set initialRejected true if the responding side refuses to enter settlement talks.",
           "Keep responseText in the voice of the responding opposing party or opposing counsel.",
@@ -577,12 +681,14 @@ export const runSettlementExchange = async ({
         role: "player",
         speaker: "You",
         text: message,
+        terms: playerProposalTerms,
         moodSnapshot: activeSettlement.moods,
       },
       {
         role: "opponent",
         speaker: getPartyName(ensureTemplate(getTemplate(caseSession)), getOpposingSide(playerSide)),
         text: result.responseText,
+        terms: normalizeSettlementTermsAsRows(result.currentTerms),
         moodSnapshot: result.moods,
       },
       ...(result.clientReaction

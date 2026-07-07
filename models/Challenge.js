@@ -200,6 +200,15 @@ const settlementEntrySchema = mongoose.Schema(
     },
     speaker: { type: String, required: true },
     text: { type: String, required: true },
+    terms: {
+      type: [
+        {
+          label: { type: String, default: "" },
+          value: { type: String, default: "" },
+        },
+      ],
+      default: [],
+    },
     moodSnapshot: {
       player: { type: Number, default: 0 },
       opponent: { type: Number, default: 0 },
@@ -226,6 +235,66 @@ const settlementSchema = mongoose.Schema(
     },
     currentTerms: { type: [String], default: [] },
     finalTerms: { type: [String], default: [] },
+    intentPending: { type: Boolean, default: false },
+    intentStatus: {
+      type: String,
+      enum: ["none", "pending", "accepted", "rejected"],
+      default: "none",
+    },
+    intentSenderUserId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    intentSenderSide: {
+      type: String,
+      enum: ["client", "opponent", ""],
+      default: "",
+    },
+    intentReceiverUserId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    intentReceiverSide: {
+      type: String,
+      enum: ["client", "opponent", ""],
+      default: "",
+    },
+    intentMessage: { type: String, default: "" },
+    intentSentAt: { type: Date, default: null },
+    intentResponse: {
+      type: String,
+      enum: ["", "accepted", "rejected"],
+      default: "",
+    },
+    intentRespondedAt: { type: Date, default: null },
+    latestNegotiationMessageUserId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    latestNegotiationMessageSide: {
+      type: String,
+      enum: ["client", "opponent", ""],
+      default: "",
+    },
+    awaitingNegotiationResponseUserId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    negotiationTurnUserId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    negotiationTurnSide: {
+      type: String,
+      enum: ["client", "opponent", ""],
+      default: "",
+    },
+    latestNegotiationMessageAt: { type: Date, default: null },
     proposedByUserId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -240,6 +309,18 @@ const settlementSchema = mongoose.Schema(
     proposedAt: { type: Date, default: null },
     outcomeSummary: { type: String, default: "" },
     failureReason: { type: String, default: "" },
+    endedNegotiations: { type: Boolean, default: false },
+    endedByUserId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    endedBySide: {
+      type: String,
+      enum: ["client", "opponent", ""],
+      default: "",
+    },
+    endedAt: { type: Date, default: null },
     rejectionCount: { type: Number, default: 0 },
     cooldownUntil: { type: Date, default: null },
     startedAt: { type: Date, default: null },

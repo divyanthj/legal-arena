@@ -37,8 +37,16 @@ const pvpSettlementPreviewRouteSource = await readFile(
   new URL("../app/api/challenges/[challengeId]/settlement/preview/route.js", import.meta.url),
   "utf8"
 );
+const pvpChallengePortraitRouteSource = await readFile(
+  new URL("../app/api/challenges/[challengeId]/client-portrait/route.js", import.meta.url),
+  "utf8"
+);
 const challengeSource = await readFile(
   new URL("../libs/game/challenges.js", import.meta.url),
+  "utf8"
+);
+const storeSource = await readFile(
+  new URL("../libs/game/store.js", import.meta.url),
   "utf8"
 );
 const soloSettlementDashboardRouteSource = await readFile(
@@ -144,8 +152,38 @@ assert.match(
 );
 assert.match(
   challengeModelSource,
-  /proposedByUserId:[\s\S]*proposedBySide:[\s\S]*proposalMessage:[\s\S]*proposedAt:/,
-  "PVP settlement schema should persist pending settlement intent metadata."
+  /endedNegotiations:\s*\{\s*type:\s*Boolean,\s*default:\s*false[\s\S]*endedByUserId:[\s\S]*endedBySide:[\s\S]*endedAt:\s*\{\s*type:\s*Date,\s*default:\s*null/,
+  "PVP settlement schema should persist who ended active negotiations."
+);
+assert.match(
+  challengeModelSource,
+  /intentPending:[\s\S]*intentStatus:[\s\S]*intentSenderUserId:[\s\S]*intentReceiverUserId:[\s\S]*intentMessage:[\s\S]*intentSentAt:[\s\S]*proposedByUserId:[\s\S]*proposedBySide:[\s\S]*proposalMessage:[\s\S]*proposedAt:/,
+  "PVP settlement schema should persist explicit pending settlement intent flags."
+);
+assert.match(
+  challengeModelSource,
+  /latestNegotiationMessageUserId:[\s\S]*latestNegotiationMessageSide:[\s\S]*awaitingNegotiationResponseUserId:[\s\S]*negotiationTurnUserId:[\s\S]*negotiationTurnSide:[\s\S]*latestNegotiationMessageAt:/,
+  "PVP settlement schema should persist negotiation turn ownership fields."
+);
+assert.match(
+  caseSessionModelSource,
+  /intentPending:[\s\S]*intentStatus:[\s\S]*intentSenderUserId:[\s\S]*intentReceiverUserId:[\s\S]*intentMessage:[\s\S]*intentSentAt:/,
+  "Case session settlement schema should expose the same settlement intent flag shape."
+);
+assert.match(
+  caseSessionModelSource,
+  /latestNegotiationMessageUserId:[\s\S]*latestNegotiationMessageSide:[\s\S]*awaitingNegotiationResponseUserId:[\s\S]*negotiationTurnUserId:[\s\S]*negotiationTurnSide:[\s\S]*latestNegotiationMessageAt:/,
+  "Case session settlement schema should expose the same negotiation turn field shape."
+);
+assert.match(
+  caseSessionModelSource,
+  /terms:\s*\{[\s\S]*label:\s*\{\s*type:\s*String[\s\S]*value:\s*\{\s*type:\s*String/,
+  "Solo settlement transcript entries should persist structured proposal terms."
+);
+assert.match(
+  challengeModelSource,
+  /terms:\s*\{[\s\S]*label:\s*\{\s*type:\s*String[\s\S]*value:\s*\{\s*type:\s*String/,
+  "PVP settlement transcript entries should persist structured proposal terms."
 );
 
 assert.match(
@@ -190,8 +228,18 @@ assert.doesNotMatch(
 );
 assert.match(
   caseWorkspaceSource,
-  /Current Offer[\s\S]*Client moods[\s\S]*Recommended next move[\s\S]*Message to opposing counsel[\s\S]*Recent exchanges/,
-  "Settlement room should prioritize offer, client moods, next move, composer, and recent exchanges."
+  /Private Client Huddle[\s\S]*SettlementMoodMeter[\s\S]*Other Side&apos;s Last Offer[\s\S]*SettlementMoodMeter/,
+  "Settlement room should place moods beside each party."
+);
+assert.match(
+  caseWorkspaceSource,
+  /settlementHumanTranscript[\s\S]*analyticsMode === "pvp"[\s\S]*filter\(\(entry\) => entry\?\.role === "player"[\s\S]*latestOpponentOfferEntry[\s\S]*settlementHumanTranscript[\s\S]*recentSettlementEntries = settlementHumanTranscript/,
+  "PVP settlement UI should ignore stale simulated opponent/client transcript rows when deciding latest responses."
+);
+assert.match(
+  caseWorkspaceSource,
+  /const settlementComposeModal =[\s\S]*createPortal\([\s\S]*modal modal-middle modal-open[\s\S]*Message to opposing counsel[\s\S]*document\.body/,
+  "Settlement room should portal the opposing-counsel composer into a centered body-level modal."
 );
 assert.match(
   caseWorkspaceSource,
@@ -259,6 +307,16 @@ assert.match(
   "Settlement client previews should include represented-client monetary posture."
 );
 assert.match(
+  settlementSource,
+  /extractSettlementTermsFromMessage[\s\S]*runSettlementExchange = async \(\{[\s\S]*playerProposalTerms = extractSettlementTermsFromMessage\(message\)[\s\S]*role: "player"[\s\S]*terms: playerProposalTerms[\s\S]*role: "opponent"[\s\S]*terms: normalizeSettlementTermsAsRows\(result\.currentTerms\)/,
+  "Solo settlement exchanges should derive player proposal terms from the freeform message text."
+);
+assert.match(
+  settlementSource,
+  /clientInstruction = ""[\s\S]*draftTerms[\s\S]*privateLawyerMessageToClient/,
+  "Settlement client previews should accept private lawyer instructions and return draft term updates."
+);
+assert.match(
   soloSettlementPreviewRouteSource,
   /previewSettlementDraftForClient[\s\S]*appendUsageEntriesToCaseSession[\s\S]*preview: result\.preview/,
   "Solo settlement preview route should return an AI client preview and record usage."
@@ -272,6 +330,41 @@ assert.match(
   caseWorkspaceSource,
   /Private Client Huddle[\s\S]*Client reaction to draft[\s\S]*Private Draft Terms/,
   "Settlement UI should frame draft editing as a private client huddle."
+);
+assert.match(
+  caseWorkspaceSource,
+  /preview\.draftTerms[\s\S]*setSettlementDraftState[\s\S]*Object\.fromEntries/,
+  "Settlement huddle should apply returned draft terms."
+);
+assert.match(
+  caseWorkspaceSource,
+  /Talk to your client[\s\S]*handleSettlementClientInstructionVoiceInput[\s\S]*Update draft with client/,
+  "Settlement huddle should let the lawyer privately instruct the client by text or voice and apply returned draft terms."
+);
+assert.match(
+  caseWorkspaceSource,
+  /Message opposing counsel[\s\S]*Review and send the proposal from the message modal/,
+  "Settlement center column should open the opposing-counsel message modal without pretending the message was already sent."
+);
+assert.match(
+  caseWorkspaceSource,
+  /disabled=\{settlementActionsLocked\}[\s\S]*Waiting for response[\s\S]*Your message is with the other player\. Wait for their formal response before messaging opposing counsel again/,
+  "Settlement center message button should clearly lock opposing-counsel messaging while waiting for the other player."
+);
+assert.match(
+  caseWorkspaceSource,
+  /setSettlementMessageAndFocus\(\(current\) => current\.trim\(\) \|\| settlementDraftMessage\)[\s\S]*Message opposing counsel/,
+  "Opening the opposing-counsel composer should prefill it with the terms discussed with the client."
+);
+assert.match(
+  caseWorkspaceSource,
+  /aria-label="Message opposing counsel"[\s\S]*<textarea[\s\S]*disabled=\{settlementActionsLocked\}[\s\S]*Use terms in message[\s\S]*submitSettlementMessage\(\{[\s\S]*messageOverride: settlementMessage\.trim\(\) \|\| settlementDraftMessage[\s\S]*disabled=\{settlementActionsLocked \|\| !getSettlementOutgoingMessage\(\)\.trim\(\)\}/,
+  "The opposing-counsel composer should be locked while waiting for the other player's response."
+);
+assert.match(
+  caseWorkspaceSource,
+  /Use in message[\s\S]*disabled=\{settlementActionsLocked\}/,
+  "Private draft shortcuts should not bypass the PVP opposing-counsel turn lock."
 );
 assert.match(
   caseWorkspaceSource,
@@ -305,8 +398,28 @@ assert.match(
 );
 assert.match(
   caseWorkspaceSource,
-  /Current Public Terms[\s\S]*sidePanelTermRows\.map[\s\S]*opponent-\$\{term\.label\}[\s\S]*\{term\.value\}/,
-  "Current public settlement terms should remain read-only."
+  /Last exchanged proposal[\s\S]*latestOpponentOfferText[\s\S]*Breakdown[\s\S]*sidePanelTermRows\.map[\s\S]*opponent-\$\{term\.label\}[\s\S]*\{term\.value\}/,
+  "Opponent settlement panel should show the freeform proposal first and a player-facing breakdown below."
+);
+assert.match(
+  caseWorkspaceSource,
+  /formatSettlementOfferText[\s\S]*split\(\s*\/\\s\*;\\s\*\/\s*\)[\s\S]*normalizeSettlementTermLabel[\s\S]*`\$\{label\.charAt\(0\)\.toUpperCase\(\)\}\$\{label\.slice\(1\)\} is \$\{value\}`/,
+  "PVP semicolon-separated proposal shorthand should display as a coherent paragraph."
+);
+assert.match(
+  caseWorkspaceSource,
+  /professionalizeSettlementProposalText[\s\S]*The other side rejects the proposal\.[\s\S]*formatSettlementOfferText[\s\S]*professionalizeSettlementProposalText\(text\)/,
+  "Opponent-facing settlement proposal text should be cleaned into professional prose without changing the raw message."
+);
+assert.match(
+  caseWorkspaceSource,
+  /sidePanelTermRows\.length \? sidePanelTermRows\.map[\s\S]*No separate terms were stated\. Read the proposal text above as the source of truth/,
+  "Settlement breakdown should only show terms parsed from the message and otherwise defer to the proposal text."
+);
+assert.match(
+  caseWorkspaceSource,
+  /compactSettlementBreakdownValue[\s\S]*Settlement Amount[\s\S]*amount\[0\][\s\S]*Payment Timeline[\s\S]*duration\[1\][\s\S]*Corrective Work[\s\S]*return "None"/,
+  "Settlement breakdown rows should compact long proposal sentences into key datapoints."
 );
 assert.match(
   caseWorkspaceSource,
@@ -352,6 +465,46 @@ assert.match(
   caseWorkspaceSource,
   /getSettlementOutgoingMessage\(messageOverride = ""\)[\s\S]*messageOverride[\s\S]*settlementMessage\.trim\(\) \|\| settlementDraftMessage[\s\S]*message: submittedMessage/,
   "Sending a settlement message should support action overrides and fall back to serialized edited draft terms."
+);
+assert.match(
+  caseWorkspaceSource,
+  /shouldOptimisticallyWaitForPvpResponse[\s\S]*analyticsMode === "pvp"[\s\S]*awaitingNegotiationResponse: true[\s\S]*latestNegotiationMessageByViewer: true[\s\S]*updateCaseFromResponse\(responseForState\)/,
+  "PVP settlement sends should immediately put the sender into the waiting-for-opponent state."
+);
+assert.match(
+  caseWorkspaceSource,
+  /serverSettlementStatus === "active"[\s\S]*optimisticNegotiationTurnFields[\s\S]*awaitingNegotiationResponseUserId: caseSession\.playerUserId[\s\S]*negotiationTurnUserId: caseSession\.opponentUserId/,
+  "PVP settlement sends should lock the sender even when the outer challenge status is still active."
+);
+assert.match(
+  caseWorkspaceSource,
+  /playerUserId[\s\S]*awaitingNegotiationResponseUserId[\s\S]*idsMatch\(awaitingNegotiationResponseUserId, viewerUserId\)[\s\S]*idsMatch\(negotiationTurnUserId, viewerUserId\)/,
+  "Settlement action state should be derived from explicit negotiation turn ownership."
+);
+assert.match(
+  caseWorkspaceSource,
+  /settlementActionsLocked =[\s\S]*awaitingNegotiationResponse[\s\S]*analyticsMode === "pvp"[\s\S]*Boolean\(negotiationTurnUserId\)[\s\S]*!receivedNegotiationMessage/,
+  "PVP settlement buttons should stay locked whenever the explicit turn owner is another player."
+);
+assert.match(
+  caseWorkspaceSource,
+  /type="button"[\s\S]*submitSettlementMessage\(\{[\s\S]*messageOverride: settlementMessage\.trim\(\) \|\| settlementDraftMessage[\s\S]*Send Counteroffer/,
+  "Settlement message modal should own the actual send action and post the textarea or draft message."
+);
+assert.match(
+  caseWorkspaceSource,
+  /settlement_message_blocked[\s\S]*settlement_message_submit_started[\s\S]*settlement_message_submit_succeeded[\s\S]*settlement_message_submit_failed/,
+  "Settlement sends should track blocked, started, succeeded, and failed states for debugging PVP turn issues."
+);
+assert.match(
+  caseWorkspaceSource,
+  /shouldOptimisticallyWaitForPvpResponse[\s\S]*Settlement message sent\. Waiting for opposing counsel\./,
+  "PVP settlement sends should show waiting copy instead of saying talks are merely open."
+);
+assert.match(
+  challengeWorkspaceSource,
+  /playerUserId: viewer\.userId[\s\S]*opponentUserId: opponent\.userId/,
+  "Challenge workspaces should preserve player ids so settlement turn locks can update from the database state."
 );
 assert.match(
   caseWorkspaceSource,
@@ -450,13 +603,13 @@ assert.match(
 );
 assert.match(
   caseWorkspaceSource,
-  /inline-flex min-h-0 w-full items-center justify-center gap-2 px-4 py-3 text-sm[\s\S]*Use terms in message/,
+  /arena-btn-dark inline-flex min-h-0 items-center justify-center gap-2 px-4 py-3 text-sm[\s\S]*Use terms in message/,
   "Settlement draft terms button should align its icon and label as a single centered action."
 );
 assert.match(
   caseWorkspaceSource,
-  /settlementMessageComposerRef[\s\S]*settlementMessageTextareaRef[\s\S]*scrollIntoView[\s\S]*focus\(\{ preventScroll: true \}\)/,
-  "Using settlement draft terms should scroll to and focus the message composer."
+  /const focusSettlementMessageComposer = useCallback\(\(\) => \{[\s\S]*setShowSettlementComposeModal\(true\)[\s\S]*settlementMessageTextareaRef\.current\?\.focus\(\{ preventScroll: true \}\)/,
+  "Using settlement draft terms should open and focus the message composer modal."
 );
 assert.match(
   caseWorkspaceSource,
@@ -489,9 +642,29 @@ assert.match(
   "Solo settlement start route should enforce rejection cooldowns."
 );
 assert.match(
+  soloSettlementStartRouteSource,
+  /runSettlementExchange\(\{[\s\S]*terms: body\?\.terms \|\| \{\}/,
+  "Solo settlement start should pass drafted proposal terms into the settlement exchange."
+);
+assert.match(
+  soloSettlementPreviewRouteSource,
+  /clientInstruction: body\?\.clientInstruction \|\| ""/,
+  "Solo settlement preview should pass private client instructions."
+);
+assert.match(
   soloSettlementMessageRouteSource,
   /caseSession\.primaryCategory === "criminal"/,
   "Solo settlement message route should reject criminal cases."
+);
+assert.match(
+  soloSettlementMessageRouteSource,
+  /runSettlementExchange\(\{[\s\S]*terms: body\?\.terms \|\| \{\}/,
+  "Solo settlement messages should pass drafted proposal terms into the settlement exchange."
+);
+assert.match(
+  storeSource,
+  /latestOpponentTerms[\s\S]*role === "opponent"[\s\S]*coerceSettlementTermRows\(settlement\.currentTerms \|\| \[\]\)[\s\S]*latestViewerTerms/,
+  "Solo case payloads should expose the latest terms proposed by the opposing side."
 );
 assert.match(
   challengeSource,
@@ -505,17 +678,137 @@ assert.match(
 );
 assert.match(
   challengeSource,
-  /status: "proposed"[\s\S]*proposedByUserId: participant\.userId[\s\S]*proposalMessage: message[\s\S]*return buildChallengePayload/,
-  "PVP settlement start should first create a pending intent instead of immediately opening talks."
+  /const isParticipantInPrivateChallengeIntake =[\s\S]*\["active", "courtroom"\]\.includes\(challenge\?\.status\)[\s\S]*participant\?\.status === "active"/,
+  "PVP settlement drafting should allow a player who is still in private intake after the court phase opens."
 );
 assert.match(
   challengeSource,
-  /isRespondingToOtherProposal[\s\S]*runSettlementExchange/,
-  "PVP settlement should open only when the other lawyer responds after client authority."
+  /if \(!isParticipantInPrivateChallengeIntake\(\{ challenge, participant \}\)\)[\s\S]*Settlement drafts can only be prepared during private intake/,
+  "PVP settlement draft gating should use the viewer's private intake status."
+);
+assert.match(
+  challengeSource,
+  /status: "proposed"[\s\S]*intentPending: true[\s\S]*intentStatus: "pending"[\s\S]*intentSenderUserId: participant\.userId[\s\S]*intentReceiverUserId: otherParticipant\.userId[\s\S]*proposedByUserId: participant\.userId[\s\S]*proposalMessage: message[\s\S]*return buildChallengePayload/,
+  "PVP settlement start should first create a database-backed pending intent instead of immediately opening talks."
+);
+assert.match(
+  challengeSource,
+  /isRespondingToOtherProposal[\s\S]*status: "active"[\s\S]*intentPending: false[\s\S]*intentStatus: "accepted"/,
+  "PVP settlement should open when the other lawyer formally accepts the pending intent."
+);
+assert.match(
+  challengeSource,
+  /openingNegotiationTurnFields[\s\S]*latestNegotiationMessageUserId: participant\.userId[\s\S]*negotiationTurnUserId: otherParticipant\.userId[\s\S]*\.\.\.openingNegotiationTurnFields/,
+  "PVP settlement intent acceptance should assign the next negotiation turn to the other player."
+);
+assert.match(
+  challengeSource,
+  /negotiationTurnUserId[\s\S]*!isSameId\(negotiationTurnUserId, userId\)[\s\S]*Waiting for the other player to respond[\s\S]*latestPlayerMessage[\s\S]*!negotiationTurnUserId[\s\S]*isSameId\(latestPlayerMessage\.userId, userId\)/,
+  "PVP settlement messages should be turn-based and prevent consecutive sends by the same player."
+);
+assert.match(
+  challengeSource,
+  /playerMessageEntry[\s\S]*text: message[\s\S]*"settlement\.negotiationTurnUserId": negotiationTurnFields\.negotiationTurnUserId[\s\S]*Challenge\.collection\.findOneAndUpdate[\s\S]*\$push:[\s\S]*"settlement\.transcript": playerMessageEntry/,
+  "PVP settlement sends should atomically append the raw message and persist explicit negotiation turn ownership."
+);
+assert.match(
+  challengeSource,
+  /insultPatterns[\s\S]*insultCount >= 2\) return -70[\s\S]*insultCount === 1\) return -45/,
+  "PVP settlement insults should sharply reduce the receiving client's mood."
+);
+assert.match(
+  challengeSource,
+  /\$unset:[\s\S]*"settlement\.currentTerms": ""/,
+  "PVP settlement sends should not store parsed helper terms as canonical database state."
+);
+assert.match(
+  challengeSource,
+  /getTermsFromSettlementMessage[\s\S]*extractSettlementTermsFromMessage\(entry\?\.text \|\| ""\)[\s\S]*currentTerms: derivedCurrentTerms/,
+  "Settlement payloads should derive helper terms from the raw message text."
+);
+assert.doesNotMatch(
+  challengeSource.match(/export const continueChallengeSettlement[\s\S]*?export const previewChallengeSettlementDraft/)?.[0] || "",
+  /runSettlementExchange/,
+  "PVP settlement replies should not generate an immediate simulated counter-reply."
+);
+assert.match(
+  challengeSource,
+  /awaitingNegotiationResponseUserId[\s\S]*negotiationTurnUserId[\s\S]*awaitingNegotiationResponse[\s\S]*receivedNegotiationMessage[\s\S]*latestNegotiationMessageByViewer/,
+  "PVP challenge payload should expose viewer-specific settlement turn state from persisted turn fields."
+);
+assert.match(
+  challengeSource,
+  /latestOpponentSettlementTerms[\s\S]*latestViewerSettlementTerms[\s\S]*latestOpponentTerms[\s\S]*latestViewerTerms/,
+  "PVP challenge payload should expose viewer-relative latest proposed settlement terms."
+);
+assert.match(
+  challengeSource,
+  /getChallengeRealtimeVersionForUser[\s\S]*latestNegotiationMessageAt[\s\S]*negotiationTurnUserId/,
+  "PVP challenges should expose a cheap realtime version signal for settlement refreshes."
+);
+assert.match(
+  caseWorkspaceSource,
+  /realtimeVersionPath[\s\S]*realtimeVersionIntervalMs[\s\S]*apiClient\.get\(realtimeVersionPath\)[\s\S]*apiClient\.get\(realtimeRefreshPath\)/,
+  "PVP settlement clients should refresh full challenge data when the database version changes."
+);
+assert.match(
+  caseWorkspaceSource,
+  /analyticsMode === "pvp"[\s\S]*onClick=\{handleSettlementExit\}[\s\S]*disabled=\{working \|\| pendingAction === "settlement-exit"\}[\s\S]*End negotiations/,
+  "PVP settlement should expose an end-negotiations action that is not gated by mood or turn ownership."
+);
+assert.match(
+  challengeSource,
+  /wasActiveSettlement[\s\S]*endedNegotiations = true[\s\S]*endedByUserId = participant\.userId[\s\S]*endedAt = endedAt/,
+  "PVP settlement exit should record who walked away from active negotiations."
+);
+assert.match(
+  challengeSource,
+  /endedByUserId[\s\S]*endedByViewer[\s\S]*endedByOther[\s\S]*endedAt/,
+  "PVP settlement payload should expose viewer-relative walkout flags."
+);
+assert.match(
+  caseWorkspaceSource,
+  /settlementEndedByOther[\s\S]*renderSettlementWalkoutNoticePanel[\s\S]*Opposing counsel walked away from settlement negotiations[\s\S]*renderSettlementWalkoutNoticePanel\(\)/,
+  "PVP intake should show a small note when the other side ended settlement talks."
+);
+assert.match(
+  challengeSource,
+  /getPvpSettlementSenderMoodDelta[\s\S]*clientPreviewTone[\s\S]*clientPreviewScore/,
+  "PVP settlement sends should let bad private client previews reduce sender client mood."
+);
+assert.match(
+  challengeSource,
+  /syncChallengeSettlementIntentFields[\s\S]*settlement\.status !== "proposed"[\s\S]*intentPending[\s\S]*intentStatus[\s\S]*intentSenderUserId[\s\S]*intentReceiverUserId/,
+  "PVP settlement reads should backfill explicit intent flags for old proposed records."
+);
+assert.match(
+  challengeSource,
+  /syncChallengeSettlementNegotiationTurnFields[\s\S]*settlement\.status !== "active"[\s\S]*latestPlayerMessage[\s\S]*latestNegotiationMessageUserId[\s\S]*negotiationTurnUserId/,
+  "PVP settlement reads should backfill explicit negotiation turn flags for old active records."
+);
+assert.match(
+  challengeSource,
+  /normalizeChallengeForRead[\s\S]*syncChallengeSettlementIntentFields\(challenge\)[\s\S]*syncChallengeSettlementNegotiationTurnFields\(challenge\)/,
+  "PVP challenge reads should run settlement intent and negotiation turn normalizers."
+);
+assert.match(
+  challengeSource,
+  /intentSentByViewer[\s\S]*intentReceivedByViewer[\s\S]*awaitingSettlementResponse[\s\S]*receivedSettlementIntent/,
+  "PVP challenge payload should expose viewer-specific settlement intent flags."
+);
+assert.match(
+  pvpChallengePortraitRouteSource,
+  /getPortraitParticipantId[\s\S]*participantId[\s\S]*getParticipantForRequest[\s\S]*getPortraitImageUrl[\s\S]*participantId=/,
+  "PVP challenge portrait route should use stable participant-specific image URLs."
+);
+assert.match(
+  challengeSource,
+  /getStableChallengePortraitImage[\s\S]*\/client-portrait\?participantId=\$\{toObjectIdString[\s\S]*clientPortrait: getStableChallengePortrait/,
+  "PVP challenge payload should normalize old viewer-relative portrait URLs."
 );
 assert.match(
   challengeWorkspaceSource,
-  /Settlement Intent Received[\s\S]*Ask your client whether they are willing to explore settlement/,
+  /intentPending[\s\S]*intentStatus === "pending"[\s\S]*Settlement Intent Received[\s\S]*Ask your client whether they are willing to explore settlement/,
   "PVP receiver should see a prompt to ask their client about settlement intent."
 );
 assert.match(
@@ -525,8 +818,43 @@ assert.match(
 );
 assert.match(
   caseWorkspaceSource,
-  /Settlement Intent Sent[\s\S]*Respond to Settlement[\s\S]*Send Settlement Response[\s\S]*Send Settlement Intent/,
-  "PVP settlement CTA should distinguish sent intents from response actions."
+  /Settlement intent sent, awaiting response[\s\S]*Settlement intent received[\s\S]*Yes, Accept[\s\S]*No, Reject/,
+  "PVP settlement intent UI should show sender waiting state and receiver Yes/No consent actions."
+);
+assert.match(
+  caseWorkspaceSource,
+  /intentPending[\s\S]*intentStatus === "pending"[\s\S]*awaitingSettlementResponse[\s\S]*intakeActionsLocked[\s\S]*Settlement intent sent, awaiting response/,
+  "PVP sender intake should lock while awaiting the opponent's settlement response."
+);
+assert.match(
+  caseWorkspaceSource,
+  /settlementAuthorityReady[\s\S]*intakeActionsLocked[\s\S]*Settlement Authority Ready[\s\S]*Send Settlement Intent/,
+  "PVP intake should lock ordinary actions once the client gives settlement authority."
+);
+assert.match(
+  caseWorkspaceSource,
+  /const handleSendSettlementIntent = async \(\) => \{[\s\S]*submitSettlementMessage\(\{[\s\S]*initial: true,[\s\S]*messageOverride: getDefaultSettlementIntentMessage\(\),[\s\S]*\}\)/,
+  "PVP settlement authority CTA should immediately persist a settlement intent."
+);
+assert.match(
+  caseWorkspaceSource,
+  /onClick=\{handleSendSettlementIntent\}[\s\S]*Send Settlement Intent[\s\S]*settlementAuthorityReady[\s\S]*handleSendSettlementIntent\(\)/,
+  "PVP settlement intent CTAs should use the direct send handler."
+);
+assert.match(
+  caseWorkspaceSource,
+  /handleFactSheetPrimaryAction[\s\S]*settlementAuthorityReady[\s\S]*handleSendSettlementIntent\(\)[\s\S]*factSheetPrimaryActionDisabled[\s\S]*settlementAuthorityReady/,
+  "Prominent intake/fact-sheet CTAs should send settlement intent instead of becoming dead disabled buttons."
+);
+assert.match(
+  caseWorkspaceSource,
+  /type=\{settlementAuthorityReady \? "button" : "submit"\}[\s\S]*onClick=\{settlementAuthorityReady \? handleSendSettlementIntent : undefined\}/,
+  "Question submit CTAs should explicitly send settlement intent when authority is ready."
+);
+assert.match(
+  caseWorkspaceSource,
+  /Settlement Intent Received[\s\S]*Ask your client whether they consent to settlement[\s\S]*hasSettlementAuthority[\s\S]*hasSettlementRejection/,
+  "PVP receiver intake should prominently notify the player about settlement intent."
 );
 assert.match(
   soloSettlementDashboardRouteSource,

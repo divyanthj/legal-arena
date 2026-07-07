@@ -7,7 +7,7 @@ const positiveAuthorityPattern =
 const negativeAuthorityPattern =
   /\b(no|not now|not yet|don't|do not|won't|will not|can't|cannot|refuse|not willing|not open|rather go to court|want court|take it to court)\b/i;
 
-export const hasClientSettlementAuthority = (interviewTranscript = []) => {
+const hasSettlementAnswerMatching = (interviewTranscript = [], matcher) => {
   const transcript = Array.isArray(interviewTranscript) ? interviewTranscript : [];
 
   for (let index = 0; index < transcript.length - 1; index += 1) {
@@ -25,13 +25,24 @@ export const hasClientSettlementAuthority = (interviewTranscript = []) => {
       continue;
     }
 
-    if (
-      positiveAuthorityPattern.test(answerText) &&
-      !negativeAuthorityPattern.test(answerText)
-    ) {
+    if (matcher(answerText)) {
       return true;
     }
   }
 
   return false;
 };
+
+export const hasClientSettlementAuthority = (interviewTranscript = []) =>
+  hasSettlementAnswerMatching(
+    interviewTranscript,
+    (answerText) =>
+      positiveAuthorityPattern.test(answerText) &&
+      !negativeAuthorityPattern.test(answerText)
+  );
+
+export const hasClientSettlementRejection = (interviewTranscript = []) =>
+  hasSettlementAnswerMatching(
+    interviewTranscript,
+    (answerText) => negativeAuthorityPattern.test(answerText)
+  );

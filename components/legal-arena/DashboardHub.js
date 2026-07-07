@@ -45,22 +45,38 @@ const challengeStatusLabel = {
   expired: "Expired",
 };
 
+const hasOpenSettlementStatus = (challenge = {}) =>
+  challenge.settlement?.intentPending === true ||
+  challenge.settlement?.intentStatus === "pending" ||
+  ["proposed", "active"].includes(challenge.settlement?.status);
+
+const getPvpDisplayStatus = (challenge = {}) => {
+  if (challenge.status === "settlement" || hasOpenSettlementStatus(challenge)) {
+    return "settlement";
+  }
+
+  return challenge.status;
+};
+
 const getChallengeViewerStatus = (challenge = {}) => {
+  const displayStatus = getPvpDisplayStatus(challenge);
+
   if (
-    challenge.status === "courtroom" &&
+    displayStatus === "courtroom" &&
     challenge.viewer?.status !== "ready" &&
-    challenge.status !== "verdict"
+    displayStatus !== "verdict"
   ) {
     return "active";
   }
 
-  return challenge.status;
+  return displayStatus;
 };
 
 const pvpDocketTabs = [
   { value: "needs-response", label: "Needs Response" },
   { value: "sent", label: "Sent" },
   { value: "active-intake", label: "Active Intake" },
+  { value: "settlement", label: "Settlement" },
   { value: "in-court", label: "In Court" },
   { value: "finished", label: "Finished" },
 ];
@@ -74,19 +90,21 @@ const isIncomingPendingChallenge = (challenge = {}) =>
   isSameUserId(challenge.challenged?.userId, challenge.viewer?.userId);
 
 const getPvpDocketTab = (challenge = {}) => {
-  if (challenge.status === "pending") {
+  const displayStatus = getPvpDisplayStatus(challenge);
+
+  if (displayStatus === "pending") {
     return isIncomingPendingChallenge(challenge) ? "needs-response" : "sent";
   }
 
-  if (challenge.status === "active") {
+  if (displayStatus === "active") {
     return "active-intake";
   }
 
-  if (challenge.status === "settlement") {
-    return "active-intake";
+  if (displayStatus === "settlement") {
+    return "settlement";
   }
 
-  if (challenge.status === "courtroom") {
+  if (displayStatus === "courtroom") {
     return "in-court";
   }
 
@@ -97,19 +115,30 @@ const getOpenPvpRound = (challenge = {}) =>
   (challenge.courtroomRounds || []).find((round) => round.status === "open") || null;
 
 const getPvpTurnSummary = (challenge = {}) => {
-  if (challenge.status === "pending") {
+  const displayStatus = getPvpDisplayStatus(challenge);
+
+  if (displayStatus === "pending") {
     return isIncomingPendingChallenge(challenge)
       ? "Accept to begin"
       : "Waiting for opponent";
   }
 
-  if (challenge.status === "active") {
+  if (displayStatus === "active") {
     return challenge.viewer?.status === "ready"
       ? "Waiting for opponent"
       : "Your turn: finish intake";
   }
 
-  if (challenge.status === "courtroom") {
+  if (displayStatus === "settlement") {
+    return (challenge.settlement?.intentPending ||
+      challenge.settlement?.status === "proposed") &&
+      (challenge.settlement?.intentSentByViewer ||
+        challenge.settlement?.proposedByViewer)
+      ? "Settlement intent sent"
+      : "Negotiate settlement";
+  }
+
+  if (displayStatus === "courtroom") {
     if (challenge.viewer?.status !== "ready") {
       return "Finish intake to join court";
     }
@@ -119,39 +148,41 @@ const getPvpTurnSummary = (challenge = {}) => {
       : "Your turn";
   }
 
-  if (challenge.status === "settled") {
+  if (displayStatus === "settled") {
     return "View settlement";
   }
 
-  if (challenge.status === "verdict") {
+  if (displayStatus === "verdict") {
     return "View final ruling";
   }
 
-  if (challenge.status === "expired") {
+  if (displayStatus === "expired") {
     return "Expired";
   }
 
-  if (challenge.status === "declined") {
+  if (displayStatus === "declined") {
     return "Declined";
   }
 
-  return challengeStatusLabel[challenge.status] || "Open";
+  return challengeStatusLabel[displayStatus] || "Open";
 };
 
 const isPvpChallengeActionable = (challenge = {}) => {
+  const displayStatus = getPvpDisplayStatus(challenge);
+
   if (isIncomingPendingChallenge(challenge)) {
     return true;
   }
 
-  if (challenge.status === "active") {
+  if (displayStatus === "active") {
     return challenge.viewer?.status !== "ready";
   }
 
-  if (challenge.status === "settlement") {
+  if (displayStatus === "settlement") {
     return true;
   }
 
-  if (challenge.status === "courtroom") {
+  if (displayStatus === "courtroom") {
     if (challenge.viewer?.status !== "ready") {
       return true;
     }
@@ -163,18 +194,20 @@ const isPvpChallengeActionable = (challenge = {}) => {
 };
 
 const getPvpUrgencyLabel = (challenge = {}) => {
+  const displayStatus = getPvpDisplayStatus(challenge);
+
   if (isIncomingPendingChallenge(challenge)) {
     return "Accept now";
   }
 
-  if (challenge.status === "active") {
+  if (displayStatus === "active") {
     return challenge.viewer?.status === "ready" ? "Waiting" : "Finish intake";
   }
 
-  if (challenge.status === "courtroom") {
+  if (displayStatus === "courtroom") {
     return challenge.viewer?.status === "ready" ? "Your court turn" : "Finish intake";
   }
-  if (challenge.status === "settlement") {
+  if (displayStatus === "settlement") {
     return "Negotiate";
   }
 
@@ -182,29 +215,36 @@ const getPvpUrgencyLabel = (challenge = {}) => {
 };
 
 const getPvpActionLabel = (challenge = {}) => {
+  const displayStatus = getPvpDisplayStatus(challenge);
+
   if (isIncomingPendingChallenge(challenge)) {
     return "Accept";
   }
 
-  if (challenge.status === "pending") {
+  if (displayStatus === "pending") {
     return "View Invite";
   }
 
-  if (challenge.status === "active") {
+  if (displayStatus === "active") {
     return "Resume";
   }
 
-  if (challenge.status === "courtroom") {
+  if (displayStatus === "courtroom") {
     return challenge.viewer?.status === "ready" ? "Enter Court" : "Finish Intake";
   }
-  if (challenge.status === "settlement") {
-    return "Negotiate";
+  if (displayStatus === "settlement") {
+    return (challenge.settlement?.intentPending ||
+      challenge.settlement?.status === "proposed") &&
+      (challenge.settlement?.intentReceivedByViewer ||
+        !challenge.settlement?.proposedByViewer)
+      ? "Respond to Settlement"
+      : "Negotiate";
   }
-  if (challenge.status === "settled") {
+  if (displayStatus === "settled") {
     return "View Settlement";
   }
 
-  if (challenge.status === "verdict") {
+  if (displayStatus === "verdict") {
     return "View Verdict";
   }
 
@@ -212,15 +252,21 @@ const getPvpActionLabel = (challenge = {}) => {
 };
 
 const getPvpStatusTone = (challenge = {}) => {
-  if (isIncomingPendingChallenge(challenge) || challenge.status === "courtroom") {
+  const displayStatus = getPvpDisplayStatus(challenge);
+
+  if (
+    isIncomingPendingChallenge(challenge) ||
+    displayStatus === "courtroom" ||
+    displayStatus === "settlement"
+  ) {
     return "arena-status-caution";
   }
 
-  if (challenge.status === "active") {
+  if (displayStatus === "active") {
     return "arena-status-favorable";
   }
 
-  if (["declined", "expired"].includes(challenge.status)) {
+  if (["declined", "expired"].includes(displayStatus)) {
     return "arena-status-critical";
   }
 
@@ -326,7 +372,7 @@ const PvpDocketSection = ({
           </Link>
         ) : null}
 
-        <div className="mt-5 grid gap-2 sm:grid-cols-5">
+        <div className="mt-5 grid gap-2 sm:grid-cols-6">
           {pvpDocketTabs.map((tab) => {
             const selected = activeTab === tab.value;
             const count = groupedChallenges[tab.value]?.length || 0;

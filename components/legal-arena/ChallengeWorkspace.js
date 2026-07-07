@@ -26,6 +26,14 @@ const getChallengeRef = (challenge) => challenge.slug || challenge.id;
 
 const sideRoleLabel = (side) => (side === "opponent" ? "Defendant" : "Plaintiff");
 
+const getChallengeDisplayStatus = (challenge = {}) => {
+  if (challenge.status === "settlement") {
+    return "settlement";
+  }
+
+  return challenge.status;
+};
+
 const uniqueTextList = (items = []) => {
   const seen = new Set();
 
@@ -71,21 +79,23 @@ const normalizeFeedbackForViewer = ({ items = [], viewer = {} }) => {
 };
 
 const getViewerStage = (challenge = {}) => {
-  if (challenge.status === "verdict") {
+  const displayStatus = getChallengeDisplayStatus(challenge);
+
+  if (displayStatus === "verdict") {
     return "verdict";
   }
-  if (challenge.status === "settled") {
+  if (displayStatus === "settled") {
     return "settled";
   }
-  if (challenge.status === "settlement") {
+  if (displayStatus === "settlement") {
     return "settlement";
   }
 
-  if (challenge.status === "courtroom" && challenge.viewer?.status !== "ready") {
+  if (displayStatus === "courtroom" && challenge.viewer?.status !== "ready") {
     return "active";
   }
 
-  return challenge.status || "active";
+  return displayStatus || "active";
 };
 
 const challengeToCaseSession = (challenge = {}) => {
@@ -147,23 +157,25 @@ const challengeToCaseSession = (challenge = {}) => {
       ? "draw"
       : "";
   const viewerReady = viewer.status === "ready";
+  const displayStatus = getChallengeDisplayStatus(challenge);
   const status =
-    challenge.status === "settled"
+    displayStatus === "settled"
       ? "settled"
-      : challenge.status === "settlement"
+      : displayStatus === "settlement"
       ? "settlement"
-      : challenge.status === "verdict"
+      : displayStatus === "verdict"
       ? "verdict"
-      : challenge.status === "courtroom" && viewerReady
+      : displayStatus === "courtroom" && viewerReady
       ? "courtroom"
-      : ["active", "courtroom"].includes(challenge.status)
+      : ["active", "courtroom"].includes(displayStatus)
       ? "interview"
-      : challenge.status || "interview";
+      : displayStatus || "interview";
 
   return {
     id: challenge.id,
     slug: getChallengeRef(challenge),
     title: challenge.title,
+    updatedAt: challenge.updatedAt,
     caseTemplateId: challenge.templateSnapshot,
     templateSnapshot: challenge.templateSnapshot,
     canonicalStory: challenge.canonicalStory,
@@ -173,6 +185,8 @@ const challengeToCaseSession = (challenge = {}) => {
     primaryCategory: challenge.primaryCategory,
     complexity: challenge.complexity,
     playerSide: viewer.side,
+    playerUserId: viewer.userId || "",
+    opponentUserId: opponent.userId || "",
     status,
     lawbookVersion: challenge.lawbookVersion,
     maxCourtRounds: challenge.maxCourtRounds,
@@ -248,10 +262,16 @@ const OpponentStageNotice = ({ challenge }) => {
   const viewerParty = viewer.partyName || viewerRole;
   const opponentParty = opponent.partyName || opponentRole;
   const viewerStage = getViewerStage(challenge);
-  const settlementIntent = challenge.settlement?.status === "proposed"
+  const settlementIntent = challenge.settlement?.intentPending ||
+    challenge.settlement?.intentStatus === "pending" ||
+    challenge.settlement?.status === "proposed"
     ? challenge.settlement
     : null;
-  const settlementIntentFromViewer = Boolean(settlementIntent?.proposedByViewer);
+  const settlementIntentFromViewer = Boolean(
+    settlementIntent?.intentSentByViewer ||
+      settlementIntent?.awaitingSettlementResponse ||
+      settlementIntent?.proposedByViewer
+  );
   const viewerHasSettlementAuthority = hasClientSettlementAuthority(
     viewer.interviewTranscript || []
   );
@@ -576,6 +596,8 @@ export default function ChallengeWorkspace({ initialChallenge }) {
         exitStaysInWorkspace: true,
         realtimeRefresh: true,
         realtimeRefreshPath: `/challenges/${challengeRef}`,
+        realtimeVersionPath: `/challenges/${challengeRef}/version`,
+        realtimeVersionIntervalMs: 1200,
         realtimeRefreshIntervalMs: 4000,
         courtroomSubmitOnly: true,
         requirePlaintiffOpening: true,

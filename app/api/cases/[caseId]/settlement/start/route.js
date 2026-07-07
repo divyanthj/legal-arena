@@ -93,6 +93,7 @@ export async function POST(req, { params }) {
       message,
       userId: session.user.id,
       initial: true,
+      terms: body?.terms || {},
     });
 
     caseSession.settlement = result.settlement;

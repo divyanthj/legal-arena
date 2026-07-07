@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/libs/next-auth";
-import { previewChallengeSettlementDraft } from "@/libs/game/challenges";
+import { getChallengeRealtimeVersionForUser } from "@/libs/game/challenges";
 
-export async function POST(req, { params }) {
+export async function GET(req, { params }) {
   const session = await getServerSession(authOptions);
 
   if (!session?.user?.id) {
@@ -11,23 +11,22 @@ export async function POST(req, { params }) {
   }
 
   try {
-    const body = await req.json();
-    const result = await previewChallengeSettlementDraft({
+    const version = await getChallengeRealtimeVersionForUser({
       userId: session.user.id,
       challengeId: params.challengeId,
-      terms: body?.terms || {},
-      message: body?.message || "",
-      clientInstruction: body?.clientInstruction || "",
     });
 
-    if (!result) {
+    if (!version) {
       return NextResponse.json(
-        { error: "Challenge not found for your account." },
+        {
+          error:
+            "Challenge not found for your account. It may have expired, been declined, or belong to another player.",
+        },
         { status: 404 }
       );
     }
 
-    return NextResponse.json({ preview: result.preview });
+    return NextResponse.json({ version });
   } catch (error) {
     console.error(error);
     return NextResponse.json({ error: error.message }, { status: 500 });

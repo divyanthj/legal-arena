@@ -105,6 +105,15 @@ const settlementEntrySchema = mongoose.Schema(
       type: String,
       required: true,
     },
+    terms: {
+      type: [
+        {
+          label: { type: String, default: "" },
+          value: { type: String, default: "" },
+        },
+      ],
+      default: [],
+    },
     moodSnapshot: {
       player: {
         type: Number,
@@ -151,6 +160,81 @@ const settlementSchema = mongoose.Schema(
     finalTerms: {
       type: [String],
       default: [],
+    },
+    intentPending: {
+      type: Boolean,
+      default: false,
+    },
+    intentStatus: {
+      type: String,
+      enum: ["none", "pending", "accepted", "rejected"],
+      default: "none",
+    },
+    intentSenderUserId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    intentSenderSide: {
+      type: String,
+      enum: ["client", "opponent", ""],
+      default: "",
+    },
+    intentReceiverUserId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    intentReceiverSide: {
+      type: String,
+      enum: ["client", "opponent", ""],
+      default: "",
+    },
+    intentMessage: {
+      type: String,
+      default: "",
+    },
+    intentSentAt: {
+      type: Date,
+      default: null,
+    },
+    intentResponse: {
+      type: String,
+      enum: ["", "accepted", "rejected"],
+      default: "",
+    },
+    intentRespondedAt: {
+      type: Date,
+      default: null,
+    },
+    latestNegotiationMessageUserId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    latestNegotiationMessageSide: {
+      type: String,
+      enum: ["client", "opponent", ""],
+      default: "",
+    },
+    awaitingNegotiationResponseUserId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    negotiationTurnUserId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    negotiationTurnSide: {
+      type: String,
+      enum: ["client", "opponent", ""],
+      default: "",
+    },
+    latestNegotiationMessageAt: {
+      type: Date,
+      default: null,
     },
     outcomeSummary: {
       type: String,

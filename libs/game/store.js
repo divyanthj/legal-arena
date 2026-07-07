@@ -118,6 +118,60 @@ const factSheetHasVisibleContent = (factSheet = {}) =>
     "missingEvidence",
     "openQuestions",
   ].some((field) => Array.isArray(factSheet?.[field]) && factSheet[field].length > 0);
+
+const coerceSettlementTermRows = (terms = []) => {
+  const rowTerms = (Array.isArray(terms) ? terms : [])
+    .map((term) => ({
+      label: String(term?.label || term?.[0] || "").trim(),
+      value: String(term?.value || term?.[1] || "").trim(),
+    }))
+    .filter((term) => term.label && term.value);
+
+  if (rowTerms.length) {
+    return rowTerms.slice(0, 8);
+  }
+
+  const labels = [
+    "Settlement Amount",
+    "Payment Timeline",
+    "Corrective Work",
+    "Release Terms",
+    "Costs",
+    "Fault",
+  ];
+  const inferLabel = (value = "") => {
+    if (/\$|payment|pay|amount|refund|return|balance/i.test(value)) return "Settlement Amount";
+    if (/day|week|month|deadline|within|timeline|date|prompt/i.test(value)) return "Payment Timeline";
+    if (/punch|credit|repair|corrective|work|perform|complete/i.test(value)) return "Corrective Work";
+    if (/future|relationship|release|waive|claim|dismiss/i.test(value)) return "Release Terms";
+    if (/cost|fee|fees|interest/i.test(value)) return "Costs";
+    if (/fault|admission|liability/i.test(value)) return "Fault";
+    return "Settlement Amount";
+  };
+  const byLabel = new Map();
+
+  for (const term of Array.isArray(terms) ? terms : []) {
+    const text = String(term || "").replace(/\s+/g, " ").trim();
+    if (!text) continue;
+
+    const [rawLabel, ...rawValueParts] = text.split(":");
+    const parsedLabel =
+      rawValueParts.length && labels.includes(rawLabel.trim())
+        ? rawLabel.trim()
+        : inferLabel(text);
+    const value =
+      rawValueParts.length && labels.includes(rawLabel.trim())
+        ? rawValueParts.join(":").trim()
+        : text;
+
+    if (!byLabel.has(parsedLabel) && value) {
+      byLabel.set(parsedLabel, value);
+    }
+  }
+
+  return Array.from(byLabel.entries()).map(([label, value]) => ({ label, value }));
+};
+
 const DEFAULT_PLAYER_SIDE = "client";
 const OPPOSING_SIDE = {
   client: "opponent",
@@ -792,9 +846,29 @@ export const buildCasePayload = (caseSession, templateOverride = null) => {
     opponentPartyName,
   });
   const clientMemoryExcerpt = String(plainCase.clientMemoryExcerpt || "").trim();
+  const settlement = plainCase.settlement || {};
+  const settlementTranscript = Array.isArray(settlement.transcript)
+    ? settlement.transcript
+    : [];
+  const latestOpponentTerms =
+    [...settlementTranscript]
+      .reverse()
+      .find((entry) => entry?.role === "opponent" && entry?.terms?.length)
+      ?.terms || coerceSettlementTermRows(settlement.currentTerms || []);
+  const latestViewerTerms =
+    [...settlementTranscript]
+      .reverse()
+      .find((entry) => entry?.role === "player" && entry?.terms?.length)
+      ?.terms || [];
 
   return {
     ...plainCase,
+    settlement: {
+      ...settlement,
+      transcript: settlementTranscript,
+      latestOpponentTerms,
+      latestViewerTerms,
+    },
     usage: stripUsageEntries(plainCase.usage),
     factSheet,
     slug:

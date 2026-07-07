@@ -24,11 +24,27 @@ const getPortraitTarget = (request) => {
   return url.searchParams.get("target") === "opponent" ? "opponent" : "client";
 };
 
+const getPortraitParticipantId = (request) => {
+  const url = new URL(request.url);
+  return String(url.searchParams.get("participantId") || "").trim();
+};
+
 const getParticipantForTarget = (challenge, userId, target) => {
   const participants = challenge.participants || [];
   return target === "opponent"
     ? participants.find((participant) => toId(participant.userId) !== toId(userId))
     : participants.find((participant) => toId(participant.userId) === toId(userId));
+};
+
+const getParticipantForRequest = (challenge, userId, request, target) => {
+  const participantId = getPortraitParticipantId(request);
+  const participants = challenge.participants || [];
+
+  if (participantId) {
+    return participants.find((participant) => toId(participant.userId) === participantId);
+  }
+
+  return getParticipantForTarget(challenge, userId, target);
 };
 
 const getPartyName = (challenge, participant) =>
@@ -41,12 +57,10 @@ const getChallengeId = (challenge) => toId(challenge._id || challenge.id);
 const getPortraitBlobPath = (challenge, participant) =>
   `challenge-party-portraits/${getChallengeId(challenge)}-${toId(participant.userId)}.webp`;
 
-const getPortraitImageUrl = (challenge, target) => {
+const getPortraitImageUrl = (challenge, participant) => {
   const baseUrl = `/api/challenges/${challenge.slug || getChallengeId(challenge)}/client-portrait`;
   const version = Date.now();
-  return target === "opponent"
-    ? `${baseUrl}?target=opponent&v=${version}`
-    : `${baseUrl}?v=${version}`;
+  return `${baseUrl}?participantId=${toId(participant.userId)}&v=${version}`;
 };
 
 const buildPortraitPrompt = (challenge, participant, target) => {
@@ -121,7 +135,7 @@ const resizePortrait = async (imageBuffer) =>
     .webp({ quality: 82 })
     .toBuffer();
 
-const storePortrait = async ({ buffer, challenge, participant, target }) => {
+const storePortrait = async ({ buffer, challenge, participant }) => {
   if (!process.env.BLOB_READ_WRITE_TOKEN) {
     return `data:image/webp;base64,${buffer.toString("base64")}`;
   }
@@ -133,7 +147,7 @@ const storePortrait = async ({ buffer, challenge, participant, target }) => {
     allowOverwrite: true,
   });
 
-  return getPortraitImageUrl(challenge, target);
+  return getPortraitImageUrl(challenge, participant);
 };
 
 export async function GET(request, { params }) {
@@ -154,7 +168,7 @@ export async function GET(request, { params }) {
       challengeId: params.challengeId,
     });
     const participant = challenge
-      ? getParticipantForTarget(challenge, session.user.id, target)
+      ? getParticipantForRequest(challenge, session.user.id, request, target)
       : null;
 
     if (!challenge || !participant) {
@@ -198,7 +212,7 @@ export async function POST(request, { params }) {
       challengeId: params.challengeId,
     });
     const participant = challenge
-      ? getParticipantForTarget(challenge, session.user.id, target)
+      ? getParticipantForRequest(challenge, session.user.id, request, target)
       : null;
 
     if (!challenge || !participant) {
@@ -224,7 +238,6 @@ export async function POST(request, { params }) {
       buffer: resizedPortrait,
       challenge,
       participant,
-      target,
     });
 
     participant.clientPortrait = {
@@ -253,4 +266,3 @@ export async function POST(request, { params }) {
     );
   }
 }
-

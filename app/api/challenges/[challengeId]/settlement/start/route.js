@@ -25,6 +25,9 @@ export async function POST(req, { params }) {
       userId: session.user.id,
       challengeId: params.challengeId,
       message,
+      terms: body?.terms || {},
+      clientPreviewTone: body?.clientPreviewTone || "",
+      clientPreviewScore: body?.clientPreviewScore || 0,
     });
 
     if (!challenge) {

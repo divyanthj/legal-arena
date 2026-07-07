@@ -56,7 +56,10 @@ assert.match(dashboardHubSource, /\{entry\.completedCases\} matches \| \{entry\.
 assert.match(dashboardHubSource, /const pvpDocketTabs = \[/);
 assert.match(dashboardHubSource, /value: "needs-response"/);
 assert.match(dashboardHubSource, /value: "active-intake"/);
+assert.match(dashboardHubSource, /value: "settlement"/);
 assert.match(dashboardHubSource, /const getPvpDocketTab = /);
+assert.match(dashboardHubSource, /const getPvpDisplayStatus = /);
+assert.match(dashboardHubSource, /\["proposed", "active"\]\.includes\(challenge\.settlement\?\.status\)/);
 assert.match(dashboardHubSource, /const getPvpActionLabel = /);
 assert.match(dashboardHubSource, /My PVP Docket/);
 assert.match(dashboardHubSource, /Open PVP Docket/);
@@ -150,14 +153,18 @@ assert.match(challengeWorkspaceSource, /viewer\.verdict === "loss" && opponentWe
 assert.match(challengeWorkspaceSource, /viewer\.verdict === "win" && opponentStrengths\.length/);
 assert.match(
   challengeWorkspaceSource,
-  /challenge\.status === "courtroom" && viewerReady/
+  /displayStatus === "courtroom" && viewerReady/
 );
 assert.match(
   challengeWorkspaceSource,
-  /\["active", "courtroom"\]\.includes\(challenge\.status\)\s*\?\s*"interview"/
+  /\["active", "courtroom"\]\.includes\(displayStatus\)\s*\?\s*"interview"/
 );
+assert.match(challengeWorkspaceSource, /const getChallengeDisplayStatus = /);
+assert.doesNotMatch(challengeWorkspaceSource, /\["proposed", "active"\]\.includes\(challenge\.settlement\?\.status\)/);
 assert.match(challengeWorkspaceSource, /realtimeRefresh:\s*true/);
 assert.match(challengeWorkspaceSource, /realtimeRefreshPath:\s*`\/challenges\/\$\{challengeRef\}`/);
+assert.match(challengeWorkspaceSource, /realtimeVersionPath:\s*`\/challenges\/\$\{challengeRef\}\/version`/);
+assert.match(challengeWorkspaceSource, /realtimeVersionIntervalMs:\s*1200/);
 assert.match(challengeWorkspaceSource, /courtroomSubmitOnly:\s*true/);
 assert.match(challengeWorkspaceSource, /requirePlaintiffOpening:\s*true/);
 assert.match(challengeWorkspaceSource, /turnBasedCourtroom:\s*true/);
@@ -166,6 +173,9 @@ assert.match(challengeWorkspaceSource, /playerCounselName:\s*viewer\.name/);
 assert.match(challengeWorkspaceSource, /opponentCounselName:\s*opponent\.name/);
 assert.match(caseWorkspaceSource, /apiClient\.get\(realtimeRefreshPath\)/);
 assert.match(caseWorkspaceSource, /window\.setInterval\(refreshCase, realtimeRefreshIntervalMs\)/);
+assert.match(caseWorkspaceSource, /apiClient\.get\(realtimeVersionPath\)/);
+assert.match(caseWorkspaceSource, /buildRealtimeVersionKey/);
+assert.match(caseWorkspaceSource, /nextVersionKey !== realtimeVersionKeyRef\.current[\s\S]*apiClient\.get\(realtimeRefreshPath\)/);
 assert.match(caseWorkspaceSource, /Opponent Argument/);
 assert.match(caseWorkspaceSource, /const waitingForPlaintiffOpening = Boolean/);
 assert.match(caseWorkspaceSource, /const waitingForOpponentResponse = Boolean/);

@@ -3,13 +3,20 @@
 import { useEffect, useRef, useState } from "react";
 import apiClient from "@/libs/api";
 
-export const useCaseVoiceRecorder = ({ setQuestion, setArgument }) => {
+export const useCaseVoiceRecorder = ({
+  setQuestion,
+  setArgument,
+  setSettlementClientInstruction,
+}) => {
   const [recordingQuestion, setRecordingQuestion] = useState(false);
   const [transcribingQuestion, setTranscribingQuestion] = useState(false);
   const [questionAudioLevel, setQuestionAudioLevel] = useState(0);
   const [recordingArgument, setRecordingArgument] = useState(false);
   const [transcribingArgument, setTranscribingArgument] = useState(false);
   const [argumentAudioLevel, setArgumentAudioLevel] = useState(0);
+  const [recordingSettlementClientInstruction, setRecordingSettlementClientInstruction] = useState(false);
+  const [transcribingSettlementClientInstruction, setTranscribingSettlementClientInstruction] = useState(false);
+  const [settlementClientInstructionAudioLevel, setSettlementClientInstructionAudioLevel] = useState(0);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const streamRef = useRef(null);
@@ -195,6 +202,15 @@ export const useCaseVoiceRecorder = ({ setQuestion, setArgument }) => {
       setAudioLevel: setArgumentAudioLevel,
     });
 
+  const handleSettlementClientInstructionVoiceInput = () =>
+    handleVoiceInput({
+      recording: recordingSettlementClientInstruction,
+      setRecording: setRecordingSettlementClientInstruction,
+      setTranscribing: setTranscribingSettlementClientInstruction,
+      setText: setSettlementClientInstruction,
+      setAudioLevel: setSettlementClientInstructionAudioLevel,
+    });
+
   return {
     recordingQuestion,
     transcribingQuestion,
@@ -202,7 +218,11 @@ export const useCaseVoiceRecorder = ({ setQuestion, setArgument }) => {
     recordingArgument,
     transcribingArgument,
     argumentAudioLevel,
+    recordingSettlementClientInstruction,
+    transcribingSettlementClientInstruction,
+    settlementClientInstructionAudioLevel,
     handleQuestionVoiceInput,
     handleArgumentVoiceInput,
+    handleSettlementClientInstructionVoiceInput,
   };
 };
