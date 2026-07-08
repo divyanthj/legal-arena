@@ -4,7 +4,7 @@ import { getSEOTags } from "@/libs/seo";
 export const metadata = getSEOTags({
   title: "Legal Arena FAQ | AI Lawyer Game",
   description:
-    "Answers to common questions about Legal Arena, the first-of-its-kind AI lawyer game where players interview AI clients, challenge other players, and argue before an AI judge.",
+    "Answers to common questions about Legal Arena, the AI lawyer game where players interview AI clients, negotiate settlements, challenge other players, and argue before an AI judge.",
   keywords: [
     "Legal Arena FAQ",
     "lawyer game FAQ",
@@ -23,7 +23,23 @@ const faqSchema = {
       name: "What makes Legal Arena different from a normal legal quiz?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Legal Arena is built around open-ended play. You interview AI clients in your own words, build a case file, argue before an AI judge, and win through better questions and clearer reasoning.",
+        text: "Legal Arena is built around open-ended legal strategy. You interview AI clients in your own words, shape a fact sheet, negotiate when settlement makes sense, argue before an AI judge, and win through better questions and clearer reasoning.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "What happens during a case?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "You interview your AI client, turn useful answers into a working fact sheet, may test settlement, finalize the file, and argue in court against pushback from the other side.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "Can I settle a case instead of going to court?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Yes. Some matters let you make settlement offers before court, read the other side's leverage, revise your position, and decide whether a deal is better than risking a verdict.",
       },
     },
     {
@@ -31,7 +47,7 @@ const faqSchema = {
       name: "Can I play against another player?",
       acceptedAnswer: {
         "@type": "Answer",
-        text: "Yes. You can challenge another player to a PVP case. Each side independently interviews their own AI client, then both players argue in court before an AI judge.",
+        text: "Yes. Legal Arena includes asynchronous PVP challenges. Each side privately interviews their own AI client, then both players argue through timed courtroom rounds before an AI judge evaluates the match.",
       },
     },
     {
@@ -40,6 +56,38 @@ const faqSchema = {
       acceptedAnswer: {
         "@type": "Answer",
         text: "No. Legal Arena is built for people interested in law, courtroom drama, legal shows, debate, and strategic argument.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "Are the cases fixed or always the same?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Legal Arena is moving toward a larger stream of fresh legal matters that can vary by client, facts, stakes, side assignment, and courtroom pressure while keeping each started session stable enough to argue from.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "Can I use voice input?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Yes. Supported intake flows include microphone input with a waveform indicator, and players can still type questions whenever they prefer.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "How do progression and leaderboards work?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Legal Arena tracks wins, losses, draws, settlements, ratings, XP, specialty boards, and category progress across solo cases and PVP challenges.",
+      },
+    },
+    {
+      "@type": "Question",
+      name: "What feedback do I get after a ruling?",
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: "Verdicts explain who prevailed, what helped your argument, what hurt your side, and how your courtroom strategy performed.",
       },
     },
     {
@@ -84,7 +132,7 @@ export default function FAQPage() {
       <FAQ
         eyebrow="Support"
         title="Frequently Asked Questions"
-        intro="If you are wondering how AI client interviews, case access, court arguments, or replays work, the answers are here."
+        intro="If you are wondering how AI client interviews, settlements, PVP challenges, progression, access, or courtroom arguments work, the answers are here."
       />
     </main>
   );

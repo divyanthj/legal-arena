@@ -39,7 +39,7 @@ const config = {
         price: 99,
         priceAnchor: 149,
         features: [
-          { name: "Expanded case library access" },
+          { name: "Infinite legal matter access" },
           { name: "Expanded courtroom game modes" },
           { name: "Progression and leaderboard tracking" },
           { name: "Future Legal Arena updates" },

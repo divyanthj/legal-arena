@@ -1615,7 +1615,7 @@ export default function DashboardHub({
   const desktopFeatureBody = canContinueDesktopHeroCase
     ? `${desktopHeroCaseProgress.nextStep}. ${desktopHeroCase.primaryCategory || "Your case"} is ready.`
     : shouldSellLifetimeAccess
-    ? "Get permanent access to the case library, player challenges, and future updates."
+    ? "Get permanent access to infinite legal matters, player challenges, and future updates."
     : desktopFeaturedTemplate?.overview ||
       "Choose a dispute, interview your client, and prepare for court.";
   const desktopPlaintiffName =

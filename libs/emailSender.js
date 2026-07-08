@@ -1,4 +1,3 @@
-import mongoose from "mongoose";
 import connectMongo from "@/libs/mongoose";
 import { sendEmail, sendBatchEmails } from "@/libs/resend";
 import { emailTemplate } from "@/libs/emailTemplate";
@@ -23,16 +22,22 @@ const escapeHtml = (value = "") =>
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 
-async function getRecipientsForAudience({ audience = "all_users", userId = "" } = {}) {
+async function getRecipientsForAudience({ audience = "all_users", email = "" } = {}) {
   if (audience === "single_user") {
-    if (!mongoose.Types.ObjectId.isValid(userId)) {
-      throw new Error("Invalid user ID format.");
+    const normalizedEmail = String(email || "").trim().toLowerCase();
+
+    if (!normalizedEmail) {
+      throw new Error("Email address is required for single-user sends.");
     }
 
-    const user = await User.findById(userId).select("email name");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      throw new Error("Enter a valid email address.");
+    }
+
+    const user = await User.findOne({ email: normalizedEmail }).select("email name");
 
     if (!user?.email) {
-      throw new Error("User not found or email is missing.");
+      throw new Error("No stored user account was found for that email.");
     }
 
     return [{ email: user.email, name: user.name || "" }];
@@ -79,7 +84,7 @@ async function getRecipientsForAudience({ audience = "all_users", userId = "" } 
 
 export async function sendBroadcastEmail({
   audience = "all_users",
-  userId = "",
+  email = "",
   subject,
   content,
   type = "announcement",
@@ -87,7 +92,7 @@ export async function sendBroadcastEmail({
 }) {
   await connectMongo();
 
-  const recipients = await getRecipientsForAudience({ audience, userId });
+  const recipients = await getRecipientsForAudience({ audience, email });
   const signature = getDigestSignature(type);
 
   const emailsToSend = recipients.map((recipient) => {
@@ -122,14 +127,15 @@ export async function sendBroadcastEmail({
 }
 
 export async function sendCustomEmail({
-  userId,
+  audience = "",
+  email,
   subject,
   content,
   type = "announcement",
 }) {
   return sendBroadcastEmail({
-    audience: userId ? "single_user" : "all_users",
-    userId,
+    audience: audience || (email ? "single_user" : "all_users"),
+    email,
     subject,
     content,
     type,

@@ -9,7 +9,7 @@ export default function EarlyAccessCheckoutButton({
   variantId,
   label = "Get early access for $15.99",
   source = "early_access_button",
-  className = "btn btn-primary btn-block min-h-14 text-base font-black uppercase tracking-[0.08em]",
+  className = "btn btn-block min-h-16 rounded-xl border-0 bg-[#fee88a] px-6 text-base font-bold normal-case tracking-normal text-black shadow-[0_18px_42px_rgba(245,158,11,0.16)] transition hover:scale-[1.01] hover:bg-[#fff0a6] hover:shadow-[0_20px_48px_rgba(245,158,11,0.2)] disabled:scale-100 disabled:bg-[#fee88a]/70 md:text-lg",
   onIntent = null,
   showArrow = false,
 }) {

@@ -98,8 +98,8 @@ export function DevelopmentAccessPanel({
         </h1>
         <p className="mt-4 max-w-xl text-base leading-8 text-white/66">
           Play the full early-access build: AI client interviews, case prep,
-          courtroom arguments, PVP challenges, verdicts, XP, and the growing
-          case library.
+          courtroom arguments, PVP challenges, verdicts, XP, and infinite legal
+          matters.
         </p>
       </div>
 
@@ -118,7 +118,8 @@ export function DevelopmentAccessPanel({
 
       <p className="mt-4 text-sm leading-7 text-white/62">
         Early-access lifetime access is {currentPrice}. Pay once and keep every
-        future Legal Arena update while the case library grows.
+        future Legal Arena update as the game expands with new features, polish,
+        and progression.
       </p>
 
       <ul className="mt-8 space-y-3 text-sm leading-7 text-white/72">
@@ -134,7 +135,7 @@ export function DevelopmentAccessPanel({
 
       <div className="arena-surface-soft mt-6 rounded-2xl p-4 text-sm leading-7 text-white/62">
         Your purchase includes the current experience plus every future update
-        while we keep expanding cases, polish, and progression.
+        while we keep expanding gameplay, polish, and progression.
       </div>
 
       {showAccountActions && email ? (
@@ -173,11 +174,6 @@ export function DevelopmentAccessPanel({
           source={isModal ? "paywall_modal_primary_cta" : "early_access_gate_primary_cta"}
           onIntent={handleCheckoutIntent}
           showArrow={isModal}
-          className={
-            isModal
-              ? "btn btn-block min-h-16 rounded-xl border-0 bg-[#fee88a] px-6 text-base font-bold normal-case tracking-normal text-black shadow-[0_18px_42px_rgba(245,158,11,0.16)] transition hover:scale-[1.01] hover:bg-[#fff0a6] hover:shadow-[0_20px_48px_rgba(245,158,11,0.2)] disabled:scale-100 disabled:bg-[#fee88a]/70 md:text-lg"
-              : undefined
-          }
         />
       </div>
 

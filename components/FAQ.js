@@ -9,13 +9,15 @@ export const faqList = [
     answer: (
       <div className="space-y-2 leading-relaxed">
         <p>
-          Legal Arena is built around open-ended play. You interview AI clients
-          in your own words, decide which facts matter, build a case file, and
-          argue before an AI judge.
+          Legal Arena is built around open-ended legal strategy. You interview
+          AI clients in your own words, decide which facts matter, shape a fact
+          sheet, negotiate when settlement makes sense, and argue before an AI
+          judge.
         </p>
         <p>
           There is no multiple-choice answer key. Better questions, cleaner
-          reasoning, and sharper courtroom strategy give you the edge.
+          reasoning, sharper settlement choices, and stronger courtroom strategy
+          give you the edge.
         </p>
       </div>
     ),
@@ -41,12 +43,30 @@ export const faqList = [
     answer: (
       <div className="space-y-2 leading-relaxed">
         <p>
-          You start by interviewing your AI client. You decide what to ask, turn
-          the answers into a case file, then argue the case in court.
+          You start by interviewing your AI client and turning the useful answers
+          into a working fact sheet. The file tracks the theory, timeline,
+          supporting facts, risks, proof gaps, and the result you want.
         </p>
         <p>
-          The other side pushes back, and the judge decides whether your facts
-          and argument were strong enough.
+          From there, you may test settlement, finalize the file, and argue in
+          court. The other side pushes back, and the judge decides whether your
+          facts and argument were strong enough.
+        </p>
+      </div>
+    ),
+  },
+  {
+    question: "Can I settle a case instead of going to court?",
+    answer: (
+      <div className="space-y-2 leading-relaxed">
+        <p>
+          Yes. Some matters let you make settlement offers before the courtroom
+          stage. You can read the other side&apos;s leverage, revise your position,
+          and decide whether a deal is better than taking the risk of a verdict.
+        </p>
+        <p>
+          Settlement is part of the strategy. A clean deal can be the smarter win
+          when your facts, proof, or downside risk point that way.
         </p>
       </div>
     ),
@@ -56,12 +76,13 @@ export const faqList = [
     answer: (
       <div className="space-y-2 leading-relaxed">
         <p>
-          Yes. Legal Arena includes PVP case challenges. You challenge another
-          player, each side independently interviews their own AI client, and
-          then both players fight it out in court.
+          Yes. Legal Arena includes asynchronous PVP case challenges. You
+          challenge another player, each side privately interviews their own AI
+          client, and then both players meet in court through timed rounds.
         </p>
         <p>
-          An AI judge evaluates the arguments and gives the ruling.
+          You do not both need to be online at the same time. Once each round is
+          ready, the arguments are revealed and an AI judge evaluates the match.
         </p>
       </div>
     ),
@@ -82,18 +103,66 @@ export const faqList = [
     ),
   },
   {
-    question: "Are the cases fixed or generated on the fly?",
+    question: "Are the cases fixed or always the same?",
     answer: (
       <div className="space-y-2 leading-relaxed">
         <p>
-          Current cases come from a managed case library. Each case includes
-          structured facts, evidence references, and competing claims for both
-          sides.
+          Legal Arena is moving toward a larger stream of fresh legal matters.
+          Cases can vary by client, facts, stakes, party assignment, and
+          courtroom pressure, so the experience does not feel like replaying a
+          single canned puzzle.
         </p>
         <p>
-          That structure lets the interview and courtroom stages feel open-ended
-          without collapsing into random chat. In the future, we may also include
-          dynamically generated cases alongside the curated library.
+          Once a session starts, the matter is stored as stable state. That means
+          the client interview can feel flexible while the case facts remain
+          consistent enough to argue from.
+        </p>
+      </div>
+    ),
+  },
+  {
+    question: "Can I use voice input?",
+    answer: (
+      <div className="space-y-2 leading-relaxed">
+        <p>
+          Yes. Supported intake flows include microphone input, with a waveform
+          indicator so you can tell when your voice is being captured.
+        </p>
+        <p>
+          You can still type your questions whenever you prefer. Voice input is
+          there to make client interviews feel faster and more natural.
+        </p>
+      </div>
+    ),
+  },
+  {
+    question: "How do progression and leaderboards work?",
+    answer: (
+      <div className="space-y-2 leading-relaxed">
+        <p>
+          Legal Arena tracks your record across wins, losses, draws,
+          settlements, ratings, XP, specialty boards, and category progress.
+        </p>
+        <p>
+          Solo cases and PVP challenges tell different parts of your lawyer
+          profile, so you can improve against AI opponents and test yourself
+          against other players.
+        </p>
+      </div>
+    ),
+  },
+  {
+    question: "What feedback do I get after a ruling?",
+    answer: (
+      <div className="space-y-2 leading-relaxed">
+        <p>
+          Verdicts explain who prevailed, what helped your argument, what hurt
+          your side, and how your courtroom strategy performed.
+        </p>
+        <p>
+          Use that feedback as a study tool. It can show whether you relied on
+          useful facts, answered the opposing argument, handled risks, and tied
+          your theory to the rules in play.
         </p>
       </div>
     ),
@@ -124,7 +193,7 @@ export const faqList = [
         </p>
         <p>
           The important part: buying lifetime access now means you keep permanent
-          access through future updates and product changes.
+          access through future updates and product changes as the game evolves.
         </p>
       </div>
     ),

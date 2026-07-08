@@ -4,10 +4,10 @@ export default function Section3({ id }) {
   return (
     <section id={id} className="arena-surface scroll-mt-28">
       <div className="p-6 md:p-8">
-      <p className="arena-kicker">03</p>
+      <p className="arena-kicker">04</p>
       <h2 className="arena-headline mt-2 text-3xl">{`Courtroom Playbook`}</h2>
       <p className="mt-4 text-base leading-8 text-white/72">
-        {`After the fact sheet is finalized, Legal Arena shifts from investigation to advocacy. The courtroom stage is a freeform exchange where you submit arguments in rounds, respond to the opponent, and try to move the hidden bench in your favor.`}
+        {`After the fact sheet is finalized and settlement is no longer the best path, Legal Arena shifts from investigation to advocacy. The courtroom stage is a freeform exchange where you submit arguments in rounds, respond to the opponent, and try to move the hidden bench in your favor.`}
       </p>
       <ol className="mt-6 space-y-4 pl-6 text-base leading-8 text-white/72">
         <li>

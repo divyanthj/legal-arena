@@ -166,7 +166,7 @@ export default function AdminCaseLab({
   });
   const [emailForm, setEmailForm] = useState({
     audience: "all",
-    userId: "",
+    email: "",
     subject: "",
     content: "",
     type: "announcement",
@@ -622,7 +622,8 @@ export default function AdminCaseLab({
 
     try {
       const payload = {
-        userId: emailForm.audience === "single" ? emailForm.userId.trim() : "",
+        audience: emailForm.audience,
+        email: emailForm.audience === "single" ? emailForm.email.trim() : "",
         subject: emailForm.subject.trim(),
         content: emailForm.content.trim(),
         type: emailForm.type,
@@ -636,7 +637,7 @@ export default function AdminCaseLab({
       );
       setEmailForm({
         audience: "all",
-        userId: "",
+        email: "",
         subject: "",
         content: "",
         type: "announcement",
@@ -1365,20 +1366,22 @@ export default function AdminCaseLab({
                       }
                     >
                       <option value="all">All existing users</option>
-                      <option value="single">One user by ID</option>
+                      <option value="single">One user by email</option>
                     </select>
                   </label>
 
                   {emailForm.audience === "single" ? (
                     <label className="form-control">
-                      <span className="label-text font-semibold text-white">User ID</span>
+                      <span className="label-text font-semibold text-white">User email</span>
                       <input
                         className={arenaInputClass}
-                        value={emailForm.userId}
+                        type="email"
+                        value={emailForm.email}
+                        placeholder="person@example.com"
                         onChange={(event) =>
                           setEmailForm((current) => ({
                             ...current,
-                            userId: event.target.value,
+                            email: event.target.value,
                           }))
                         }
                       />
@@ -1448,7 +1451,7 @@ export default function AdminCaseLab({
                     {[
                       "Use announcements for product updates, new features, and operational notices.",
                       "Use marketing only when the message should feel more promotional in tone.",
-                      "Single-user sends require the MongoDB user id, while all-user sends target every stored account with an email.",
+                      "Single-user sends require a stored account email, while all-user sends target every stored account with an email.",
                     ].map((item) => (
                       <div key={item} className="arena-surface-soft p-4 text-sm leading-7 text-white/66">
                         {item}

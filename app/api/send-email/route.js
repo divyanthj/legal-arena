@@ -23,7 +23,8 @@ export async function POST(req) {
   }
 
   try {
-    const { userId, subject, content, type } = await req.json();
+    const { audience, email, subject, content, type } = await req.json();
+    const targetAudience = audience === "single" ? "single_user" : "all_users";
 
     if (!subject || !content) {
       return NextResponse.json(
@@ -32,7 +33,13 @@ export async function POST(req) {
       );
     }
 
-    const result = await sendCustomEmail({ userId, subject, content, type });
+    const result = await sendCustomEmail({
+      audience: targetAudience,
+      email,
+      subject,
+      content,
+      type,
+    });
     return NextResponse.json(result);
   } catch (error) {
     console.error("Error sending email:", error);
