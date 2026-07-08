@@ -15,7 +15,7 @@ export const maxDuration = 60;
 
 const OPENAI_IMAGE_GENERATION_URL = "https://api.openai.com/v1/images/generations";
 const IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL?.trim() || "gpt-image-1.5";
-const PORTRAIT_PROMPT_VERSION = 5;
+const PORTRAIT_PROMPT_VERSION = 6;
 const PORTRAIT_WIDTH = 640;
 const PORTRAIT_HEIGHT = 720;
 
@@ -27,6 +27,7 @@ const masculineGivenNameCues = new Set([
   "caleb",
   "chris",
   "daniel",
+  "darren",
   "david",
   "elliot",
   "elliott",
@@ -132,14 +133,20 @@ const getGivenNameCue = (name) =>
     .replace(/[^a-z-]/g, "");
 
 const buildGenderPresentationGuidance = ({ caseSession, subjectName, isOrganization }) => {
+  const targetSide =
+    subjectName === caseSession.premise?.opponentName ||
+    subjectName === caseSession.opponentPartyName
+      ? "defendant"
+      : "plaintiff";
   const cueText = [
     caseSession.premise?.overview,
     caseSession.premise?.openingStatement,
     caseSession.premise?.desiredRelief,
     caseSession.clientMemoryExcerpt,
     ...(caseSession.interviewTranscript || []).map((entry) => entry.text),
-    stringifyCueSource(caseSession.canonicalStory),
-    stringifyCueSource(caseSession.templateSnapshot),
+    stringifyCueSource(caseSession.canonicalStory?.partyMentalStates?.[targetSide]),
+    stringifyCueSource(caseSession.templateSnapshot?.partyProfiles?.[targetSide]),
+    stringifyCueSource(caseSession.templateSnapshot?.interviewBlueprint?.[targetSide]),
   ]
     .filter(Boolean)
     .join(" ")

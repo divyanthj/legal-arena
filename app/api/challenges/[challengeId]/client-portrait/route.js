@@ -10,7 +10,7 @@ export const maxDuration = 60;
 
 const OPENAI_IMAGE_GENERATION_URL = "https://api.openai.com/v1/images/generations";
 const IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL?.trim() || "gpt-image-1.5";
-const PORTRAIT_PROMPT_VERSION = 4;
+const PORTRAIT_PROMPT_VERSION = 5;
 const PORTRAIT_WIDTH = 640;
 const PORTRAIT_HEIGHT = 720;
 
@@ -22,6 +22,7 @@ const masculineGivenNameCues = new Set([
   "caleb",
   "chris",
   "daniel",
+  "darren",
   "david",
   "elliot",
   "elliott",
@@ -123,9 +124,9 @@ const buildGenderPresentationGuidance = ({ challenge, participant, subjectName, 
     challenge.premise?.openingStatement,
     challenge.premise?.desiredRelief,
     participant?.clientMemoryExcerpt,
-    stringifyCueSource(challenge.canonicalStory),
-    stringifyCueSource(challenge.templateSnapshot),
+    stringifyCueSource(challenge.canonicalStory?.partyMentalStates?.[sideKey]),
     stringifyCueSource(challenge.templateSnapshot?.partyProfiles?.[sideKey]),
+    stringifyCueSource(challenge.templateSnapshot?.interviewBlueprint?.[sideKey]),
   ]
     .filter(Boolean)
     .join(" ")

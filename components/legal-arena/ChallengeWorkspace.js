@@ -10,6 +10,8 @@ import { trackGoal } from "@/libs/datafast";
 import { hasClientSettlementAuthority } from "@/libs/game/settlementAuthority";
 import CaseWorkspace from "./CaseWorkspace";
 
+const REQUIRED_CHALLENGE_PORTRAIT_PROMPT_VERSION = 5;
+
 const statusLabel = {
   pending: "Awaiting acceptance",
   active: "Intake",
@@ -25,6 +27,10 @@ const statusLabel = {
 };
 
 const getChallengeRef = (challenge) => challenge.slug || challenge.id;
+
+const needsFreshChallengePortrait = (portrait = {}) =>
+  !portrait?.image ||
+  Number(portrait?.promptVersion || 0) < REQUIRED_CHALLENGE_PORTRAIT_PROMPT_VERSION;
 
 const sideRoleLabel = (side) => (side === "opponent" ? "Defendant" : "Plaintiff");
 
@@ -480,11 +486,17 @@ export default function ChallengeWorkspace({ initialChallenge }) {
     }
 
     const requests = [];
-    if (!challenge.viewer?.clientPortrait?.image) {
-      requests.push({ target: "client", key: `${challengeRef}:client` });
+    if (needsFreshChallengePortrait(challenge.viewer?.clientPortrait)) {
+      requests.push({
+        target: "client",
+        key: `${challengeRef}:client:${challenge.viewer?.clientPortrait?.promptVersion || 0}`,
+      });
     }
-    if (!challenge.opponent?.clientPortrait?.image) {
-      requests.push({ target: "opponent", key: `${challengeRef}:opponent` });
+    if (needsFreshChallengePortrait(challenge.opponent?.clientPortrait)) {
+      requests.push({
+        target: "opponent",
+        key: `${challengeRef}:opponent:${challenge.opponent?.clientPortrait?.promptVersion || 0}`,
+      });
     }
 
     let cancelled = false;
@@ -519,8 +531,10 @@ export default function ChallengeWorkspace({ initialChallenge }) {
     };
   }, [
     challenge.opponent?.clientPortrait?.image,
+    challenge.opponent?.clientPortrait?.promptVersion,
     challenge.status,
     challenge.viewer?.clientPortrait?.image,
+    challenge.viewer?.clientPortrait?.promptVersion,
     challengeRef,
   ]);
 

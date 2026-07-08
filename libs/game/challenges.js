@@ -1820,23 +1820,12 @@ const getPvpSettlementRecipientMoodDelta = (message = "") => {
   return -4;
 };
 
-const getPvpSettlementSenderMoodDelta = ({ clientPreviewTone = "", clientPreviewScore = 0 } = {}) => {
-  const tone = String(clientPreviewTone || "").toLowerCase();
-  const score = Number(clientPreviewScore) || 0;
-
-  if (tone === "red" || score < -15) return -14;
-  if (tone === "amber" || score < 15) return -4;
-  return 0;
-};
-
 export const startChallengeSettlement = async ({
   userId,
   challengeId,
   message,
   terms = {},
   acceptTerms = false,
-  clientPreviewTone = "",
-  clientPreviewScore = 0,
 }) => {
   const challenge = await getChallengeDocumentForUser({ userId, challengeId });
   if (!challenge) {
@@ -1998,10 +1987,7 @@ export const startChallengeSettlement = async ({
   moods[recipientMoodKey] = clampMood(
     (moods[recipientMoodKey] || 0) + getPvpSettlementRecipientMoodDelta(message)
   );
-  moods[senderMoodKey] = clampMood(
-    (moods[senderMoodKey] || 0) +
-      getPvpSettlementSenderMoodDelta({ clientPreviewTone, clientPreviewScore })
-  );
+  moods[senderMoodKey] = clampMood(moods[senderMoodKey] || 0);
   const now = new Date();
   const openingNegotiationTurnFields = {
     latestNegotiationMessageUserId: participant.userId,
@@ -2117,8 +2103,6 @@ export const continueChallengeSettlement = async ({
   challengeId,
   message,
   terms = {},
-  clientPreviewTone = "",
-  clientPreviewScore = 0,
 }) => {
   const challenge = await getChallengeDocumentForUser({ userId, challengeId });
   if (!challenge) {
@@ -2204,10 +2188,7 @@ export const continueChallengeSettlement = async ({
   moods[recipientMoodKey] = clampMood(
     (moods[recipientMoodKey] || 0) + getPvpSettlementRecipientMoodDelta(message)
   );
-  moods[senderMoodKey] = clampMood(
-    (moods[senderMoodKey] || 0) +
-      getPvpSettlementSenderMoodDelta({ clientPreviewTone, clientPreviewScore })
-  );
+  moods[senderMoodKey] = clampMood(moods[senderMoodKey] || 0);
   const failedMoodKey =
     moods[senderMoodKey] <= -100
       ? senderMoodKey
@@ -2364,7 +2345,7 @@ export const previewChallengeSettlementDraft = async ({
 
   return previewSettlementDraftForClient({
     caseSession,
-    draftTerms: terms,
+    offerTerms: terms,
     message,
     clientInstruction,
     userId,

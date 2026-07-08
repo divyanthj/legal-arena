@@ -17,6 +17,10 @@ const caseWorkspaceSource = await readFile(
   new URL("../components/legal-arena/CaseWorkspace.js", import.meta.url),
   "utf8"
 );
+const caseVoiceRecorderSource = await readFile(
+  new URL("../components/legal-arena/useCaseVoiceRecorder.js", import.meta.url),
+  "utf8"
+);
 const challengeWorkspaceSource = await readFile(
   new URL("../components/legal-arena/ChallengeWorkspace.js", import.meta.url),
   "utf8"
@@ -47,6 +51,10 @@ const pvpSettlementMessageRouteSource = await readFile(
 );
 const pvpChallengePortraitRouteSource = await readFile(
   new URL("../app/api/challenges/[challengeId]/client-portrait/route.js", import.meta.url),
+  "utf8"
+);
+const soloClientPortraitRouteSource = await readFile(
+  new URL("../app/api/cases/[caseId]/client-portrait/route.js", import.meta.url),
   "utf8"
 );
 const challengeSource = await readFile(
@@ -216,6 +224,36 @@ assert.match(
 );
 assert.match(
   caseWorkspaceSource,
+  /const hasActiveSettlement = Boolean\([\s\S]*caseSession\.settlement\?\.status === "active"[\s\S]*caseSession\.settlement\?\.status === "proposed"[\s\S]*caseSession\.settlement\?\.intentPending === true[\s\S]*caseSession\.settlement\.transcript\.length > 0[\s\S]*const isSettlement = Boolean\([\s\S]*caseSession\.status === "settlement" \|\| hasActiveSettlement[\s\S]*!isSettlementAccepted/,
+  "Workspace should derive settlement mode from active settlement state, not only top-level status."
+);
+assert.match(
+  dashboardHubSource,
+  /const hasActiveSoloSettlement = \(caseSession = \{\}\) => \{[\s\S]*const hasTranscript = Array\.isArray\(settlement\.transcript\) && settlement\.transcript\.length > 0;[\s\S]*\["proposed", "active"\]\.includes\(settlement\.status\)[\s\S]*\["pending", "accepted"\]\.includes\(settlement\.intentStatus\)[\s\S]*hasTranscript[\s\S]*\};/,
+  "Dashboard solo routing should treat active settlement state as the current stage."
+);
+assert.match(
+  dashboardHubSource,
+  /const getSoloDisplayStatus = \(caseSession = \{\}\) => \{[\s\S]*if \(hasActiveSoloSettlement\(caseSession\)\) \{[\s\S]*return "settlement";[\s\S]*return caseSession\.status === "active" \? "interview" : caseSession\.status;/,
+  "Dashboard solo status badges should derive settlement display state before falling back to raw active status."
+);
+assert.match(
+  dashboardHubSource,
+  /const getSoloCaseHref = \(caseSession = \{\}\) => \{[\s\S]*const baseHref = `\/dashboard\/cases\/\$\{caseRef\}`;[\s\S]*hasActiveSoloSettlement\(caseSession\) \|\| hasSettledSoloSettlement\(caseSession\)[\s\S]*\? `\$\{baseHref\}\/settlement`[\s\S]*: baseHref;/,
+  "Dashboard solo case hrefs should route active or settled settlements to the settlement workspace."
+);
+assert.match(
+  dashboardHubSource,
+  /const displayStatus = getSoloDisplayStatus\(caseSession\);[\s\S]*displayStatus === "interview"[\s\S]*displayStatus === "settlement"[\s\S]*displayStatus === "courtroom"/,
+  "Dashboard template resume logic should not skip settlement-stage cases."
+);
+assert.match(
+  dashboardHubSource,
+  /const itemStatus = getSoloDisplayStatus\(item\);[\s\S]*statusLabel\[itemStatus\] \|\| caseProgress\.label/,
+  "Dashboard archive and recent case cards should use settlement-aware solo display labels."
+);
+assert.match(
+  caseWorkspaceSource,
   /\) : isSettlement \|\| isSettled \? \(\s*renderSettlementPanel\(\)\s*\) : isExited/s,
   "Settlement mode should replace the courtroom workspace, not render beneath it."
 );
@@ -291,18 +329,18 @@ assert.match(
 );
 assert.match(
   caseWorkspaceSource,
-  /settlementClientPreview[\s\S]*settlementPreviewApiPath[\s\S]*\/settlement\/preview[\s\S]*fetch\(`\/api\$\{settlementPreviewApiPath\}`/,
-  "Settlement draft edits should request AI private client reaction previews."
+  /handleSettlementClientInstructionSubmit[\s\S]*fetch\(`\/api\$\{settlementPreviewApiPath\}`[\s\S]*handleAskClientAboutLatestOffer[\s\S]*fetch\(`\/api\$\{settlementPreviewApiPath\}`/,
+  "Settlement client preview calls should happen only from explicit private-client huddle actions."
+);
+assert.doesNotMatch(
+  caseWorkspaceSource,
+  /SETTLEMENT_PREVIEW_DEBOUNCE_MS|setSettlementClientPreviewLoading|settlementPreviewPayload/,
+  "Settlement draft edits should not trigger a debounced background AI preview."
 );
 assert.match(
   caseWorkspaceSource,
-  /SETTLEMENT_PREVIEW_DEBOUNCE_MS = 350[\s\S]*setSettlementClientPreviewLoading\(true\)[\s\S]*window\.setTimeout[\s\S]*SETTLEMENT_PREVIEW_DEBOUNCE_MS/,
-  "Settlement client preview should show pending feedback immediately while debouncing model calls."
-);
-assert.match(
-  caseWorkspaceSource,
-  /const draftClientReaction =\s*settlementClientPreviewLoading\s*\?\s*\{[\s\S]*\$\{playerPartyName\} is considering/,
-  "Settlement client huddle should show the client considering while private feedback loads."
+  /const draftClientReaction =\s*settlementClientInstructionWorking\s*\?\s*\{[\s\S]*\$\{playerPartyName\} is considering/,
+  "Settlement client huddle should show the client considering only while an explicit private ask is running."
 );
 assert.doesNotMatch(
   caseWorkspaceSource,
@@ -331,8 +369,23 @@ assert.match(
 );
 assert.match(
   settlementSource,
-  /clientInstruction = ""[\s\S]*draftTerms[\s\S]*privateLawyerMessageToClient/,
-  "Settlement client previews should accept private lawyer instructions and return draft term updates."
+  /clientInstruction = ""[\s\S]*offerTerms[\s\S]*privateLawyerMessageToClient/,
+  "Settlement client previews should accept private lawyer instructions and offer terms."
+);
+assert.doesNotMatch(
+  settlementSource,
+  /draftTerms: \[\{ label: "string", value: "string" \}\]|revise draftTerms|Return draftTerms/,
+  "Settlement client previews should not ask the model to rewrite editable draft terms."
+);
+assert.match(
+  settlementSource,
+  /acceptanceAuthority[\s\S]*accept \| counter \| reject \| unclear[\s\S]*authorityReason/,
+  "Settlement client previews should return explicit accept/counter/reject/unclear authority."
+);
+assert.match(
+  settlementSource,
+  /acceptable settlement range[\s\S]*qualitative band of acceptable value/,
+  "Settlement client previews should express authority as a qualitative acceptable range, not a precise term set."
 );
 assert.match(
   soloSettlementPreviewRouteSource,
@@ -349,10 +402,10 @@ assert.match(
   /Private Client Huddle[\s\S]*\{playerPartyName\} says[\s\S]*Private huddle/,
   "Settlement UI should frame the player side as a private client huddle."
 );
-assert.match(
+assert.doesNotMatch(
   caseWorkspaceSource,
   /preview\.draftTerms[\s\S]*setSettlementDraftState[\s\S]*Object\.fromEntries/,
-  "Settlement huddle should apply returned draft terms."
+  "Settlement huddle should not rewrite editable draft terms from AI preview responses."
 );
 assert.match(
   caseWorkspaceSource,
@@ -381,7 +434,7 @@ assert.match(
 );
 assert.match(
   caseWorkspaceSource,
-  /isSettlementAccepted[\s\S]*caseSession\.settlement\?\.accepted === true[\s\S]*caseSession\.settlement\?\.resolution === "settled"[\s\S]*const isSettlement = caseSession\.status === "settlement" && !isSettlementAccepted[\s\S]*const isSettled = isSettlementAccepted/,
+  /isSettlementAccepted[\s\S]*caseSession\.settlement\?\.accepted === true[\s\S]*caseSession\.settlement\?\.resolution === "settled"[\s\S]*const hasActiveSettlement = Boolean\([\s\S]*!isSettlementAccepted[\s\S]*caseSession\.settlement\?\.status === "active"[\s\S]*const isSettlement = Boolean\([\s\S]*!isSettlementAccepted[\s\S]*const isSettled = isSettlementAccepted/,
   "Settlement workspace should leave negotiation mode when accepted closeout flags are present."
 );
 assert.match(
@@ -391,13 +444,18 @@ assert.match(
 );
 assert.match(
   caseWorkspaceSource,
-  /setSettlementMessageAndFocus\(\(current\) => current\.trim\(\) \|\| settlementDraftMessage\)[\s\S]*Message opposing counsel/,
-  "Opening the opposing-counsel composer should prefill it with the terms discussed with the client."
+  /settlementClientGuidanceParts[\s\S]*settlementClientPreview\?\.authorityReason[\s\S]*settlementClientGuidedMessage[\s\S]*getSettlementComposerDefaultMessage[\s\S]*setSettlementMessageAndFocus\(getSettlementComposerDefaultMessage\)/,
+  "Opening the opposing-counsel composer should prefill it with the client's settlement range or conditions."
 );
 assert.match(
   caseWorkspaceSource,
-  /aria-label="Message opposing counsel"[\s\S]*<textarea[\s\S]*disabled=\{settlementActionsLocked\}[\s\S]*submitSettlementMessage\(\{[\s\S]*messageOverride: settlementMessage\.trim\(\) \|\| settlementDraftMessage[\s\S]*disabled=\{settlementActionsLocked \|\| !getSettlementOutgoingMessage\(\)\.trim\(\)\}/,
-  "The opposing-counsel composer should be locked while waiting for the other player's response."
+  /aria-label="Message opposing counsel"[\s\S]*<textarea[\s\S]*disabled=\{settlementActionsLocked \|\| transcribingSettlementMessage\}[\s\S]*Clear[\s\S]*handleSettlementMessageVoiceInput[\s\S]*messageOverride: settlementMessage\.trim\(\)[\s\S]*!settlementMessage\.trim\(\)/,
+  "The opposing-counsel composer should support clear, voice input, and sending only the visible message."
+);
+assert.match(
+  caseVoiceRecorderSource,
+  /setSettlementMessage[\s\S]*recordingSettlementMessage[\s\S]*transcribingSettlementMessage[\s\S]*settlementMessageAudioLevel[\s\S]*handleSettlementMessageVoiceInput/,
+  "Voice recorder hook should support settlement opposing-counsel messages."
 );
 assert.doesNotMatch(
   caseWorkspaceSource,
@@ -481,8 +539,38 @@ assert.match(
 );
 assert.match(
   caseWorkspaceSource,
-  /bg-emerald-300[\s\S]*Accept terms[\s\S]*pendingAction === "settlement-accept"/,
-  "Settlement UI should expose a green Accept terms button with its own pending state."
+  /settlementAcceptAuthority[\s\S]*latestOpponentOfferSignature[\s\S]*authority === "accept"/,
+  "Settlement acceptance should use the latest opponent offer signature as a stale-authority guard."
+);
+assert.match(
+  caseWorkspaceSource,
+  /hasConcreteLatestOpponentTerms[\s\S]*preview\?\.acceptanceAuthority === "accept"[\s\S]*setSettlementAcceptAuthority/,
+  "Settlement client checks should only grant acceptance authority when the latest offer is inside the client's acceptable range."
+);
+assert.match(
+  caseWorkspaceSource,
+  /setSettlementAcceptAuthority\(\(current\) =>[\s\S]*current\.offerSignature === latestOpponentOfferSignature[\s\S]*authority: "unclear"/,
+  "Settlement acceptance authority should clear when the latest opponent offer changes."
+);
+assert.match(
+  caseWorkspaceSource,
+  /clientAuthorizedLatestOffer \? \([\s\S]*Accept terms[\s\S]*\) : \([\s\S]*Ask client first/,
+  "Settlement action rail should show Ask client first until the latest offer is within client authority."
+);
+assert.match(
+  caseWorkspaceSource,
+  /acceptable range[\s\S]*within authority/,
+  "Settlement action copy should describe client authority as an acceptable range."
+);
+assert.doesNotMatch(
+  caseWorkspaceSource,
+  /exact latest terms|these exact terms|exact terms/,
+  "Settlement acceptance UI should not frame client authority as one precise set of terms."
+);
+assert.doesNotMatch(
+  caseWorkspaceSource,
+  /disabled=\{settlementActionsLocked \|\| !latestOpponentOfferEntry\}/,
+  "Settlement Accept terms should not be enabled merely because an opponent message exists."
 );
 assert.match(
   caseWorkspaceSource,
@@ -496,7 +584,7 @@ assert.match(
 );
 assert.match(
   caseWorkspaceSource,
-  /Do This Next[\s\S]*Message opposing counsel[\s\S]*End negotiations/,
+  /Do This Next[\s\S]*Ask client first[\s\S]*Message opposing counsel[\s\S]*End negotiations/,
   "Settlement action rail should keep the next move focused on the available buttons."
 );
 assert.doesNotMatch(
@@ -504,10 +592,10 @@ assert.doesNotMatch(
   /nextActionChecklist/,
   "Settlement action rail should not reintroduce explanatory checklist clutter."
 );
-assert.match(
+assert.doesNotMatch(
   caseWorkspaceSource,
   /clientReactionNeedsFix[\s\S]*Client dislikes this draft[\s\S]*I need you to tighten this before you send it/,
-  "Settlement blocker copy should be framed as the client speaking when the client dislikes the draft."
+  "Settlement blocker copy should not frame the huddle as a live draft critique."
 );
 assert.doesNotMatch(
   caseWorkspaceSource,
@@ -546,8 +634,8 @@ assert.match(
 );
 assert.match(
   caseWorkspaceSource,
-  /type="button"[\s\S]*submitSettlementMessage\(\{[\s\S]*messageOverride: settlementMessage\.trim\(\) \|\| settlementDraftMessage[\s\S]*Send Counteroffer/,
-  "Settlement message modal should own the actual send action and post the textarea or draft message."
+  /type="button"[\s\S]*submitSettlementMessage\(\{[\s\S]*messageOverride: settlementMessage\.trim\(\)[\s\S]*recordingSettlementMessage[\s\S]*transcribingSettlementMessage[\s\S]*!settlementMessage\.trim\(\)[\s\S]*Send Counteroffer/,
+  "Settlement message modal should own the actual send action and post only the visible textarea message."
 );
 assert.match(
   caseWorkspaceSource,
@@ -909,10 +997,10 @@ assert.match(
   /disabled=\{[\s\S]*clientWalkoutActive[\s\S]*settlementClientInstructionWorking[\s\S]*transcribingSettlementClientInstruction[\s\S]*\}/,
   "Private client huddle controls should be disabled after own-client walkout."
 );
-assert.match(
+assert.doesNotMatch(
   challengeSource,
   /getPvpSettlementSenderMoodDelta[\s\S]*clientPreviewTone[\s\S]*clientPreviewScore/,
-  "PVP settlement sends should let bad private client previews reduce sender client mood."
+  "PVP settlement sends should not use private preview tone or score to change sender mood."
 );
 assert.match(
   challengeSource,
@@ -950,6 +1038,11 @@ assert.match(
   "Challenge workspace wrapper should map terminal failed settlement challenges back to intake."
 );
 assert.match(
+  challengeWorkspaceSource,
+  /REQUIRED_CHALLENGE_PORTRAIT_PROMPT_VERSION = 5[\s\S]*needsFreshChallengePortrait[\s\S]*promptVersion/,
+  "PVP challenge workspace should regenerate stale party portraits when the portrait prompt version changes."
+);
+assert.match(
   challengeSource,
   /intentSentByViewer[\s\S]*intentReceivedByViewer[\s\S]*awaitingSettlementResponse[\s\S]*receivedSettlementIntent/,
   "PVP challenge payload should expose viewer-specific settlement intent flags."
@@ -961,8 +1054,23 @@ assert.match(
 );
 assert.match(
   pvpChallengePortraitRouteSource,
-  /PORTRAIT_PROMPT_VERSION = 4[\s\S]*buildGenderPresentationGuidance[\s\S]*genderGuidance/,
+  /PORTRAIT_PROMPT_VERSION = 5[\s\S]*buildGenderPresentationGuidance[\s\S]*genderGuidance/,
   "PVP challenge portrait prompts should include gender-presentation guidance and invalidate older mixed portraits."
+);
+assert.match(
+  pvpChallengePortraitRouteSource,
+  /masculineGivenNameCues[\s\S]*"darren"/,
+  "PVP challenge portrait prompts should treat Darren as conventionally masculine when the case text does not contradict it."
+);
+assert.match(
+  soloClientPortraitRouteSource,
+  /PORTRAIT_PROMPT_VERSION = 6[\s\S]*masculineGivenNameCues[\s\S]*"darren"/,
+  "Solo case portrait prompts should invalidate older portraits and treat Darren as conventionally masculine."
+);
+assert.doesNotMatch(
+  pvpChallengePortraitRouteSource,
+  /stringifyCueSource\(challenge\.templateSnapshot\)/,
+  "PVP challenge portrait gender cues should not score the entire mixed-party template snapshot."
 );
 assert.match(
   challengeSource,

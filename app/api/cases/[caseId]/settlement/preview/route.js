@@ -52,7 +52,7 @@ export async function POST(req, { params }) {
 
     const result = await previewSettlementDraftForClient({
       caseSession,
-      draftTerms: body?.terms || {},
+      offerTerms: body?.terms || {},
       message: body?.message || "",
       clientInstruction: body?.clientInstruction || "",
       userId: session.user.id,

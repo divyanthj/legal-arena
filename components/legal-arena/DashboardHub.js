@@ -753,22 +753,85 @@ const getPlayerComplexityCap = (playerLevel = 1) => {
   return 5;
 };
 
+const getSoloCaseRef = (caseSession = {}) => caseSession.slug || caseSession.id;
+
+const isTerminalSoloSettlement = (caseSession = {}) => {
+  const settlement = caseSession.settlement || {};
+
+  return Boolean(
+    settlement.resolution === "failed" ||
+      settlement.resolution === "rejected" ||
+      ["failed", "rejected"].includes(settlement.status)
+  );
+};
+
+const hasActiveSoloSettlement = (caseSession = {}) => {
+  const settlement = caseSession.settlement || {};
+  const hasTranscript = Array.isArray(settlement.transcript) && settlement.transcript.length > 0;
+
+  return Boolean(
+    !isTerminalSoloSettlement(caseSession) &&
+      caseSession.status !== "settled" &&
+      settlement.accepted !== true &&
+      settlement.resolution !== "settled" &&
+      (caseSession.status === "settlement" ||
+        ["proposed", "active"].includes(settlement.status) ||
+        settlement.intentPending === true ||
+        ["pending", "accepted"].includes(settlement.intentStatus) ||
+        hasTranscript)
+  );
+};
+
+const hasSettledSoloSettlement = (caseSession = {}) => {
+  const settlement = caseSession.settlement || {};
+
+  return Boolean(
+    caseSession.status === "settled" ||
+      settlement.accepted === true ||
+      settlement.resolution === "settled" ||
+      settlement.status === "settled"
+  );
+};
+
+const getSoloCaseHref = (caseSession = {}) => {
+  const caseRef = getSoloCaseRef(caseSession);
+  const baseHref = `/dashboard/cases/${caseRef}`;
+
+  return hasActiveSoloSettlement(caseSession) || hasSettledSoloSettlement(caseSession)
+    ? `${baseHref}/settlement`
+    : baseHref;
+};
+
+const getSoloDisplayStatus = (caseSession = {}) => {
+  if (hasSettledSoloSettlement(caseSession)) {
+    return "settled";
+  }
+
+  if (hasActiveSoloSettlement(caseSession)) {
+    return "settlement";
+  }
+
+  return caseSession.status === "active" ? "interview" : caseSession.status;
+};
+
 const getCaseProgress = (caseSession = null) => {
   if (!caseSession) {
     return { label: "Not started", percent: 0, nextStep: "Begin client interview" };
   }
 
-  if (caseSession.status === "courtroom") {
+  const displayStatus = getSoloDisplayStatus(caseSession);
+
+  if (displayStatus === "courtroom") {
     return { label: "Courtroom", percent: 75, nextStep: "Argue in court" };
   }
 
-  if (caseSession.status === "verdict") {
+  if (displayStatus === "verdict") {
     return { label: "Verdict ready", percent: 100, nextStep: "Review the ruling" };
   }
-  if (caseSession.status === "settled") {
+  if (displayStatus === "settled") {
     return { label: "Settled", percent: 100, nextStep: "Review the settlement" };
   }
-  if (caseSession.status === "settlement") {
+  if (displayStatus === "settlement") {
     return { label: "Settlement", percent: 74, nextStep: "Negotiate terms" };
   }
 
@@ -821,9 +884,16 @@ const caseMatchesTemplate = (caseSession = {}, template = null) => {
 
 const findResumableCaseForTemplate = (caseSessions = [], template = null) =>
   caseSessions.find(
-    (caseSession) =>
-      (caseSession.status === "interview" || caseSession.status === "courtroom") &&
-      caseMatchesTemplate(caseSession, template)
+    (caseSession) => {
+      const displayStatus = getSoloDisplayStatus(caseSession);
+
+      return (
+        (displayStatus === "interview" ||
+          displayStatus === "settlement" ||
+          displayStatus === "courtroom") &&
+        caseMatchesTemplate(caseSession, template)
+      );
+    }
   ) || null;
 
 const onboardingSteps = [
@@ -870,17 +940,55 @@ const DashboardOnboardingOverlay = ({ isOpen, onComplete }) => {
   const [stepIndex, setStepIndex] = useState(0);
   const [targetRect, setTargetRect] = useState(null);
   const [completing, setCompleting] = useState(false);
+  const viewedStepsRef = useRef(new Set());
   const step = onboardingSteps[stepIndex] || onboardingSteps[0];
+
+  const trackDashboardTourGoal = useCallback(
+    (goal, extra = {}) => {
+      trackGoal(goal, {
+        tour: "dashboard_onboarding",
+        step_index: stepIndex + 1,
+        step_count: onboardingSteps.length,
+        step_target: step?.target || "",
+        step_title: step?.title || "",
+        ...extra,
+      });
+    },
+    [step, stepIndex]
+  );
 
   useEffect(() => {
     if (isOpen) {
       setStepIndex(0);
       setTargetRect(null);
+      viewedStepsRef.current = new Set();
+      trackGoal("tour_started", {
+        tour: "dashboard_onboarding",
+        step_count: onboardingSteps.length,
+      });
     }
   }, [isOpen]);
 
-  const completeTutorial = useCallback(async () => {
+  useEffect(() => {
+    if (!isOpen || !step) {
+      return;
+    }
+
+    const viewKey = `${stepIndex}:${step.target}`;
+
+    if (viewedStepsRef.current.has(viewKey)) {
+      return;
+    }
+
+    viewedStepsRef.current.add(viewKey);
+    trackDashboardTourGoal("tour_step_viewed");
+  }, [isOpen, step, stepIndex, trackDashboardTourGoal]);
+
+  const completeTutorial = useCallback(async (reason = "completed") => {
     setCompleting(true);
+    trackDashboardTourGoal(reason === "skipped" ? "tour_skipped" : "tour_completed", {
+      completion_reason: reason,
+    });
 
     try {
       await apiClient.post("/onboarding/dashboard-tutorial");
@@ -890,7 +998,7 @@ const DashboardOnboardingOverlay = ({ isOpen, onComplete }) => {
     } finally {
       setCompleting(false);
     }
-  }, [onComplete]);
+  }, [onComplete, trackDashboardTourGoal]);
 
   const findAvailableStepIndex = useCallback((startIndex, direction = 1) => {
     for (
@@ -919,9 +1027,15 @@ const DashboardOnboardingOverlay = ({ isOpen, onComplete }) => {
         nextIndex >= 0 ? -1 : findAvailableStepIndex(stepIndex - 1, -1);
 
       if (nextIndex >= 0 || previousIndex >= 0) {
-        setStepIndex(nextIndex >= 0 ? nextIndex : previousIndex);
+        const fallbackIndex = nextIndex >= 0 ? nextIndex : previousIndex;
+        trackDashboardTourGoal("tour_target_missing", {
+          missing_target: step.target,
+          fallback_step_index: fallbackIndex + 1,
+          fallback_direction: nextIndex >= 0 ? "next" : "previous",
+        });
+        setStepIndex(fallbackIndex);
       } else {
-        completeTutorial();
+        completeTutorial("no_targets_available");
       }
 
       return;
@@ -938,7 +1052,7 @@ const DashboardOnboardingOverlay = ({ isOpen, onComplete }) => {
       centerX: rect.left + rect.width / 2,
       centerY: rect.top + rect.height / 2,
     });
-  }, [completeTutorial, findAvailableStepIndex, isOpen, step, stepIndex]);
+  }, [completeTutorial, findAvailableStepIndex, isOpen, step, stepIndex, trackDashboardTourGoal]);
 
   useEffect(() => {
     if (!isOpen || !step) {
@@ -992,6 +1106,10 @@ const DashboardOnboardingOverlay = ({ isOpen, onComplete }) => {
     const previousIndex = findAvailableStepIndex(stepIndex - 1, -1);
 
     if (previousIndex >= 0) {
+      trackDashboardTourGoal("tour_back_clicked", {
+        destination_step_index: previousIndex + 1,
+        destination_target: onboardingSteps[previousIndex]?.target || "",
+      });
       setStepIndex(previousIndex);
     }
   };
@@ -1000,9 +1118,13 @@ const DashboardOnboardingOverlay = ({ isOpen, onComplete }) => {
     const nextIndex = findAvailableStepIndex(stepIndex + 1, 1);
 
     if (nextIndex >= 0) {
+      trackDashboardTourGoal("tour_next_clicked", {
+        destination_step_index: nextIndex + 1,
+        destination_target: onboardingSteps[nextIndex]?.target || "",
+      });
       setStepIndex(nextIndex);
     } else {
-      completeTutorial();
+      completeTutorial("no_next_step");
     }
   };
 
@@ -1074,7 +1196,7 @@ const DashboardOnboardingOverlay = ({ isOpen, onComplete }) => {
             <button
               type="button"
               className="arena-btn-dark min-h-0 px-3 py-2 text-sm"
-              onClick={completeTutorial}
+              onClick={() => completeTutorial("skipped")}
               disabled={completing}
             >
               Skip
@@ -1090,7 +1212,7 @@ const DashboardOnboardingOverlay = ({ isOpen, onComplete }) => {
             <button
               type="button"
               className="arena-btn-light min-h-0 px-4 py-2 text-sm"
-              onClick={isLastStep ? completeTutorial : goToNextStep}
+              onClick={isLastStep ? () => completeTutorial("completed") : goToNextStep}
               disabled={completing}
             >
               {isLastStep ? "Finish" : "Next"}
@@ -1142,6 +1264,17 @@ export default function DashboardHub({
   const [dashboardTutorialCompleted, setDashboardTutorialCompleted] = useState(
     Boolean(onboarding?.dashboardTutorialCompleted)
   );
+  const requestDashboardTour = useCallback((source = "manual") => {
+    trackGoal("tour_requested", {
+      tour: "dashboard_onboarding",
+      source,
+      completed_cases: progression?.completedCases || 0,
+      active_cases: initialCases.length,
+      pvp_challenges: challenges.length,
+      has_arena_access: Boolean(hasArenaAccess),
+    });
+    setDashboardTutorialCompleted(false);
+  }, [challenges.length, hasArenaAccess, initialCases.length, progression?.completedCases]);
 
   const filteredTemplates = useMemo(
     () =>
@@ -1153,11 +1286,17 @@ export default function DashboardHub({
     [selectedCategory, showPlayableOnly, templates]
   );
   const finishedCases = useMemo(
-    () => initialCases.filter((caseSession) => ["verdict", "settled"].includes(caseSession.status)),
+    () =>
+      initialCases.filter((caseSession) =>
+        ["verdict", "settled"].includes(getSoloDisplayStatus(caseSession))
+      ),
     [initialCases]
   );
   const ongoingCases = useMemo(
-    () => initialCases.filter((caseSession) => !["verdict", "settled"].includes(caseSession.status)),
+    () =>
+      initialCases.filter(
+        (caseSession) => !["verdict", "settled"].includes(getSoloDisplayStatus(caseSession))
+      ),
     [initialCases]
   );
   const selectedArchiveCases = caseArchiveTab === "finished" ? finishedCases : ongoingCases;
@@ -1227,13 +1366,11 @@ export default function DashboardHub({
   }, [lawyerSearch, overallLeaderboard, searchedLawyers]);
   const topCategoryEntries = selectedLeaderboard.slice(0, 5);
   const recentVerdicts = initialCases
-    .filter((item) => ["verdict", "settled"].includes(item.status))
+    .filter((item) => ["verdict", "settled"].includes(getSoloDisplayStatus(item)))
     .slice(0, 5);
   const canResumeLastCase =
     lastActiveCase &&
-    (lastActiveCase.status === "interview" ||
-      lastActiveCase.status === "settlement" ||
-      lastActiveCase.status === "courtroom");
+    ["interview", "settlement", "courtroom"].includes(getSoloDisplayStatus(lastActiveCase));
   const nextCategoryUnlockTarget = Math.max(
     (categoryProgress?.unlockedComplexity || 1) * 2,
     2
@@ -1479,7 +1616,7 @@ export default function DashboardHub({
     Boolean(featuredLibraryCase) && !shouldSellLifetimeAccess;
   const featuredLibraryCaseProgress = getCaseProgress(featuredLibraryCase);
   const featuredLibraryCaseHref = featuredLibraryCase
-    ? `/dashboard/cases/${featuredLibraryCase.slug || featuredLibraryCase.id}`
+    ? getSoloCaseHref(featuredLibraryCase)
     : "";
   const firstUnlockedTemplate =
     visibleTemplates.find((template) => template.unlocked) ||
@@ -1573,7 +1710,9 @@ export default function DashboardHub({
   }, [activeTemplateIndex, visibleTemplates.length]);
 
   const lastCaseProgress = getCaseProgress(lastActiveCase);
+  const lastActiveCaseHref = lastActiveCase ? getSoloCaseHref(lastActiveCase) : "";
   const desktopHeroCase = ongoingCases[0] || null;
+  const desktopHeroCaseHref = desktopHeroCase ? getSoloCaseHref(desktopHeroCase) : "";
   const desktopHeroCaseProgress = getCaseProgress(desktopHeroCase);
   const canContinueDesktopHeroCase = Boolean(desktopHeroCase) && !shouldSellLifetimeAccess;
   const primaryCtaLabel = shouldSellLifetimeAccess
@@ -1703,7 +1842,7 @@ export default function DashboardHub({
                 <button
                   type="button"
                   className="flex h-12 w-12 items-center justify-center rounded-2xl text-white/54 transition hover:bg-white/[0.04] hover:text-white"
-                  onClick={() => setDashboardTutorialCompleted(false)}
+                  onClick={() => requestDashboardTour("desktop_sidebar")}
                   aria-label="Take the quick tour"
                   title="Quick tour"
                 >
@@ -1758,7 +1897,7 @@ export default function DashboardHub({
                     <div className="mt-3 space-y-2.5">
                       {canResumeLastCase && !shouldSellLifetimeAccess ? (
                         <Link
-                          href={`/dashboard/cases/${lastActiveCase.slug || lastActiveCase.id}`}
+                          href={lastActiveCaseHref}
                           data-onboarding-target={
                             isMobileActivationViewport ? "quick-start-case" : undefined
                           }
@@ -1914,7 +2053,7 @@ export default function DashboardHub({
                   <button
                     type="button"
                     className="mt-4 flex w-full items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-4 text-left text-white transition hover:border-white/20"
-                    onClick={() => setDashboardTutorialCompleted(false)}
+                    onClick={() => requestDashboardTour("mobile_activation_card")}
                   >
                     <HeroIcons.BoltIcon className="h-8 w-8 shrink-0 text-amber-200" aria-hidden="true" />
                     <span className="min-w-0 flex-1">
@@ -2035,7 +2174,7 @@ export default function DashboardHub({
                         <div className="mt-8 flex flex-col items-start gap-4">
                           {canContinueDesktopHeroCase ? (
                             <Link
-                              href={`/dashboard/cases/${desktopHeroCase.slug || desktopHeroCase.id}`}
+                              href={desktopHeroCaseHref}
                               data-onboarding-target="quick-start-case"
                               className="inline-flex min-h-[4rem] w-full max-w-md items-center justify-center gap-4 rounded-xl border border-amber-200/45 bg-amber-200 px-6 text-lg font-bold text-black shadow-[0_18px_40px_rgba(251,191,36,0.22)] transition hover:bg-amber-100"
                             >
@@ -3198,7 +3337,7 @@ export default function DashboardHub({
                   <div className="px-4 py-4">
                     {selectedArchiveCases.length > 0 ? (
                       <Link
-                        href={`/dashboard/cases/${selectedArchiveCases[0].slug || selectedArchiveCases[0].id}`}
+                        href={getSoloCaseHref(selectedArchiveCases[0])}
                         className="block overflow-hidden rounded-2xl border border-white/10 bg-white/[0.035] text-white shadow-[0_18px_55px_rgba(0,0,0,0.34)] transition hover:border-white/20"
                       >
                         <div className="relative min-h-[10.75rem] p-4">
@@ -3207,7 +3346,8 @@ export default function DashboardHub({
                             {(() => {
                               const featuredCase = selectedArchiveCases[0];
                               const featuredProgress = getCaseProgress(featuredCase);
-                              const featuredSeverity = statusSeverity[featuredCase.status] || "neutral";
+                              const featuredStatus = getSoloDisplayStatus(featuredCase);
+                              const featuredSeverity = statusSeverity[featuredStatus] || "neutral";
 
                               return (
                                 <>
@@ -3217,7 +3357,7 @@ export default function DashboardHub({
                                   severityClass[featuredSeverity]
                                 }`}
                               >
-                                {statusLabel[featuredCase.status] || featuredProgress.label}
+                                {statusLabel[featuredStatus] || featuredProgress.label}
                               </span>
                               <span className="flex h-10 w-10 items-center justify-center rounded-full border border-emerald-300/30 bg-emerald-300/10 text-xs font-semibold text-emerald-200">
                                 {featuredProgress.percent}%
@@ -3272,13 +3412,14 @@ export default function DashboardHub({
                             .slice(0, 5)
                             .map((item) => {
                               const caseProgress = getCaseProgress(item);
-                              const caseSeverity = statusSeverity[item.status] || "neutral";
+                              const itemStatus = getSoloDisplayStatus(item);
+                              const caseSeverity = statusSeverity[itemStatus] || "neutral";
                               const Icon = categoryIconMap[item.primaryCategory] || HeroIcons.DocumentTextIcon;
 
                               return (
                                 <Link
                                   key={item.id}
-                                  href={`/dashboard/cases/${item.slug || item.id}`}
+                                  href={getSoloCaseHref(item)}
                                   className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.025] p-3 text-left transition hover:border-white/20"
                                 >
                                   <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-black/28 text-white/70">
@@ -3288,7 +3429,7 @@ export default function DashboardHub({
                                     <span
                                       className={`rounded-full border px-2 py-0.5 text-[0.6rem] font-semibold uppercase tracking-[0.06em] arena-status ${severityClass[caseSeverity]}`}
                                     >
-                                      {statusLabel[item.status] || "In Progress"}
+                                      {statusLabel[itemStatus] || caseProgress.label}
                                     </span>
                                     <span className="mt-1.5 line-clamp-1 block text-sm font-semibold text-white">
                                       {item.title}
@@ -3310,7 +3451,7 @@ export default function DashboardHub({
                     <button
                       type="button"
                       className="mt-4 flex w-full items-center gap-3 rounded-xl border border-white/10 bg-white/[0.025] p-3 text-left text-white transition hover:border-white/20"
-                      onClick={() => setDashboardTutorialCompleted(false)}
+                      onClick={() => requestDashboardTour("dashboard_sidebar_card")}
                     >
                       <HeroIcons.BoltIcon className="h-6 w-6 shrink-0 text-amber-200" aria-hidden="true" />
                       <span className="min-w-0 flex-1">
@@ -3375,18 +3516,19 @@ export default function DashboardHub({
                     ) : (
                       selectedArchiveCases.slice(0, 6).map((item) => {
                         const caseProgress = getCaseProgress(item);
-                        const caseSeverity = statusSeverity[item.status] || "neutral";
+                        const itemStatus = getSoloDisplayStatus(item);
+                        const caseSeverity = statusSeverity[itemStatus] || "neutral";
 
                         return (
                           <Link
                             key={item.id}
-                            href={`/dashboard/cases/${item.slug || item.id}`}
+                            href={getSoloCaseHref(item)}
                             className="arena-surface-soft block p-4 transition hover:-translate-y-0.5 hover:border-white/20"
                           >
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
                                 <span className={`badge border arena-status ${severityClass[caseSeverity]}`}>
-                                  {statusLabel[item.status] || "In Progress"}
+                                  {statusLabel[itemStatus] || caseProgress.label}
                                 </span>
                                 <h3 className="mt-3 break-words text-base font-semibold text-white">
                                   {item.title}
@@ -3707,7 +3849,7 @@ export default function DashboardHub({
                     </button>
                     {canResumeLastCase ? (
                       <Link
-                        href={`/dashboard/cases/${lastActiveCase.slug || lastActiveCase.id}`}
+                        href={lastActiveCaseHref}
                         className="arena-btn-dark flex w-full items-center justify-center px-5 py-4"
                       >
                         Continue Last Case
@@ -4013,12 +4155,14 @@ export default function DashboardHub({
                     </div>
                   ) : (
                     initialCases.map((item) => {
-                      const caseSeverity = statusSeverity[item.status] || "neutral";
+                      const itemStatus = getSoloDisplayStatus(item);
+                      const caseProgress = getCaseProgress(item);
+                      const caseSeverity = statusSeverity[itemStatus] || "neutral";
 
                       return (
                         <Link
                           key={item.id}
-                          href={`/dashboard/cases/${item.slug || item.id}`}
+                          href={getSoloCaseHref(item)}
                           className="arena-surface-soft block p-4 transition hover:-translate-y-0.5 hover:border-white/20"
                         >
                           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -4030,7 +4174,7 @@ export default function DashboardHub({
                                     severityClass[caseSeverity]
                                   }`}
                                 >
-                                  {statusLabel[item.status] || "In Progress"}
+                                  {statusLabel[itemStatus] || caseProgress.label}
                                 </span>
                               </div>
                               <div className="mt-2 flex flex-wrap gap-3 text-sm text-white/52">
@@ -4196,7 +4340,7 @@ export default function DashboardHub({
                     recentVerdicts.map((item) => (
                       <Link
                         key={`verdict-${item.id}`}
-                        href={`/dashboard/cases/${item.slug || item.id}`}
+                        href={getSoloCaseHref(item)}
                         className="arena-surface-soft block px-4 py-3 transition hover:-translate-y-0.5 hover:border-white/20"
                       >
                         <p className="font-semibold text-white">{item.title}</p>

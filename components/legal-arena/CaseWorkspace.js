@@ -293,24 +293,66 @@ const WorkspaceTourOverlay = ({
   storageKey,
   targetAttribute,
   titleId,
+  tourName,
+  analyticsContext = {},
 }) => {
   const [stepIndex, setStepIndex] = useState(0);
   const [targetRect, setTargetRect] = useState(null);
+  const viewedStepsRef = useRef(new Set());
   const step = steps[stepIndex] || steps[0];
+
+  const trackTourGoal = useCallback(
+    (goal, extra = {}) => {
+      trackGoal(goal, {
+        tour: tourName,
+        step_index: stepIndex + 1,
+        step_count: steps.length,
+        step_target: step?.target || "",
+        step_title: step?.title || "",
+        ...analyticsContext,
+        ...extra,
+      });
+    },
+    [analyticsContext, step, stepIndex, steps.length, tourName]
+  );
 
   useEffect(() => {
     if (isOpen) {
       setStepIndex(0);
       setTargetRect(null);
+      viewedStepsRef.current = new Set();
+      trackGoal("tour_started", {
+        tour: tourName,
+        step_count: steps.length,
+        ...analyticsContext,
+      });
     }
-  }, [isOpen]);
+  }, [analyticsContext, isOpen, steps.length, tourName]);
 
-  const finishTour = useCallback(() => {
+  useEffect(() => {
+    if (!isOpen || !step) {
+      return;
+    }
+
+    const viewKey = `${stepIndex}:${step.target}`;
+
+    if (viewedStepsRef.current.has(viewKey)) {
+      return;
+    }
+
+    viewedStepsRef.current.add(viewKey);
+    trackTourGoal("tour_step_viewed");
+  }, [isOpen, step, stepIndex, trackTourGoal]);
+
+  const finishTour = useCallback((reason = "completed") => {
     if (typeof window !== "undefined") {
       window.localStorage.setItem(storageKey, "true");
     }
+    trackTourGoal(reason === "skipped" ? "tour_skipped" : "tour_completed", {
+      completion_reason: reason,
+    });
     onComplete();
-  }, [onComplete, storageKey]);
+  }, [onComplete, storageKey, trackTourGoal]);
 
   const findAvailableStepIndex = useCallback((startIndex, direction = 1) => {
     for (
@@ -339,9 +381,15 @@ const WorkspaceTourOverlay = ({
         nextIndex >= 0 ? -1 : findAvailableStepIndex(stepIndex - 1, -1);
 
       if (nextIndex >= 0 || previousIndex >= 0) {
-        setStepIndex(nextIndex >= 0 ? nextIndex : previousIndex);
+        const fallbackIndex = nextIndex >= 0 ? nextIndex : previousIndex;
+        trackTourGoal("tour_target_missing", {
+          missing_target: step.target,
+          fallback_step_index: fallbackIndex + 1,
+          fallback_direction: nextIndex >= 0 ? "next" : "previous",
+        });
+        setStepIndex(fallbackIndex);
       } else {
-        finishTour();
+        finishTour("no_targets_available");
       }
 
       return;
@@ -357,7 +405,7 @@ const WorkspaceTourOverlay = ({
       height: Math.min(rect.height + padding * 2, window.innerHeight - padding * 2),
       centerX: rect.left + rect.width / 2,
     });
-  }, [findAvailableStepIndex, finishTour, isOpen, step, stepIndex, targetAttribute]);
+  }, [findAvailableStepIndex, finishTour, isOpen, step, stepIndex, targetAttribute, trackTourGoal]);
 
   useEffect(() => {
     if (!isOpen || !step || typeof window === "undefined") {
@@ -406,6 +454,10 @@ const WorkspaceTourOverlay = ({
     const previousIndex = findAvailableStepIndex(stepIndex - 1, -1);
 
     if (previousIndex >= 0) {
+      trackTourGoal("tour_back_clicked", {
+        destination_step_index: previousIndex + 1,
+        destination_target: steps[previousIndex]?.target || "",
+      });
       setStepIndex(previousIndex);
     }
   };
@@ -414,9 +466,13 @@ const WorkspaceTourOverlay = ({
     const nextIndex = findAvailableStepIndex(stepIndex + 1, 1);
 
     if (nextIndex >= 0) {
+      trackTourGoal("tour_next_clicked", {
+        destination_step_index: nextIndex + 1,
+        destination_target: steps[nextIndex]?.target || "",
+      });
       setStepIndex(nextIndex);
     } else {
-      finishTour();
+      finishTour("no_next_step");
     }
   };
 
@@ -480,7 +536,7 @@ const WorkspaceTourOverlay = ({
             <button
               type="button"
               className="arena-btn-dark min-h-0 px-3 py-2 text-sm"
-              onClick={finishTour}
+              onClick={() => finishTour("skipped")}
             >
               Skip
             </button>
@@ -495,7 +551,7 @@ const WorkspaceTourOverlay = ({
             <button
               type="button"
               className="arena-btn-light min-h-0 px-4 py-2 text-sm"
-              onClick={isLastStep ? finishTour : goToNextStep}
+              onClick={isLastStep ? () => finishTour("completed") : goToNextStep}
             >
               {isLastStep ? "Finish" : "Next"}
             </button>
@@ -506,7 +562,7 @@ const WorkspaceTourOverlay = ({
   );
 };
 
-const IntakeTourOverlay = ({ isOpen, onComplete }) => (
+const IntakeTourOverlay = ({ isOpen, onComplete, analyticsContext }) => (
   <WorkspaceTourOverlay
     isOpen={isOpen}
     onComplete={onComplete}
@@ -514,10 +570,12 @@ const IntakeTourOverlay = ({ isOpen, onComplete }) => (
     storageKey={intakeTourStorageKey}
     targetAttribute="data-intake-tour-target"
     titleId="intake-tour-title"
+    tourName="intake"
+    analyticsContext={analyticsContext}
   />
 );
 
-const SettlementTourOverlay = ({ isOpen, onComplete }) => (
+const SettlementTourOverlay = ({ isOpen, onComplete, analyticsContext }) => (
   <WorkspaceTourOverlay
     isOpen={isOpen}
     onComplete={onComplete}
@@ -525,6 +583,8 @@ const SettlementTourOverlay = ({ isOpen, onComplete }) => (
     storageKey={settlementTourStorageKey}
     targetAttribute="data-settlement-tour-target"
     titleId="settlement-tour-title"
+    tourName="settlement"
+    analyticsContext={analyticsContext}
   />
 );
 
@@ -824,7 +884,6 @@ const IntakeProgressRing = ({ value }) => {
 const INTERVIEW_HISTORY_DEFAULT_HEIGHT = 240;
 const INTERVIEW_HISTORY_MIN_HEIGHT = 140;
 const INTERVIEW_HISTORY_MAX_HEIGHT = 520;
-const SETTLEMENT_PREVIEW_DEBOUNCE_MS = 350;
 
 const clampInterviewHistoryHeight = (value) =>
   Math.min(
@@ -957,8 +1016,12 @@ export default function CaseWorkspace({
     dirty: false,
   });
   const [settlementClientPreview, setSettlementClientPreview] = useState(null);
-  const [settlementClientPreviewLoading, setSettlementClientPreviewLoading] = useState(false);
   const [settlementClientPreviewError, setSettlementClientPreviewError] = useState("");
+  const [settlementAcceptAuthority, setSettlementAcceptAuthority] = useState({
+    offerSignature: "",
+    authority: "unclear",
+    reason: "",
+  });
   const [settlementClientCounselNote, setSettlementClientCounselNote] = useState("");
   const [showSettlementDialog, setShowSettlementDialog] = useState(false);
   const [showSettlementComposeModal, setShowSettlementComposeModal] = useState(false);
@@ -1044,13 +1107,18 @@ export default function CaseWorkspace({
     recordingSettlementClientInstruction,
     transcribingSettlementClientInstruction,
     settlementClientInstructionAudioLevel,
+    recordingSettlementMessage,
+    transcribingSettlementMessage,
+    settlementMessageAudioLevel,
     handleQuestionVoiceInput,
     handleArgumentVoiceInput,
     handleSettlementClientInstructionVoiceInput,
+    handleSettlementMessageVoiceInput,
   } = useCaseVoiceRecorder({
     setQuestion,
     setArgument,
     setSettlementClientInstruction,
+    setSettlementMessage,
   });
   const focusSettlementMessageComposer = useCallback(() => {
     setShowSettlementComposeModal(true);
@@ -1126,6 +1194,21 @@ export default function CaseWorkspace({
     side: caseSession.playerSide,
     ...extra,
   });
+  const tourAnalyticsContext = useMemo(
+    () => ({
+      mode: analyticsMode,
+      status: caseSession.status,
+      category: caseSession.primaryCategory,
+      complexity: caseSession.complexity,
+      side: caseSession.playerSide,
+      case_id: caseSession.id || caseSession._id || "",
+      case_ref: getCaseRouteRef(caseSession),
+    }),
+    [
+      analyticsMode,
+      caseSession,
+    ]
+  );
   const getResponseCase = (response) =>
     apiConfig.responseToCase ? apiConfig.responseToCase(response) : response?.caseSession;
   const updateCaseFromResponse = (response) => {
@@ -1242,8 +1325,23 @@ export default function CaseWorkspace({
       caseSession.settlement?.resolution === "settled" ||
       caseSession.settlement?.status === "settled"
   );
+  const hasActiveSettlement = Boolean(
+    !isSettlementAccepted &&
+      caseSession.settlement?.resolution !== "failed" &&
+      caseSession.settlement?.resolution !== "rejected" &&
+      !["failed", "rejected"].includes(caseSession.settlement?.status) &&
+      (caseSession.settlement?.status === "active" ||
+        caseSession.settlement?.status === "proposed" ||
+        caseSession.settlement?.intentPending === true ||
+        ["pending", "accepted"].includes(caseSession.settlement?.intentStatus) ||
+        (Array.isArray(caseSession.settlement?.transcript) &&
+          caseSession.settlement.transcript.length > 0))
+  );
   const isInterview = caseSession.status === "interview";
-  const isSettlement = caseSession.status === "settlement" && !isSettlementAccepted;
+  const isSettlement = Boolean(
+    (caseSession.status === "settlement" || hasActiveSettlement) &&
+      !isSettlementAccepted
+  );
   const isSettled = isSettlementAccepted;
   const isVerdict = caseSession.status === "verdict";
   const isExited = caseSession.status === "exited";
@@ -1326,6 +1424,24 @@ export default function CaseWorkspace({
 
     return () => window.clearTimeout(timeoutId);
   }, [isSettlement]);
+
+  const requestIntakeTour = useCallback(() => {
+    trackGoal("tour_requested", {
+      tour: "intake",
+      source: "manual",
+      ...tourAnalyticsContext,
+    });
+    setShowIntakeTour(true);
+  }, [tourAnalyticsContext]);
+
+  const requestSettlementTour = useCallback(() => {
+    trackGoal("tour_requested", {
+      tour: "settlement",
+      source: "manual",
+      ...tourAnalyticsContext,
+    });
+    setShowSettlementTour(true);
+  }, [tourAnalyticsContext]);
 
   useEffect(() => {
     const cooldownUntil = caseSession.settlement?.cooldownUntil;
@@ -1648,6 +1764,7 @@ export default function CaseWorkspace({
     initial = false,
     messageOverride = "",
     acceptTerms = false,
+    termsOverride = null,
   } = {}) => {
     const outgoingMessage = getSettlementOutgoingMessage(messageOverride).trim();
     if (
@@ -1691,10 +1808,8 @@ export default function CaseWorkspace({
         `${getApiBasePath(caseSession)}/settlement/${initial ? "start" : "message"}`,
         {
           message: submittedMessage,
-          terms: Object.fromEntries(editableSettlementTerms),
+          terms: termsOverride || Object.fromEntries(editableSettlementTerms),
           acceptTerms,
-          clientPreviewTone: draftClientReaction.tone,
-          clientPreviewScore: settlementClientPreview?.score || 0,
         }
       );
       let responseForState = response;
@@ -1912,7 +2027,11 @@ export default function CaseWorkspace({
 
   const handleSettlementMessageSubmit = async (event) => {
     event.preventDefault();
-    await submitSettlementMessage();
+    if (recordingSettlementMessage || transcribingSettlementMessage || !settlementMessage.trim()) {
+      return;
+    }
+
+    await submitSettlementMessage({ messageOverride: settlementMessage.trim() });
   };
 
   const handleAcceptSettlementIntent = async () => {
@@ -3001,11 +3120,34 @@ export default function CaseWorkspace({
     ...customCurrentTermRows.map((term) => [term.label, term.value]),
   ];
   const latestOpponentOfferTerms = coerceUiSettlementTermRows(settlement.latestOpponentTerms);
+  const latestOpponentOfferTermsObject = Object.fromEntries(
+    latestOpponentOfferTerms
+      .filter((term) => term?.label && term?.value)
+      .map((term) => [term.label, term.value])
+  );
+  const latestOpponentOfferSignature = latestOpponentOfferEntry
+    ? JSON.stringify({
+        speaker: latestOpponentOfferEntry.speaker || "",
+        createdAt: latestOpponentOfferEntry.createdAt || "",
+        text: getSettlementEntryText(latestOpponentOfferEntry),
+        terms: latestOpponentOfferTerms
+          .filter((term) => term?.label && term?.value)
+          .map((term) => [term.label, term.value]),
+      })
+    : "";
   const settlementDraftDefaultEntries = currentOfferTerms.map(([label, value]) => [
     label,
     String(value || "").trim(),
   ]);
   const settlementDraftSignature = JSON.stringify(settlementDraftDefaultEntries);
+
+  useEffect(() => {
+    setSettlementAcceptAuthority((current) =>
+      current.offerSignature === latestOpponentOfferSignature
+        ? current
+        : { offerSignature: "", authority: "unclear", reason: "" }
+    );
+  }, [latestOpponentOfferSignature]);
 
   useEffect(() => {
     setSettlementDraftState((current) => {
@@ -3037,14 +3179,25 @@ export default function CaseWorkspace({
         .map(([label, value]) => `${label}: ${String(value || "").trim()}`)
         .join("; ")}.`
     : "Counteroffer: Please clarify which settlement terms are still open.";
+  const settlementClientGuidanceParts = cleanDraftList([
+    settlementClientPreview?.authorityReason,
+    settlementClientPreview?.suggestedRevision,
+    ...(Array.isArray(settlementClientPreview?.drivers)
+      ? settlementClientPreview.drivers
+      : []),
+  ]).slice(0, 4);
+  const settlementClientGuidedMessage = settlementClientGuidanceParts.length
+    ? `Counteroffer: My client can continue settlement discussions within this range: ${settlementClientGuidanceParts.join("; ")}. Please respond with concrete terms that fit those conditions.`
+    : settlementDraftMessage;
+  const getSettlementComposerDefaultMessage = (current = "") => {
+    const cleanCurrent = String(current || "").trim();
+    const genericFallback = "Counteroffer: Please clarify which settlement terms are still open.";
+
+    return !cleanCurrent || cleanCurrent === genericFallback
+      ? settlementClientGuidedMessage
+      : cleanCurrent;
+  };
   const settlementPreviewApiPath = `${getApiBasePath(caseSession)}/settlement/preview`;
-  const settlementPreviewPayload = JSON.stringify({
-    terms: Object.fromEntries(editableSettlementTerms),
-    message: settlementDraftMessage,
-    clientInstruction: "",
-    transcriptCount: settlementTranscript.length,
-    mood: settlementClientMood,
-  });
 
   const handleSettlementClientInstructionSubmit = async (event) => {
     event?.preventDefault();
@@ -3080,21 +3233,6 @@ export default function CaseWorkspace({
       const preview = payload?.preview || null;
       setSettlementClientPreview(preview);
 
-      if (Array.isArray(preview?.draftTerms) && preview.draftTerms.length) {
-        setSettlementDraftState((current) => ({
-          sourceSignature: settlementDraftSignature,
-          values: {
-            ...(current.sourceSignature === settlementDraftSignature ? current.values : {}),
-            ...Object.fromEntries(
-              preview.draftTerms
-                .filter((term) => term?.label && term?.value)
-                .map((term) => [term.label, term.value])
-            ),
-          },
-          dirty: true,
-        }));
-      }
-
       setSettlementClientInstruction("");
     } catch (error) {
       setSettlementClientPreviewError(error?.message || "Could not talk to the client.");
@@ -3103,70 +3241,13 @@ export default function CaseWorkspace({
     }
   };
 
-  useEffect(() => {
-    if (!isSettlement || settlementIsTerminal || !settlementPreviewApiPath) {
-      return;
-    }
-
-    let cancelled = false;
-    const controller = new AbortController();
-
-    setSettlementClientPreviewLoading(true);
-    setSettlementClientPreviewError("");
-
-    const timeoutId = window.setTimeout(async () => {
-      try {
-        const response = await fetch(`/api${settlementPreviewApiPath}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: settlementPreviewPayload,
-          signal: controller.signal,
-        });
-
-        if (!response.ok) {
-          const errorBody = await response.json().catch(() => ({}));
-          throw new Error(errorBody?.error || "Could not preview client reaction.");
-        }
-
-        const data = await response.json();
-        if (!cancelled) {
-          setSettlementClientPreview(data?.preview || null);
-          setSettlementClientPreviewError("");
-        }
-      } catch (error) {
-        if (error?.name === "AbortError" || cancelled) {
-          return;
-        }
-
-        console.error(error);
-        setSettlementClientPreview(null);
-        setSettlementClientPreviewError("Client reaction unavailable.");
-      } finally {
-        if (!cancelled) {
-          setSettlementClientPreviewLoading(false);
-        }
-      }
-    }, SETTLEMENT_PREVIEW_DEBOUNCE_MS);
-
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timeoutId);
-      controller.abort();
-    };
-  }, [
-    isSettlement,
-    settlementIsTerminal,
-    settlementPreviewApiPath,
-    settlementPreviewPayload,
-  ]);
-
   const previewTone = ["emerald", "amber", "red"].includes(
     String(settlementClientPreview?.tone || "").toLowerCase()
   )
     ? String(settlementClientPreview?.tone || "").toLowerCase()
     : "amber";
   const draftClientReaction =
-    settlementClientPreviewLoading
+    settlementClientInstructionWorking
       ? {
           label: `${playerPartyName} is considering...`,
           tone: "amber",
@@ -3195,19 +3276,19 @@ export default function CaseWorkspace({
             `${playerPartyName} has a private reaction to these terms.`,
         }
       : {
-          label: "Waiting for draft",
+          label: "Ask client privately",
           tone: "amber",
           icon: HeroIcons.MinusCircleIcon,
-          note: `Edit the terms to hear how ${playerPartyName} feels about the proposal.`,
+          note: `Ask ${playerPartyName} about the latest offer before speaking for them.`,
         };
   const draftClientReactionDrivers =
-    settlementClientPreviewLoading
+    settlementClientInstructionWorking
       ? [`${playerPartyName} is weighing value, timing, release, costs, and fault.`]
       : settlementClientPreviewError
       ? ["The client reaction is delayed. Keep the proposal concrete."]
       : Array.isArray(settlementClientPreview?.drivers) && settlementClientPreview.drivers.length
       ? settlementClientPreview.drivers.slice(0, 3)
-      : [`${playerPartyName}'s reaction will appear here.`];
+      : [`${playerPartyName}'s private guidance will appear after you ask.`];
   const renderSettlementIntentNoticePanel = (className = "") =>
     isPendingSettlementIntent || settlementAuthorityReady ? (
       <div
@@ -3401,10 +3482,10 @@ export default function CaseWorkspace({
   const renderSettlementPanel = () => {
     const settlementStageLabel = settlementStages[settlementStageIndex] || settlementStages[0];
     const clientPrivateLine = String(settlementClientPreview?.privateClientLine || "").trim();
-    const clientReactionNeedsFix = draftClientReaction.tone === "red";
+    const clientWantsCounter = settlementClientPreview?.acceptanceAuthority === "counter";
     const blockerText =
-      clientReactionNeedsFix
-        ? "Client dislikes this draft"
+      clientWantsCounter
+        ? "Client wants a counter"
       : settlementOpponentMood < settlementClientMood
         ? settlementOpponentMood < -25
           ? "Opposing client still resisting"
@@ -3418,12 +3499,12 @@ export default function CaseWorkspace({
         : "Constructive if payment and release terms stay practical.";
     const clientSpokenLine = clientPrivateLine
       ? clientPrivateLine
-      : settlementClientPreviewLoading
+      : settlementClientInstructionWorking
       ? "I am thinking through the amount, timing, and release."
       : settlementClientPreviewError
       ? "I need the offer spelled out more clearly before I can react."
-      : clientReactionNeedsFix
-      ? "I need you to tighten this before you send it."
+      : clientWantsCounter
+      ? "That is not inside my acceptable range. Counter with the conditions I gave you."
       : "I can work with this if the terms protect what matters most.";
     const opponentAcceptanceReason =
       settlementOpponentMood < 0
@@ -3604,17 +3685,88 @@ export default function CaseWorkspace({
       value: compactSettlementBreakdownValue(label, value),
       icon: getSettlementTermIcon(label),
     })).filter((term) => term.label && term.value);
+    const hasConcreteLatestOpponentTerms = latestOpponentOfferTerms.some(
+      (term) => term?.label && term?.value
+    );
+    const clientAuthorizedLatestOffer =
+      hasConcreteLatestOpponentTerms &&
+      latestOpponentOfferSignature &&
+      settlementAcceptAuthority.offerSignature === latestOpponentOfferSignature &&
+      settlementAcceptAuthority.authority === "accept";
     const publicTermSummary = sidePanelTermRows
       .map((term) => `${term.label}: ${term.value}`)
       .join("; ");
     const settlementAcceptMessage = publicTermSummary
       ? `My client accepts the current settlement terms: ${publicTermSummary}. Please confirm we have agreement.`
       : "My client accepts your latest settlement proposal. Please confirm we have agreement.";
-    const handleAcceptSettlementTerms = () =>
+    const handleAskClientAboutLatestOffer = async () => {
+      if (settlementActionsLocked || settlementClientInstructionWorking) {
+        return;
+      }
+
+      setSettlementClientInstructionWorking(true);
+      setSettlementClientPreviewError("");
+
+      try {
+        const concreteInstruction =
+          "Can you live with this latest offer, and what range or conditions would still be acceptable? If this offer is within your authority, say I can accept it. If not, tell me what to counter with.";
+        const clarificationInstruction =
+          "The other side has not stated concrete settlement terms. What range of concrete terms would be acceptable before I reply?";
+        const response = await fetch(`/api${settlementPreviewApiPath}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            terms: hasConcreteLatestOpponentTerms
+              ? latestOpponentOfferTermsObject
+              : Object.fromEntries(editableSettlementTerms),
+            message: hasConcreteLatestOpponentTerms
+              ? latestOpponentOfferText || settlementDraftMessage
+              : settlementDraftMessage,
+            clientInstruction: hasConcreteLatestOpponentTerms
+              ? concreteInstruction
+              : clarificationInstruction,
+          }),
+        });
+        const payload = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          throw new Error(payload?.error || "Could not talk to the client.");
+        }
+
+        const preview = payload?.preview || null;
+        setSettlementClientPreview(preview);
+
+        if (
+          hasConcreteLatestOpponentTerms &&
+          latestOpponentOfferSignature &&
+          preview?.acceptanceAuthority === "accept"
+        ) {
+          setSettlementAcceptAuthority({
+            offerSignature: latestOpponentOfferSignature,
+            authority: "accept",
+            reason: preview?.authorityReason || "Client says this offer is within settlement authority.",
+          });
+        } else {
+          setSettlementAcceptAuthority({ offerSignature: "", authority: "unclear", reason: "" });
+        }
+
+      } catch (error) {
+        setSettlementClientPreviewError(error?.message || "Could not talk to the client.");
+      } finally {
+        setSettlementClientInstructionWorking(false);
+      }
+    };
+    const handleAcceptSettlementTerms = () => {
+      if (!clientAuthorizedLatestOffer) {
+        return;
+      }
+
       submitSettlementMessage({
         messageOverride: settlementAcceptMessage,
         acceptTerms: true,
+        termsOverride: latestOpponentOfferTermsObject,
       });
+    };
     const settlementPressureMessage = [
       "We have stayed at the table and made concrete terms available.",
       "If your side cannot move meaningfully now, we are prepared to end settlement discussions and proceed on the record we have.",
@@ -3626,20 +3778,30 @@ export default function CaseWorkspace({
     ].join(" ");
     const settlementClientWarningText = `${playerPartyName}, I need to be direct: if the other side keeps repeating positions without improving the terms, settlement may be wasting time. We can apply pressure once more, or walk away and return to building the case.`;
     const settlementNextMoveActions = [
-      {
+      clientAuthorizedLatestOffer
+        ? {
         title: "Accept terms",
-        body: "Accept the current public terms and ask the other side to confirm agreement.",
+            body: "Accept the latest offer because it is within your client's authority.",
         icon: HeroIcons.CheckCircleIcon,
         tone: "emerald",
         onClick: handleAcceptSettlementTerms,
-      },
+          }
+        : {
+            title: "Ask client first",
+            body: hasConcreteLatestOpponentTerms
+              ? "Ask whether the latest offer is within your client's acceptable range."
+              : "Ask what range of concrete terms your client needs before you reply.",
+            icon: HeroIcons.UserIcon,
+            tone: "emerald",
+            onClick: handleAskClientAboutLatestOffer,
+          },
       {
         title: "Make counteroffer",
         body: "Use what your client told you privately, then present a new offer.",
         icon: HeroIcons.PencilSquareIcon,
         tone: "amber",
         featured: true,
-        onClick: () => setSettlementMessageAndFocus((current) => current.trim() || settlementDraftMessage),
+        onClick: () => setSettlementMessageAndFocus(getSettlementComposerDefaultMessage),
       },
       {
         title: "Apply pressure",
@@ -3724,24 +3886,80 @@ export default function CaseWorkspace({
                       rows={6}
                       className="block min-h-40 w-full resize-none border-0 bg-transparent px-4 py-4 text-sm leading-6 text-white outline-none placeholder:text-white/34"
                       placeholder="Write your negotiation message..."
-                      disabled={settlementActionsLocked}
+                      disabled={settlementActionsLocked || transcribingSettlementMessage}
                     />
-                    <div className="border-t border-white/[0.035] px-4 py-2 text-right text-xs font-semibold text-white/38">
-                      {settlementMessage.trim().length} / 2500
+                    <div className="flex items-center justify-between gap-3 border-t border-white/[0.035] px-4 py-2">
+                      <div className="h-1.5 w-28 overflow-hidden rounded-full bg-white/[0.08]">
+                        <span
+                          className="block h-full rounded-full bg-amber-200 transition-[width]"
+                          style={{
+                            width: recordingSettlementMessage
+                              ? `${Math.max(8, Math.round(settlementMessageAudioLevel * 100))}%`
+                              : "0%",
+                          }}
+                        />
+                      </div>
+                      <span className="text-xs font-semibold text-white/38">
+                        {transcribingSettlementMessage
+                          ? "Transcribing..."
+                          : recordingSettlementMessage
+                          ? "Listening..."
+                          : `${settlementMessage.trim().length} / 2500`}
+                      </span>
                     </div>
                   </div>
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div aria-hidden="true" />
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        className="arena-btn-dark inline-flex min-h-0 items-center justify-center gap-2 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-55"
+                        onClick={() => setSettlementMessage("")}
+                        disabled={
+                          settlementActionsLocked ||
+                          recordingSettlementMessage ||
+                          transcribingSettlementMessage ||
+                          !settlementMessage
+                        }
+                      >
+                        Clear
+                        <HeroIcons.XMarkIcon className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
+                        className={`arena-btn-dark inline-flex min-h-0 items-center justify-center gap-2 px-3 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-55 ${
+                          recordingSettlementMessage ? "border-red-300/40 text-red-100" : ""
+                        }`}
+                        onClick={handleSettlementMessageVoiceInput}
+                        disabled={settlementActionsLocked || transcribingSettlementMessage}
+                        aria-label={
+                          recordingSettlementMessage
+                            ? "Stop message voice note"
+                            : "Record message voice note"
+                        }
+                      >
+                        {recordingSettlementMessage
+                          ? "Stop"
+                          : transcribingSettlementMessage
+                          ? "Transcribing"
+                          : "Voice"}
+                        <HeroIcons.MicrophoneIcon className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                    </div>
                     <button
                       type="button"
                       className="arena-btn-light inline-flex items-center justify-center gap-2 px-5 py-3 text-sm font-black disabled:cursor-not-allowed disabled:opacity-60"
                       onPointerDown={triggerSettlementHaptic}
                       onClick={() =>
                         submitSettlementMessage({
-                          messageOverride: settlementMessage.trim() || settlementDraftMessage,
+                          messageOverride: settlementMessage.trim(),
                         })
                       }
-                      disabled={settlementActionsLocked || !getSettlementOutgoingMessage().trim()}
+                      disabled={
+                        settlementActionsLocked ||
+                        recordingSettlementMessage ||
+                        transcribingSettlementMessage ||
+                        !settlementMessage.trim()
+                      }
                     >
                       {pendingAction === "settlement" ? "Sending..." : "Send Counteroffer"}
                       <HeroIcons.PaperAirplaneIcon className="h-5 w-5" aria-hidden="true" />
@@ -4003,7 +4221,7 @@ export default function CaseWorkspace({
                 className="btn btn-ghost min-h-0 rounded-xl border border-amber-200/12 bg-white/[0.02] px-4 py-2 text-sm font-black normal-case text-amber-100 hover:border-amber-200/24 hover:bg-white/[0.04]"
                 onClick={() => {
                   setIsSettlementInfoModalOpen(false);
-                  setShowSettlementTour(true);
+                  requestSettlementTour();
                 }}
                 onPointerDown={triggerSettlementHaptic}
                 aria-label="Take the settlement tour"
@@ -4130,6 +4348,9 @@ export default function CaseWorkspace({
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 {[
+                  hasConcreteLatestOpponentTerms
+                    ? "Is this offer within your acceptable range?"
+                    : "What range of terms would be acceptable?",
                   "What amount would you actually accept?",
                   "Can we trade timing for a lower amount?",
                   "What term is non-negotiable?",
@@ -4195,20 +4416,44 @@ export default function CaseWorkspace({
             data-settlement-tour-target="settlement-viability"
           >
             <p className="arena-kicker text-amber-200">Do This Next</p>
-            <button
-              type="button"
-              className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-300 px-4 py-3 text-sm font-black text-black shadow-[0_12px_28px_rgba(16,185,129,0.16)] transition hover:bg-emerald-200 disabled:cursor-not-allowed disabled:opacity-60"
-              onClick={handleAcceptSettlementTerms}
-              onPointerDown={triggerSettlementHaptic}
-              disabled={settlementActionsLocked || !latestOpponentOfferEntry}
-            >
-              {pendingAction === "settlement-accept" ? "Accepting terms..." : "Accept terms"}
-              <HeroIcons.CheckCircleIcon className="h-4 w-4" aria-hidden="true" />
-            </button>
+            {clientAuthorizedLatestOffer ? (
+              <button
+                type="button"
+                className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-300 px-4 py-3 text-sm font-black text-black shadow-[0_12px_28px_rgba(16,185,129,0.16)] transition hover:bg-emerald-200 disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={handleAcceptSettlementTerms}
+                onPointerDown={triggerSettlementHaptic}
+                disabled={settlementActionsLocked}
+              >
+                {pendingAction === "settlement-accept" ? "Accepting terms..." : "Accept terms"}
+                <HeroIcons.CheckCircleIcon className="h-4 w-4" aria-hidden="true" />
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-300 px-4 py-3 text-sm font-black text-black shadow-[0_12px_28px_rgba(16,185,129,0.16)] transition hover:bg-emerald-200 disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={handleAskClientAboutLatestOffer}
+                onPointerDown={triggerSettlementHaptic}
+                disabled={settlementActionsLocked || settlementClientInstructionWorking}
+              >
+                {settlementClientInstructionWorking ? "Asking client..." : "Ask client first"}
+                <HeroIcons.UserIcon className="h-4 w-4" aria-hidden="true" />
+              </button>
+            )}
+            {!clientAuthorizedLatestOffer ? (
+              <p className="mt-2 text-xs font-semibold leading-5 text-white/46">
+                {hasConcreteLatestOpponentTerms
+                  ? "Acceptance unlocks only after your client says the latest offer is within authority."
+                  : "No definite offer can be accepted yet. Ask your client what range of terms to send."}
+              </p>
+            ) : settlementAcceptAuthority.reason ? (
+              <p className="mt-2 text-xs font-semibold leading-5 text-emerald-100/72">
+                {settlementAcceptAuthority.reason}
+              </p>
+            ) : null}
             <button
               type="button"
               className="arena-btn-light mt-3 inline-flex w-full items-center justify-center gap-2 px-4 py-3 text-sm font-black disabled:cursor-not-allowed disabled:opacity-60"
-              onClick={() => setSettlementMessageAndFocus((current) => current.trim() || settlementDraftMessage)}
+              onClick={() => setSettlementMessageAndFocus(getSettlementComposerDefaultMessage)}
               onPointerDown={triggerSettlementHaptic}
               disabled={settlementActionsLocked}
             >
@@ -4452,7 +4697,7 @@ export default function CaseWorkspace({
                   className="btn btn-ghost settlement-interactive min-h-0 rounded-xl border border-amber-200/10 bg-white/[0.018] px-3 py-2 text-sm font-black normal-case text-amber-100 hover:border-amber-200/20 hover:bg-white/[0.035] focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-200/45"
                   onClick={() => {
                     setIsSettlementInfoModalOpen(false);
-                    setShowSettlementTour(true);
+                    requestSettlementTour();
                   }}
                   onPointerDown={triggerSettlementHaptic}
                   aria-label="Take the settlement tour"
@@ -5436,7 +5681,7 @@ export default function CaseWorkspace({
                         <button
                           type="button"
                           className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-amber-200/20 bg-amber-200/10 text-amber-100 transition hover:border-amber-200/40 hover:bg-amber-200/15"
-                          onClick={() => setShowIntakeTour(true)}
+                          onClick={requestIntakeTour}
                           aria-label="Take the intake tour"
                           title="Intake tour"
                         >
@@ -5863,7 +6108,7 @@ export default function CaseWorkspace({
                         <button
                           type="button"
                           className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-amber-200/20 bg-amber-200/10 text-amber-100 transition hover:border-amber-200/40 hover:bg-amber-200/15"
-                          onClick={() => setShowIntakeTour(true)}
+                          onClick={requestIntakeTour}
                           aria-label="Take the intake tour"
                           title="Intake tour"
                         >
@@ -7905,10 +8150,12 @@ export default function CaseWorkspace({
       <IntakeTourOverlay
         isOpen={showIntakeTour && isInterview}
         onComplete={() => setShowIntakeTour(false)}
+        analyticsContext={tourAnalyticsContext}
       />
       <SettlementTourOverlay
         isOpen={showSettlementTour && isSettlement}
         onComplete={() => setShowSettlementTour(false)}
+        analyticsContext={tourAnalyticsContext}
       />
       {!isSettlement && !isSettled && Number.isFinite(Number(displayedSuccessChance)) ? (
         <Tooltip

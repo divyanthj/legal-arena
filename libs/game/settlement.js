@@ -389,6 +389,8 @@ const fallbackAiSettlementPreview = () => ({
   drivers: ["Keep the amount, timing, release, costs, and fault language concrete."],
   privateClientLine: "Walk me through why this protects me before you offer it.",
   suggestedRevision: "Make the amount, timing, release, costs, and fault language concrete.",
+  acceptanceAuthority: "unclear",
+  authorityReason: "The client has not described an acceptable settlement range yet.",
   model: SETTLEMENT_PREVIEW_MODEL,
   source: "fallback",
 });
@@ -408,6 +410,12 @@ const normalizeAiSettlementPreview = (aiResult = {}) => {
     .map((driver) => cleanClientPreviewCopy(driver))
     .filter(Boolean)
     .slice(0, 4);
+  const rawAcceptanceAuthority = coerceString(aiResult?.acceptanceAuthority).toLowerCase();
+  const acceptanceAuthority = ["accept", "counter", "reject", "unclear"].includes(
+    rawAcceptanceAuthority
+  )
+    ? rawAcceptanceAuthority
+    : "unclear";
 
   return {
     label: cleanClientPreviewCopy(aiResult?.label, "Client reaction ready"),
@@ -423,7 +431,11 @@ const normalizeAiSettlementPreview = (aiResult = {}) => {
       : ["The client is weighing the practical tradeoffs."],
     privateClientLine: cleanClientPreviewCopy(aiResult?.privateClientLine),
     suggestedRevision: cleanClientPreviewCopy(aiResult?.suggestedRevision),
-    draftTerms: normalizeDraftTerms(aiResult?.draftTerms || {}),
+    acceptanceAuthority,
+    authorityReason: cleanClientPreviewCopy(
+      aiResult?.authorityReason,
+      "The client has not described an acceptable settlement range yet."
+    ),
     model: SETTLEMENT_PREVIEW_MODEL,
     source: "ai",
   };
@@ -431,7 +443,7 @@ const normalizeAiSettlementPreview = (aiResult = {}) => {
 
 export const previewSettlementDraftForClient = async ({
   caseSession,
-  draftTerms,
+  offerTerms,
   message = "",
   clientInstruction = "",
   userId,
@@ -439,7 +451,7 @@ export const previewSettlementDraftForClient = async ({
   const usageCollector = createUsageCollector("settlement");
   const currentSettlement = normalizeSettlement(caseSession.settlement || {}, caseSession);
   const playerSide = getPlayerSide(caseSession);
-  const normalizedDraftTerms = normalizeDraftTerms(draftTerms);
+  const normalizedOfferTerms = normalizeDraftTerms(offerTerms);
   const representedClientMoneyPosture =
     playerSide === "opponent"
       ? "If the draft makes the represented client pay money, lower payment is normally better. Treat a higher payment only as a pragmatic concession for certainty, speed, or risk control."
@@ -455,11 +467,11 @@ export const previewSettlementDraftForClient = async ({
       usageLabel: "settlement.clientPreview",
       onUsage: usageCollector.record,
       systemPrompt:
-        "You simulate the represented client privately during settlement negotiations in a legal strategy game. The player is the lawyer. Evaluate the draft terms as a private client huddle before opposing counsel hears them. Output valid JSON only.",
+        "You simulate the represented client privately during settlement negotiations in a legal strategy game. The player is the lawyer. Evaluate the latest offer or proposed reply as a private client huddle before opposing counsel hears anything. Output valid JSON only.",
       userPrompt: JSON.stringify({
         task: clientInstruction
-          ? "The lawyer is privately talking to the represented client. Respond with a concise client reaction and revise the draft settlement terms to reflect that private instruction where appropriate."
-          : "Give a concise private client reaction to the lawyer's draft settlement terms before they are presented to the other side.",
+          ? "The lawyer is privately talking to the represented client. Respond with concise client guidance and describe the acceptable settlement range or conditions where possible."
+          : "Give concise private client guidance about the latest settlement offer or proposed reply before it is presented to the other side.",
         rules: [
           "Speak from the represented client's practical perspective, not as a judge and not as opposing counsel.",
           "Do not decide whether the opponent accepts. Only evaluate whether the represented client can live with the draft.",
@@ -470,10 +482,13 @@ export const previewSettlementDraftForClient = async ({
           "Do not ask the lawyer to weaken the monetary position unless you explain the tradeoff: faster payment, certainty, narrow release, fee or cost waiver, or litigation risk.",
           "Use the case facts, requested relief, current settlement moods, current public terms, and recent transcript.",
           "Flag unclear or risky wording. Reward concrete timing, protected fault language, clear release scope, and terms that match client priorities.",
-          "If the lawyer privately asks the client for authority, preferences, reassurance, or a new settlement direction, use that message to revise draftTerms while preserving the client's interests.",
-          "Return draftTerms as labeled rows only when the private client huddle should update the lawyer's draft.",
+          "If the lawyer privately asks the client for authority, preferences, reassurance, or a new settlement direction, answer in plain client guidance rather than editing structured terms.",
+          "If the lawyer asks whether the client can live with the latest offer, set acceptanceAuthority to accept only if that offer is within the represented client's acceptable settlement range. Otherwise use counter, reject, or unclear.",
+          "When acceptanceAuthority is accept, authorityReason must briefly describe the acceptable range or conditions that make the latest offer livable.",
+          "Do not turn settlement authority into one precise required term set; describe a qualitative band of acceptable value, timing, release, cost, fault, or certainty tradeoffs.",
           "Do not invent new facts or legal outcomes.",
           "Keep label under 7 words, note under 24 words, each driver under 12 words, and privateClientLine under 20 words.",
+          "acceptanceAuthority must be one of: accept, counter, reject, unclear.",
           "Never mention AI, models, prompts, previews, scoring, schemas, or generation.",
           "Tone must be one of: emerald, amber, red.",
           "Score must be a number from -100 to 100.",
@@ -486,7 +501,8 @@ export const previewSettlementDraftForClient = async ({
           drivers: ["string"],
           privateClientLine: "string",
           suggestedRevision: "string",
-          draftTerms: [{ label: "string", value: "string" }],
+          acceptanceAuthority: "accept | counter | reject | unclear",
+          authorityReason: "string",
         },
         context: {
           ...buildSettlementPromptContext({
@@ -497,7 +513,7 @@ export const previewSettlementDraftForClient = async ({
           }),
           representedSide: playerSide,
           clientMoneyPosture: representedClientMoneyPosture,
-          draftTerms: normalizedDraftTerms,
+          offerTerms: normalizedOfferTerms,
           privateLawyerMessageToClient: coerceString(clientInstruction),
           factSheet: caseSession.factSheet || {},
           recentIntake: (caseSession.interviewTranscript || []).slice(-8),
