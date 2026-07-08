@@ -7,30 +7,37 @@ const updates = [
   {
     title: "Infinite legal matters",
     body: "The case library no longer feels capped. Keep opening fresh disputes with new clients, facts, stakes, and courtroom pressure.",
+    symbol: "∞",
   },
   {
     title: "Settlement strategy",
-    body: "Not every win needs a verdict. Make offers, read the other side's leverage, and decide when a deal is better than a courtroom fight.",
+    body: "Not every win needs a verdict. Make out-of-court settlement offers, read the other side's leverage, and decide when a deal is better than a courtroom fight.",
+    symbol: "🤝",
   },
   {
     title: "Smarter client intake",
     body: "Clients remember the dispute in their own voice, so interviews feel more natural while the important facts stay tied to the matter.",
+    symbol: "💡",
   },
   {
     title: "PVP challenges",
     body: "Challenge another player, prepare privately with your own AI client, then meet in court and see whose strategy holds up.",
+    symbol: "⚔",
   },
   {
     title: "Bar Association",
     body: "Browse lawyers across the arena, inspect public dossiers, review records, and find opponents for the next challenge.",
+    icon: HeroIcons.BuildingLibraryIcon,
   },
   {
     title: "Progression and leaderboards",
     body: "Build your record across wins, losses, draws, settlements, ratings, XP, specialty boards, and category progress.",
+    icon: HeroIcons.TrophyIcon,
   },
   {
     title: "Richer verdict feedback",
     body: "Rulings now show what helped your argument, what weakened it, and how your courtroom strategy performed.",
+    symbol: "⚒",
   },
 ];
 
@@ -105,22 +112,32 @@ export default function WhatsNewDialog({ buttonLabel = dialogTitle }) {
             </div>
 
             <div className="grid gap-3 p-5 md:grid-cols-2 md:p-6">
-              {updates.map((update) => (
-                <article
-                  key={update.title}
-                  className="rounded-xl border border-white/10 bg-white/[0.035] p-4"
-                >
-                  <div className="flex items-start gap-3">
-                    <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-amber-100/15 bg-amber-100/10 text-amber-100">
-                      <HeroIcons.CheckIcon className="h-4 w-4" aria-hidden="true" />
-                    </span>
-                    <div>
-                      <h3 className="text-base font-semibold text-white">{update.title}</h3>
-                      <p className="mt-2 text-sm leading-6 text-white/62">{update.body}</p>
+              {updates.map((update) => {
+                const Icon = update.icon || HeroIcons.SparklesIcon;
+
+                return (
+                  <article
+                    key={update.title}
+                    className="rounded-xl border border-white/10 bg-white/[0.035] p-4"
+                  >
+                    <div className="flex items-start gap-3">
+                      <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-amber-100/15 bg-amber-100/10 text-amber-100">
+                        {update.symbol ? (
+                          <span className="text-lg leading-none" aria-hidden="true">
+                            {update.symbol}
+                          </span>
+                        ) : (
+                          <Icon className="h-4 w-4" aria-hidden="true" />
+                        )}
+                      </span>
+                      <div>
+                        <h3 className="text-base font-semibold text-white">{update.title}</h3>
+                        <p className="mt-2 text-sm leading-6 text-white/62">{update.body}</p>
+                      </div>
                     </div>
-                  </div>
-                </article>
-              ))}
+                  </article>
+                );
+              })}
             </div>
 
             <div className="modal-action border-t border-white/10 bg-white/[0.02] px-5 py-4 md:px-6">

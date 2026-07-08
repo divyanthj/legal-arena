@@ -45,26 +45,32 @@ const featureHighlights = [
   {
     title: "AI Clients",
     description: "Question characters who answer like people with messy memories, motives, and missing details.",
+    iconKind: "profile",
   },
   {
     title: "Real Arguments",
     description: "Write your own questions and courtroom arguments instead of choosing from canned options.",
+    iconKind: "bolt",
   },
   {
     title: "AI Courtroom",
     description: "Face pushback from the other side, adapt your theory, and try to persuade the judge.",
-  },
-  {
-    title: "Settlements",
-    description: "Make offers, test leverage, and resolve matters before the fight reaches a verdict.",
+    iconKind: "gavel",
   },
   {
     title: "Verdicts",
     description: "Every case ends with a ruling that explains what helped you and what weakened your side.",
+    iconKind: "scale",
+  },
+  {
+    title: "Out-of-Court Settlements",
+    description: "Make offers, test leverage, and resolve matters out of court before the fight reaches a verdict.",
+    iconKind: "handshake",
   },
   {
     title: "PVP Cases",
     description: "Challenge another player, prepare separately, and argue both sides before an AI judge.",
+    iconKind: "swords",
   },
 ];
 
@@ -104,26 +110,31 @@ const practiceCards = [
     title: "Client Interview",
     detail:
       "Your client is powered by AI. Ask follow-up questions, dig into weak spots, and decide what story you can actually prove.",
+    iconKind: "profile",
   },
   {
     title: "Case Prep",
     detail:
       "Turn a messy interview into a working file: the timeline, strongest facts, disputed points, risks, and what your side is asking for.",
+    iconKind: "folder",
   },
   {
     title: "Court Fight",
     detail:
       "Argue against AI opposition, respond to attacks, and get a ruling that tells you whether your strategy held up.",
+    iconKind: "gavel",
   },
   {
     title: "Settlement Talks",
     detail:
       "Send offers, read the other side, and decide whether a deal is smarter than risking everything in court.",
+    iconKind: "handshake",
   },
   {
     title: "PVP Gameplay",
     detail:
       "Challenge another player to the same dispute. You each prepare privately with your own AI client, then fight it out in court with an AI judge.",
+    iconKind: "swords",
   },
 ];
 
@@ -176,6 +187,19 @@ const Icon = ({ kind, className = "h-5 w-5" }) => {
           <path d="M19 14l.9 2.1L22 17l-2.1.9L19 20l-.9-2.1L16 17l2.1-.9L19 14Z" />
         </svg>
       );
+    case "profile":
+      return (
+        <svg {...props}>
+          <circle cx="12" cy="8" r="4" />
+          <path d="M4.5 21a7.5 7.5 0 0 1 15 0" />
+        </svg>
+      );
+    case "infinity":
+      return (
+        <svg {...props}>
+          <path d="M7.5 8.5c-2 0-3.5 1.5-3.5 3.5s1.5 3.5 3.5 3.5c1.6 0 3-1.2 4.5-3.5 1.5-2.3 2.9-3.5 4.5-3.5 2 0 3.5 1.5 3.5 3.5s-1.5 3.5-3.5 3.5c-1.6 0-3-1.2-4.5-3.5-1.5-2.3-2.9-3.5-4.5-3.5Z" />
+        </svg>
+      );
     case "bolt":
       return (
         <svg {...props}>
@@ -199,6 +223,30 @@ const Icon = ({ kind, className = "h-5 w-5" }) => {
           <path d="M3 8h18v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8Z" />
           <path d="M8 8V6a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
           <path d="M3 12h18" />
+        </svg>
+      );
+    case "handshake":
+      return (
+        <svg {...props}>
+          <path d="m7 12 3.4 3.4a2 2 0 0 0 2.8 0L17 11.6" />
+          <path d="m3 10 4-4 4 4" />
+          <path d="m21 10-4-4-4 4" />
+          <path d="M7 6h10" />
+          <path d="m5 12 4.2 4.2" />
+          <path d="m19 12-4.2 4.2" />
+        </svg>
+      );
+    case "swords":
+      return (
+        <svg {...props}>
+          <path d="m4 20 6.5-6.5" />
+          <path d="m14 10 6-6" />
+          <path d="M15 4h5v5" />
+          <path d="m20 20-6.5-6.5" />
+          <path d="M10 10 4 4" />
+          <path d="M4 9V4h5" />
+          <path d="m8 16-2 2" />
+          <path d="m16 16 2 2" />
         </svg>
       );
     case "folder":
@@ -375,7 +423,7 @@ export default async function Page() {
           <div className="arena-surface-soft mx-auto mb-8 flex max-w-5xl flex-col gap-4 border-amber-200/22 bg-amber-200/[0.055] px-5 py-4 text-left md:flex-row md:items-center md:justify-between">
             <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-amber-100/72">
-                Infinite cases are live
+                Infinite cases and out-of-court settlements are live
               </p>
               <h2 className="mt-2 text-xl font-semibold leading-tight text-white">
                 More disputes. More strategy. More ways to win.
@@ -416,14 +464,13 @@ export default async function Page() {
 
               <div className="mt-10 grid gap-6 border-t border-white/10 pt-8 sm:grid-cols-2 xl:grid-cols-6">
                 {featureHighlights.map((item, index) => {
-                  const iconKinds = ["spark", "bolt", "trophy", "scale", "brief", "users"];
                   return (
                     <div
                       key={item.title}
                       className="mx-auto flex h-full max-w-xs flex-col items-center space-y-3 text-center xl:max-w-none"
                     >
                       <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-amber-200/16 bg-amber-200/[0.055] text-amber-100/82">
-                        <Icon kind={iconKinds[index]} />
+                        <Icon kind={item.iconKind} />
                       </div>
                       <div>
                         <p className="text-sm font-semibold text-white">{item.title}</p>
@@ -557,13 +604,11 @@ export default async function Page() {
         </p>
           <div className="mt-12 grid gap-5 md:grid-cols-2 xl:grid-cols-5">
           {practiceCards.map((item, index) => {
-            const iconKinds = ["users", "folder", "gavel", "scale", "star"];
-
             return (
             <div key={item.title} className="arena-surface-soft p-6">
               <div className="flex items-center gap-4">
                 <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-emerald-300/16 bg-emerald-300/[0.045] text-emerald-100/72">
-                  <Icon kind={iconKinds[index]} />
+                  <Icon kind={item.iconKind} />
                 </div>
                 <div>
                   <p className="font-medium text-white">{item.title}</p>
@@ -578,11 +623,11 @@ export default async function Page() {
 
         <div className="mt-12 grid gap-6 border-t border-white/10 pt-8 text-center sm:grid-cols-2 xl:grid-cols-5">
           {[
-            { icon: "brief", value: infiniteCasesStat, label: "Legal Matters" },
-            { icon: "users", value: "AI", label: "Client Interviews" },
-            { icon: "scale", value: "Deal", label: "Settlement Talks" },
+            { icon: "infinity", value: infiniteCasesStat, label: "Legal Matters" },
+            { icon: "profile", value: "AI", label: "Client Interviews" },
+            { icon: "handshake", value: "Deal", label: "Settlement Talks" },
             { icon: "gavel", value: "Court", label: "Argument Battles" },
-            { icon: "star", value: "PVP", label: "Player Challenges" },
+            { icon: "swords", value: "PVP", label: "Player Challenges" },
           ].map((stat) => (
             <div key={stat.label} className="flex items-center justify-center gap-4">
               <div className="rounded-xl border border-amber-200/14 bg-amber-200/[0.045] p-3 text-amber-100/72">
