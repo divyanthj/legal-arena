@@ -5,6 +5,11 @@ import { signOut } from "next-auth/react";
 import * as HeroIcons from "@heroicons/react/24/outline";
 import config from "@/config";
 import { trackGoal } from "@/libs/datafast";
+import {
+  INDEPENDENCE_DAY_PROMO,
+  getDiscountedPrice,
+  isIndependenceDayPromoActive,
+} from "@/libs/independenceDayPromo";
 import EarlyAccessCheckoutButton from "./EarlyAccessCheckoutButton";
 
 const loginHref = `${config.auth.loginUrl}?callbackUrl=${encodeURIComponent(
@@ -20,6 +25,9 @@ export function DevelopmentAccessPanel({
 }) {
   const plan = config.lemonsqueezy.plans[0];
   const isModal = variant === "modal";
+  const [promoActive, setPromoActive] = useState(() =>
+    isIndependenceDayPromoActive()
+  );
 
   const handleLogout = () => {
     signOut({ callbackUrl: "/" });
@@ -32,6 +40,21 @@ export function DevelopmentAccessPanel({
   };
 
   const currentPrice = `$${plan.price.toFixed(2)}`;
+  const promoPrice = `$${getDiscountedPrice(plan.price).toFixed(2)}`;
+
+  useEffect(() => {
+    if (!promoActive) {
+      return;
+    }
+
+    const promoEndsAt = new Date(INDEPENDENCE_DAY_PROMO.endsAt).getTime();
+    const delay = Math.max(0, promoEndsAt - Date.now());
+    const timerId = window.setTimeout(() => {
+      setPromoActive(isIndependenceDayPromoActive());
+    }, delay);
+
+    return () => window.clearTimeout(timerId);
+  }, [promoActive]);
 
   useEffect(() => {
     if (!isModal) {
@@ -103,14 +126,26 @@ export function DevelopmentAccessPanel({
         </p>
       </div>
 
-      <div className="mt-8 flex items-end gap-3">
+      <div className="mt-8 flex flex-wrap items-end gap-3">
+        {promoActive ? (
+          <div className="pb-2 text-2xl font-bold tracking-tight text-white/38 line-through">
+            {currentPrice}
+          </div>
+        ) : null}
         <div className="text-5xl font-black tracking-tight text-white">
-          ${plan.price.toFixed(2)}
+          {promoActive ? promoPrice : currentPrice}
         </div>
         <div className="pb-1 text-xs font-semibold uppercase tracking-[0.25em] text-white/42">
           USD
         </div>
       </div>
+
+      {promoActive ? (
+        <div className="arena-surface-soft mt-6 rounded-2xl border border-sky-200/20 bg-sky-200/10 p-4 text-sm font-semibold leading-7 text-sky-50">
+          Independence Day offer: get 30% off lifetime access. No code needed -
+          your discount is ready at checkout.
+        </div>
+      ) : null}
 
       <div className="arena-surface-soft mt-6 rounded-2xl border border-emerald-300/20 bg-emerald-300/10 p-4 text-sm font-semibold leading-7 text-emerald-50">
         Pay once. Keep permanent access to all future Legal Arena updates.
@@ -170,7 +205,13 @@ export function DevelopmentAccessPanel({
       <div className={isModal ? "modal-action mt-8 block" : "mt-8"}>
         <EarlyAccessCheckoutButton
           variantId={plan.variantId}
-          label={isModal ? "Unlock Lifetime Access" : `Unlock Lifetime Access for ${currentPrice}`}
+          label={
+            isModal
+              ? promoActive
+                ? "Claim 30% Off Lifetime Access"
+                : "Unlock Lifetime Access"
+              : `Unlock Lifetime Access for ${promoActive ? promoPrice : currentPrice}`
+          }
           source={isModal ? "paywall_modal_primary_cta" : "early_access_gate_primary_cta"}
           onIntent={handleCheckoutIntent}
           showArrow={isModal}
@@ -179,6 +220,7 @@ export function DevelopmentAccessPanel({
 
       <p className="mt-4 text-center text-xs leading-5 text-white/42">
         One-time payment. Secure checkout via Lemon Squeezy.
+        {promoActive ? " Your limited-time discount is included." : ""}
       </p>
     </>
   );

@@ -9,6 +9,7 @@ import "./globals.css";
 
 const DATAFAST_WEBSITE_ID =
   process.env.NEXT_PUBLIC_DATAFAST_WEBSITE_ID || "dfid_jj19izF8dJN5YpCrXoA2G";
+const GOOGLE_ADS_ID = "AW-18300889585";
 
 const font = Inter({ subsets: ["latin"] });
 const arenaHeadlineFont = Inter_Tight({
@@ -101,6 +102,23 @@ export default function RootLayout({ children }) {
             data-disable-payments="true"
             src="https://datafa.st/js/script.js"
             strategy="afterInteractive"
+          />
+          <Script
+            async
+            src={`https://www.googletagmanager.com/gtag/js?id=${GOOGLE_ADS_ID}`}
+            strategy="afterInteractive"
+          />
+          <Script
+            id="google-ads-gtag"
+            strategy="afterInteractive"
+            dangerouslySetInnerHTML={{
+              __html: `
+                window.dataLayer = window.dataLayer || [];
+                function gtag(){dataLayer.push(arguments);}
+                gtag('js', new Date());
+                gtag('config', '${GOOGLE_ADS_ID}');
+              `,
+            }}
           />
         </head>
       )}

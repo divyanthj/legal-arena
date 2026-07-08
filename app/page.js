@@ -10,10 +10,23 @@ import {
 } from "@/libs/adminOps";
 import { getSEOTags } from "@/libs/seo";
 import config from "@/config";
+import {
+  isIndependenceDayPromoActive,
+} from "@/libs/independenceDayPromo";
+import IndependenceDayPromoBanner from "@/components/legal-arena/IndependenceDayPromoBanner";
 import LandingCategoryCarousel from "@/components/legal-arena/LandingCategoryCarousel";
-import WhatsNewDialog from "@/components/legal-arena/WhatsNewDialog";
 
 export const dynamic = "force-dynamic";
+
+const searchIntentKeywords = [
+  "Ace Attorney alternative",
+  "Ace Attorney style game",
+  "games like Ace Attorney",
+  "Phoenix Wright alternative",
+  "courtroom visual novel game",
+  "objection style lawyer game",
+  "detective courtroom game",
+];
 
 export const metadata = getSEOTags({
   title: "Legal Arena | AI Lawyer Game",
@@ -26,6 +39,7 @@ export const metadata = getSEOTags({
     "AI courtroom simulator",
     "legal simulation game",
     "law game",
+    ...searchIntentKeywords,
   ],
   canonicalUrlRelative: "/",
   openGraph: {
@@ -321,6 +335,7 @@ export default async function Page() {
     adminOpsConfig?.freeGameplayCampaign
   );
   const freeGameplayCampaignActive = freeGameplayCampaignStatus.active;
+  const independenceDayPromoActive = isIndependenceDayPromoActive();
   const campaignCtaLabel =
     freeGameplayAnnouncement?.ctaLabel ||
     (freeGameplayCampaignActive ? "Play Free Case" : "Start Free");
@@ -341,11 +356,20 @@ export default async function Page() {
       "Legal Arena is a first-of-its-kind AI lawyer game where players interview AI clients, negotiate settlements, build cases, argue in court, and receive rulings.",
     gamePlatform: "Web browser",
     genre: ["AI lawyer game", "Courtroom game", "Legal strategy game"],
+    keywords: [
+      "AI lawyer game",
+      "online courtroom game",
+      "legal strategy game",
+      "courtroom visual novel",
+      ...searchIntentKeywords,
+    ],
+    disambiguatingDescription:
+      "An independent browser-based AI lawyer game for players searching for courtroom games, legal strategy games, or Ace Attorney-style experiences. Legal Arena is not affiliated with Ace Attorney, Phoenix Wright, or Capcom.",
     applicationCategory: "GameApplication",
     audience: {
       "@type": "Audience",
       audienceType:
-        "People interested in law, courtroom drama, legal shows, debate, and legal reasoning.",
+        "People interested in law, courtroom drama, legal shows, debate, legal reasoning, detective courtroom games, and interactive legal stories.",
     },
     isAccessibleForFree: true,
   };
