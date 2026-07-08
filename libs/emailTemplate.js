@@ -136,11 +136,9 @@ export const emailTemplate = ({
                 <p style="margin:0 0 10px;color:#8f8a80;font-size:12px;line-height:1.7;">${escapeHtml(
                   footer
                 )}</p>
-                <p style="margin:0;color:#8f8a80;font-size:12px;line-height:1.7;">Need help? Contact <a href="mailto:${escapeHtml(
-                  config.email.supportEmail
-                )}" style="color:#d8c275;text-decoration:underline;">${escapeHtml(
-                  config.email.supportEmail
-                )}</a>.</p>
+                <p style="margin:0;color:#8f8a80;font-size:12px;line-height:1.7;">Need help? Visit the <a href="https://${escapeHtml(
+                  config.domainName
+                )}/contact" style="color:#d8c275;text-decoration:underline;">contact page</a>.</p>
               </td>
             </tr>
           </table>

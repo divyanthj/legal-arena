@@ -262,7 +262,7 @@ export async function sendFreeAccessRevokedEmail({
     text:
       `${content}\n\nUse this secure magic link to view your account: ${magicLoginUrl}\n\n` +
       "This link expires in 24 hours.\n\n" +
-      `Support: ${config.email.supportEmail}`,
+      `Support: https://${config.domainName}/contact`,
     html: emailTemplate({
       title: "Access updated",
       subtitle: `Your manually granted free ${config.appName} access has changed.`,
