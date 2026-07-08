@@ -38,6 +38,7 @@ import {
   normalizeBlueprintPatchSide,
   normalizeProfileScalar,
   normalizePartyProfile,
+  normalizeGeneratedPartyName,
   titleLooksGeneric,
   categoryTitleFallbacks,
   MONEY_PATTERN,
@@ -380,8 +381,14 @@ export const normalizeGeneratedPayload = (payload, categorySlug, complexity) => 
     title: String(payload.title || "").trim(),
     subtitle: String(payload.subtitle || "").trim(),
     openingStatement: normalizeClientIntakeStatement(payload.openingStatement),
-    plaintiffName: String(payload.plaintiffName || payload.clientName || "").trim(),
-    defendantName: String(payload.defendantName || payload.opponentName || "").trim(),
+    plaintiffName: normalizeGeneratedPartyName(
+      payload.plaintiffName || payload.clientName || "",
+      "plaintiff"
+    ),
+    defendantName: normalizeGeneratedPartyName(
+      payload.defendantName || payload.opponentName || "",
+      "defendant"
+    ),
     primaryCategory: normalizeCategorySlug(payload.primaryCategory, categorySlug),
     complexity,
     secondaryCategories: Array.isArray(payload.secondaryCategories)

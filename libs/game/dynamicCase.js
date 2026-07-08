@@ -6,6 +6,7 @@ import {
   getCategoryBySlug,
   getCategoryTitle,
 } from "./categories";
+import { normalizeGeneratedPartyName } from "./templateBuilder/shared";
 
 const DYNAMIC_CASE_MODEL =
   process.env.OPENAI_DYNAMIC_CASE_MODEL?.trim() ||
@@ -246,8 +247,10 @@ const normalizeDynamicCaseState = ({
   const primaryCategory = category?.slug || DEFAULT_CATEGORY_SLUG;
   const normalizedComplexity = clampComplexity(complexity);
   const playabilityProfile = getPlayabilityProfile(normalizedComplexity, playerLevel);
-  const plaintiffName = cleanText(source.plaintiffName) || fallback.plaintiffName;
-  const defendantName = cleanText(source.defendantName) || fallback.defendantName;
+  const plaintiffName =
+    normalizeGeneratedPartyName(source.plaintiffName, "plaintiff") || fallback.plaintiffName;
+  const defendantName =
+    normalizeGeneratedPartyName(source.defendantName, "defendant") || fallback.defendantName;
 
   return {
     generationMode: "dynamic",
@@ -402,6 +405,8 @@ export const generateDynamicCaseState = async ({
         "Make intake discovery matter: at least one useful fact or artifact should require a sharp follow-up question.",
         "Do not generate canonicalFacts. Do not assume the judge knows secret truth.",
         "The case must produce a satisfying player move within five minutes.",
+        "Use fresh ordinary party names. Do not use Maya Torres, and avoid reusing obvious placeholder names across cases.",
+        "When a party is an individual, keep the person's pronouns and presentation cues consistent across all story fields.",
         "Honor the playabilityProfile strictly. Do not exceed its issueBudget or evidenceBudget.",
         "For intro and beginner cases, avoid expert procedural traps, dense counterclaims, medical causation, and multi-issue sprawl.",
         "For intro and beginner cases, use plain-language legal issues a non-lawyer can reason about from visible facts.",

@@ -8,13 +8,14 @@ import {
   buildCasePayload,
   getCaseSessionDocumentForUser,
 } from "@/libs/game/store";
+import { normalizeGeneratedPartyName } from "@/libs/game/templateBuilder/shared";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const OPENAI_IMAGE_GENERATION_URL = "https://api.openai.com/v1/images/generations";
 const IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL?.trim() || "gpt-image-1.5";
-const PORTRAIT_PROMPT_VERSION = 4;
+const PORTRAIT_PROMPT_VERSION = 5;
 const PORTRAIT_WIDTH = 640;
 const PORTRAIT_HEIGHT = 720;
 
@@ -116,7 +117,8 @@ const getPortraitSubject = (caseSession, target = "client") => {
     targetSide === "opponent"
       ? caseSession.opponentPartyName
       : caseSession.playerPartyName;
-  const name = String(subjectName || fallbackName || "client").trim();
+  const role = targetSide === "opponent" ? "defendant" : "plaintiff";
+  const name = normalizeGeneratedPartyName(subjectName || fallbackName || "client", role);
   const isOrganization = organizationPattern.test(name);
 
   return { name, isOrganization };

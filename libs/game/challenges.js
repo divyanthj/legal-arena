@@ -17,6 +17,7 @@ import {
   finalizeFactSheetInput,
   lockAssessmentForCourt,
   runCourtroomRound,
+  runPvpCourtroomTimeoutVerdict,
 } from "./engine";
 import {
   buildDesiredReliefForSide,
@@ -69,6 +70,8 @@ import { hasClientSettlementAuthority } from "./settlementAuthority";
 
 const MONGO_ID_PATTERN = /^[a-f0-9]{24}$/i;
 const CHALLENGE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
+const COURTROOM_RESPONSE_TIMEOUT_MS = 24 * 60 * 60 * 1000;
+const COURTROOM_TIMEOUT_FINALIZING_STALE_MS = 30 * 60 * 1000;
 
 const toPlain = (doc) => (doc?.toJSON ? doc.toJSON() : doc);
 const toObjectIdString = (value) => String(value?._id || value?.id || value || "");
@@ -371,6 +374,10 @@ const advanceChallengeToCourtIfPlaintiffReady = (challenge) => {
   }
 
   challenge.status = "courtroom";
+  const now = new Date();
+  challenge.courtroomLastActivityAt = now;
+  challenge.courtroomDeadlineAt = getCourtroomDeadlineFrom(now);
+  challenge.courtroomTimeoutFinalizingAt = null;
   appendOpenRoundIfNeeded(challenge);
   return true;
 };
@@ -387,6 +394,7 @@ const normalizeChallengeForRead = (challenge) => {
   changed = seedChallengeFactSheetsIfNeeded(challenge) || changed;
   changed = backfillChallengeFactSheetsFromTranscript(challenge) || changed;
   changed = advanceChallengeToCourtIfPlaintiffReady(challenge) || changed;
+  changed = ensureChallengeCourtroomTimer(challenge) || changed;
 
   return changed;
 };
@@ -733,6 +741,38 @@ const markCourtroomRoundsModified = (challenge) => {
   if (typeof challenge?.markModified === "function") {
     challenge.markModified("courtroomRounds");
   }
+};
+
+const getCourtroomDeadlineFrom = (date = new Date()) =>
+  new Date(date.getTime() + COURTROOM_RESPONSE_TIMEOUT_MS);
+
+const resetChallengeCourtroomTimer = (challenge, now = new Date()) => {
+  if (!challenge || challenge.status !== "courtroom") {
+    return false;
+  }
+
+  challenge.courtroomLastActivityAt = now;
+  challenge.courtroomDeadlineAt = getCourtroomDeadlineFrom(now);
+  challenge.courtroomTimeoutFinalizingAt = null;
+  return true;
+};
+
+const ensureChallengeCourtroomTimer = (challenge) => {
+  if (!challenge || challenge.status !== "courtroom") {
+    return false;
+  }
+
+  if (challenge.courtroomDeadlineAt) {
+    return false;
+  }
+
+  const lastSubmission = getLastCourtroomSubmission(challenge);
+  const lastActivityAt = new Date(
+    lastSubmission?.submittedAt || challenge.updatedAt || challenge.acceptedAt || Date.now()
+  );
+  challenge.courtroomLastActivityAt = lastActivityAt;
+  challenge.courtroomDeadlineAt = getCourtroomDeadlineFrom(lastActivityAt);
+  return true;
 };
 
 const isMongooseVersionConflict = (error) =>
@@ -1590,6 +1630,7 @@ export const markChallengeReady = async ({ userId, challengeId, factSheet }) => 
   const plaintiffReady = participant.side === "client";
   if (allReady || plaintiffReady) {
     challenge.status = "courtroom";
+    resetChallengeCourtroomTimer(challenge);
     appendOpenRoundIfNeeded(challenge);
   }
 
@@ -2570,13 +2611,262 @@ const applyResolvedChallengeProgression = async ({ challenge, left, right }) => 
   ]);
 };
 
+const getChallengeScoreByLabel = (challenge, label) => {
+  const participant =
+    label === "initiator"
+      ? (challenge.participants || []).find((item) =>
+          isSameId(item.userId, challenge.initiatorId)
+        )
+      : (challenge.participants || []).find((item) =>
+          isSameId(item.userId, challenge.challengedId)
+        );
+
+  return participant?.score || 0;
+};
+
+const getChallengeParticipantByLabel = (challenge, label) =>
+  label === "initiator"
+    ? (challenge.participants || []).find((item) => isSameId(item.userId, challenge.initiatorId))
+    : (challenge.participants || []).find((item) => isSameId(item.userId, challenge.challengedId));
+
+const buildCourtroomTimeoutContext = (challenge) => {
+  const [left, right] = challenge.participants || [];
+  const initiatorParticipant = getChallengeParticipantByLabel(challenge, "initiator") || left;
+  const challengedParticipant = getChallengeParticipantByLabel(challenge, "challenged") || right;
+
+  return {
+    challengeId: toObjectIdString(challenge._id || challenge.id),
+    title: challenge.title,
+    templateSlug: challenge.templateSlug,
+    primaryCategory: challenge.primaryCategory,
+    complexity: challenge.complexity,
+    judgeProfile: challenge.judgeProfile || null,
+    maxCourtRounds: challenge.maxCourtRounds,
+    scores: {
+      initiator: getChallengeScoreByLabel(challenge, "initiator"),
+      challenged: getChallengeScoreByLabel(challenge, "challenged"),
+    },
+    initiator: {
+      side: initiatorParticipant?.side || "",
+      partyName: getPartyName(challenge.templateSnapshot, initiatorParticipant?.side),
+      factSheet: initiatorParticipant?.factSheet || {},
+      caseAssessment: initiatorParticipant?.caseAssessment || {},
+    },
+    challenged: {
+      side: challengedParticipant?.side || "",
+      partyName: getPartyName(challenge.templateSnapshot, challengedParticipant?.side),
+      factSheet: challengedParticipant?.factSheet || {},
+      caseAssessment: challengedParticipant?.caseAssessment || {},
+    },
+    courtroomRounds: (challenge.courtroomRounds || []).map((round) => ({
+      round: round.round,
+      status: round.status,
+      benchSummary: round.benchSummary || "",
+      submissions: (round.submissions || []).map((submission) => ({
+        party:
+          isSameId(submission.userId, challenge.initiatorId)
+            ? "initiator"
+            : isSameId(submission.userId, challenge.challengedId)
+            ? "challenged"
+            : "unknown",
+        side: submission.side,
+        text: submission.text,
+        citedFacts: submission.citedFacts || [],
+        citedClaimIds: submission.citedClaimIds || [],
+        citedRules: submission.citedRules || [],
+        judgeNotes: submission.judgeNotes || {},
+        submittedAt: submission.submittedAt || null,
+      })),
+    })),
+  };
+};
+
+const applyChallengeVerdictByLabel = async ({ challenge, winner, summary, highlights = [], concerns = [], timedOutAt = null }) => {
+  const initiatorParticipant = getChallengeParticipantByLabel(challenge, "initiator");
+  const challengedParticipant = getChallengeParticipantByLabel(challenge, "challenged");
+  const isDraw = winner === "draw";
+  const winnerParticipant = isDraw ? null : getChallengeParticipantByLabel(challenge, winner);
+  const loserParticipant =
+    isDraw || !winnerParticipant
+      ? null
+      : winner === "initiator"
+      ? challengedParticipant
+      : initiatorParticipant;
+
+  challenge.status = "verdict";
+  challenge.completedAt = challenge.completedAt || new Date();
+  challenge.courtroomTimedOutAt = timedOutAt || challenge.courtroomTimedOutAt || null;
+  challenge.courtroomTimeoutFinalizingAt = null;
+  challenge.verdict = {
+    ...(challenge.verdict || {}),
+    winnerUserId: winnerParticipant?.userId || null,
+    winner: isDraw ? "draw" : winner,
+    summary,
+    highlights,
+    concerns,
+    finalScore: {
+      initiator: getChallengeScoreByLabel(challenge, "initiator"),
+      challenged: getChallengeScoreByLabel(challenge, "challenged"),
+    },
+  };
+
+  if (isDraw) {
+    if (initiatorParticipant) initiatorParticipant.verdict = "draw";
+    if (challengedParticipant) challengedParticipant.verdict = "draw";
+    await Promise.all(
+      (challenge.participants || []).map((participant) =>
+        applyChallengeVerdictToPvpProgression({
+          userId: participant.userId,
+          primaryCategory: challenge.primaryCategory,
+          outcome: "draw",
+        })
+      )
+    );
+    return;
+  }
+
+  if (winnerParticipant) {
+    winnerParticipant.verdict = "win";
+  }
+  if (loserParticipant) {
+    loserParticipant.verdict = "loss";
+  }
+  await Promise.all([
+    winnerParticipant
+      ? applyChallengeVerdictToPvpProgression({
+          userId: winnerParticipant.userId,
+          primaryCategory: challenge.primaryCategory,
+          outcome: "win",
+        })
+      : null,
+    loserParticipant
+      ? applyChallengeVerdictToPvpProgression({
+          userId: loserParticipant.userId,
+          primaryCategory: challenge.primaryCategory,
+          outcome: "loss",
+        })
+      : null,
+  ].filter(Boolean));
+};
+
+const finalizeTimedOutChallenge = async ({ challenge, now = new Date() }) => {
+  const submissions = (challenge.courtroomRounds || []).flatMap(
+    (round) => round.submissions || []
+  );
+
+  if (!submissions.length) {
+    await applyChallengeVerdictByLabel({
+      challenge,
+      winner: "draw",
+      summary:
+        "The court enters a draw because the courtroom deadline expired before either side filed an argument.",
+      highlights: [],
+      concerns: ["No courtroom arguments were filed before the response deadline."],
+      timedOutAt: now,
+    });
+    return;
+  }
+
+  const timeoutVerdict = await runPvpCourtroomTimeoutVerdict({
+    challengeContext: buildCourtroomTimeoutContext(challenge),
+  });
+
+  const initiatorAdjustment = timeoutVerdict.finalScoreAdjustment?.initiator || 0;
+  const challengedAdjustment = timeoutVerdict.finalScoreAdjustment?.challenged || 0;
+  const initiatorParticipant = getChallengeParticipantByLabel(challenge, "initiator");
+  const challengedParticipant = getChallengeParticipantByLabel(challenge, "challenged");
+  if (initiatorParticipant && initiatorAdjustment) {
+    initiatorParticipant.score = (initiatorParticipant.score || 0) + initiatorAdjustment;
+  }
+  if (challengedParticipant && challengedAdjustment) {
+    challengedParticipant.score = (challengedParticipant.score || 0) + challengedAdjustment;
+  }
+
+  await applyChallengeVerdictByLabel({
+    challenge,
+    winner: timeoutVerdict.winner,
+    summary: timeoutVerdict.summary,
+    highlights: timeoutVerdict.highlights,
+    concerns: timeoutVerdict.concerns,
+    timedOutAt: now,
+  });
+};
+
+export const runChallengeCourtroomTimeouts = async ({ limit = 20, now = new Date() } = {}) => {
+  await connectMongo();
+
+  const finalizingStaleBefore = new Date(now.getTime() - COURTROOM_TIMEOUT_FINALIZING_STALE_MS);
+  const challenges = await Challenge.find({
+    status: "courtroom",
+    courtroomDeadlineAt: { $lte: now },
+    $or: [
+      { courtroomTimeoutFinalizingAt: null },
+      { courtroomTimeoutFinalizingAt: { $exists: false } },
+      { courtroomTimeoutFinalizingAt: { $lte: finalizingStaleBefore } },
+    ],
+  })
+    .sort({ courtroomDeadlineAt: 1 })
+    .limit(Math.max(1, Math.min(100, Number(limit) || 20)));
+
+  const summary = {
+    scanned: challenges.length,
+    finalized: 0,
+    failed: 0,
+    skipped: 0,
+    errors: [],
+  };
+
+  for (const candidate of challenges) {
+    const claimed = await Challenge.findOneAndUpdate(
+      {
+        _id: candidate._id,
+        status: "courtroom",
+        courtroomDeadlineAt: { $lte: now },
+        $or: [
+          { courtroomTimeoutFinalizingAt: null },
+          { courtroomTimeoutFinalizingAt: { $exists: false } },
+          { courtroomTimeoutFinalizingAt: { $lte: finalizingStaleBefore } },
+        ],
+      },
+      {
+        $set: {
+          courtroomTimeoutStartedAt: candidate.courtroomTimeoutStartedAt || now,
+          courtroomTimeoutFinalizingAt: now,
+        },
+      },
+      { new: true }
+    );
+
+    if (!claimed) {
+      summary.skipped += 1;
+      continue;
+    }
+
+    try {
+      await finalizeTimedOutChallenge({ challenge: claimed, now });
+      markParticipantsModified(claimed);
+      await claimed.save();
+      summary.finalized += 1;
+    } catch (error) {
+      summary.failed += 1;
+      summary.errors.push({
+        challengeId: toObjectIdString(claimed._id),
+        error: error.message || "Timeout verdict failed.",
+      });
+      await Challenge.updateOne(
+        { _id: claimed._id, status: "courtroom" },
+        { $set: { courtroomTimeoutFinalizingAt: null } }
+      );
+    }
+  }
+
+  return summary;
+};
+
 export const quitChallengeForUser = async ({ userId, challengeId }) => {
   const challenge = await getChallengeDocumentForUser({ userId, challengeId });
   if (!challenge) {
     return null;
-  }
-  if (!["active", "courtroom"].includes(challenge.status)) {
-    throw new Error("Only active challenges can be quit.");
   }
 
   const quittingParticipant = getParticipant(challenge, userId);
@@ -2585,39 +2875,47 @@ export const quitChallengeForUser = async ({ userId, challengeId }) => {
     throw new Error("Challenge participant not found.");
   }
 
-  const judgedRounds = (challenge.courtroomRounds || []).filter(
-    (round) => round.status === "judged"
-  );
-  const intakeForfeit = challenge.status === "active";
+  if (challenge.status === "verdict") {
+    return buildChallengePayload({ challenge, viewerUserId: userId });
+  }
+
+  const quittingFromPrivateIntake = quittingParticipant.status !== "ready";
+  const quittingFromCourtroom = challenge.status === "courtroom";
+  if (
+    !["active", "settlement", "courtroom"].includes(challenge.status) ||
+    (!quittingFromPrivateIntake && !quittingFromCourtroom)
+  ) {
+    throw new Error("Only active challenges can be quit.");
+  }
+
+  const intakeForfeit = quittingFromPrivateIntake;
+  const courtroomForfeit = quittingFromCourtroom;
   const baseStayingScore = stayingParticipant.score || 0;
   const stayBonus =
     intakeForfeit
       ? Math.max(12, challenge.complexity * 6, (quittingParticipant.score || 0) - baseStayingScore + 1)
-      : Math.max(8, challenge.complexity * 3 + judgedRounds.length * 2);
+      : 0;
   const quitterScore = quittingParticipant.score || 0;
   const stayingScore = baseStayingScore + stayBonus;
-  const isDraw = !intakeForfeit && judgedRounds.length > 0 && stayingScore === quitterScore;
-  const winnerParticipant = intakeForfeit
-    ? stayingParticipant
-    : isDraw
-    ? null
-    : stayingScore > quitterScore
-    ? stayingParticipant
-    : quittingParticipant;
+  const winnerParticipant = stayingParticipant;
 
   stayingParticipant.score = stayingScore;
   challenge.status = "verdict";
   challenge.completedAt = new Date();
+  challenge.courtroomTimeoutFinalizingAt = null;
   challenge.verdict = {
     winnerUserId: winnerParticipant?.userId || null,
-    winner: isDraw ? "draw" : getParticipantLabel(challenge, winnerParticipant.userId),
+    winner: getParticipantLabel(challenge, winnerParticipant.userId),
     summary:
       intakeForfeit
         ? `${getPartyName(
             challenge.templateSnapshot,
             stayingParticipant.side
           )}'s counsel wins immediately by forfeit because the other player quit during intake.`
-        : `One player quit before the challenge was complete. The court still considered the judged rounds so far, then awarded a staying bonus for the player who remained available.`,
+        : `${getPartyName(
+            challenge.templateSnapshot,
+            stayingParticipant.side
+          )}'s counsel wins immediately by forfeit because the other player quit during court.`,
     finalScore: {
       initiator: isSameId(stayingParticipant.userId, challenge.initiatorId)
         ? stayingScore
@@ -2631,11 +2929,20 @@ export const quitChallengeForUser = async ({ userId, challengeId }) => {
     stayBonus,
   };
 
-  await applyResolvedChallengeProgression({
-    challenge,
-    left: challenge.participants[0],
-    right: challenge.participants[1],
-  });
+  stayingParticipant.verdict = "win";
+  quittingParticipant.verdict = "loss";
+  await Promise.all([
+    applyChallengeVerdictToPvpProgression({
+      userId: stayingParticipant.userId,
+      primaryCategory: challenge.primaryCategory,
+      outcome: "win",
+    }),
+    applyChallengeVerdictToPvpProgression({
+      userId: quittingParticipant.userId,
+      primaryCategory: challenge.primaryCategory,
+      outcome: "loss",
+    }),
+  ]);
   await challenge.save();
 
   return buildChallengePayload({ challenge, viewerUserId: userId });
@@ -2737,6 +3044,12 @@ export const submitChallengeCourtroomArgument = async ({
   if (challenge.status !== "courtroom") {
     throw new Error("This challenge is not in courtroom rounds.");
   }
+  if (
+    challenge.courtroomDeadlineAt &&
+    new Date(challenge.courtroomDeadlineAt).getTime() <= Date.now()
+  ) {
+    throw new Error("The response window expired. The court is preparing a timeout verdict.");
+  }
 
   appendOpenRoundIfNeeded(challenge);
   const participant = getParticipant(challenge, userId);
@@ -2781,6 +3094,9 @@ export const submitChallengeCourtroomArgument = async ({
     userId,
   });
   await closeRoundIfReady({ challenge, round });
+  if (challenge.status === "courtroom") {
+    resetChallengeCourtroomTimer(challenge);
+  }
   await challenge.save();
 
   return buildChallengePayload({ challenge, viewerUserId: userId });
@@ -2930,6 +3246,17 @@ export const buildChallengePayload = async ({ challenge, viewerUserId }) => {
   const settlementTerminal = Boolean(
     settlementResolved || settlement.endedNegotiations || plainChallenge.status === "settled"
   );
+  const settlementFailedShouldReturnToIntake = Boolean(
+    settlementFailed && publicChallenge.status === "settlement"
+  );
+  const payloadStatus =
+    publicChallenge.status === "verdict"
+      ? "verdict"
+      : settlementAccepted
+      ? "settled"
+      : settlementFailedShouldReturnToIntake
+      ? "active"
+      : publicChallenge.status;
   const endedByUserId = toObjectIdString(settlement.endedByUserId);
   const latestNegotiationMessageUserId = toObjectIdString(
     settlementTerminal
@@ -2965,7 +3292,7 @@ export const buildChallengePayload = async ({ challenge, viewerUserId }) => {
 
   return {
     ...publicChallenge,
-    status: settlementAccepted ? "settled" : settlementFailed ? "active" : publicChallenge.status,
+    status: payloadStatus,
     id: plainChallenge.id || toObjectIdString(plainChallenge._id),
     slug,
     viewer: participant

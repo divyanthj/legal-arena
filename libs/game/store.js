@@ -26,6 +26,7 @@ import {
 } from "./dynamicCase";
 import {
   buildPublicLeaderboardEntry,
+  applyVerdictToProgression,
   ensureUserProfile,
   getEligibleComplexityForCategory,
   normalizeProgression,
@@ -1012,6 +1013,7 @@ export const createCaseSession = async ({
       playerSide === "opponent"
         ? dynamicCase.starterQuestions?.defendant || []
         : dynamicCase.starterQuestions?.plaintiff || [];
+    const desiredRelief = buildDesiredReliefForSide(template, playerSide);
 
     const caseSession = new CaseSession({
       userId,
@@ -1039,7 +1041,7 @@ export const createCaseSession = async ({
         opponentName: dynamicCase.defendantName,
         courtName: dynamicCase.courtName,
         overview: buildOverviewForSide(template, playerSide),
-        desiredRelief: buildDesiredReliefForSide(template, playerSide),
+        desiredRelief,
         openingStatement,
       },
       interviewTranscript: [
@@ -1132,6 +1134,7 @@ export const createCaseSession = async ({
     template,
     playerSide === "opponent" ? "defendant" : "plaintiff"
   );
+  const desiredRelief = buildDesiredReliefForSide(template, playerSide);
 
   if (!availability.unlocked) {
     throw new Error(availability.blockReason);
@@ -1159,7 +1162,7 @@ export const createCaseSession = async ({
       opponentName: template.opponentName,
       courtName: template.courtName,
       overview: buildOverviewForSide(template, playerSide),
-      desiredRelief: buildDesiredReliefForSide(template, playerSide),
+      desiredRelief,
       openingStatement,
     },
     interviewTranscript: [
@@ -1394,15 +1397,50 @@ export const exitCaseSessionForUser = async ({ userId, caseId }) => {
 
   ensureCaseSessionSlug(caseSession);
 
-  if (caseSession.status !== "interview") {
-    throw new Error("Only interview-stage cases can be exited.");
+  if (caseSession.status === "interview") {
+    caseSession.status = "exited";
+    caseSession.exitedAt = new Date();
+    await caseSession.save();
+
+    return caseSession;
   }
 
-  caseSession.status = "exited";
-  caseSession.exitedAt = new Date();
-  await caseSession.save();
+  if (caseSession.status === "courtroom") {
+    caseSession.status = "verdict";
+    caseSession.completedAt = caseSession.completedAt || new Date();
+    caseSession.verdict = {
+      ...(caseSession.verdict || {}),
+      winner: "opponent",
+      summary:
+        "You quit during court, so the court enters judgment for the other side.",
+      highlights: [],
+      concerns: ["You ended the courtroom phase before the case was complete."],
+      finalScore: {
+        player: caseSession.score?.player || 0,
+        opponent: caseSession.score?.opponent || 0,
+      },
+    };
+    await applyVerdictToProgression({
+      userId,
+      primaryCategory: caseSession.primaryCategory,
+      complexity: caseSession.complexity,
+      verdictWinner: "opponent",
+      caseTitle: caseSession.title,
+      verdictSummary: caseSession.verdict.summary,
+      highlights: caseSession.verdict.highlights,
+      lockedCourtEntryChance:
+        caseSession.caseAssessment?.lockedCourtEntryChance ?? null,
+    });
+    await caseSession.save();
 
-  return caseSession;
+    return caseSession;
+  }
+
+  if (caseSession.status === "verdict") {
+    throw new Error("This case already has a final verdict.");
+  }
+
+  throw new Error("Only intake or courtroom cases can be quit.");
 };
 
 export const listDashboardDataForUser = async (userId, userProfile = null) => {

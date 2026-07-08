@@ -79,6 +79,33 @@ export const normalizeLookupKey = (value = "") =>
     .replace(/\s+/g, " ")
     .trim();
 
+export const OVERUSED_PARTY_NAME_REPLACEMENTS = {
+  "maya torres": "Maya Chen",
+};
+
+export const normalizeGeneratedPartyName = (value = "", role = "plaintiff") => {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  const replacement = OVERUSED_PARTY_NAME_REPLACEMENTS[text.toLowerCase()];
+
+  if (replacement) {
+    return replacement;
+  }
+
+  if (/^(?:the\s+)?(?:client|party)$/i.test(text)) {
+    return role === "defendant" ? "Northline Services" : "Avery Morgan";
+  }
+
+  if (/^(?:the\s+)?(?:plaintiff|tenant)$/i.test(text)) {
+    return role === "defendant" ? "Northline Services" : "Nora Patel";
+  }
+
+  if (/^(?:the\s+)?(?:defendant|landlord|opponent)$/i.test(text)) {
+    return role === "plaintiff" ? "Avery Morgan" : "Harbor Gate Rentals";
+  }
+
+  return text;
+};
+
 export const normalizeCategorySlug = (value = "", fallback = "") => {
   const raw = String(value || "").trim();
 

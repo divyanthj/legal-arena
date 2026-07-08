@@ -364,6 +364,11 @@ assert.match(
   /Message opposing counsel/,
   "Settlement center column should open the opposing-counsel message modal without pretending the message was already sent."
 );
+assert.match(
+  caseWorkspaceSource,
+  /analyticsMode !== "pvp"[\s\S]*Exit settlement[\s\S]*pendingAction === "settlement-exit"/,
+  "Solo settlement action rail should expose an explicit exit settlement button."
+);
 assert.doesNotMatch(
   caseWorkspaceSource,
   /Review and send the proposal from the message modal/,
@@ -781,8 +786,8 @@ assert.match(
 );
 assert.match(
   challengeSource,
-  /settlementAccepted[\s\S]*settlementFailed[\s\S]*settlementResolved[\s\S]*settlementTerminal[\s\S]*status: settlementAccepted \? "settled" : settlementFailed \? "active" : publicChallenge\.status[\s\S]*accepted: settlementAccepted/,
-  "PVP settlement payload should treat accepted flags as settled and failed flags as active intake even if top-level status lags."
+  /settlementAccepted[\s\S]*settlementFailed[\s\S]*settlementResolved[\s\S]*settlementTerminal[\s\S]*settlementFailedShouldReturnToIntake[\s\S]*settlementFailed && publicChallenge\.status === "settlement"[\s\S]*const payloadStatus[\s\S]*publicChallenge\.status === "verdict"[\s\S]*\? "verdict"[\s\S]*: settlementAccepted[\s\S]*\? "settled"[\s\S]*: settlementFailedShouldReturnToIntake[\s\S]*\? "active"[\s\S]*: publicChallenge\.status[\s\S]*status: payloadStatus[\s\S]*accepted: settlementAccepted/,
+  "PVP settlement payload should preserve verdicts while mapping only stale failed settlement-stage records back to active intake."
 );
 assert.match(
   challengeSource,
@@ -953,6 +958,11 @@ assert.match(
   pvpChallengePortraitRouteSource,
   /getPortraitParticipantId[\s\S]*participantId[\s\S]*getParticipantForRequest[\s\S]*getPortraitImageUrl[\s\S]*participantId=/,
   "PVP challenge portrait route should use stable participant-specific image URLs."
+);
+assert.match(
+  pvpChallengePortraitRouteSource,
+  /PORTRAIT_PROMPT_VERSION = 4[\s\S]*buildGenderPresentationGuidance[\s\S]*genderGuidance/,
+  "PVP challenge portrait prompts should include gender-presentation guidance and invalidate older mixed portraits."
 );
 assert.match(
   challengeSource,

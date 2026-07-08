@@ -7,6 +7,10 @@
     {
       "path": "/api/internal/case-templates/rebalance",
       "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/internal/challenges/courtroom-timeouts/run",
+      "schedule": "0 */3 * * *"
     }
   ]
 }

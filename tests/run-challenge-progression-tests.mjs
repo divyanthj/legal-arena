@@ -17,6 +17,18 @@ const challengeStoreSource = await readFile(
   new URL("../libs/game/challenges.js", import.meta.url),
   "utf8"
 );
+const engineSource = await readFile(
+  new URL("../libs/game/engine.js", import.meta.url),
+  "utf8"
+);
+const challengeTimeoutRouteSource = await readFile(
+  new URL("../app/api/internal/challenges/courtroom-timeouts/run/route.js", import.meta.url),
+  "utf8"
+);
+const vercelConfigSource = await readFile(
+  new URL("../vercel.json", import.meta.url),
+  "utf8"
+);
 const emailSenderSource = await readFile(
   new URL("../libs/emailSender.js", import.meta.url),
   "utf8"
@@ -35,6 +47,14 @@ const challengeButtonSource = await readFile(
 );
 const caseWorkspaceSource = await readFile(
   new URL("../components/legal-arena/CaseWorkspace.js", import.meta.url),
+  "utf8"
+);
+const gameStoreSource = await readFile(
+  new URL("../libs/game/store.js", import.meta.url),
+  "utf8"
+);
+const soloExitRouteSource = await readFile(
+  new URL("../app/api/cases/[caseId]/exit/route.js", import.meta.url),
   "utf8"
 );
 
@@ -69,12 +89,36 @@ assert.doesNotMatch(dashboardHubSource, /No PVP docket yet/);
 assert.match(challengeButtonSource, /Generating case\.\.\./);
 assert.match(challengeModelSource, /quitByUserId/);
 assert.match(challengeModelSource, /stayBonus/);
+assert.match(challengeModelSource, /courtroomLastActivityAt/);
+assert.match(challengeModelSource, /courtroomDeadlineAt/);
+assert.match(challengeModelSource, /courtroomTimeoutStartedAt/);
+assert.match(challengeModelSource, /courtroomTimedOutAt/);
+assert.match(challengeModelSource, /courtroomTimeoutFinalizingAt/);
+assert.match(challengeModelSource, /highlights:\s*\{ type: \[String\], default: \[\] \}/);
 assert.match(challengeStoreSource, /export const quitChallengeForUser/);
-assert.match(challengeStoreSource, /staying bonus/);
+assert.match(challengeStoreSource, /const COURTROOM_RESPONSE_TIMEOUT_MS = 24 \* 60 \* 60 \* 1000/);
+assert.match(challengeStoreSource, /const resetChallengeCourtroomTimer = /);
+assert.match(challengeStoreSource, /const ensureChallengeCourtroomTimer = /);
+assert.match(challengeStoreSource, /changed = ensureChallengeCourtroomTimer\(challenge\) \|\| changed/);
 assert.match(
   challengeStoreSource,
-  /const intakeForfeit = challenge\.status === "active"/,
-  "PVP quit should detect intake-stage forfeits separately from courtroom quits."
+  /const quittingFromPrivateIntake = quittingParticipant\.status !== "ready"/,
+  "PVP quit should detect private intake from the player's participant status."
+);
+assert.match(
+  challengeStoreSource,
+  /if \(challenge\.status === "verdict"\) \{[\s\S]*return buildChallengePayload\(\{ challenge, viewerUserId: userId \}\)/,
+  "PVP quit should be idempotent when a forfeit verdict has already been declared."
+);
+assert.match(
+  challengeStoreSource,
+  /!\["active", "settlement", "courtroom"\]\.includes\(challenge\.status\)[\s\S]*\(!quittingFromPrivateIntake && !quittingFromCourtroom\)/,
+  "PVP quit should allow private-intake quits even when the global challenge stage is ahead."
+);
+assert.match(
+  challengeStoreSource,
+  /const intakeForfeit = quittingFromPrivateIntake/,
+  "PVP quit should make any private-intake quit an immediate forfeit."
 );
 assert.match(
   challengeStoreSource,
@@ -83,14 +127,49 @@ assert.match(
 );
 assert.match(
   challengeStoreSource,
-  /const winnerParticipant = intakeForfeit[\s\S]*\? stayingParticipant[\s\S]*court still considered the judged rounds/,
-  "Intake-stage PVP quit should award the verdict directly to the player who stayed."
+  /const winnerParticipant = stayingParticipant[\s\S]*stayingParticipant\.verdict = "win"[\s\S]*quittingParticipant\.verdict = "loss"/,
+  "PVP quit should award the verdict directly to the player who stayed."
 );
 assert.match(
   challengeStoreSource,
   /wins immediately by forfeit because the other player quit during intake/,
   "Intake-stage PVP quit verdict should explain that the other player quit during intake."
 );
+assert.match(
+  challengeStoreSource,
+  /wins immediately by forfeit because the other player quit during court/,
+  "Court-stage PVP quit verdict should explain immediate court forfeit."
+);
+assert.match(
+  challengeStoreSource,
+  /resetChallengeCourtroomTimer\(challenge\)/,
+  "PVP courtroom submissions should reset the response deadline."
+);
+assert.match(
+  challengeStoreSource,
+  /if \(allReady \|\| plaintiffReady\) \{[\s\S]*challenge\.status = "courtroom"[\s\S]*resetChallengeCourtroomTimer\(challenge\)[\s\S]*appendOpenRoundIfNeeded\(challenge\)/,
+  "PVP court entry should initialize the response deadline immediately."
+);
+assert.match(
+  challengeStoreSource,
+  /The response window expired\. The court is preparing a timeout verdict\./,
+  "PVP courtroom submissions should be blocked after the stored response deadline expires."
+);
+assert.match(challengeStoreSource, /export const runChallengeCourtroomTimeouts/);
+assert.match(challengeStoreSource, /runPvpCourtroomTimeoutVerdict/);
+assert.match(challengeStoreSource, /No courtroom arguments were filed before the response deadline/);
+assert.match(challengeStoreSource, /courtroomTimeoutFinalizingAt: now/);
+assert.match(challengeStoreSource, /courtroomTimedOutAt = timedOutAt/);
+assert.match(challengeTimeoutRouteSource, /CRON_SECRET/);
+assert.match(challengeTimeoutRouteSource, /acquireInternalJobLock/);
+assert.match(challengeTimeoutRouteSource, /runChallengeCourtroomTimeouts/);
+assert.match(challengeTimeoutRouteSource, /export async function GET/);
+assert.match(challengeTimeoutRouteSource, /export async function POST/);
+assert.match(vercelConfigSource, /\/api\/internal\/challenges\/courtroom-timeouts\/run/);
+assert.match(vercelConfigSource, /"schedule": "0 \*\/3 \* \* \*"/);
+assert.match(engineSource, /export const runPvpCourtroomTimeoutVerdict/);
+assert.match(engineSource, /usageLabel: "courtroom\.pvpTimeoutVerdict"/);
+assert.match(engineSource, /winner: "initiator\|challenged\|draw"/);
 assert.match(challengeStoreSource, /sendChallengeAcceptedEmail/);
 assert.match(challengeStoreSource, /challenge accepted email failed/);
 assert.match(challengeStoreSource, /User\.findById\(challenge\.initiatorId\)\.select\("name email"\)/);
@@ -186,12 +265,21 @@ assert.match(challengeWorkspaceSource, /realtimeRefreshPath:\s*`\/challenges\/\$
 assert.match(challengeWorkspaceSource, /realtimeVersionPath:\s*`\/challenges\/\$\{challengeRef\}\/version`/);
 assert.match(challengeWorkspaceSource, /realtimeVersionIntervalMs:\s*1200/);
 assert.match(challengeWorkspaceSource, /courtroomSubmitOnly:\s*true/);
+assert.match(challengeWorkspaceSource, /courtroomDeadlineAt: challenge\.courtroomDeadlineAt/);
+assert.match(challengeWorkspaceSource, /Quit this PVP challenge\? You will lose immediately\./);
 assert.match(challengeWorkspaceSource, /requirePlaintiffOpening:\s*true/);
 assert.match(challengeWorkspaceSource, /turnBasedCourtroom:\s*true/);
 assert.match(challengeWorkspaceSource, /counselLabels:\s*true/);
 assert.match(challengeWorkspaceSource, /playerCounselName:\s*viewer\.name/);
 assert.match(challengeWorkspaceSource, /opponentCounselName:\s*opponent\.name/);
 assert.match(caseWorkspaceSource, /apiClient\.get\(realtimeRefreshPath\)/);
+assert.match(gameStoreSource, /if \(caseSession\.status === "interview"\)[\s\S]*caseSession\.status = "exited"/);
+assert.match(gameStoreSource, /if \(caseSession\.status === "courtroom"\)[\s\S]*caseSession\.status = "verdict"/);
+assert.match(gameStoreSource, /winner: "opponent"/);
+assert.match(gameStoreSource, /You quit during court, so the court enters judgment for the other side\./);
+assert.match(gameStoreSource, /applyVerdictToProgression\(\{[\s\S]*verdictWinner: "opponent"/);
+assert.match(gameStoreSource, /This case already has a final verdict\./);
+assert.match(soloExitRouteSource, /caseSession: buildCasePayload\(caseSession\)/);
 assert.match(caseWorkspaceSource, /window\.setInterval\(refreshCase, realtimeRefreshIntervalMs\)/);
 assert.match(caseWorkspaceSource, /apiClient\.get\(realtimeVersionPath\)/);
 assert.match(caseWorkspaceSource, /buildRealtimeVersionKey/);
@@ -199,6 +287,11 @@ assert.match(caseWorkspaceSource, /nextVersionKey !== realtimeVersionKeyRef\.cur
 assert.match(caseWorkspaceSource, /Opponent Argument/);
 assert.match(caseWorkspaceSource, /const waitingForPlaintiffOpening = Boolean/);
 assert.match(caseWorkspaceSource, /const waitingForOpponentResponse = Boolean/);
+assert.match(caseWorkspaceSource, /const courtroomDeadlineLabel = courtroomTimeoutPending/);
+assert.match(caseWorkspaceSource, /Response due in/);
+assert.match(caseWorkspaceSource, /Court is preparing a timeout verdict/);
+assert.match(caseWorkspaceSource, /courtroomTimeoutPending \|\| !argument\.trim\(\)/);
+assert.match(caseWorkspaceSource, /\{isInterview \|\| isCourtroom \? \(/);
 assert.match(caseWorkspaceSource, /const showCourtroomWaitingCard = Boolean/);
 assert.match(caseWorkspaceSource, /apiConfig\.requirePlaintiffOpening/);
 assert.match(caseWorkspaceSource, /apiConfig\.turnBasedCourtroom/);

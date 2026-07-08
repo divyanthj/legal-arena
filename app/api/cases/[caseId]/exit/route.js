@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/libs/next-auth";
-import { exitCaseSessionForUser } from "@/libs/game/store";
+import { buildCasePayload, exitCaseSessionForUser } from "@/libs/game/store";
 import { getSoloGameplayAccessForSession } from "@/libs/admin";
 
 export async function POST(req, { params }) {
@@ -32,7 +32,10 @@ export async function POST(req, { params }) {
       return NextResponse.json({ error: "Case not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({
+      success: true,
+      caseSession: buildCasePayload(caseSession),
+    });
   } catch (error) {
     console.error(error);
     return NextResponse.json({ error: error.message }, { status: 500 });

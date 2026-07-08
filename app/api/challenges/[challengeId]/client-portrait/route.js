@@ -10,14 +10,71 @@ export const maxDuration = 60;
 
 const OPENAI_IMAGE_GENERATION_URL = "https://api.openai.com/v1/images/generations";
 const IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL?.trim() || "gpt-image-1.5";
-const PORTRAIT_PROMPT_VERSION = 3;
+const PORTRAIT_PROMPT_VERSION = 4;
 const PORTRAIT_WIDTH = 640;
 const PORTRAIT_HEIGHT = 720;
 
 const organizationPattern =
   /\b(llc|inc|corp|corporation|company|co\.|ltd|limited|partners|partnership|group|holdings|apartments|properties|renovations|services|studio|agency|association|school|university|department|city|county|state)\b/i;
 
+const masculineGivenNameCues = new Set([
+  "ben",
+  "caleb",
+  "chris",
+  "daniel",
+  "david",
+  "elliot",
+  "elliott",
+  "evan",
+  "james",
+  "john",
+  "joseph",
+  "michael",
+  "nathan",
+  "paul",
+  "ryan",
+  "samuel",
+  "thomas",
+  "william",
+]);
+
+const feminineGivenNameCues = new Set([
+  "anna",
+  "emily",
+  "emma",
+  "jessica",
+  "laura",
+  "maya",
+  "olivia",
+  "rachel",
+  "rebecca",
+  "sarah",
+  "sophia",
+  "susan",
+]);
+
 const toId = (value) => String(value?._id || value?.id || value || "");
+
+const countPatternMatches = (text, pattern) => {
+  const matches = String(text || "").match(pattern);
+  return matches ? matches.length : 0;
+};
+
+const stringifyCueSource = (value) => {
+  if (!value) {
+    return "";
+  }
+
+  if (typeof value === "string") {
+    return value;
+  }
+
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return "";
+  }
+};
 
 const getPortraitTarget = (request) => {
   const url = new URL(request.url);
@@ -52,6 +109,84 @@ const getPartyName = (challenge, participant) =>
     ? challenge.premise?.opponentName || challenge.templateSnapshot?.opponentName || "Opponent"
     : challenge.premise?.clientName || challenge.templateSnapshot?.clientName || "Client";
 
+const getGivenNameCue = (name) =>
+  String(name || "")
+    .trim()
+    .split(/\s+/)[0]
+    ?.toLowerCase()
+    .replace(/[^a-z-]/g, "");
+
+const buildGenderPresentationGuidance = ({ challenge, participant, subjectName, isOrganization }) => {
+  const sideKey = participant?.side === "opponent" ? "defendant" : "plaintiff";
+  const cueText = [
+    challenge.premise?.overview,
+    challenge.premise?.openingStatement,
+    challenge.premise?.desiredRelief,
+    participant?.clientMemoryExcerpt,
+    stringifyCueSource(challenge.canonicalStory),
+    stringifyCueSource(challenge.templateSnapshot),
+    stringifyCueSource(challenge.templateSnapshot?.partyProfiles?.[sideKey]),
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .slice(0, 12000);
+
+  const feminineScore =
+    countPatternMatches(
+      cueText,
+      /\b(she|her|hers|herself|woman|female|mother|wife|daughter|sister|landlady|businesswoman|madam|ms\.|mrs\.)\b/gi
+    ) +
+    countPatternMatches(
+      cueText,
+      /\b(client|tenant|owner|plaintiff|defendant|party)\s+(is|was|says|said|claims|claimed|told|asked)\s+she\b/gi
+    );
+
+  const masculineScore =
+    countPatternMatches(
+      cueText,
+      /\b(he|him|his|himself|man|male|father|husband|son|brother|landlord|businessman|sir|mr\.)\b/gi
+    ) +
+    countPatternMatches(
+      cueText,
+      /\b(client|tenant|owner|plaintiff|defendant|party)\s+(is|was|says|said|claims|claimed|told|asked)\s+he\b/gi
+    );
+
+  const nonBinaryScore =
+    countPatternMatches(cueText, /\b(nonbinary|non-binary|gender-neutral|gender neutral)\b/gi) +
+    countPatternMatches(cueText, /\b(they|them|their|theirs|themself|themselves)\b/gi);
+
+  if (nonBinaryScore >= 2 && nonBinaryScore > feminineScore && nonBinaryScore > masculineScore) {
+    return "Case text suggests they/them or non-binary cues; depict a gender-neutral or non-binary adult presentation.";
+  }
+
+  if (feminineScore >= 2 && feminineScore > masculineScore) {
+    return isOrganization
+      ? "Case text suggests feminine cues for the representative; depict a female-presenting adult representative."
+      : "Case text suggests feminine cues for the party; depict a female-presenting adult party.";
+  }
+
+  if (masculineScore >= 2 && masculineScore > feminineScore) {
+    return isOrganization
+      ? "Case text suggests masculine cues for the representative; depict a male-presenting adult representative."
+      : "Case text suggests masculine cues for the party; depict a male-presenting adult party.";
+  }
+
+  const givenNameCue = getGivenNameCue(subjectName);
+  if (masculineGivenNameCues.has(givenNameCue)) {
+    return isOrganization
+      ? `The representative name "${subjectName}" is conventionally masculine in this context, and the case text does not contradict that; depict a male-presenting adult representative.`
+      : `The party name "${subjectName}" is conventionally masculine in this context, and the case text does not contradict that; depict a male-presenting adult party.`;
+  }
+
+  if (feminineGivenNameCues.has(givenNameCue)) {
+    return isOrganization
+      ? `The representative name "${subjectName}" is conventionally feminine in this context, and the case text does not contradict that; depict a female-presenting adult representative.`
+      : `The party name "${subjectName}" is conventionally feminine in this context, and the case text does not contradict that; depict a female-presenting adult party.`;
+  }
+
+  return "Gender presentation is not clearly specified. Choose a plausible adult presentation without treating the name as definitive or relying on stereotypes; ambiguous names such as Alex Morgan may be woman, man, or androgynous if the case text does not specify.";
+};
+
 const getChallengeId = (challenge) => toId(challenge._id || challenge.id);
 
 const getPortraitBlobPath = (challenge, participant) =>
@@ -66,6 +201,12 @@ const getPortraitImageUrl = (challenge, participant) => {
 const buildPortraitPrompt = (challenge, participant, target) => {
   const name = getPartyName(challenge, participant);
   const isOrganization = organizationPattern.test(name);
+  const genderGuidance = buildGenderPresentationGuidance({
+    challenge,
+    participant,
+    subjectName: name,
+    isOrganization,
+  });
   const context = [
     challenge.practiceArea,
     challenge.primaryCategory,
@@ -79,6 +220,7 @@ const buildPortraitPrompt = (challenge, participant, target) => {
     `Create a photorealistic portrait for a fictional legal game ${target === "opponent" ? "opposing party" : "client"} seated across a table from their lawyer in a quiet lawyer's office.`,
     `Subject identity cue: ${name}.`,
     `Case context: ${context || "civil legal dispute"}.`,
+    genderGuidance,
     isOrganization
       ? "The party is an organization, so show a realistic representative or owner in business attire such as a suit jacket, dress shirt, or suit and tie."
       : "The party is a person, so show normal everyday clothing that fits an ordinary client, not a lawyer headshot and not overly formal.",

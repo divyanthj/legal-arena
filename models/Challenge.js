@@ -406,6 +406,11 @@ const challengeSchema = mongoose.Schema(
       type: [courtroomRoundSchema],
       default: [],
     },
+    courtroomLastActivityAt: { type: Date, default: null },
+    courtroomDeadlineAt: { type: Date, default: null, index: true },
+    courtroomTimeoutStartedAt: { type: Date, default: null },
+    courtroomTimedOutAt: { type: Date, default: null },
+    courtroomTimeoutFinalizingAt: { type: Date, default: null },
     settlement: {
       type: settlementSchema,
       default: () => ({}),
@@ -422,6 +427,8 @@ const challengeSchema = mongoose.Schema(
         default: "",
       },
       summary: { type: String, default: "" },
+      highlights: { type: [String], default: [] },
+      concerns: { type: [String], default: [] },
       finalScore: {
         initiator: { type: Number, default: 0 },
         challenged: { type: Number, default: 0 },

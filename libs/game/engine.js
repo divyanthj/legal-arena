@@ -958,6 +958,77 @@ export const runCourtroomRound = async ({ caseSession, argument, userId }) => {
   };
 };
 
+export const runPvpCourtroomTimeoutVerdict = async ({
+  challengeContext,
+  userId = "courtroom-timeout-cron",
+} = {}) => {
+  const rules = getLawbookRules();
+  const aiResult = await requestStructuredCompletion({
+    userId,
+    model: GAMEPLAY_MODEL,
+    temperature: 0.45,
+    maxTokens: 1200,
+    retryAttempts: 1,
+    usageLabel: "courtroom.pvpTimeoutVerdict",
+    promptCacheKey: buildGameplayPromptCacheKey({
+      caseSession: {
+        _id: challengeContext?.challengeId,
+        templateSlug: challengeContext?.templateSlug,
+      },
+      phase: "courtroom",
+      family: "pvpTimeoutVerdict",
+      model: GAMEPLAY_MODEL,
+    }),
+    systemPrompt:
+      "You are the judge in a player-versus-player legal strategy game. The courtroom timed out, so decide the case from the existing record only. Do not invent facts, filings, evidence, arguments, or concessions. Output valid JSON only.",
+    userPrompt: JSON.stringify({
+      task:
+        "Enter a final verdict because neither party responded before the court deadline. Decide which side made the stronger legal showing so far.",
+      rules: [
+        "Use only the supplied lawbook rules, side files, judge profile, and courtroom submissions.",
+        "Existing argument scores are context, not the sole winner rule.",
+        "winner must be initiator, challenged, or draw.",
+        "summary should explain the timeout ruling in player-facing courtroom language.",
+        "highlights should name the strongest points supporting the winner or draw.",
+        "concerns should name the main weaknesses or unresolved proof gaps.",
+        "Do not mention hidden calibration, AI, internal schemas, or product mechanics.",
+      ],
+      outputSchema: {
+        winner: "initiator|challenged|draw",
+        summary: "string",
+        highlights: ["string"],
+        concerns: ["string"],
+        finalScoreAdjustment: {
+          initiator: "number",
+          challenged: "number",
+        },
+      },
+      lawbookRules: rules,
+      challenge: challengeContext,
+    }),
+  });
+
+  const winner = coerceString(aiResult?.winner).toLowerCase();
+  const normalizedWinner = ["initiator", "challenged", "draw"].includes(winner)
+    ? winner
+    : "draw";
+  const summary =
+    coerceString(aiResult?.summary) ||
+    "The court enters a timeout verdict based on the courtroom record submitted so far.";
+  const finalScoreAdjustment = aiResult?.finalScoreAdjustment || {};
+
+  return {
+    winner: normalizedWinner,
+    summary,
+    highlights: coerceStringList(aiResult?.highlights, 3),
+    concerns: coerceStringList(aiResult?.concerns, 3),
+    finalScoreAdjustment: {
+      initiator: Number(finalScoreAdjustment.initiator) || 0,
+      challenged: Number(finalScoreAdjustment.challenged) || 0,
+    },
+  };
+};
+
 export const finalizeFactSheetInput = ({ factSheet, caseTemplate }) => {
   const template = ensureTemplate(
     caseTemplate?.toJSON ? caseTemplate.toJSON() : caseTemplate

@@ -378,6 +378,8 @@ const buildCanonicalStoryPrompt = ({
       "Write one coherent underlying story of what happened in plain language.",
       "Use the complexity profile to control length, number of beats, number of disputes, likely evidence count, proof gaps, and side pressure points.",
       "Keep the dispute realistic and ordinary for the category.",
+      "Use fresh ordinary party names. Do not use Maya Torres, and do not keep reusing the same plaintiff name across generated cases.",
+      "Keep each individual's pronouns, role, and presentation cues consistent across the story packet.",
       "Focus on events, communications, records, omissions, and motives rather than abstract legal conclusions.",
       "Make the opening statement sound like a real plaintiff talking to counsel during intake.",
       "Distinguish clearly between settled facts, disputed issues, and proof gaps.",

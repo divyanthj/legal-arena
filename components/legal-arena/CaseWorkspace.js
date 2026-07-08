@@ -964,6 +964,7 @@ export default function CaseWorkspace({
   const [showSettlementComposeModal, setShowSettlementComposeModal] = useState(false);
   const [settlementRejected, setSettlementRejected] = useState(false);
   const [settlementCooldownNow, setSettlementCooldownNow] = useState(() => Date.now());
+  const [courtroomTimerNow, setCourtroomTimerNow] = useState(() => Date.now());
   const [showSettlementMatterSummary, setShowSettlementMatterSummary] = useState(false);
   const [showClientWalkoutModal, setShowClientWalkoutModal] = useState(false);
   const [clientWalkoutCountdown, setClientWalkoutCountdown] = useState(5);
@@ -1343,6 +1344,25 @@ export default function CaseWorkspace({
 
     return () => window.clearInterval(intervalId);
   }, [caseSession.settlement?.cooldownUntil]);
+
+  useEffect(() => {
+    if (
+      analyticsMode !== "pvp" ||
+      caseSession.status !== "courtroom" ||
+      !caseSession.courtroomDeadlineAt ||
+      typeof window === "undefined"
+    ) {
+      return undefined;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setCourtroomTimerNow(Date.now());
+    }, 60000);
+
+    setCourtroomTimerNow(Date.now());
+
+    return () => window.clearInterval(intervalId);
+  }, [analyticsMode, caseSession.courtroomDeadlineAt, caseSession.status]);
 
   useEffect(() => {
     if (!isInterview || !interviewTranscriptRef.current) {
@@ -1950,7 +1970,7 @@ export default function CaseWorkspace({
 
   const handleCourtroomSubmit = async (event) => {
     event.preventDefault();
-    if (working || showCourtroomWaitingCard || !argument.trim()) return;
+    if (working || showCourtroomWaitingCard || courtroomTimeoutPending || !argument.trim()) return;
 
     const submittedArgument = argument.trim();
     trackGoal("courtroom_argument_sent", caseAnalyticsParams({
@@ -2004,9 +2024,15 @@ export default function CaseWorkspace({
       return;
     }
 
+    const exitConfirmMessage =
+      isCourtroom && analyticsMode === "pvp"
+        ? "Quit this PVP challenge? You will lose immediately."
+        : isCourtroom
+        ? "Quit this court case? You will lose immediately."
+        : apiConfig.exitConfirm ||
+          "Exit this case? You will not be able to start the same case again for 24 hours.";
     const confirmed = window.confirm(
-      apiConfig.exitConfirm ||
-        "Exit this case? You will not be able to start the same case again for 24 hours."
+      exitConfirmMessage
     );
 
     if (!confirmed) {
@@ -2023,7 +2049,7 @@ export default function CaseWorkspace({
         `${getApiBasePath(caseSession)}/${apiConfig.exitPath || "exit"}`
       );
 
-      if (apiConfig.exitStaysInWorkspace) {
+      if (apiConfig.exitStaysInWorkspace || response?.caseSession?.status === "verdict") {
         updateCaseFromResponse(response);
       } else {
         startNavigationLoading(apiConfig.exitLoadingLabel || "Returning to the docket");
@@ -2257,6 +2283,29 @@ export default function CaseWorkspace({
     (!cleanDraftList(factSheetDraft.desiredRelief).length && "Add requested relief") ||
     "Review and finalize fact sheet";
   const isCourtroom = !isInterview && !isSettlement && !isSettled && !isExited && !isVerdict;
+  const courtroomDeadlineTime = caseSession.courtroomDeadlineAt
+    ? new Date(caseSession.courtroomDeadlineAt).getTime()
+    : null;
+  const courtroomDeadlineRemainingMs =
+    analyticsMode === "pvp" && Number.isFinite(Number(courtroomDeadlineTime))
+      ? Math.max(0, Number(courtroomDeadlineTime) - courtroomTimerNow)
+      : null;
+  const courtroomDeadlineExpired =
+    analyticsMode === "pvp" &&
+    Number.isFinite(Number(courtroomDeadlineTime)) &&
+    Number(courtroomDeadlineTime) <= courtroomTimerNow;
+  const courtroomTimeoutPending = Boolean(
+    analyticsMode === "pvp" &&
+      isCourtroom &&
+      (courtroomDeadlineExpired || caseSession.courtroomTimeoutFinalizingAt)
+  );
+  const courtroomDeadlineLabel = courtroomTimeoutPending
+    ? "Court is preparing a timeout verdict"
+    : courtroomDeadlineRemainingMs !== null
+    ? `Response due in ${Math.floor(courtroomDeadlineRemainingMs / 3600000)}h ${Math.floor(
+        (courtroomDeadlineRemainingMs % 3600000) / 60000
+      )}m`
+    : "";
   const courtroomRoundLabel = `Courtroom Round ${displayedCourtroomRound}`;
   const assessment = caseSession.caseAssessment || {};
   const displayedSuccessChance = isInterview
@@ -4170,6 +4219,18 @@ export default function CaseWorkspace({
                 <HeroIcons.PaperAirplaneIcon className="h-4 w-4" aria-hidden="true" />
               )}
             </button>
+            {analyticsMode !== "pvp" ? (
+              <button
+                type="button"
+                className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-red-300/[0.12] bg-red-300/[0.055] px-4 py-2.5 text-sm font-black text-red-100 transition hover:border-red-300/[0.22] hover:bg-red-300/[0.09] disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={handleSettlementExit}
+                onPointerDown={triggerSettlementHaptic}
+                disabled={working || pendingAction === "settlement-exit" || settlementIsTerminal}
+              >
+                {pendingAction === "settlement-exit" ? "Exiting settlement..." : "Exit settlement"}
+                <HeroIcons.ArrowUturnLeftIcon className="h-4 w-4" aria-hidden="true" />
+              </button>
+            ) : null}
             {analyticsMode === "pvp" ? (
               <button
                 type="button"
@@ -5083,7 +5144,7 @@ export default function CaseWorkspace({
               Legal Arena
             </p>
             <div className="flex items-center gap-2">
-              {isInterview ? (
+              {isInterview || isCourtroom ? (
                 <button
                   type="button"
                   className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-rose-300/22 bg-rose-500/10 px-3 text-xs font-semibold text-rose-100 transition hover:border-rose-200/45 hover:bg-rose-500/18 disabled:cursor-not-allowed disabled:opacity-55"
@@ -5092,7 +5153,9 @@ export default function CaseWorkspace({
                   aria-label={apiConfig.exitLabel || "Exit case"}
                 >
                   <HeroIcons.XMarkIcon className="h-4 w-4" aria-hidden="true" />
-                  Exit
+                  {pendingAction === "exit"
+                    ? apiConfig.exitPendingLabel || "Exiting..."
+                    : apiConfig.exitLabel || "Exit Case"}
                 </button>
               ) : null}
               <ButtonAccount />
@@ -5127,6 +5190,11 @@ export default function CaseWorkspace({
                 aria-label={successChanceLabel}
               >
                 Win chance {Math.round(Number(displayedSuccessChance))}%
+              </span>
+            ) : null}
+            {courtroomDeadlineLabel ? (
+              <span className="shrink-0 rounded-lg border border-amber-200/25 bg-amber-200/10 px-2.5 py-1 text-xs font-semibold text-amber-100">
+                {courtroomDeadlineLabel}
               </span>
             ) : null}
           </div>
@@ -5219,7 +5287,12 @@ export default function CaseWorkspace({
                     Win chance {Math.round(Number(displayedSuccessChance))}%
                   </span>
                 ) : null}
-                {isInterview ? (
+                {courtroomDeadlineLabel ? (
+                  <span className="shrink-0 rounded-lg border border-amber-200/25 bg-amber-200/10 px-2.5 py-1 text-xs font-semibold text-amber-100">
+                    {courtroomDeadlineLabel}
+                  </span>
+                ) : null}
+                {isInterview || isCourtroom ? (
                   <button
                     type="button"
                     className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-rose-300/22 bg-rose-500/10 px-3 text-xs font-semibold text-rose-100 transition hover:border-rose-200/45 hover:bg-rose-500/18 disabled:cursor-not-allowed disabled:opacity-55"
@@ -6336,7 +6409,7 @@ export default function CaseWorkspace({
                           value={argument}
                           onChange={(event) => setArgument(event.target.value)}
                           onKeyDown={handleChatTextareaKeyDown}
-                          disabled={transcribingArgument}
+                          disabled={transcribingArgument || courtroomTimeoutPending}
                         />
                         <span className="absolute bottom-3 right-3 text-xs font-semibold text-white/45">
                           {argument.trim().length} / 2500
@@ -6349,7 +6422,7 @@ export default function CaseWorkspace({
                             ? "border-rose-300/35 bg-rose-400/15 text-rose-100"
                             : "border-white/12 bg-white/[0.035] text-white/82"
                         }`}
-                        disabled={working || transcribingArgument}
+                        disabled={working || transcribingArgument || courtroomTimeoutPending}
                         onClick={handleArgumentVoiceInput}
                       >
                         {recordingArgument
@@ -6358,9 +6431,14 @@ export default function CaseWorkspace({
                           ? "Transcribing"
                           : "Voice Argument"}
                       </button>
+                      {courtroomTimeoutPending ? (
+                        <p className="rounded-xl border border-amber-200/25 bg-amber-200/10 px-3 py-2 text-sm font-semibold text-amber-100">
+                          Court is preparing a timeout verdict.
+                        </p>
+                      ) : null}
                       <button
                         className="w-full rounded-xl border border-white/80 bg-white px-5 py-3 text-sm font-bold text-black transition hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
-                        disabled={working || recordingArgument || transcribingArgument || !argument.trim()}
+                        disabled={working || recordingArgument || transcribingArgument || courtroomTimeoutPending || !argument.trim()}
                       >
                         {pendingAction === "courtroom" ? (
                           <PresentingArgumentIndicator captionClassName="text-blue-800" />
@@ -6614,7 +6692,7 @@ export default function CaseWorkspace({
                           value={argument}
                           onChange={(event) => setArgument(event.target.value)}
                           onKeyDown={handleChatTextareaKeyDown}
-                          disabled={transcribingArgument}
+                          disabled={transcribingArgument || courtroomTimeoutPending}
                         />
                         <span className="absolute bottom-3 right-3 text-xs font-semibold text-white/45">
                           {argument.trim().length} / 2500
@@ -6651,7 +6729,7 @@ export default function CaseWorkspace({
                               ? "border-rose-300/35 bg-rose-400/15 text-rose-100"
                               : "border-white/12 bg-white/[0.035] text-white/82"
                           }`}
-                          disabled={working || transcribingArgument}
+                          disabled={working || transcribingArgument || courtroomTimeoutPending}
                           onClick={handleArgumentVoiceInput}
                           data-tooltip-id="tooltip"
                           data-tooltip-content={
@@ -6678,7 +6756,7 @@ export default function CaseWorkspace({
                         </button>
                         <button
                           className="w-full rounded-xl border border-amber-200/35 bg-amber-200 px-5 py-3 text-sm font-bold text-black transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
-                          disabled={working || recordingArgument || transcribingArgument || !argument.trim()}
+                          disabled={working || recordingArgument || transcribingArgument || courtroomTimeoutPending || !argument.trim()}
                         >
                           {pendingAction === "courtroom" ? (
                             <PresentingArgumentIndicator />
@@ -6692,6 +6770,11 @@ export default function CaseWorkspace({
                           )}
                         </button>
                       </div>
+                      {courtroomTimeoutPending ? (
+                        <p className="rounded-xl border border-amber-200/25 bg-amber-200/10 px-3 py-2 text-sm font-semibold text-amber-100">
+                          Court is preparing a timeout verdict.
+                        </p>
+                      ) : null}
                     </form>
                   </section>
                 ) : null}

@@ -214,6 +214,11 @@ const challengeToCaseSession = (challenge = {}) => {
     playerUserId: viewer.userId || "",
     opponentUserId: opponent.userId || "",
     status,
+    courtroomLastActivityAt: challenge.courtroomLastActivityAt || null,
+    courtroomDeadlineAt: challenge.courtroomDeadlineAt || null,
+    courtroomTimeoutStartedAt: challenge.courtroomTimeoutStartedAt || null,
+    courtroomTimedOutAt: challenge.courtroomTimedOutAt || null,
+    courtroomTimeoutFinalizingAt: challenge.courtroomTimeoutFinalizingAt || null,
     lawbookVersion: challenge.lawbookVersion,
     maxCourtRounds: challenge.maxCourtRounds,
     template: challenge.templateSnapshot,
@@ -618,7 +623,9 @@ export default function ChallengeWorkspace({ initialChallenge }) {
         exitLabel: "Quit Challenge",
         exitPendingLabel: "Quitting...",
         exitConfirm:
-          "Quit this PVP challenge? The court will consider revealed rounds so far, and the player who stays receives a staying bonus.",
+          caseSession.status === "courtroom"
+            ? "Quit this PVP challenge? You will lose immediately."
+            : "Quit this PVP challenge? The other player will win by forfeit.",
         exitStaysInWorkspace: true,
         realtimeRefresh: true,
         realtimeRefreshPath: `/challenges/${challengeRef}`,

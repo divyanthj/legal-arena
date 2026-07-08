@@ -43,8 +43,20 @@ const generationSource = await readFile(
   new URL("../libs/game/generation.js", import.meta.url),
   "utf8"
 );
+const dynamicCaseSource = await readFile(
+  new URL("../libs/game/dynamicCase.js", import.meta.url),
+  "utf8"
+);
 const promptSource = await readFile(
   new URL("../libs/game/templateBuilder/prompts.js", import.meta.url),
+  "utf8"
+);
+const repairSource = await readFile(
+  new URL("../libs/game/templateBuilder/repair.js", import.meta.url),
+  "utf8"
+);
+const sharedSource = await readFile(
+  new URL("../libs/game/templateBuilder/shared.js", import.meta.url),
   "utf8"
 );
 
@@ -54,5 +66,10 @@ assert.match(generationSource, /item-by-item split is disputed/);
 assert.match(promptSource, /preserve the concrete deposit amount/);
 assert.match(promptSource, /Do not collapse deposit and deduction amounts into vague phrases/);
 assert.match(promptSource, /making the basic deposit total unknowable/);
+assert.match(generationSource, /Do not use Maya Torres/);
+assert.match(dynamicCaseSource, /Do not use Maya Torres/);
+assert.match(sharedSource, /OVERUSED_PARTY_NAME_REPLACEMENTS/);
+assert.match(sharedSource, /"maya torres": "Maya Chen"/);
+assert.match(repairSource, /normalizeGeneratedPartyName/);
 
 console.log("Template builder no-undef tests passed");
