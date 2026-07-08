@@ -10,11 +10,8 @@ import {
 } from "@/libs/adminOps";
 import { getSEOTags } from "@/libs/seo";
 import config from "@/config";
-import {
-  isIndependenceDayPromoActive,
-} from "@/libs/independenceDayPromo";
-import IndependenceDayPromoBanner from "@/components/legal-arena/IndependenceDayPromoBanner";
 import LandingCategoryCarousel from "@/components/legal-arena/LandingCategoryCarousel";
+import WhatsNewDialog from "@/components/legal-arena/WhatsNewDialog";
 
 export const dynamic = "force-dynamic";
 
@@ -335,7 +332,6 @@ export default async function Page() {
     adminOpsConfig?.freeGameplayCampaign
   );
   const freeGameplayCampaignActive = freeGameplayCampaignStatus.active;
-  const independenceDayPromoActive = isIndependenceDayPromoActive();
   const campaignCtaLabel =
     freeGameplayAnnouncement?.ctaLabel ||
     (freeGameplayCampaignActive ? "Play Free Case" : "Start Free");
