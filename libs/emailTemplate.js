@@ -1,4 +1,5 @@
 import config from "@/config";
+import { markdownToSafeHtml, styleEmailMarkdown } from "@/libs/markdown";
 
 const escapeHtml = (value = "") =>
   value
@@ -61,6 +62,9 @@ const formatContent = (content = "") => {
     .join("");
 };
 
+const renderMarkdownEmail = (content = "") =>
+  styleEmailMarkdown(markdownToSafeHtml(content));
+
 export const emailTemplate = ({
   title = config.appName,
   subtitle = config.appDescription,
@@ -115,7 +119,7 @@ export const emailTemplate = ({
             </tr>
             <tr>
               <td style="padding:30px 34px 12px;background:#101010;">
-                ${contentHtml || formatContent(content)}
+                ${contentHtml || renderMarkdownEmail(content) || formatContent(content)}
               </td>
             </tr>
             <tr>

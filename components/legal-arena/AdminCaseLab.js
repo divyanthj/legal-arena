@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { toast } from "react-hot-toast";
+import { markdownToSafeHtml } from "@/libs/markdown";
 import apiClient from "@/libs/api";
 import ApiCredentialsAdmin from "./ApiCredentialsAdmin";
 
@@ -26,6 +27,21 @@ const adminTabs = [
 
 const arenaInputClass = "input arena-field min-h-12 w-full text-slate-100";
 const arenaTextareaClass = "textarea arena-textarea arena-field w-full text-slate-100";
+
+const MarkdownPreview = ({ content }) => (
+  <div className="rounded-xl border border-white/10 bg-black/25 p-4">
+    <div className="mb-3 flex items-center justify-between gap-3">
+      <p className="arena-kicker">Markdown preview</p>
+      <span className="text-xs text-white/38">Headings, links, lists, quotes, code, and tables</span>
+    </div>
+    {String(content || "").trim() ? (
+      <div
+        className="space-y-3 text-sm leading-7 text-white/72 [&_a]:text-amber-200 [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-amber-200/60 [&_blockquote]:px-4 [&_h1]:text-2xl [&_h1]:font-bold [&_h1]:text-white [&_h2]:text-xl [&_h2]:font-bold [&_h2]:text-white [&_h3]:text-lg [&_h3]:font-semibold [&_h3]:text-white [&_li]:ml-5 [&_ol]:list-decimal [&_table]:w-full [&_td]:border [&_td]:border-white/10 [&_td]:p-2 [&_th]:border [&_th]:border-white/15 [&_th]:p-2 [&_ul]:list-disc"
+        dangerouslySetInnerHTML={{ __html: markdownToSafeHtml(content) }}
+      />
+    ) : <p className="text-sm text-white/38">Your formatted email will appear here.</p>}
+  </div>
+);
 const arenaSelectClass = "arena-select select min-h-12 w-full text-slate-100";
 const arenaToggleClass =
   "checkbox checkbox-warning checkbox-md";
@@ -1421,7 +1437,7 @@ export default function AdminCaseLab({
                   </label>
 
                   <label className="form-control">
-                    <span className="label-text font-semibold text-white">Message</span>
+                    <span className="label-text font-semibold text-white">Message (Markdown supported)</span>
                     <textarea
                       className={`${arenaTextareaClass} h-56`}
                       value={emailForm.content}
@@ -1434,6 +1450,8 @@ export default function AdminCaseLab({
                       }
                     />
                   </label>
+
+                  <MarkdownPreview content={emailForm.content} />
 
                   <button className="arena-btn-light px-5 py-3" disabled={emailWorking}>
                     {emailWorking && <span className="loading loading-spinner loading-xs" />}
@@ -1766,7 +1784,7 @@ export default function AdminCaseLab({
                         </label>
 
                         <label className="form-control">
-                          <span className="label-text font-semibold text-white">Digest body</span>
+                          <span className="label-text font-semibold text-white">Digest body (Markdown supported)</span>
                           <textarea
                             className={`${arenaTextareaClass} h-56`}
                             value={digestForm.content}
@@ -1778,6 +1796,8 @@ export default function AdminCaseLab({
                             }
                           />
                         </label>
+
+                        <MarkdownPreview content={digestForm.content} />
 
                         <label className="form-control">
                           <span className="label-text font-semibold text-white">Footer note</span>
@@ -1861,6 +1881,7 @@ export default function AdminCaseLab({
                         <label className="form-control">
                           <span className="label-text font-semibold text-white">
                             Default digest body
+                            <span className="ml-2 font-normal text-white/42">(Markdown supported)</span>
                           </span>
                           <textarea
                             className={`${arenaTextareaClass} h-40`}
