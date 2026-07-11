@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { toast } from "react-hot-toast";
 import apiClient from "@/libs/api";
+import ApiCredentialsAdmin from "./ApiCredentialsAdmin";
 
 import {
   ALL_FILTER_OPTION,
@@ -1948,6 +1949,7 @@ export default function AdminCaseLab({
 
         {activeTab === "system" ? (
           <section className="space-y-6">
+            <ApiCredentialsAdmin />
             <form className="arena-surface" onSubmit={handleSaveOpsConfig}>
               <div className="p-6">
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">

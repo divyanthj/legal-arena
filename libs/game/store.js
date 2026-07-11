@@ -932,6 +932,40 @@ export const buildCasePayload = (caseSession, templateOverride = null) => {
   };
 };
 
+export const buildPublicCasePayload = (caseSession, templateOverride = null) => {
+  const payload = buildCasePayload(caseSession, templateOverride);
+  const publicPayload = { ...payload };
+  delete publicPayload.canonicalStory;
+  delete publicPayload.templateSnapshot;
+  delete publicPayload.caseTemplateId;
+  delete publicPayload.clientMemory;
+  delete publicPayload.usage;
+  delete publicPayload.lawbook;
+
+  return {
+    ...publicPayload,
+    template: payload.template
+      ? {
+          id: payload.template.id,
+          slug: payload.template.slug,
+          title: payload.template.title,
+          subtitle: payload.template.subtitle,
+          courtName: payload.template.courtName,
+          clientName: payload.template.clientName,
+          opponentName: payload.template.opponentName,
+          plaintiffName: payload.template.plaintiffName,
+          defendantName: payload.template.defendantName,
+          overview: payload.template.overview,
+          practiceArea: payload.template.practiceArea,
+          primaryCategory: payload.template.primaryCategory,
+          secondaryCategories: payload.template.secondaryCategories || [],
+          complexity: payload.template.complexity,
+          sourceType: payload.template.sourceType,
+        }
+      : null,
+  };
+};
+
 export const listScenarioOptions = async (userId, userProfile = null) => {
   await connectMongo();
 
@@ -1534,7 +1568,9 @@ export const getPublicPlayerProfile = async (
       fallbackMap.get(getTemplateSlugFromSession(caseSession)) ||
       null;
 
-    return buildCasePayload(caseSession, template);
+    return canViewFullArchive
+      ? buildCasePayload(caseSession, template)
+      : buildPublicCasePayload(caseSession, template);
   });
 
   const lawyerProfileSummary = await ensureStoredLawyerProfileSummary({

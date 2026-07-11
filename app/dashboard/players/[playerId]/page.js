@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/libs/next-auth";
-import DevelopmentAccessGate from "@/components/legal-arena/DevelopmentAccessGate";
 import PlayerProfileDossier from "@/components/legal-arena/PlayerProfileDossier";
 import { isAdminEmail, userCanAccessArena } from "@/libs/admin";
 import { getPublicPlayerProfile, listScenarioOptions } from "@/libs/game/store";
@@ -16,13 +15,9 @@ export default async function PlayerProfilePage({ params }) {
   const isAdmin = isAdminEmail(session?.user?.email);
   const canViewFullArchive = isAdmin || String(session?.user?.id || "") === String(params.playerId);
 
-  if (!hasArenaAccess) {
-    return <DevelopmentAccessGate email={session?.user?.email || ""} />;
-  }
-
   const [profile, challengeTemplates] = await Promise.all([
     getPublicPlayerProfile(params.playerId, { canViewFullArchive }),
-    listScenarioOptions(session.user.id, session.user),
+    hasArenaAccess ? listScenarioOptions(session.user.id, session.user) : Promise.resolve([]),
   ]);
 
   if (!profile) {

@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
+import { getRequestSession } from "@/libs/api-auth";
 import sharp from "sharp";
 import { del, put } from "@vercel/blob";
-import { authOptions } from "@/libs/next-auth";
 import connectMongo from "@/libs/mongoose";
 import { userCanAccessArena } from "@/libs/admin";
 import User from "@/models/User";
@@ -125,7 +124,8 @@ const storeHeadshot = async ({ buffer, userId }) => {
 };
 
 export async function POST(request) {
-  const session = await getServerSession(authOptions);
+  const { session, error: authError } = await getRequestSession(request);
+  if (authError) return authError;
 
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Not signed in" }, { status: 401 });
@@ -177,8 +177,9 @@ export async function POST(request) {
   }
 }
 
-export async function DELETE() {
-  const session = await getServerSession(authOptions);
+export async function DELETE(request) {
+  const { session, error: authError } = await getRequestSession(request);
+  if (authError) return authError;
 
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Not signed in" }, { status: 401 });

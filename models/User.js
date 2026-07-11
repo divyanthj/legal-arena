@@ -139,6 +139,19 @@ const userSchema = mongoose.Schema(
     image: {
       type: String,
     },
+    accountType: {
+      type: String,
+      enum: ["human", "ai"],
+      default: "human",
+      private: true,
+    },
+    aiManagedBy: {
+      type: String,
+      trim: true,
+      lowercase: true,
+      default: "",
+      private: true,
+    },
     lawyerProfileSummary: {
       type: String,
       trim: true,

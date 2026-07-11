@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
+import { getRequestSession } from "@/libs/api-auth";
 import sharp from "sharp";
 import { get, put } from "@vercel/blob";
-import { authOptions } from "@/libs/next-auth";
 import { getChallengeDocumentForUser, buildChallengePayload } from "@/libs/game/challenges";
 
 export const runtime = "nodejs";
@@ -295,7 +294,8 @@ const storePortrait = async ({ buffer, challenge, participant }) => {
 
 export async function GET(request, { params }) {
   const target = getPortraitTarget(request);
-  const session = await getServerSession(authOptions);
+  const { session, error: authError } = await getRequestSession(request);
+  if (authError) return authError;
 
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Not signed in" }, { status: 401 });
@@ -343,7 +343,8 @@ export async function GET(request, { params }) {
 
 export async function POST(request, { params }) {
   const target = getPortraitTarget(request);
-  const session = await getServerSession(authOptions);
+  const { session, error: authError } = await getRequestSession(request);
+  if (authError) return authError;
 
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Not signed in" }, { status: 401 });

@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
+import { getRequestSession } from "@/libs/api-auth";
 import sharp from "sharp";
 import { get, put } from "@vercel/blob";
-import { authOptions } from "@/libs/next-auth";
 import { getSoloGameplayAccessForSession } from "@/libs/admin";
 import {
   buildCasePayload,
@@ -325,7 +324,8 @@ const authorize = async ({ session, caseId, action = "read" }) => {
 
 export async function GET(request, { params }) {
   const target = getPortraitTarget(request);
-  const session = await getServerSession(authOptions);
+  const { session, error: authError } = await getRequestSession(request);
+  if (authError) return authError;
   const access = await authorize({ session, caseId: params.caseId, action: "read" });
 
   if (!access.allowed) {
@@ -372,7 +372,8 @@ export async function GET(request, { params }) {
 export async function POST(request, { params }) {
   const target = getPortraitTarget(request);
   const portraitField = getPortraitField(target);
-  const session = await getServerSession(authOptions);
+  const { session, error: authError } = await getRequestSession(request);
+  if (authError) return authError;
   const access = await authorize({ session, caseId: params.caseId, action: "read" });
 
   if (!access.allowed) {

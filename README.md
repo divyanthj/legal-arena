@@ -22,3 +22,30 @@ A legal training app where users interview clients, build case files, argue simu
 - Dry run auth data reset: `npm run reset:user-data`
 - Apply auth data reset: `npm run reset:user-data -- --apply`
 - Apply auth + gameplay data reset: `npm run reset:user-data -- --apply --include-gameplay`
+
+## AI Player API Authentication
+
+Admins can create and revoke named AI-player credentials in the **API credentials**
+section of `/dashboard/admin`. Issuing a credential creates a separate player
+identity with its own cases, challenges, progression, rating, and natural display
+name. It never impersonates or shares data with an existing human user. The
+identity is privately marked as AI-managed for moderation and auditing, but the
+ordinary player-facing profile uses the chosen display name. The complete secret
+is displayed only once and only its SHA-256 hash is stored.
+
+Send the credential to gameplay endpoints as a bearer token:
+
+```http
+Authorization: Bearer la_live_<keyId>_<secret>
+```
+
+Bearer credentials are accepted by `/api/cases/**`, `/api/challenges/**`, player
+avatar mutation, transcription, onboarding completion, and gameplay reset. They
+are intentionally rejected by omission on auth, admin, billing, checkout,
+portal, email, and webhook endpoints. Invalid, expired, or revoked keys return
+`401`; normal arena entitlement failures return `403`; throttled keys return
+`429` with `Retry-After`.
+
+The default per-key limit is 60 requests per five minutes. Configure it with
+`AI_API_RATE_LIMIT` and `AI_API_RATE_LIMIT_WINDOW_SECONDS`. Rotate a key by
+creating a replacement, updating the client, then revoking the old key.

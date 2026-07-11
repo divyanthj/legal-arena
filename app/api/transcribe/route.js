@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/libs/next-auth";
+import { getRequestSession } from "@/libs/api-auth";
 import { userCanAccessArena } from "@/libs/admin";
 
 export const runtime = "nodejs";
@@ -8,7 +7,8 @@ export const runtime = "nodejs";
 const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
 
 export async function POST(req) {
-  const session = await getServerSession(authOptions);
+  const { session, error: authError } = await getRequestSession(req);
+  if (authError) return authError;
 
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Not signed in" }, { status: 401 });

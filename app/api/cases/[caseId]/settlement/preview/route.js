@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/libs/next-auth";
+import { getRequestSession } from "@/libs/api-auth";
 import { getSoloGameplayAccessForSession } from "@/libs/admin";
 import { getCaseSessionDocumentForUser } from "@/libs/game/store";
 import { previewSettlementDraftForClient } from "@/libs/game/settlement";
 import { appendUsageEntriesToCaseSession } from "@/libs/game/sessionUsage";
 
 export async function POST(req, { params }) {
-  const session = await getServerSession(authOptions);
+  const { session, error: authError } = await getRequestSession(req);
+  if (authError) return authError;
 
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Not signed in" }, { status: 401 });
