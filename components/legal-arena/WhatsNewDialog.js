@@ -5,6 +5,11 @@ import * as HeroIcons from "@heroicons/react/24/outline";
 
 const updates = [
   {
+    title: "Publish your case reports",
+    body: "Turn completed verdicts into public, search-friendly blog reports that feature your advocacy, lawyer profile, case category, and performance.",
+    icon: HeroIcons.NewspaperIcon,
+  },
+  {
     title: "Infinite legal matters",
     body: "The case library no longer feels capped. Keep opening fresh disputes with new clients, facts, stakes, and courtroom pressure.",
     symbol: "∞",
@@ -98,7 +103,7 @@ export default function WhatsNewDialog({ buttonLabel = dialogTitle }) {
                 <p id={descriptionId} className="mt-3 max-w-xl text-sm leading-6 text-white/60">
                   Legal Arena now plays like a bigger legal battleground: fresh
                   matters, settlement talks, smarter clients, PVP challenges,
-                  and clearer feedback after every result.
+                  publishable case reports, and clearer feedback after every result.
                 </p>
               </div>
               <button

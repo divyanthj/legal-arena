@@ -1,9 +1,12 @@
-import { categories, articles } from "../../_assets/content";
+import { categories } from "../../_assets/content";
+import { getAllBlogArticles } from "../../_assets/runtime";
 import CardArticle from "../../_assets/components/CardArticle";
 import CardCategory from "../../_assets/components/CardCategory";
 import { notFound } from "next/navigation";
 import { getSEOTags } from "@/libs/seo";
 import config from "@/config";
+
+export const dynamic = "force-dynamic";
 
 export function generateStaticParams() {
   return categories.map((category) => ({
@@ -12,9 +15,15 @@ export function generateStaticParams() {
 }
 
 export async function generateMetadata({ params }) {
-  const category = categories.find(
+  let category = categories.find(
     (category) => category.slug === params.categoryId
   );
+  if (!category) {
+    const matchedArticle = (await getAllBlogArticles()).find((article) =>
+      article.categories.some((candidate) => candidate.slug === params.categoryId)
+    );
+    category = matchedArticle?.categories.find((candidate) => candidate.slug === params.categoryId);
+  }
   if (!category) {
     return {};
   }
@@ -27,14 +36,21 @@ export async function generateMetadata({ params }) {
 }
 
 export default async function Category({ params }) {
-  const category = categories.find(
+  const allArticles = await getAllBlogArticles();
+  let category = categories.find(
     (category) => category.slug === params.categoryId
   );
+  if (!category) {
+    const matchedArticle = allArticles.find((article) =>
+      article.categories.some((candidate) => candidate.slug === params.categoryId)
+    );
+    category = matchedArticle?.categories.find((candidate) => candidate.slug === params.categoryId);
+  }
   if (!category) {
     notFound();
   }
 
-  const articlesInCategory = articles
+  const articlesInCategory = allArticles
     .filter((article) =>
       article.categories.map((c) => c.slug).includes(category.slug)
     )

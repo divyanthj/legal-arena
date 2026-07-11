@@ -23,6 +23,7 @@ import {
 import { LEGAL_CASE_CATEGORIES } from "@/libs/game/categories";
 import { sanitizeFactSheet } from "@/libs/game/factSheetSanitizer";
 import { useCaseVoiceRecorder } from "./useCaseVoiceRecorder";
+import { getCaseReportProgressLabel } from "./caseReportUi";
 
 import {
   normalizeCourtroomEntry,
@@ -1056,6 +1057,12 @@ export default function CaseWorkspace({
   const [showIntakeTour, setShowIntakeTour] = useState(false);
   const [showSettlementTour, setShowSettlementTour] = useState(false);
   const [recentFactSheetProgress, setRecentFactSheetProgress] = useState({});
+  const [caseReport, setCaseReport] = useState({ status: "loading" });
+  const [caseReportPreferences, setCaseReportPreferences] = useState({
+    autoPublishCaseReports: false,
+    allowPortraitInCaseReports: false,
+  });
+  const [caseReportWorking, setCaseReportWorking] = useState(false);
   const interviewTranscriptRef = useRef(null);
   const courtroomTranscriptRef = useRef(null);
   const settlementTopRef = useRef(null);
@@ -1098,6 +1105,7 @@ export default function CaseWorkspace({
   const workspaceViewedRef = useRef(false);
   const intakeTourPromptedRef = useRef(false);
   const settlementTourPromptedRef = useRef(false);
+  const autoPublishAttemptedRef = useRef(false);
   const {
     recordingQuestion,
     transcribingQuestion,
@@ -1186,6 +1194,84 @@ export default function CaseWorkspace({
   const realtimeVersionIntervalMs = apiConfig.realtimeVersionIntervalMs || 1500;
   const realtimeRefreshIntervalMs = apiConfig.realtimeRefreshIntervalMs || 4000;
   const analyticsMode = apiConfig.analyticsMode || (apiConfig.basePath ? "pvp" : "solo");
+  const caseReportSourceType = analyticsMode === "pvp" ? "challenge" : "caseSession";
+  const caseReportSourceId = normalizeIdForCompare(caseSession.id || caseSession._id);
+  const caseReportPath = `/case-reports/${caseReportSourceType}/${caseReportSourceId}`;
+  const caseReportIsVerdict = caseSession.status === "verdict";
+
+  const publishCaseReport = useCallback(async ({ automatic = false } = {}) => {
+    if (!caseReportSourceId || caseReportWorking) return;
+    setCaseReportWorking(true);
+    setCaseReport((current) => ({ ...current, status: "generating" }));
+    try {
+      const response = await apiClient.post(caseReportPath);
+      setCaseReport(response.report || { status: "not_started" });
+      if (!automatic) {
+        toast.success(response.report?.status === "awaiting_consent" ? "Publication consent saved. Waiting for the other lawyer." : "Case report published.");
+      }
+    } catch (error) {
+      setCaseReport((current) => ({ ...current, status: "failed", canRetry: true }));
+    } finally {
+      setCaseReportWorking(false);
+    }
+  }, [caseReportPath, caseReportSourceId, caseReportWorking]);
+
+  const updateCaseReportPreference = async (key, value) => {
+    const previous = caseReportPreferences;
+    const next = { ...previous, [key]: value };
+    setCaseReportPreferences(next);
+    try {
+      const response = await apiClient.patch("/players/case-report-preferences", { [key]: value });
+      setCaseReportPreferences(response.preferences || next);
+    } catch (error) {
+      setCaseReportPreferences(previous);
+    }
+  };
+
+  const handleUnpublishCaseReport = async () => {
+    if (!window.confirm("Unpublish this report? It cannot be generated again from this case.")) return;
+    setCaseReportWorking(true);
+    try {
+      const response = await apiClient.delete(caseReportPath);
+      setCaseReport(response.report);
+      toast.success("Case report unpublished.");
+    } finally {
+      setCaseReportWorking(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!caseReportIsVerdict || !caseReportSourceId) return;
+    let active = true;
+    Promise.all([
+      apiClient.get(caseReportPath),
+      apiClient.get("/players/case-report-preferences"),
+    ]).then(([reportResponse, preferencesResponse]) => {
+      if (!active) return;
+      const report = reportResponse.report || { status: "not_started" };
+      const preferences = preferencesResponse.preferences || {};
+      setCaseReport(report);
+      setCaseReportPreferences(preferences);
+      if (preferences.autoPublishCaseReports && report.status === "not_started" && !autoPublishAttemptedRef.current) {
+        autoPublishAttemptedRef.current = true;
+        publishCaseReport({ automatic: true });
+      }
+    }).catch(() => { if (active) setCaseReport({ status: "not_started" }); });
+    return () => { active = false; };
+  }, [caseReportIsVerdict, caseReportPath, caseReportSourceId, publishCaseReport]);
+
+  useEffect(() => {
+    if (!caseReportWorking && caseReport.status !== "generating") return;
+    const interval = window.setInterval(async () => {
+      try {
+        const response = await apiClient.get(caseReportPath);
+        if (response.report) setCaseReport(response.report);
+      } catch (error) {
+        // The publishing request remains authoritative; polling can safely retry.
+      }
+    }, 1200);
+    return () => window.clearInterval(interval);
+  }, [caseReport.status, caseReportPath, caseReportWorking]);
   const caseAnalyticsParams = (extra = {}) => ({
     mode: analyticsMode,
     status: caseSession.status,
@@ -7094,6 +7180,46 @@ export default function CaseWorkspace({
                       </p>
                     </div>
                   </div>
+
+                  <section className="mt-5 rounded-2xl border border-amber-200/20 bg-black/22 p-4 sm:p-5">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <HeroIcons.NewspaperIcon className="h-5 w-5 text-amber-200" aria-hidden="true" />
+                          <h3 className="font-serif text-xl font-semibold text-white">Legal Arena case report</h3>
+                        </div>
+                        <p className="mt-2 max-w-2xl text-sm leading-6 text-white/58">
+                          Turn this verdict into a public, search-friendly report featuring your advocacy.
+                          {analyticsMode === "pvp" ? " Both lawyers must consent before it is published." : ""}
+                        </p>
+                      </div>
+                      {caseReport.status === "published" ? (
+                        <div className="flex flex-wrap gap-2">
+                          <Link href={`/blog/${caseReport.slug}`} className="rounded-xl bg-amber-200 px-4 py-2.5 text-sm font-bold text-black transition hover:bg-amber-100">Read report</Link>
+                          <button type="button" disabled={caseReportWorking} onClick={handleUnpublishCaseReport} className="rounded-xl border border-white/15 px-4 py-2.5 text-sm font-semibold text-white/72 transition hover:border-white/30 hover:text-white disabled:opacity-50">Unpublish</button>
+                        </div>
+                      ) : caseReport.status === "unpublished" ? (
+                        <span className="rounded-full border border-white/12 px-3 py-2 text-xs font-semibold text-white/45">Unpublished permanently</span>
+                      ) : (
+                        <button type="button" disabled={caseReportWorking || caseReport.status === "generating" || (caseReport.status === "awaiting_consent" && caseReport.viewerConsented)} onClick={() => publishCaseReport()} className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-200 px-4 py-2.5 text-sm font-bold text-black transition hover:bg-amber-100 disabled:cursor-wait disabled:opacity-60">
+                          {caseReportWorking || caseReport.status === "generating" ? <HeroIcons.ArrowPathIcon className="h-4 w-4 animate-spin" /> : <HeroIcons.NewspaperIcon className="h-4 w-4" />}
+                          {caseReport.status === "failed" ? "Retry publication" : caseReport.status === "awaiting_consent" && caseReport.viewerConsented ? "Waiting for other lawyer" : "Publish case report"}
+                        </button>
+                      )}
+                    </div>
+                    <div className="mt-4 grid gap-3 border-t border-white/8 pt-4 md:grid-cols-2">
+                      <label className="flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-white/8 bg-white/[0.025] p-3">
+                        <span><span className="block text-sm font-semibold text-white/82">Auto-publish future verdicts</span><span className="mt-1 block text-xs leading-5 text-white/45">Off by default. PVP still requires both lawyers.</span></span>
+                        <input type="checkbox" className="checkbox checkbox-warning checkbox-sm" checked={caseReportPreferences.autoPublishCaseReports} onChange={(event) => updateCaseReportPreference("autoPublishCaseReports", event.target.checked)} />
+                      </label>
+                      <label className="flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-white/8 bg-white/[0.025] p-3">
+                        <span><span className="block text-sm font-semibold text-white/82">Use my lawyer portrait</span><span className="mt-1 block text-xs leading-5 text-white/45">Separate consent for generated report images.</span></span>
+                        <input type="checkbox" className="checkbox checkbox-warning checkbox-sm" checked={caseReportPreferences.allowPortraitInCaseReports} onChange={(event) => updateCaseReportPreference("allowPortraitInCaseReports", event.target.checked)} />
+                      </label>
+                    </div>
+                    {getCaseReportProgressLabel(caseReport) ? <p className="mt-3 flex items-center gap-2 text-sm text-amber-100/75">{caseReport.status === "generating" ? <HeroIcons.ArrowPathIcon className="h-4 w-4 animate-spin" /> : null}{getCaseReportProgressLabel(caseReport)}</p> : null}
+                    {caseReport.status === "failed" ? <p className="mt-3 text-sm text-rose-200">Generation did not finish. Nothing was published; you can safely retry.</p> : null}
+                  </section>
 
                   <div className="mt-5 grid gap-4 md:grid-cols-2">
                     <div className="rounded-2xl border border-emerald-300/25 bg-emerald-300/[0.055] p-4">

@@ -2,10 +2,29 @@ import Link from "next/link";
 import Script from "next/script";
 import { notFound } from "next/navigation";
 import { articles } from "../_assets/content";
+import { getAllBlogArticles, getBlogArticle } from "../_assets/runtime";
 import BadgeCategory from "../_assets/components/BadgeCategory";
 import Avatar from "../_assets/components/Avatar";
 import { getSEOTags } from "@/libs/seo";
 import config from "@/config";
+
+export const dynamic = "force-dynamic";
+
+const escapeRegExp = (value = "") => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+function LinkedAdvocateText({ text, advocates = [] }) {
+  const linkedAdvocates = advocates.filter((advocate) => advocate.name && advocate.playerId);
+  if (!linkedAdvocates.length || !text) return text;
+  const expression = new RegExp(`(${linkedAdvocates.map((advocate) => escapeRegExp(advocate.name)).sort((a, b) => b.length - a.length).join("|")})`, "gi");
+  return String(text).split(expression).map((part, index) => {
+    const advocate = linkedAdvocates.find((candidate) => candidate.name.toLowerCase() === part.toLowerCase());
+    return advocate ? (
+      <Link key={`${advocate.playerId}-${index}`} href={`/dashboard/players/${advocate.playerId}`} className="font-semibold text-amber-200 underline decoration-amber-200/35 underline-offset-4 transition hover:text-amber-100" title={`View ${advocate.name}'s lawyer profile`}>
+        {part}
+      </Link>
+    ) : part;
+  });
+}
 
 export function generateStaticParams() {
   return articles.map((article) => ({
@@ -14,7 +33,7 @@ export function generateStaticParams() {
 }
 
 export async function generateMetadata({ params }) {
-  const article = articles.find((article) => article.slug === params.articleId);
+  const article = await getBlogArticle(params.articleId);
   if (!article) {
     return {};
   }
@@ -43,12 +62,12 @@ export async function generateMetadata({ params }) {
 }
 
 export default async function Article({ params }) {
-  const article = articles.find((article) => article.slug === params.articleId);
+  const article = await getBlogArticle(params.articleId);
   if (!article) {
     notFound();
   }
 
-  const articlesRelated = articles
+  const articlesRelated = (await getAllBlogArticles())
     .filter(
       (a) =>
         a.slug !== params.articleId &&
@@ -76,13 +95,14 @@ export default async function Article({ params }) {
             name: article.title,
             headline: article.title,
             description: article.description,
-            image: `https://${config.domainName}${article.image.urlRelative}`,
+            image: /^https?:\/\//.test(article.image.urlRelative)
+              ? article.image.urlRelative
+              : `https://${config.domainName}${article.image.urlRelative}`,
             datePublished: article.publishedAt,
             dateModified: article.publishedAt,
-            author: {
-              "@type": "Person",
-              name: article.author.name,
-            },
+            author: article.dynamic
+              ? { "@type": "Organization", name: "Legal Arena Reports" }
+              : { "@type": "Person", name: article.author.name },
           }),
         }}
       />
@@ -118,6 +138,12 @@ export default async function Article({ params }) {
           <h1 className="arena-headline text-5xl uppercase leading-[0.92] md:text-7xl">
             {article.title}
           </h1>
+
+          {article.dynamic ? (
+            <p className="mt-4 inline-flex rounded-full border border-white/12 bg-white/[0.04] px-3 py-1.5 text-xs leading-5 text-white/52">
+              This report covers a fictional proceeding argued and decided inside Legal Arena.
+            </p>
+          ) : null}
 
           <p className="mt-6 max-w-2xl text-lg leading-8 text-white/68 md:text-xl">
             {article.description}
@@ -164,7 +190,30 @@ export default async function Article({ params }) {
 
           {/* ARTICLE CONTENT */}
           <section className="max-w-3xl space-y-12 md:space-y-16">
-            {article.content}
+            {article.dynamic ? (
+              <>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={article.image.src} alt={article.image.alt} width={1536} height={1024} className="aspect-[3/2] w-full rounded-[1.75rem] border border-white/10 object-cover" />
+                <div className="rounded-2xl border border-amber-200/20 bg-amber-200/[0.05] p-5 text-white/72">
+                  <strong className="text-white">Legal Arena Reports</strong> · Featuring <LinkedAdvocateText text={article.playerName} advocates={article.advocates} />
+                </div>
+                {article.tags?.length ? (
+                  <div className="flex flex-wrap gap-2" aria-label="Article tags">
+                    {article.tags.map((tag) => <span key={tag} className="rounded-full border border-white/10 bg-white/[0.035] px-3 py-1.5 text-xs text-white/55">#{tag.replace(/\s+/g, "-")}</span>)}
+                  </div>
+                ) : null}
+                {article.sections.map((section, index) => (
+                  <section key={`${section.heading}-${index}`}>
+                    <h2 className="mb-5 text-3xl font-semibold tracking-tight text-white lg:text-5xl">{section.heading}</h2>
+                    <div className="space-y-5">
+                      {section.paragraphs.map((paragraph, paragraphIndex) => <p key={paragraphIndex} className="text-lg leading-8 text-white/68"><LinkedAdvocateText text={paragraph} advocates={article.advocates} /></p>)}
+                      {section.quote ? <blockquote className="border-l-2 border-amber-300/60 pl-5 text-xl italic leading-8 text-white/82"><LinkedAdvocateText text={section.quote} advocates={article.advocates} /></blockquote> : null}
+                      {section.bullets.length ? <ul className="list-disc space-y-3 pl-6 text-lg leading-8 text-white/68">{section.bullets.map((bullet, bulletIndex) => <li key={bulletIndex}><LinkedAdvocateText text={bullet} advocates={article.advocates} /></li>)}</ul> : null}
+                    </div>
+                  </section>
+                ))}
+              </>
+            ) : article.content}
           </section>
         </div>
       </article>

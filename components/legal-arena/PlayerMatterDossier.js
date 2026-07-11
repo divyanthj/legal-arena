@@ -1,7 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { toast } from "react-hot-toast";
+import * as HeroIcons from "@heroicons/react/24/outline";
+import apiClient from "@/libs/api";
+import { getCaseReportProgressLabel } from "./caseReportUi";
 import { sanitizeFactSheet } from "@/libs/game/factSheetSanitizer";
 import {
   verdictTone,
@@ -28,7 +32,7 @@ import {
   summarizeCount,
 } from "./playerDossierShared";
 
-export default function PlayerMatterDossier({ player, caseSession }) {
+export default function PlayerMatterDossier({ player, caseSession, canManageCaseReport = false }) {
   const matter = normalizeMatter(caseSession);
   const [activeTab, setActiveTab] = useState("Case File");
   const factSheet = sanitizeFactSheet(matter.factSheet || {});
@@ -37,6 +41,116 @@ export default function PlayerMatterDossier({ player, caseSession }) {
   const playerScore = verdict.finalScore?.player || matter.score?.player || 0;
   const opponentScore = verdict.finalScore?.opponent || matter.score?.opponent || 0;
   const verdictStyle = verdictTone[verdict.winner] || verdictTone.draw;
+  const reportSourceId = String(matter.id || matter._id || "");
+  const reportPath = `/case-reports/caseSession/${reportSourceId}`;
+  const [caseReport, setCaseReport] = useState({ status: "loading" });
+  const [reportPreferences, setReportPreferences] = useState({
+    autoPublishCaseReports: false,
+    allowPortraitInCaseReports: false,
+  });
+  const [reportWorking, setReportWorking] = useState(false);
+
+  useEffect(() => {
+    if (!hasVerdict || !canManageCaseReport || !reportSourceId) return;
+    let active = true;
+    Promise.all([
+      apiClient.get(reportPath),
+      apiClient.get("/players/case-report-preferences"),
+    ]).then(([reportResponse, preferenceResponse]) => {
+      if (!active) return;
+      setCaseReport(reportResponse.report || { status: "not_started" });
+      setReportPreferences(preferenceResponse.preferences || {});
+    }).catch(() => { if (active) setCaseReport({ status: "not_started" }); });
+    return () => { active = false; };
+  }, [canManageCaseReport, hasVerdict, reportPath, reportSourceId]);
+
+  useEffect(() => {
+    if (!reportWorking && caseReport.status !== "generating") return;
+    const interval = window.setInterval(async () => {
+      try {
+        const response = await apiClient.get(reportPath);
+        if (response.report) setCaseReport(response.report);
+      } catch (error) {
+        // The publishing request remains authoritative; polling can safely retry.
+      }
+    }, 1200);
+    return () => window.clearInterval(interval);
+  }, [caseReport.status, reportPath, reportWorking]);
+
+  const publishReport = async () => {
+    setReportWorking(true);
+    setCaseReport((current) => ({ ...current, status: "generating" }));
+    try {
+      const response = await apiClient.post(reportPath);
+      setCaseReport(response.report || { status: "not_started" });
+      toast.success("Case report published.");
+    } catch (error) {
+      setCaseReport((current) => ({ ...current, status: "failed", canRetry: true }));
+    } finally {
+      setReportWorking(false);
+    }
+  };
+
+  const unpublishReport = async () => {
+    if (!window.confirm("Unpublish this report? It cannot be generated again from this case.")) return;
+    setReportWorking(true);
+    try {
+      const response = await apiClient.delete(reportPath);
+      setCaseReport(response.report);
+      toast.success("Case report unpublished.");
+    } finally { setReportWorking(false); }
+  };
+
+  const updateReportPreference = async (key, value) => {
+    const previous = reportPreferences;
+    const next = { ...previous, [key]: value };
+    setReportPreferences(next);
+    try {
+      const response = await apiClient.patch("/players/case-report-preferences", { [key]: value });
+      setReportPreferences(response.preferences || next);
+    } catch (error) { setReportPreferences(previous); }
+  };
+
+  const renderCaseReportPanel = () => canManageCaseReport ? (
+    <section className="mt-5 rounded-2xl border border-amber-200/25 bg-black/20 p-4 md:p-5">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <div className="flex items-center gap-2">
+            <HeroIcons.NewspaperIcon className="h-5 w-5 text-amber-200" aria-hidden="true" />
+            <h3 className="font-serif text-xl font-semibold text-white">Publish this case</h3>
+          </div>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-white/58">
+            Generate a public, search-friendly Legal Arena report featuring your advocacy.
+          </p>
+        </div>
+        {caseReport.status === "published" ? (
+          <div className="flex flex-wrap gap-2">
+            <Link href={`/blog/${caseReport.slug}`} className="arena-btn-light inline-flex px-4 py-2.5 text-sm">Read report</Link>
+            <button type="button" disabled={reportWorking} onClick={unpublishReport} className="arena-btn-dark px-4 py-2.5 text-sm disabled:opacity-50">Unpublish</button>
+          </div>
+        ) : caseReport.status === "unpublished" ? (
+          <span className="badge badge-outline border-white/15 px-3 py-3 text-white/50">Unpublished permanently</span>
+        ) : (
+          <button type="button" disabled={reportWorking || caseReport.status === "generating" || caseReport.status === "loading"} onClick={publishReport} className="arena-btn-light inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm disabled:cursor-wait disabled:opacity-60">
+            {reportWorking || caseReport.status === "generating" || caseReport.status === "loading" ? <HeroIcons.ArrowPathIcon className="h-4 w-4 animate-spin" /> : <HeroIcons.NewspaperIcon className="h-4 w-4" />}
+            {caseReport.status === "failed" ? "Retry publication" : caseReport.status === "loading" ? "Loading…" : "Publish case report"}
+          </button>
+        )}
+      </div>
+      <div className="mt-4 grid gap-3 border-t border-white/10 pt-4 md:grid-cols-2">
+        <label className="flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+          <span><span className="block text-sm font-semibold text-white/82">Auto-publish future verdicts</span><span className="mt-1 block text-xs text-white/45">Applies to cases you complete later.</span></span>
+          <input type="checkbox" className="checkbox checkbox-warning checkbox-sm" checked={Boolean(reportPreferences.autoPublishCaseReports)} onChange={(event) => updateReportPreference("autoPublishCaseReports", event.target.checked)} />
+        </label>
+        <label className="flex cursor-pointer items-center justify-between gap-4 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+          <span><span className="block text-sm font-semibold text-white/82">Use my lawyer portrait</span><span className="mt-1 block text-xs text-white/45">Separate consent for the generated image.</span></span>
+          <input type="checkbox" className="checkbox checkbox-warning checkbox-sm" checked={Boolean(reportPreferences.allowPortraitInCaseReports)} onChange={(event) => updateReportPreference("allowPortraitInCaseReports", event.target.checked)} />
+        </label>
+      </div>
+      {getCaseReportProgressLabel(caseReport) ? <p className="mt-3 flex items-center gap-2 text-sm text-amber-100/75">{caseReport.status === "generating" ? <HeroIcons.ArrowPathIcon className="h-4 w-4 animate-spin" /> : null}{getCaseReportProgressLabel(caseReport)}</p> : null}
+      {caseReport.status === "failed" ? <p className="mt-3 text-sm text-rose-200">Nothing was published. Fix the reported configuration or generation error, then retry.</p> : null}
+    </section>
+  ) : null;
 
   const renderVerdictPanel = () => (
     <div className={`arena-surface border ${verdictStyle.card}`}>
@@ -56,6 +170,7 @@ export default function PlayerMatterDossier({ player, caseSession }) {
           {winnerLabel[verdict.winner] || winnerLabel.draw}
         </h2>
         <p className="mt-3 max-w-3xl leading-7 text-white/66">{verdict.summary}</p>
+        {renderCaseReportPanel()}
         <div className="mt-5 grid gap-4 md:grid-cols-2">
           <FactList title="What helped your side" items={verdict.highlights} />
           <FactList title="What weakened your side" items={verdict.concerns} />

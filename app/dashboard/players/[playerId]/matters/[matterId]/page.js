@@ -30,6 +30,7 @@ export default async function PlayerMatterPage({ params }) {
     <PlayerMatterDossier
       player={toClientJSON(profile.player)}
       caseSession={toClientJSON(matter)}
+      canManageCaseReport={String(session?.user?.id || "") === String(params.playerId)}
     />
   );
 }

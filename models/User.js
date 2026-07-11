@@ -176,6 +176,14 @@ const userSchema = mongoose.Schema(
       type: Date,
       default: null,
     },
+    autoPublishCaseReports: {
+      type: Boolean,
+      default: false,
+    },
+    allowPortraitInCaseReports: {
+      type: Boolean,
+      default: false,
+    },
     lastGameplayResetAt: {
       type: Date,
       default: null,
