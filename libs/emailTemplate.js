@@ -73,6 +73,7 @@ export const emailTemplate = ({
   ctaLabel = `Open ${config.appName}`,
   ctaUrl = `https://${config.domainName}`,
   footer = `You're receiving this email because you have an account or requested updates from ${config.appName}.`,
+  unsubscribeUrl = "",
 }) => `<!DOCTYPE html>
 <html lang="en">
   <head>
@@ -143,6 +144,7 @@ export const emailTemplate = ({
                 <p style="margin:0;color:#8f8a80;font-size:12px;line-height:1.7;">Need help? Visit the <a href="https://${escapeHtml(
                   config.domainName
                 )}/contact" style="color:#d8c275;text-decoration:underline;">contact page</a>.</p>
+                ${unsubscribeUrl ? `<p style="margin:10px 0 0;color:#8f8a80;font-size:12px;line-height:1.7;"><a href="${escapeHtml(unsubscribeUrl)}" style="color:#d8c275;text-decoration:underline;">Unsubscribe from mailing list</a></p>` : ""}
               </td>
             </tr>
           </table>

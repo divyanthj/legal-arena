@@ -22,3 +22,5 @@ await import("./run-free-gameplay-campaign-tests.mjs");
 await import("./run-api-credential-tests.mjs");
 await import("./run-case-report-tests.mjs");
 await import("./run-markdown-email-tests.mjs");
+await import("./run-email-suppression-tests.mjs");
+await import("./run-unsubscribe-tests.mjs");

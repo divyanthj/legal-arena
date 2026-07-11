@@ -190,6 +190,9 @@ export default function AdminCaseLab({
   });
   const [working, setWorking] = useState(false);
   const [emailWorking, setEmailWorking] = useState(false);
+  const [suppressionForm, setSuppressionForm] = useState({ email: "", reason: "" });
+  const [emailSuppressions, setEmailSuppressions] = useState([]);
+  const [suppressionWorking, setSuppressionWorking] = useState(false);
   const [accessWorking, setAccessWorking] = useState(false);
   const [revokingAccessEmail, setRevokingAccessEmail] = useState("");
   const [opsLoading, setOpsLoading] = useState(true);
@@ -219,6 +222,16 @@ export default function AdminCaseLab({
     email: "",
   });
   const [freeAccessGrants, setFreeAccessGrants] = useState(initialFreeAccessGrants);
+
+  useEffect(() => {
+    let active = true;
+    apiClient.get("/admin/email-suppressions").then((response) => {
+      if (active) setEmailSuppressions(response.suppressions || []);
+    }).catch(() => {
+      // The mailing controls remain usable and can retry on the next page load.
+    });
+    return () => { active = false; };
+  }, []);
   const [generationProgress, setGenerationProgress] = useState({
     total: 0,
     completed: 0,
@@ -664,6 +677,35 @@ export default function AdminCaseLab({
     } finally {
       setEmailWorking(false);
     }
+  };
+
+  const handleSuppressEmail = async (event) => {
+    event.preventDefault();
+    const email = suppressionForm.email.trim().toLowerCase();
+    if (!email) return toast.error("Enter an email address.");
+    setSuppressionWorking(true);
+    try {
+      const response = await apiClient.post("/admin/email-suppressions", {
+        email,
+        reason: suppressionForm.reason.trim(),
+      });
+      setEmailSuppressions((current) => [
+        response.suppression,
+        ...current.filter((entry) => entry.email !== response.suppression.email),
+      ]);
+      setSuppressionForm({ email: "", reason: "" });
+      toast.success(`${email} removed from broadcast mailing.`);
+    } finally { setSuppressionWorking(false); }
+  };
+
+  const handleRestoreEmail = async (email) => {
+    if (!window.confirm(`Restore broadcast emails for ${email}?`)) return;
+    setSuppressionWorking(true);
+    try {
+      await apiClient.delete("/admin/email-suppressions", { data: { email } });
+      setEmailSuppressions((current) => current.filter((entry) => entry.email !== email));
+      toast.success(`${email} restored to broadcast mailing.`);
+    } finally { setSuppressionWorking(false); }
   };
 
   const handleGrantFreeAccess = async (event) => {
@@ -1470,12 +1512,40 @@ export default function AdminCaseLab({
                     {[
                       "Use announcements for product updates, new features, and operational notices.",
                       "Use marketing only when the message should feel more promotional in tone.",
-                      "Single-user sends require a stored account email, while all-user sends target every stored account with an email.",
+                      "Suppressed addresses are excluded from announcements, updates, digests, and marketing—even for single-user broadcast sends.",
                     ].map((item) => (
                       <div key={item} className="arena-surface-soft p-4 text-sm leading-7 text-white/66">
                         {item}
                       </div>
                     ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="arena-surface">
+                <div className="p-6">
+                  <p className="arena-kicker">Mailing Suppression</p>
+                  <h2 className="arena-headline mt-2 text-2xl">Remove recipients</h2>
+                  <p className="mt-3 text-sm leading-6 text-white/56">
+                    Suppressed addresses will not receive announcements, product updates, digests, or marketing. Account and gameplay emails still work.
+                  </p>
+                  <form className="mt-5 grid gap-3" onSubmit={handleSuppressEmail}>
+                    <input className={arenaInputClass} type="email" required placeholder="person@example.com" value={suppressionForm.email} onChange={(event) => setSuppressionForm((current) => ({ ...current, email: event.target.value }))} />
+                    <input className={arenaInputClass} placeholder="Reason (optional)" value={suppressionForm.reason} onChange={(event) => setSuppressionForm((current) => ({ ...current, reason: event.target.value }))} />
+                    <button className="arena-btn-danger px-5 py-3" disabled={suppressionWorking}>
+                      {suppressionWorking ? "Updating…" : "Remove from mailing list"}
+                    </button>
+                  </form>
+                  <div className="mt-6 space-y-3">
+                    {emailSuppressions.length ? emailSuppressions.map((entry) => (
+                      <div key={entry.email} className="arena-surface-soft flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0">
+                          <p className="break-words text-sm font-semibold text-white">{entry.email}</p>
+                          <p className="mt-1 text-xs leading-5 text-white/45">{entry.reason || "Removed by admin"}</p>
+                        </div>
+                        <button type="button" className="arena-btn-dark shrink-0 px-3 py-2 text-xs" disabled={suppressionWorking} onClick={() => handleRestoreEmail(entry.email)}>Restore</button>
+                      </div>
+                    )) : <div className="arena-surface-soft p-4 text-sm text-white/48">No suppressed addresses.</div>}
                   </div>
                 </div>
               </div>

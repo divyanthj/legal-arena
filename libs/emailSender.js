@@ -4,7 +4,9 @@ import { emailTemplate } from "@/libs/emailTemplate";
 import { createMagicLoginLink } from "@/libs/authMagicLink";
 import User from "@/models/User";
 import Lead from "@/models/Lead";
+import EmailSuppression from "@/models/EmailSuppression";
 import config from "@/config";
+import { createUnsubscribeToken } from "@/libs/emailUnsubscribe";
 
 const MAX_BATCH_SIZE = 100;
 
@@ -93,12 +95,21 @@ export async function sendBroadcastEmail({
   await connectMongo();
 
   const recipients = await getRecipientsForAudience({ audience, email });
+  const suppressedEmails = new Set(
+    (await EmailSuppression.find({ email: { $in: recipients.map((recipient) => String(recipient.email || "").trim().toLowerCase()) } }).select("email").lean())
+      .map((entry) => String(entry.email || "").trim().toLowerCase())
+  );
+  const deliverableRecipients = recipients.filter(
+    (recipient) => !suppressedEmails.has(String(recipient.email || "").trim().toLowerCase())
+  );
   const signature = getDigestSignature(type);
 
-  const emailsToSend = recipients.map((recipient) => {
-    const text = `${greeting(recipient.name)}${content}\n\n${
+  const emailsToSend = deliverableRecipients.map((recipient) => {
+    const unsubscribeUrl = `https://${config.domainName}/unsubscribe?token=${encodeURIComponent(createUnsubscribeToken(recipient.email))}`;
+    const bodyText = `${greeting(recipient.name)}${content}\n\n${
       footerNote ? `${footerNote}\n\n` : ""
     }Regards,\n${signature}`;
+    const text = `${bodyText}\n\nUnsubscribe from mailing list: ${unsubscribeUrl}`;
 
     return {
       to: recipient.email,
@@ -106,13 +117,14 @@ export async function sendBroadcastEmail({
       text,
       html: emailTemplate({
         title: subject,
-        content: text,
+        content: bodyText,
+        unsubscribeUrl,
       }),
     };
   });
 
   if (!emailsToSend.length) {
-    return { success: true, totalEmailsSent: 0 };
+    return { success: true, totalEmailsSent: 0, suppressedCount: recipients.length - deliverableRecipients.length };
   }
 
   let totalSent = 0;
@@ -123,7 +135,7 @@ export async function sendBroadcastEmail({
     );
   }
 
-  return { success: true, totalEmailsSent: totalSent };
+  return { success: true, totalEmailsSent: totalSent, suppressedCount: recipients.length - deliverableRecipients.length };
 }
 
 export async function sendCustomEmail({
