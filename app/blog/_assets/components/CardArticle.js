@@ -28,7 +28,7 @@ const CardArticle = ({
               width={600}
               height={338}
               priority={isImagePriority}
-              placeholder="blur"
+              placeholder={typeof article.image.src === "string" ? "empty" : "blur"}
               className="aspect-video w-full object-cover object-center opacity-80 transition duration-300 group-hover:scale-[1.03] group-hover:opacity-100"
             />
           </figure>
@@ -63,6 +63,9 @@ const CardArticle = ({
           {/* AUTHOR & DATE */}
           <div className="flex flex-wrap items-center gap-4 border-t border-white/10 pt-5 text-sm">
             <Avatar article={article} />
+            {article.playerName ? (
+              article.playerId ? <Link href={`/dashboard/players/${article.playerId}`} className="text-white/62 transition hover:text-amber-200">Featuring {article.playerName}</Link> : <span className="text-white/62">Featuring {article.playerName}</span>
+            ) : null}
 
             <span className="text-white/42" itemProp="datePublished">
               {new Date(article.publishedAt).toLocaleDateString("en-US", {

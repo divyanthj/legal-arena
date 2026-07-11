@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "react-hot-toast";
 import * as HeroIcons from "@heroicons/react/24/outline";
 import apiClient from "@/libs/api";
@@ -84,8 +84,23 @@ export default function PlayerProfileDossier({
   const [avatarDeleting, setAvatarDeleting] = useState(false);
   const [showResetDialog, setShowResetDialog] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [reportPreferences, setReportPreferences] = useState(null);
 
   const canEditAvatar = String(viewerUserId || "") === String(player.id || "");
+  useEffect(() => {
+    if (!canEditAvatar) return;
+    apiClient.get("/players/case-report-preferences").then((response) => setReportPreferences(response.preferences)).catch(() => {});
+  }, [canEditAvatar]);
+
+  const updateReportPreference = async (key, value) => {
+    const previous = reportPreferences;
+    const next = { ...previous, [key]: value };
+    setReportPreferences(next);
+    try {
+      const response = await apiClient.patch("/players/case-report-preferences", { [key]: value });
+      setReportPreferences(response.preferences || next);
+    } catch (error) { setReportPreferences(previous); }
+  };
   const canViewFullArchive = canEditAvatar || isAdmin;
   const archiveCases = useMemo(
     () =>
@@ -433,6 +448,12 @@ export default function PlayerProfileDossier({
                         onChange={handleAvatarChange}
                       />
                     </label>
+                    {reportPreferences ? (
+                      <label className="mt-2 flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-left">
+                        <span><span className="block text-xs font-semibold text-white/78">Use portrait in reports</span><span className="mt-1 block text-[0.68rem] leading-4 text-white/42">Allow generated public case images.</span></span>
+                        <input type="checkbox" className="checkbox checkbox-warning checkbox-sm" checked={Boolean(reportPreferences.allowPortraitInCaseReports)} onChange={(event) => updateReportPreference("allowPortraitInCaseReports", event.target.checked)} />
+                      </label>
+                    ) : null}
                     <button
                       type="button"
                       className="arena-btn-danger flex items-center justify-center px-4 py-3 text-sm xl:hidden"

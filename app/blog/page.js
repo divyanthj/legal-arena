@@ -1,8 +1,11 @@
-import { categories, articles } from "./_assets/content";
+import { categories } from "./_assets/content";
+import { getAllBlogArticles } from "./_assets/runtime";
 import CardArticle from "./_assets/components/CardArticle";
 import CardCategory from "./_assets/components/CardCategory";
 import config from "@/config";
 import { getSEOTags } from "@/libs/seo";
+
+export const dynamic = "force-dynamic";
 
 export const metadata = getSEOTags({
   title: `${config.appName} Blog | Lawyer Game & Courtroom Strategy`,
@@ -12,9 +15,7 @@ export const metadata = getSEOTags({
 });
 
 export default async function Blog() {
-  const articlesToDisplay = articles
-    .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt))
-    .slice(0, 6);
+  const articlesToDisplay = (await getAllBlogArticles()).slice(0, 6);
 
   return (
     <>

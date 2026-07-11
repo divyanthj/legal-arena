@@ -9,6 +9,13 @@ const categorySlugs = {
 
 export const categories = [
   {
+    slug: "case-reports",
+    title: "Case Reports",
+    titleShort: "Case Reports",
+    description: "Reported verdicts, arguments, and advocate performances from Legal Arena cases.",
+    descriptionShort: "Verdicts and advocate case reports.",
+  },
+  {
     slug: categorySlugs.lawyerGame,
     title: "Lawyer Games",
     titleShort: "Lawyer Games",
