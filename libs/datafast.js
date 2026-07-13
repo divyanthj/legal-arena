@@ -4,6 +4,7 @@ const GOAL_NAME_PATTERN = /^[a-z0-9_:-]{1,64}$/;
 const PARAM_NAME_PATTERN = /^[a-z0-9_-]{1,64}$/;
 const MAX_PARAMS = 10;
 const MAX_VALUE_LENGTH = 255;
+const DATAFAST_COOKIE_NAMES = ["datafast_visitor_id", "datafast_session_id"];
 
 const cleanParamName = (name = "") =>
   String(name || "")
@@ -58,3 +59,37 @@ export const trackGoal = (goalName, params = {}) => {
   }
 };
 
+const hasDatafastAttributionCookies = () => {
+  if (typeof document === "undefined") {
+    return false;
+  }
+
+  const cookieNames = new Set(
+    document.cookie
+      .split(";")
+      .map((cookie) => cookie.trim().split("=")[0])
+      .filter(Boolean)
+  );
+
+  return DATAFAST_COOKIE_NAMES.every((cookieName) => cookieNames.has(cookieName));
+};
+
+// The tracker loads asynchronously. A fast click on the checkout CTA can otherwise
+// reach the server before DataFast has created the visitor/session cookies that are
+// required for Lemon Squeezy revenue attribution.
+export const waitForDatafastAttribution = async ({ timeoutMs = 2000, intervalMs = 50 } = {}) => {
+  if (typeof window === "undefined" || hasDatafastAttributionCookies()) {
+    return hasDatafastAttributionCookies();
+  }
+
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => window.setTimeout(resolve, intervalMs));
+    if (hasDatafastAttributionCookies()) {
+      return true;
+    }
+  }
+
+  return false;
+};

@@ -1,16 +1,26 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { trackGoal } from "@/libs/datafast";
 
 const REDIRECT_SECONDS = 3;
 
 export default function PurchaseSuccessRedirect() {
   const router = useRouter();
   const [secondsRemaining, setSecondsRemaining] = useState(REDIRECT_SECONDS);
+  const purchaseSuccessTrackedRef = useRef(false);
 
   useEffect(() => {
+    if (!purchaseSuccessTrackedRef.current) {
+      purchaseSuccessTrackedRef.current = true;
+      trackGoal("purchase_success_viewed", {
+        provider: "lemonsqueezy",
+        source: "checkout_redirect",
+      });
+    }
+
     const redirectTimer = window.setTimeout(() => {
       router.replace("/dashboard");
     }, REDIRECT_SECONDS * 1000);

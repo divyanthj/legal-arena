@@ -95,13 +95,12 @@ export default function RootLayout({ children }) {
                 "window.datafast=window.datafast||function(){window.datafast.q=window.datafast.q||[];window.datafast.q.push(arguments);};",
             }}
           />
-          <Script
+          <script
             defer
             data-website-id={DATAFAST_WEBSITE_ID}
             data-domain="legalarena.app"
             data-disable-payments="true"
             src="https://datafa.st/js/script.js"
-            strategy="afterInteractive"
           />
           <Script
             async

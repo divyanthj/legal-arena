@@ -3,7 +3,7 @@
 import { useState } from "react";
 import * as HeroIcons from "@heroicons/react/24/outline";
 import apiClient from "@/libs/api";
-import { trackGoal } from "@/libs/datafast";
+import { trackGoal, waitForDatafastAttribution } from "@/libs/datafast";
 
 export default function EarlyAccessCheckoutButton({
   variantId,
@@ -25,6 +25,8 @@ export default function EarlyAccessCheckoutButton({
     });
 
     try {
+      await waitForDatafastAttribution();
+
       const purchaseSuccessUrl = new URL("/purchase-success", window.location.origin).toString();
       const response = await apiClient.post("/lemonsqueezy/create-checkout", {
         variantId,
@@ -32,6 +34,13 @@ export default function EarlyAccessCheckoutButton({
       });
 
       if (response?.url) {
+        if (!response.datafastAttributionReady) {
+          trackGoal("early_access_checkout_attribution_missing", {
+            provider: "lemonsqueezy",
+            variant_id: variantId,
+            source,
+          });
+        }
         trackGoal("early_access_checkout_redirect", {
           provider: "lemonsqueezy",
           variant_id: variantId,

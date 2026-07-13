@@ -33,6 +33,13 @@ export async function POST(req) {
     const user = await User.findById(session?.user?.id);
     const { redirectUrl } = body;
     const cookieStore = cookies();
+    const datafastVisitorId = cookieStore.get("datafast_visitor_id")?.value;
+    const datafastSessionId = cookieStore.get("datafast_session_id")?.value;
+    const datafastAttributionReady = Boolean(datafastVisitorId && datafastSessionId);
+
+    if (!datafastAttributionReady) {
+      console.warn("Creating Lemon Squeezy checkout without complete DataFast attribution cookies");
+    }
 
     const checkoutURL = await createLemonSqueezyCheckout({
       variantId,
@@ -40,11 +47,11 @@ export async function POST(req) {
       userId: session?.user?.id,
       email: user?.email,
       discountCode: getActiveIndependenceDayDiscountCode() || undefined,
-      datafastVisitorId: cookieStore.get("datafast_visitor_id")?.value,
-      datafastSessionId: cookieStore.get("datafast_session_id")?.value,
+      datafastVisitorId,
+      datafastSessionId,
     });
 
-    return NextResponse.json({ url: checkoutURL });
+    return NextResponse.json({ url: checkoutURL, datafastAttributionReady });
   } catch (e) {
     console.error(e);
     return NextResponse.json({ error: e?.message }, { status: 500 });
