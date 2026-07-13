@@ -34,6 +34,7 @@ import {
 import {
   getCourtroomDifficultyProfile,
   getOpponentResponsePromptRules,
+  getOpponentStrategyPromptRules,
 } from "./courtroomDifficulty";
 import { createUsageCollector } from "./sessionUsage";
 import { generateClientMemoryExcerpt } from "./clientMemory";
@@ -801,6 +802,8 @@ export const generatePlaintiffCourtOpeningStatement = async ({
         difficultyProfile.complexity <= 2
           ? "Use plain language and argue from visible facts rather than procedural technicalities."
           : "Use the strongest legal and factual pressure available at this difficulty.",
+        ...difficultyProfile.promptGuidance,
+        ...getOpponentStrategyPromptRules(difficultyProfile),
         "Sound human and adversarial, not like a generated checklist.",
         "Argue from the plaintiff-side record and requested relief.",
         "Do not use repeated formula lines like 'The evidence will show' for every point.",
@@ -880,7 +883,7 @@ export const runCourtroomRound = async ({ caseSession, argument, userId }) => {
     }),
     onUsage: usageCollector.record,
     systemPrompt:
-      "You are simulating a courtroom exchange in a legal strategy game. The courtroom is fully record-bound. Use role actors, not deterministic scripts. One role is the player's counsel position, one role is opposing counsel, and one role is the bench. Opposing counsel is always talented, adversarial, strategic, and professionally restrained: they should attack the player's legal theory, proof, credibility, requested relief, or handling of disputes using only opposingCounsel.preparedCaseFile, the lawbook, and the courtroom transcript. Opposing counsel may make narrow concessions only when they are tactically necessary, but must not compliment, praise, coach, validate, or give feedback on the player's advocacy. The bench should score the exchange based only on each side's visible courtroom file, facts actually presented, argument quality, proof gaps, the lawbook, judge profile, and hidden courtroom calibration. The bench must apply every materially cited lawbook rule that fits the visible record, including category-specific rules, and must follow the bench ruleApplicationGuidance when weighing burden, proof, and remedies. Do not infer, cite, or credit any fact, story detail, claim, or evidence outside the supplied side files. Outcomes may vary in close cases based on judicial weighting, but they must remain explainable and sensitive to the record. Never reveal or refer to calibration, difficulty, complexity scaling, junior counsel, senior counsel, scoring bounds, or hidden tuning in player-facing text. Do not narrate metadata or internal schemas. Output JSON only.",
+      "You are simulating a courtroom exchange in a legal strategy game. The courtroom is fully record-bound. Use role actors, not deterministic scripts. One role is the player's counsel position, one role is opposing counsel, and one role is the bench. Opposing counsel is adversarial and professionally restrained, but their preparation and strategic sophistication must stay within the supplied counsel guidance and prepared case file. They should attack the player's legal theory, proof, credibility, requested relief, or handling of disputes only to the degree that guidance permits. Opposing counsel may make narrow concessions only when they are tactically necessary, but must not compliment, praise, coach, validate, or give feedback on the player's advocacy. The bench should score the exchange based only on each side's visible courtroom file, facts actually presented, argument quality, proof gaps, the lawbook, judge profile, and hidden courtroom calibration. The bench must apply every materially cited lawbook rule that fits the visible record, including category-specific rules, and must follow the bench ruleApplicationGuidance when weighing burden, proof, and remedies. Do not infer, cite, or credit any fact, story detail, claim, or evidence outside the supplied side files. Outcomes may vary in close cases based on judicial weighting, but they must remain explainable and sensitive to the record. Never reveal or refer to calibration, difficulty, complexity scaling, junior counsel, senior counsel, scoring bounds, or hidden tuning in player-facing text. Do not narrate metadata or internal schemas. Output JSON only.",
     userPrompt: JSON.stringify({
       task: shouldReturnVerdict
         ? "Generate the opposing counsel response, the bench scoring, and the final verdict."
@@ -896,6 +899,7 @@ export const runCourtroomRound = async ({ caseSession, argument, userId }) => {
         "If acknowledging an undisputed fact, immediately pivot to why it does not carry the legal burden or requested relief.",
         ...difficultyProfile.promptGuidance,
         ...getOpponentResponsePromptRules(difficultyProfile),
+        ...getOpponentStrategyPromptRules(difficultyProfile),
         "Never mention the hidden courtroom calibration or why the response is more focused or more layered.",
         "Use only opposingCounsel.preparedCaseFile as opposing counsel's factual and evidentiary portfolio.",
         "Do not cite or imply hidden canonical story facts, full template facts, or unsurfaced evidence.",

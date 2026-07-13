@@ -9,6 +9,10 @@ const engineSource = readFileSync(
   new URL("../libs/game/engine.js", import.meta.url),
   "utf8"
 );
+const dynamicCaseSource = readFileSync(
+  new URL("../libs/game/dynamicCase.js", import.meta.url),
+  "utf8"
+);
 const caseWorkspaceSource = readFileSync(
   new URL("../components/legal-arena/CaseWorkspace.js", import.meta.url),
   "utf8"
@@ -51,12 +55,29 @@ assert.match(courtroomSource, /For security-deposit disputes, apply Rule 9 direc
 assert.match(courtroomSource, /ordinary wear, routine turnover cleaning/);
 assert.match(courtroomSource, /Use deposit burden allocation/);
 assert.match(courtroomSource, /Missing landlord receipts, invoices, itemization, or condition records/);
-assert.match(courtroomSource, /OPPONENT_FACT_LIMITS/);
-assert.match(courtroomSource, /OPPONENT_EVIDENCE_LIMITS/);
+assert.match(courtroomSource, /preparation\.factLimit/);
+assert.match(courtroomSource, /preparation\.evidenceLimit/);
 assert.match(courtroomSource, /evidenceIsProofForSide/);
 assert.match(courtroomSource, /holderSide === "third-party"[\s\S]*return false/);
 assert.match(courtroomSource, /preparedEvidenceIds: proofEvidenceIds/);
 assert.match(courtroomSource, /evidenceLeads/);
+assert.match(courtroomSource, /dynamicEvidenceIsProofForSide/);
+assert.match(courtroomSource, /dynamicEvidenceIsLeadForSide/);
+assert.match(courtroomSource, /dynamicEvidenceIsHeldBySide/);
+assert.match(courtroomSource, /\["missing", "hard_to_get", "contested", "unknown"\]/);
+assert.match(courtroomSource, /accessibility === "contested"[\s\S]*complexity >= 3/);
+assert.match(courtroomSource, /accessibility === "hard_to_get"[\s\S]*complexity >= 4/);
+assert.match(courtroomSource, /buildLegacyDynamicPositions/);
+assert.match(courtroomSource, /dynamicCase\.courtroomPositions/);
+assert.match(courtroomSource, /strategyGuardrails/);
+assert.match(courtroomSource, /sideKey === "defendant"/);
+assert.match(courtroomSource, /sideKey === "defendant" \? dynamicCase\.defendantStory : dynamicCase\.plaintiffStory/);
+assert.match(dynamicCaseSource, /normalizeCourtroomPositions/);
+assert.match(dynamicCaseSource, /courtroomPositions:\s*\{/);
+assert.match(dynamicCaseSource, /source\.courtroomPositions\.plaintiff\.length/);
+assert.match(dynamicCaseSource, /source\.courtroomPositions\.defendant\.length/);
+assert.match(dynamicCaseSource, /linkedEvidenceIds:\s*\["evidencePool id"\]/);
+assert.match(dynamicCaseSource, /availableAtStart when complexity is 1/);
 
 assert.doesNotMatch(courtroomSource, /buildCourtroomFallback/);
 assert.doesNotMatch(courtroomSource, /buildVerdictFallback/);
@@ -87,11 +108,6 @@ assert.match(engineSource, /prefer partial relief or a reduced award/);
 
 assert.match(caseWorkspaceSource, /const PresentingArgumentIndicator = /);
 assert.match(caseWorkspaceSource, /loading loading-dots loading-xs/);
-assert.match(caseWorkspaceSource, /arena-presenting-gavel/);
-assert.match(caseWorkspaceSource, /arena-presenting-gavel-icon/);
-assert.match(caseWorkspaceSource, /arena-presenting-gavel-swing/);
 assert.match(caseWorkspaceSource, /pendingAction === "courtroom" \? \(\s*<PresentingArgumentIndicator/);
-assert.match(globalsSource, /@keyframes arena-gavel-strike/);
-assert.match(globalsSource, /\.arena-presenting-gavel-swing/);
 
 console.log("Courtroom evidence gating tests passed");

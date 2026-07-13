@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 const {
   getCourtroomDifficultyProfile,
   getOpponentResponsePromptRules,
+  getOpponentStrategyPromptRules,
   isPlayerAdverseVerdictPoint,
   limitOpponentResponseForDifficulty,
   normalizePlayerPerspectiveVerdictLists,
@@ -14,9 +15,20 @@ const {
 
 const lowestProfile = getCourtroomDifficultyProfile(-10);
 assert.equal(lowestProfile.complexity, 1);
-assert.equal(lowestProfile.opponentMaxDelta, 11);
-assert.equal(lowestProfile.partialCreditBonus, 3);
+assert.equal(lowestProfile.opponentMinDelta, 0);
+assert.equal(lowestProfile.opponentMaxDelta, 20);
+assert.equal(lowestProfile.playerMinDelta, 0);
+assert.equal(lowestProfile.partialCreditBonus, 0);
 assert.equal(lowestProfile.opponentResponseLimits.issueBudget, 1);
+assert.deepEqual(lowestProfile.preparation, {
+  factLimit: 2,
+  evidenceLimit: 1,
+  evidenceLeadLimit: 0,
+  contradictionBudget: 0,
+  ruleCombinationLimit: 1,
+  maxIssuePivots: 0,
+  secondaryWeaknessBudget: 0,
+});
 
 const defaultProfile = getCourtroomDifficultyProfile("nope");
 assert.equal(defaultProfile.complexity, 3);
@@ -26,6 +38,32 @@ assert.equal(highestProfile.complexity, 5);
 assert.equal(highestProfile.opponentMaxDelta, 20);
 assert.equal(highestProfile.partialCreditBonus, 0);
 assert.equal(highestProfile.opponentResponseLimits.issueBudget, 5);
+assert.deepEqual(highestProfile.preparation, {
+  factLimit: 8,
+  evidenceLimit: 7,
+  evidenceLeadLimit: 3,
+  contradictionBudget: 3,
+  ruleCombinationLimit: 4,
+  maxIssuePivots: 3,
+  secondaryWeaknessBudget: 3,
+});
+
+const expectedPreparationBudgets = [
+  [2, 1, 0, 0, 1, 0, 0],
+  [3, 2, 0, 1, 1, 0, 0],
+  [4, 3, 1, 1, 2, 1, 1],
+  [6, 5, 2, 2, 3, 2, 2],
+  [8, 7, 3, 3, 4, 3, 3],
+];
+expectedPreparationBudgets.forEach((expected, index) => {
+  const profile = getCourtroomDifficultyProfile(index + 1);
+  assert.deepEqual(Object.values(profile.preparation), expected);
+  assert.deepEqual(
+    [profile.playerMinDelta, profile.playerMaxDelta, profile.opponentMinDelta, profile.opponentMaxDelta],
+    [0, 20, 0, 20],
+    `level ${index + 1} must use difficulty-neutral bench bounds`
+  );
+});
 
 assert.deepEqual(
   normalizeCourtroomDeltasForDifficulty({
@@ -35,8 +73,8 @@ assert.deepEqual(
     hasPartialCredit: true,
   }),
   {
-    playerDelta: 11,
-    opponentDelta: 11,
+    playerDelta: 8,
+    opponentDelta: 19,
   }
 );
 
@@ -210,6 +248,18 @@ assert.match(highComplexityResponse, /The fifth problem/);
 assert.match(
   getOpponentResponsePromptRules(lowestProfile).join(" "),
   /Press no more than 1 core issue/
+);
+assert.match(
+  getOpponentStrategyPromptRules(lowestProfile).join(" "),
+  /Do not pivot to a new core issue across rounds/
+);
+assert.match(
+  getOpponentStrategyPromptRules(lowestProfile).join(" "),
+  /Do not pursue secondary weaknesses/
+);
+assert.match(
+  getOpponentStrategyPromptRules(highestProfile).join(" "),
+  /make at most 3 strategic issue pivots/
 );
 
 const defendantLossLists = normalizePlayerPerspectiveVerdictLists({

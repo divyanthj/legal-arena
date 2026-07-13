@@ -157,6 +157,18 @@ const settlementSchema = mongoose.Schema(
       type: [String],
       default: [],
     },
+    clientPreview: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
+    clientPreviewUpdatedAt: {
+      type: Date,
+      default: null,
+    },
+    clientHuddle: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
     finalTerms: {
       type: [String],
       default: [],

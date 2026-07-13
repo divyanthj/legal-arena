@@ -117,6 +117,35 @@ const normalizeEvidence = (items = []) =>
     .filter((item) => item.detail)
     .slice(0, 12);
 
+const normalizeCourtroomPositions = (positions = {}, evidencePool = []) => {
+  const validEvidenceIds = new Set(evidencePool.map((item) => item.id));
+  const normalizeSide = (items = [], side = "plaintiff") =>
+    (Array.isArray(items) ? items : [])
+      .map((item, index) => {
+        const position = cleanText(item?.position || item?.claim || item?.detail);
+        const id =
+          slugify(item?.id || `${side}-position-${index + 1}`) ||
+          `${side}-position-${index + 1}`;
+
+        return {
+          id,
+          label: cleanText(item?.label) || `${side === "defendant" ? "Defense" : "Plaintiff"} position ${index + 1}`,
+          position,
+          priority: Math.max(1, Math.min(5, Math.round(Number(item?.priority) || 3))),
+          linkedEvidenceIds: cleanList(item?.linkedEvidenceIds, 6)
+            .map((evidenceId) => slugify(evidenceId))
+            .filter((evidenceId) => validEvidenceIds.has(evidenceId)),
+        };
+      })
+      .filter((item) => item.position)
+      .slice(0, 10);
+
+  return {
+    plaintiff: normalizeSide(positions?.plaintiff, "plaintiff"),
+    defendant: normalizeSide(positions?.defendant, "defendant"),
+  };
+};
+
 const fallbackDynamicCase = ({ categorySlug, complexity }) => {
   const category = getCategoryBySlug(categorySlug) || getCategoryBySlug(DEFAULT_CATEGORY_SLUG);
   const categoryTitle = category?.title || getCategoryTitle(categorySlug);
@@ -178,6 +207,7 @@ const fallbackDynamicCase = ({ categorySlug, complexity }) => {
         accessibility: "discoverable",
         strength: "moderate",
         supportsSide: isRental ? "defendant" : "plaintiff",
+        availableAtStart: true,
       },
       {
         label: isRental ? "Move-out photos" : "Revision thread",
@@ -185,12 +215,55 @@ const fallbackDynamicCase = ({ categorySlug, complexity }) => {
           ? "A few move-out photos show clean counters and floors, but not every disputed area."
           : "Messages show the defendant asked for changes after praising earlier work.",
         type: isRental ? "photo" : "message",
-        owner: "plaintiff",
+        owner: isRental ? "plaintiff" : "defendant",
         accessibility: "discoverable",
         strength: "ambiguous",
-        supportsSide: "plaintiff",
+        supportsSide: isRental ? "plaintiff" : "defendant",
+        availableAtStart: true,
       },
     ],
+    courtroomPositions: {
+      plaintiff: [
+        {
+          id: "plaintiff-core-position",
+          label: "Plaintiff core position",
+          position: isRental
+            ? "The deductions are unsupported and overstate ordinary turnover."
+            : "The defendant accepted useful performance but withheld the agreed payment.",
+          priority: 5,
+          linkedEvidenceIds: [isRental ? "move-out-photos" : "final-delivery-email"],
+        },
+        {
+          id: "plaintiff-proof-position",
+          label: "Plaintiff proof position",
+          position: isRental
+            ? "The available condition record does not justify the withheld amount."
+            : "The delivery record supports completion of the central milestone.",
+          priority: 4,
+          linkedEvidenceIds: [isRental ? "move-out-photos" : "final-delivery-email"],
+        },
+      ],
+      defendant: [
+        {
+          id: "defendant-core-position",
+          label: "Defense core position",
+          position: isRental
+            ? "Real turnover work justified at least part of the deductions."
+            : "The plaintiff has not proven final performance under the agreement.",
+          priority: 5,
+          linkedEvidenceIds: [isRental ? "generic-turnover-invoice" : "revision-thread"],
+        },
+        {
+          id: "defendant-proof-position",
+          label: "Defense proof position",
+          position: isRental
+            ? "The tenant's incomplete condition record does not disprove the charges."
+            : "The revision history supports a dispute about whether delivery was complete.",
+          priority: 4,
+          linkedEvidenceIds: [isRental ? "generic-turnover-invoice" : "revision-thread"],
+        },
+      ],
+    },
     starterQuestions: {
       plaintiff: [
         "Walk me through the timeline from the last clear agreement to the dispute.",
@@ -251,6 +324,24 @@ const normalizeDynamicCaseState = ({
     normalizeGeneratedPartyName(source.plaintiffName, "plaintiff") || fallback.plaintiffName;
   const defendantName =
     normalizeGeneratedPartyName(source.defendantName, "defendant") || fallback.defendantName;
+  const normalizedEvidence = normalizeEvidence(source.evidencePool).length
+    ? normalizeEvidence(source.evidencePool).slice(0, playabilityProfile.evidenceBudget)
+    : normalizeEvidence(fallback.evidencePool).slice(0, playabilityProfile.evidenceBudget);
+  const courtroomPositions = normalizeCourtroomPositions(
+    {
+      plaintiff:
+        Array.isArray(source.courtroomPositions?.plaintiff) &&
+        source.courtroomPositions.plaintiff.length
+          ? source.courtroomPositions.plaintiff
+          : fallback.courtroomPositions.plaintiff,
+      defendant:
+        Array.isArray(source.courtroomPositions?.defendant) &&
+        source.courtroomPositions.defendant.length
+          ? source.courtroomPositions.defendant
+          : fallback.courtroomPositions.defendant,
+    },
+    normalizedEvidence
+  );
 
   return {
     generationMode: "dynamic",
@@ -285,9 +376,8 @@ const normalizeDynamicCaseState = ({
       : fallback.discoveryRules,
     factGenerationRules: cleanList(source.factGenerationRules, 8),
     contradictionRules: cleanList(source.contradictionRules, 8),
-    evidencePool: normalizeEvidence(source.evidencePool).length
-      ? normalizeEvidence(source.evidencePool).slice(0, playabilityProfile.evidenceBudget)
-      : normalizeEvidence(fallback.evidencePool).slice(0, playabilityProfile.evidenceBudget),
+    evidencePool: normalizedEvidence,
+    courtroomPositions,
     starterQuestions: {
       plaintiff: cleanList(source.starterQuestions?.plaintiff, 4).length
         ? cleanList(source.starterQuestions.plaintiff, 4)
@@ -411,6 +501,8 @@ export const generateDynamicCaseState = async ({
         "For intro and beginner cases, avoid expert procedural traps, dense counterclaims, medical causation, and multi-issue sprawl.",
         "For intro and beginner cases, use plain-language legal issues a non-lawyer can reason about from visible facts.",
         "The opponent should be beatable by a non-lawyer who asks sensible questions and makes plain arguments from visible facts.",
+        "Give each side discrete subjective courtroomPositions. Each position must express one concise claim, use an evidencePool id when linking proof, and must not reveal objective hidden truth.",
+        "Give each side at least one relevant evidence item that is availableAtStart when complexity is 1; do not make missing or hard-to-get material necessary for an intro opponent's core theory.",
       ],
       outputSchema: {
         title: "string",
@@ -435,6 +527,7 @@ export const generateDynamicCaseState = async ({
         contradictionRules: ["string"],
         evidencePool: [
           {
+            id: "string",
             label: "string",
             detail: "string",
             type: "message|email|receipt|photo|invoice|contract|inspection|payment_record|witness|call_log|notice|screenshot|estimate|other",
@@ -447,6 +540,26 @@ export const generateDynamicCaseState = async ({
             availableAtStart: "boolean",
           },
         ],
+        courtroomPositions: {
+          plaintiff: [
+            {
+              id: "string",
+              label: "string",
+              position: "string",
+              priority: "number 1-5",
+              linkedEvidenceIds: ["evidencePool id"],
+            },
+          ],
+          defendant: [
+            {
+              id: "string",
+              label: "string",
+              position: "string",
+              priority: "number 1-5",
+              linkedEvidenceIds: ["evidencePool id"],
+            },
+          ],
+        },
         starterQuestions: {
           plaintiff: ["string"],
           defendant: ["string"],

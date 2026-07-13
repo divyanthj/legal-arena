@@ -222,6 +222,15 @@ export const normalizeSettlement = (settlement = {}, caseSession = {}) => ({
   },
   transcript: Array.isArray(settlement?.transcript) ? settlement.transcript : [],
   currentTerms: coerceStringList(settlement?.currentTerms, 6),
+  clientPreview:
+    settlement?.clientPreview && typeof settlement.clientPreview === "object"
+      ? settlement.clientPreview
+      : null,
+  clientPreviewUpdatedAt: settlement?.clientPreviewUpdatedAt || null,
+  clientHuddle:
+    settlement?.clientHuddle && typeof settlement.clientHuddle === "object"
+      ? settlement.clientHuddle
+      : null,
   finalTerms: coerceStringList(settlement?.finalTerms, 6),
   outcomeSummary: coerceString(settlement?.outcomeSummary),
   failureReason: coerceString(settlement?.failureReason),
@@ -391,6 +400,8 @@ const fallbackAiSettlementPreview = () => ({
   suggestedRevision: "Make the amount, timing, release, costs, and fault language concrete.",
   acceptanceAuthority: "unclear",
   authorityReason: "The client has not described an acceptable settlement range yet.",
+  moodDelta: 0,
+  moodReason: "The conversation did not materially change the client's confidence.",
   model: SETTLEMENT_PREVIEW_MODEL,
   source: "fallback",
 });
@@ -436,6 +447,11 @@ const normalizeAiSettlementPreview = (aiResult = {}) => {
       aiResult?.authorityReason,
       "The client has not described an acceptable settlement range yet."
     ),
+    moodDelta: Math.max(-15, Math.min(8, Math.round(Number(aiResult?.moodDelta) || 0))),
+    moodReason: cleanClientPreviewCopy(
+      aiResult?.moodReason,
+      "The conversation did not materially change the client's confidence."
+    ),
     model: SETTLEMENT_PREVIEW_MODEL,
     source: "ai",
   };
@@ -467,7 +483,7 @@ export const previewSettlementDraftForClient = async ({
       usageLabel: "settlement.clientPreview",
       onUsage: usageCollector.record,
       systemPrompt:
-        "You simulate the represented client privately during settlement negotiations in a legal strategy game. The player is the lawyer. Evaluate the latest offer or proposed reply as a private client huddle before opposing counsel hears anything. Output valid JSON only.",
+        "You simulate the represented client privately during settlement negotiations in a legal strategy game. The player is the lawyer. Evaluate either the latest offer received from opposing counsel or the lawyer's proposed reply, as identified by the supplied context and private instruction. This is always a private client huddle. Output valid JSON only.",
       userPrompt: JSON.stringify({
         task: clientInstruction
           ? "The lawyer is privately talking to the represented client. Respond with concise client guidance and describe the acceptable settlement range or conditions where possible."
@@ -483,6 +499,8 @@ export const previewSettlementDraftForClient = async ({
           "Use the case facts, requested relief, current settlement moods, current public terms, and recent transcript.",
           "Flag unclear or risky wording. Reward concrete timing, protected fault language, clear release scope, and terms that match client priorities.",
           "If the lawyer privately asks the client for authority, preferences, reassurance, or a new settlement direction, answer in plain client guidance rather than editing structured terms.",
+          "Evaluate the effect of the lawyer's private communication on the represented client's trust and willingness. Honest reassurance, useful clarity, and respectful risk explanation may improve mood; dismissiveness, pressure, false certainty, or ignoring stated priorities should reduce it.",
+          "Base moodDelta on the lawyer's communication quality, not merely whether the current offer is favorable. A routine neutral question should usually be 0 to +2, genuinely helpful communication may be +3 to +8, and harmful communication may be -3 to -15.",
           "If the lawyer asks whether the client can live with the latest offer, set acceptanceAuthority to accept only if that offer is within the represented client's acceptable settlement range. Otherwise use counter, reject, or unclear.",
           "When acceptanceAuthority is accept, authorityReason must briefly describe the acceptable range or conditions that make the latest offer livable.",
           "Do not turn settlement authority into one precise required term set; describe a qualitative band of acceptable value, timing, release, cost, fault, or certainty tradeoffs.",
@@ -503,6 +521,8 @@ export const previewSettlementDraftForClient = async ({
           suggestedRevision: "string",
           acceptanceAuthority: "accept | counter | reject | unclear",
           authorityReason: "string",
+          moodDelta: "number from -15 to 8",
+          moodReason: "short string explaining the trust or mood effect",
         },
         context: {
           ...buildSettlementPromptContext({
@@ -534,6 +554,89 @@ export const previewSettlementDraftForClient = async ({
       usageEntries: usageCollector.entries,
     };
   }
+};
+
+const getPrivateHuddleRoundKey = (settlement = {}) => {
+  const latestOpponentEntry = [...(settlement.transcript || [])]
+    .reverse()
+    .find((entry) => entry?.role === "opponent");
+  const source = latestOpponentEntry
+    ? {
+        text: latestOpponentEntry.text || "",
+        terms: latestOpponentEntry.terms || [],
+      }
+    : {
+        text: "opening-huddle",
+        terms: settlement.currentTerms || [],
+      };
+
+  return createHash("sha256")
+    .update(JSON.stringify(source))
+    .digest("hex")
+    .slice(0, 16);
+};
+
+export const applyPrivateClientHuddleMood = ({ caseSession, preview } = {}) => {
+  const settlement = normalizeSettlement(caseSession?.settlement || {}, caseSession || {});
+  const playerSide = getPlayerSide(caseSession || {});
+  const moodKey = getSettlementMoodKeyForSide(playerSide);
+  const roundKey = getPrivateHuddleRoundKey(settlement);
+  const priorState = settlement.clientHuddle || {};
+  const sameRound = priorState.roundKey === roundKey;
+  const attempts = sameRound ? Math.max(0, Number(priorState.attempts) || 0) : 0;
+  const positiveApplied = sameRound
+    ? Math.max(0, Number(priorState.positiveApplied) || 0)
+    : 0;
+  const negativeApplied = sameRound
+    ? Math.max(0, Number(priorState.negativeApplied) || 0)
+    : 0;
+  const requestedDelta = Math.max(
+    -15,
+    Math.min(8, Math.round(Number(preview?.moodDelta) || 0))
+  );
+  let appliedDelta = requestedDelta;
+
+  if (requestedDelta > 0) {
+    const multiplier = attempts === 0 ? 1 : attempts === 1 ? 0.5 : 0.25;
+    appliedDelta = Math.min(
+      Math.max(0, 10 - positiveApplied),
+      Math.max(0, Math.round(requestedDelta * multiplier))
+    );
+  } else if (requestedDelta < 0) {
+    appliedDelta = -Math.min(
+      Math.max(0, 20 - negativeApplied),
+      Math.abs(requestedDelta)
+    );
+  }
+
+  const moods = {
+    ...settlement.moods,
+    [moodKey]: clampMood((settlement.moods?.[moodKey] || 0) + appliedDelta),
+  };
+  const moodReason = coerceString(preview?.moodReason);
+
+  return {
+    settlement: {
+      ...settlement,
+      moods,
+      clientHuddle: {
+        roundKey,
+        attempts: attempts + 1,
+        positiveApplied: positiveApplied + Math.max(0, appliedDelta),
+        negativeApplied: negativeApplied + Math.max(0, -appliedDelta),
+        lastDelta: appliedDelta,
+        lastReason: moodReason,
+        updatedAt: new Date(),
+      },
+    },
+    moodUpdate: {
+      requestedDelta,
+      appliedDelta,
+      mood: moods[moodKey],
+      reason: moodReason,
+      capped: appliedDelta !== requestedDelta,
+    },
+  };
 };
 
 export const generateOpeningSettlementMessage = async ({ caseSession, userId }) => {
@@ -682,12 +785,61 @@ export const runSettlementExchange = async ({
   const terminal = ["settled", "failed"].includes(result.status);
   const settled = result.status === "settled";
   const completedAt = terminal ? new Date() : null;
+  const template = ensureTemplate(getTemplate(caseSession));
+  const opponentEntry = {
+    role: "opponent",
+    speaker: getPartyName(template, getOpposingSide(playerSide)),
+    text: result.responseText,
+    terms: normalizeSettlementTermsAsRows(result.currentTerms),
+    moodSnapshot: result.moods,
+  };
+  const provisionalSettlement = {
+    ...activeSettlement,
+    status: result.status,
+    moods: result.moods,
+    currentTerms: result.currentTerms,
+    transcript: [
+      ...activeSettlement.transcript,
+      {
+        role: "player",
+        speaker: "You",
+        text: message,
+        terms: playerProposalTerms,
+        moodSnapshot: activeSettlement.moods,
+      },
+      opponentEntry,
+    ],
+  };
+  let refreshedClientPreview = null;
+  let clientPreviewUsageEntries = [];
+
+  if (!terminal) {
+    const plainCaseSession = caseSession?.toObject
+      ? caseSession.toObject()
+      : { ...caseSession };
+    const previewResult = await previewSettlementDraftForClient({
+      caseSession: {
+        ...plainCaseSession,
+        settlement: provisionalSettlement,
+      },
+      offerTerms: opponentEntry.terms,
+      message: result.responseText,
+      clientInstruction:
+        "React to the other side's latest response and concrete terms. State whether I can accept, should counter, should reject, or still need clarification.",
+      userId,
+    });
+    refreshedClientPreview = previewResult.preview;
+    clientPreviewUsageEntries = previewResult.usageEntries;
+  }
+  const refreshedClientLine = coerceString(refreshedClientPreview?.privateClientLine);
 
   const nextSettlement = {
     ...activeSettlement,
     status: result.status,
     moods: result.moods,
     currentTerms: result.currentTerms,
+    clientPreview: refreshedClientPreview,
+    clientPreviewUpdatedAt: refreshedClientPreview ? new Date() : null,
     finalTerms: result.finalTerms,
     resolved: terminal,
     resolution: settled ? "settled" : result.status === "failed" ? "failed" : "",
@@ -710,19 +862,13 @@ export const runSettlementExchange = async ({
         terms: playerProposalTerms,
         moodSnapshot: activeSettlement.moods,
       },
-      {
-        role: "opponent",
-        speaker: getPartyName(ensureTemplate(getTemplate(caseSession)), getOpposingSide(playerSide)),
-        text: result.responseText,
-        terms: normalizeSettlementTermsAsRows(result.currentTerms),
-        moodSnapshot: result.moods,
-      },
-      ...(result.clientReaction
+      opponentEntry,
+      ...(refreshedClientLine || result.clientReaction
         ? [
             {
               role: "client",
-              speaker: getPartyName(ensureTemplate(getTemplate(caseSession)), playerSide),
-              text: result.clientReaction,
+              speaker: getPartyName(template, playerSide),
+              text: refreshedClientLine || result.clientReaction,
               moodSnapshot: result.moods,
             },
           ]
@@ -732,7 +878,7 @@ export const runSettlementExchange = async ({
 
   return {
     settlement: nextSettlement,
-    usageEntries: usageCollector.entries,
+    usageEntries: [...usageCollector.entries, ...clientPreviewUsageEntries],
     rejected,
     settled: result.status === "settled",
     failed: result.status === "failed",

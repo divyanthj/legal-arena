@@ -1,8 +1,14 @@
 import { NextResponse } from "next/server";
 import { getRequestSession } from "@/libs/api-auth";
 import { getSoloGameplayAccessForSession } from "@/libs/admin";
-import { getCaseSessionDocumentForUser } from "@/libs/game/store";
-import { previewSettlementDraftForClient } from "@/libs/game/settlement";
+import {
+  buildCasePayload,
+  getCaseSessionDocumentForUser,
+} from "@/libs/game/store";
+import {
+  applyPrivateClientHuddleMood,
+  previewSettlementDraftForClient,
+} from "@/libs/game/settlement";
 import { appendUsageEntriesToCaseSession } from "@/libs/game/sessionUsage";
 
 export async function POST(req, { params }) {
@@ -57,11 +63,22 @@ export async function POST(req, { params }) {
       clientInstruction: body?.clientInstruction || "",
       userId: session.user.id,
     });
+    const huddleResult = applyPrivateClientHuddleMood({
+      caseSession,
+      preview: result.preview,
+    });
+
+    caseSession.settlement = huddleResult.settlement;
+    caseSession.markModified?.("settlement");
 
     appendUsageEntriesToCaseSession(caseSession, result.usageEntries);
     await caseSession.save();
 
-    return NextResponse.json({ preview: result.preview });
+    return NextResponse.json({
+      preview: result.preview,
+      moodUpdate: huddleResult.moodUpdate,
+      caseSession: buildCasePayload(caseSession),
+    });
   } catch (error) {
     console.error(error);
     return NextResponse.json({ error: error.message }, { status: 500 });

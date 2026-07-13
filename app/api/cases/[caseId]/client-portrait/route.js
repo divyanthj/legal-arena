@@ -8,13 +8,14 @@ import {
   getCaseSessionDocumentForUser,
 } from "@/libs/game/store";
 import { normalizeGeneratedPartyName } from "@/libs/game/templateBuilder/shared";
+import { buildPortraitWardrobeGuidance } from "@/libs/game/portraitWardrobe";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const OPENAI_IMAGE_GENERATION_URL = "https://api.openai.com/v1/images/generations";
 const IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL?.trim() || "gpt-image-1.5";
-const PORTRAIT_PROMPT_VERSION = 6;
+const PORTRAIT_PROMPT_VERSION = 7;
 const PORTRAIT_WIDTH = 640;
 const PORTRAIT_HEIGHT = 720;
 
@@ -215,13 +216,28 @@ const buildClientPortraitPrompt = (caseSession, target = "client") => {
   ]
     .filter(Boolean)
     .join(" | ");
+  const wardrobeSeed = [
+    getCaseObjectId(caseSession),
+    caseSession.slug,
+    target,
+    name,
+    caseSession.practiceArea,
+  ]
+    .filter(Boolean)
+    .join(":");
 
   if (isOpponentCounsel) {
+    const wardrobeGuidance = buildPortraitWardrobeGuidance({
+      seed: wardrobeSeed,
+      role: "counsel",
+    });
+
     return [
       "Create a photorealistic portrait for a fictional legal game of opposing counsel in a courtroom dispute.",
       `Opposing counsel represents: ${name}.`,
       `Case context: ${context || "civil legal dispute"}.`,
-      "Depict an adult lawyer, not the party or client. The subject should look like courtroom counsel: professional suit jacket, dress shirt, and tie or similarly formal legal attire.",
+      "Depict an adult lawyer, not the party or client. The subject should look like courtroom counsel in polished formal legal attire.",
+      wardrobeGuidance,
       "Use a polished legal dashboard portrait style: realistic face, composed professional expression, soft office or courthouse lighting, shoulders and upper torso visible.",
       "Compose this as a vertical rectangular case-card portrait, not a circular avatar. Do not place the person inside a circle, white badge, round mask, profile bubble, or sticker frame.",
       "Frame the subject as a counsel headshot: full head, face, neck, and upper shoulders visible with a clean legal-office or courthouse background.",
@@ -229,14 +245,20 @@ const buildClientPortraitPrompt = (caseSession, target = "client") => {
     ].join(" ");
   }
 
+  const wardrobeGuidance = buildPortraitWardrobeGuidance({
+    seed: wardrobeSeed,
+    role: isOrganization ? "organization" : "everyday",
+  });
+
   return [
     `Create a photorealistic portrait for a fictional legal game ${target === "opponent" ? "opposing party" : "client"} seated across a table from their lawyer in a quiet lawyer's office.`,
     `Subject identity cue: ${name}.`,
     `Case context: ${context || "civil legal dispute"}.`,
     genderGuidance,
     isOrganization
-      ? "The client is an organization, so show a realistic representative or owner in business attire such as a suit jacket, dress shirt, or suit and tie."
-      : "The client is a person, so show normal everyday clothing that fits an ordinary client, not a lawyer headshot and not overly formal.",
+      ? "The client is an organization, so show a realistic representative or owner in credible business attire."
+      : "The client is a person, so show believable everyday clothing appropriate for an ordinary client, not a lawyer headshot and not overly formal.",
+    wardrobeGuidance,
     "Use the same visual family as a polished legal dashboard portrait: realistic face, natural expression, soft office lighting, lawyer-office background, client seated at a consultation table, shoulders and upper torso visible.",
     "Compose this as a vertical rectangular case-card portrait, not a circular avatar. Do not place the person inside a circle, white badge, round mask, profile bubble, or sticker frame.",
     "Frame the subject as if the viewer is the lawyer sitting across from them: slight conversational distance, natural seated posture, full head, face, neck, and upper shoulders visible with enough office background for a clean rectangular crop.",

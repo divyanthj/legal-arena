@@ -3,13 +3,14 @@ import { getRequestSession } from "@/libs/api-auth";
 import sharp from "sharp";
 import { get, put } from "@vercel/blob";
 import { getChallengeDocumentForUser, buildChallengePayload } from "@/libs/game/challenges";
+import { buildPortraitWardrobeGuidance } from "@/libs/game/portraitWardrobe";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const OPENAI_IMAGE_GENERATION_URL = "https://api.openai.com/v1/images/generations";
 const IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL?.trim() || "gpt-image-1.5";
-const PORTRAIT_PROMPT_VERSION = 5;
+const PORTRAIT_PROMPT_VERSION = 6;
 const PORTRAIT_WIDTH = 640;
 const PORTRAIT_HEIGHT = 720;
 
@@ -215,6 +216,19 @@ const buildPortraitPrompt = (challenge, participant, target) => {
   ]
     .filter(Boolean)
     .join(" | ");
+  const wardrobeGuidance = buildPortraitWardrobeGuidance({
+    seed: [
+      getChallengeId(challenge),
+      toId(participant?.userId),
+      participant?.side,
+      target,
+      name,
+      challenge.practiceArea,
+    ]
+      .filter(Boolean)
+      .join(":"),
+    role: isOrganization ? "organization" : "everyday",
+  });
 
   return [
     `Create a photorealistic portrait for a fictional legal game ${target === "opponent" ? "opposing party" : "client"} seated across a table from their lawyer in a quiet lawyer's office.`,
@@ -222,8 +236,9 @@ const buildPortraitPrompt = (challenge, participant, target) => {
     `Case context: ${context || "civil legal dispute"}.`,
     genderGuidance,
     isOrganization
-      ? "The party is an organization, so show a realistic representative or owner in business attire such as a suit jacket, dress shirt, or suit and tie."
-      : "The party is a person, so show normal everyday clothing that fits an ordinary client, not a lawyer headshot and not overly formal.",
+      ? "The party is an organization, so show a realistic representative or owner in credible business attire."
+      : "The party is a person, so show believable everyday clothing appropriate for an ordinary client, not a lawyer headshot and not overly formal.",
+    wardrobeGuidance,
     "Use a realistic face, natural expression, soft office lighting, lawyer-office background, client seated at a consultation table, shoulders and upper torso visible.",
     "Compose this as a vertical rectangular case-card portrait, not a circular avatar. Do not place the person inside a circle, white badge, round mask, profile bubble, or sticker frame.",
     "Avoid text, logos, badges, robes, gavels, courtroom props, caricature, illustration, celebrity resemblance, and dramatic fashion styling.",

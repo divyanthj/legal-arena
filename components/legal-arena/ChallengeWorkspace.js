@@ -10,7 +10,7 @@ import { trackGoal } from "@/libs/datafast";
 import { hasClientSettlementAuthority } from "@/libs/game/settlementAuthority";
 import CaseWorkspace from "./CaseWorkspace";
 
-const REQUIRED_CHALLENGE_PORTRAIT_PROMPT_VERSION = 5;
+const REQUIRED_CHALLENGE_PORTRAIT_PROMPT_VERSION = 6;
 
 const statusLabel = {
   pending: "Awaiting acceptance",

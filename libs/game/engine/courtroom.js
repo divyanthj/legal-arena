@@ -129,22 +129,6 @@ export const buildCourtroomRuleApplicationGuidance = ({ caseSession = {}, templa
   return guidance;
 };
 
-const OPPONENT_FACT_LIMITS = {
-  1: 2,
-  2: 3,
-  3: 4,
-  4: 6,
-  5: 8,
-};
-
-const OPPONENT_EVIDENCE_LIMITS = {
-  1: 1,
-  2: 2,
-  3: 3,
-  4: 5,
-  5: 7,
-};
-
 const normalizeEvidenceHolder = (value = "") =>
   String(value || "").trim().toLowerCase();
 
@@ -194,15 +178,81 @@ const buildPortfolioEvidencePacket = (item = {}) => ({
 const normalizeDynamicEvidenceOwner = (value = "") =>
   String(value || "").trim().toLowerCase();
 
+const normalizeDynamicEvidenceAccessibility = (value = "") =>
+  String(value || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+
 const dynamicEvidenceSupportsSide = (item = {}, templateSide = "plaintiff") => {
   const owner = normalizeDynamicEvidenceOwner(item.owner || item.holderSide);
   const supportsSide = normalizeDynamicEvidenceOwner(item.supportsSide);
 
   return (
-    owner === templateSide ||
-    owner === "shared" ||
     supportsSide === templateSide ||
-    supportsSide === "both"
+    supportsSide === "both" ||
+    (!supportsSide || supportsSide === "unknown") && (owner === templateSide || owner === "shared")
+  );
+};
+
+const dynamicEvidenceIsHeldBySide = (item = {}, templateSide = "plaintiff") => {
+  const owner = normalizeDynamicEvidenceOwner(item.owner || item.holderSide);
+  return owner === templateSide || owner === "shared";
+};
+
+const dynamicEvidenceIsProofForSide = (
+  item = {},
+  templateSide = "plaintiff",
+  complexity = 3
+) => {
+  if (!dynamicEvidenceSupportsSide(item, templateSide)) return false;
+  if (!dynamicEvidenceIsHeldBySide(item, templateSide)) return false;
+
+  const accessibility = normalizeDynamicEvidenceAccessibility(
+    item.accessibility || item.availabilityStatus
+  );
+  if (["missing", "hard_to_get", "contested", "unknown"].includes(accessibility)) {
+    return false;
+  }
+  if (complexity === 1) {
+    return accessibility === "available" || item.availableAtStart === true;
+  }
+  return ["available", "discoverable", "confirmed", "produced", ""].includes(
+    accessibility
+  );
+};
+
+const dynamicEvidenceIsLeadForSide = (
+  item = {},
+  templateSide = "plaintiff",
+  complexity = 3
+) => {
+  if (!dynamicEvidenceSupportsSide(item, templateSide)) return false;
+  const accessibility = normalizeDynamicEvidenceAccessibility(
+    item.accessibility || item.availabilityStatus
+  );
+
+  if (accessibility === "contested") return complexity >= 3;
+  if (accessibility === "hard_to_get") return complexity >= 4;
+  return false;
+};
+
+const dynamicEvidenceRank = (item = {}, templateSide = "plaintiff") => {
+  const accessibility = normalizeDynamicEvidenceAccessibility(
+    item.accessibility || item.availabilityStatus
+  );
+  const strength = normalizeDynamicEvidenceAccessibility(item.strength);
+  const accessibilityScore = {
+    available: 5,
+    confirmed: 5,
+    produced: 5,
+    discoverable: 3,
+    contested: 2,
+    hard_to_get: 1,
+  }[accessibility] || 0;
+  const strengthScore = { strong: 4, moderate: 3, ambiguous: 2, weak: 1 }[strength] || 0;
+  return (
+    (dynamicEvidenceIsHeldBySide(item, templateSide) ? 10 : 0) +
+    (item.availableAtStart === true ? 6 : 0) +
+    accessibilityScore +
+    strengthScore
   );
 };
 
@@ -217,6 +267,30 @@ const buildDynamicEvidencePacket = (item = {}) => ({
   strength: item.strength || "",
   contradiction: item.contradiction || "",
 });
+
+const splitLegacyStoryPositions = (story = "") =>
+  String(story || "")
+    .replace(/\s+/g, " ")
+    .match(/[^.!?]+[.!?]+|[^.!?]+$/g)
+    ?.map((item) => item.trim())
+    .filter(Boolean) || [];
+
+const buildLegacyDynamicPositions = ({ dynamicCase, sideKey, theory }) => {
+  const story = sideKey === "defendant" ? dynamicCase.defendantStory : dynamicCase.plaintiffStory;
+  return uniqueList([
+    theory,
+    ...splitLegacyStoryPositions(story),
+    dynamicCase.coreDispute,
+    ...(dynamicCase.legalIssues || []),
+    ...(dynamicCase.courtroomOpportunities || []),
+  ]).map((position, index) => ({
+    id: `legacy-${sideKey}-position-${index + 1}`,
+    label: index === 0 ? `${sideKey} core theory` : `${sideKey} position ${index + 1}`,
+    position,
+    priority: Math.max(1, 5 - index),
+    linkedEvidenceIds: [],
+  }));
+};
 
 const buildDynamicOpponentCourtroomPortfolio = ({
   safeTemplate,
@@ -234,42 +308,51 @@ const buildDynamicOpponentCourtroomPortfolio = ({
   const isDefendant = templateSide === "defendant";
   const partyName = getPartyName(safeTemplate, opponentSide);
   const sideKey = isDefendant ? "defendant" : "plaintiff";
-  const story = coerceString(
-    isDefendant ? dynamicCase.defendantStory : dynamicCase.plaintiffStory
-  );
   const theory = coerceString(
     isDefendant
       ? dynamicCase.theorySeeds?.defendant || dynamicCase.defendantObjective
       : dynamicCase.theorySeeds?.plaintiff || dynamicCase.desiredRelief
   );
-  const evidenceLimit =
-    OPPONENT_EVIDENCE_LIMITS[complexity] || OPPONENT_EVIDENCE_LIMITS[3];
+  const preparation = profile.preparation;
+  const evidenceLimit = preparation.evidenceLimit;
   const evidence = (dynamicCase.evidencePool || [])
-    .filter((item) => dynamicEvidenceSupportsSide(item, templateSide))
+    .filter((item) => dynamicEvidenceIsProofForSide(item, templateSide, complexity))
+    .slice()
+    .sort(
+      (left, right) =>
+        dynamicEvidenceRank(right, templateSide) - dynamicEvidenceRank(left, templateSide)
+    )
     .slice(0, evidenceLimit)
     .map(buildDynamicEvidencePacket);
   const evidenceLeads = (dynamicCase.evidencePool || [])
-    .filter((item) => !dynamicEvidenceSupportsSide(item, templateSide))
-    .slice(0, Math.max(1, complexity - 2))
+    .filter((item) => dynamicEvidenceIsLeadForSide(item, templateSide, complexity))
+    .slice()
+    .sort(
+      (left, right) =>
+        dynamicEvidenceRank(right, templateSide) - dynamicEvidenceRank(left, templateSide)
+    )
+    .slice(0, preparation.evidenceLeadLimit)
     .map(buildDynamicEvidencePacket);
-  const facts = uniqueList([
-    story,
-    theory,
-    dynamicCase.coreDispute,
-    ...(dynamicCase.legalIssues || []),
-    ...(dynamicCase.courtroomOpportunities || []),
-  ])
-    .filter(Boolean)
-    .slice(0, OPPONENT_FACT_LIMITS[complexity] || OPPONENT_FACT_LIMITS[3])
-    .map((position, index) => ({
-      factId: `dynamic-${sideKey}-${index + 1}`,
-      label: index === 0 ? `${partyName} story` : `Dynamic point ${index + 1}`,
+  const suppliedPositions = dynamicCase.courtroomPositions?.[sideKey];
+  const positionCandidates = Array.isArray(suppliedPositions) && suppliedPositions.length
+    ? suppliedPositions
+    : buildLegacyDynamicPositions({ dynamicCase, sideKey, theory });
+  const preparedEvidenceIds = new Set(evidence.map((item) => item.id));
+  const facts = positionCandidates
+    .map((item, index) => ({
+      factId: item.id || `dynamic-${sideKey}-${index + 1}`,
+      label: item.label || `Dynamic point ${index + 1}`,
       kind: index === 0 ? "supporting" : "dispute",
-      priority: Math.max(1, 5 - index),
-      position,
-      claimId: `${opponentSide}:dynamic-${index + 1}`,
-      linkedEvidenceIds: evidence.map((item) => item.id).slice(0, 2),
-    }));
+      priority: Math.max(1, Math.min(5, Number(item.priority) || 3)),
+      position: coerceString(item.position || item.claim || item.detail),
+      claimId: `${opponentSide}:${item.id || `dynamic-${index + 1}`}`,
+      linkedEvidenceIds: (item.linkedEvidenceIds || []).filter((id) =>
+        preparedEvidenceIds.has(id)
+      ),
+    }))
+    .filter((item) => item.position)
+    .sort((left, right) => right.priority - left.priority)
+    .slice(0, preparation.factLimit);
 
   return {
     side: templateSide,
@@ -293,6 +376,10 @@ const buildDynamicOpponentCourtroomPortfolio = ({
     facts,
     evidence,
     evidenceLeads,
+    strategyGuardrails: {
+      coreIssueIds: facts.slice(0, profile.opponentResponseLimits.issueBudget).map((fact) => fact.factId),
+      ...preparation,
+    },
   };
 };
 
@@ -327,6 +414,7 @@ export const buildOpponentCourtroomPortfolio = ({
   const safeTemplate = ensureTemplate(template);
   const profile = getCourtroomDifficultyProfile(complexity);
   const normalizedComplexity = profile.complexity;
+  const preparation = profile.preparation;
   const dynamicPortfolio = buildDynamicOpponentCourtroomPortfolio({
     safeTemplate,
     opponentSide,
@@ -339,9 +427,8 @@ export const buildOpponentCourtroomPortfolio = ({
   }
 
   const templateSide = getTemplatePartyForSessionSide(opponentSide);
-  const factLimit = OPPONENT_FACT_LIMITS[normalizedComplexity] || OPPONENT_FACT_LIMITS[3];
-  const evidenceLimit =
-    OPPONENT_EVIDENCE_LIMITS[normalizedComplexity] || OPPONENT_EVIDENCE_LIMITS[3];
+  const factLimit = preparation.factLimit;
+  const evidenceLimit = preparation.evidenceLimit;
   const rankedFacts = sortFactsForOpponentPortfolio(safeTemplate, opponentSide);
   const selectedFactPackets = rankedFacts.slice(0, factLimit);
   const selectedFactIds = selectedFactPackets.map((item) => item.fact.factId);
@@ -361,7 +448,7 @@ export const buildOpponentCourtroomPortfolio = ({
   const evidenceLeads = linkedEvidence
     .filter((item) => !proofEvidenceIds.includes(item.id))
     .filter((item) => evidenceIsLeadForSide(item, templateSide, normalizedComplexity))
-    .slice(0, Math.max(1, normalizedComplexity - 3));
+    .slice(0, preparation.evidenceLeadLimit);
   const evidenceByFactId = new Map();
 
   proofEvidence.forEach((item) => {
@@ -414,6 +501,10 @@ export const buildOpponentCourtroomPortfolio = ({
     facts,
     evidence: proofEvidence.map(buildPortfolioEvidencePacket),
     evidenceLeads: evidenceLeads.map(buildPortfolioEvidencePacket),
+    strategyGuardrails: {
+      coreIssueIds: facts.slice(0, profile.opponentResponseLimits.issueBudget).map((fact) => fact.factId),
+      ...preparation,
+    },
   };
 };
 
@@ -568,7 +659,6 @@ export const buildCourtroomAgentContext = ({
           opponentMaxDelta: difficultyProfile.opponentMaxDelta,
         },
         responseLimits: difficultyProfile.opponentResponseLimits,
-        closeCaseBand: difficultyProfile.verdictCloseCaseBand,
         guidance: difficultyProfile.promptGuidance,
         confidentiality:
           "Never mention calibration, difficulty, complexity scaling, junior counsel, senior counsel, scoring bounds, or hidden tuning in player-facing text.",

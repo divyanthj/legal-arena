@@ -57,6 +57,10 @@ const soloClientPortraitRouteSource = await readFile(
   new URL("../app/api/cases/[caseId]/client-portrait/route.js", import.meta.url),
   "utf8"
 );
+const portraitWardrobeSource = await readFile(
+  new URL("../libs/game/portraitWardrobe.js", import.meta.url),
+  "utf8"
+);
 const challengeSource = await readFile(
   new URL("../libs/game/challenges.js", import.meta.url),
   "utf8"
@@ -103,6 +107,16 @@ assert.match(
   caseSessionModelSource,
   /resolved:\s*\{[\s\S]*type:\s*Boolean,[\s\S]*default:\s*false[\s\S]*resolution:\s*\{[\s\S]*enum:\s*\["", "settled", "failed", "rejected"\][\s\S]*accepted:\s*\{[\s\S]*type:\s*Boolean,[\s\S]*default:\s*false[\s\S]*acceptedByUserId/s,
   "Solo settlement schema should persist explicit resolved and accepted closeout flags."
+);
+assert.match(
+  caseSessionModelSource,
+  /clientPreview:\s*\{[\s\S]*Schema\.Types\.Mixed[\s\S]*clientPreviewUpdatedAt/,
+  "Solo settlement state should persist the represented client's latest structured reaction."
+);
+assert.match(
+  caseSessionModelSource,
+  /clientHuddle:\s*\{[\s\S]*Schema\.Types\.Mixed/,
+  "Solo settlement state should persist private-huddle diminishing-return counters."
 );
 
 assert.match(
@@ -330,7 +344,7 @@ assert.match(
 assert.match(
   caseWorkspaceSource,
   /handleSettlementClientInstructionSubmit[\s\S]*fetch\(`\/api\$\{settlementPreviewApiPath\}`[\s\S]*handleAskClientAboutLatestOffer[\s\S]*fetch\(`\/api\$\{settlementPreviewApiPath\}`/,
-  "Settlement client preview calls should happen only from explicit private-client huddle actions."
+  "Settlement client huddle should retain explicit follow-up actions after automatic reply evaluation."
 );
 assert.doesNotMatch(
   caseWorkspaceSource,
@@ -354,6 +368,16 @@ assert.match(
 );
 assert.match(
   settlementSource,
+  /opponentEntry[\s\S]*previewSettlementDraftForClient\(\{[\s\S]*offerTerms: opponentEntry\.terms[\s\S]*message: result\.responseText[\s\S]*clientPreview: refreshedClientPreview/,
+  "Every solo opponent reply should refresh and persist the represented client's reaction to those terms."
+);
+assert.match(
+  caseWorkspaceSource,
+  /serverSettlementClientPreview[\s\S]*setSettlementClientPreview\(serverSettlementClientPreview\)[\s\S]*acceptanceAuthority === "accept"/,
+  "The settlement workspace should hydrate the server-refreshed client stance and matching acceptance authority."
+);
+assert.match(
+  settlementSource,
   /Do not tell a money-seeking client they prefer less money[\s\S]*acceptable floor[\s\S]*close-now authority/,
   "Settlement client previews should frame weaker money terms as compromise authority, not client preference."
 );
@@ -364,7 +388,7 @@ assert.match(
 );
 assert.match(
   settlementSource,
-  /extractSettlementTermsFromMessage[\s\S]*runSettlementExchange = async \(\{[\s\S]*playerProposalTerms = extractSettlementTermsFromMessage\(message\)[\s\S]*role: "player"[\s\S]*terms: playerProposalTerms[\s\S]*role: "opponent"[\s\S]*terms: normalizeSettlementTermsAsRows\(result\.currentTerms\)/,
+  /extractSettlementTermsFromMessage[\s\S]*runSettlementExchange = async \(\{[\s\S]*playerProposalTerms = extractSettlementTermsFromMessage\(message\)[\s\S]*const opponentEntry = \{[\s\S]*role: "opponent"[\s\S]*terms: normalizeSettlementTermsAsRows\(result\.currentTerms\)[\s\S]*role: "player"[\s\S]*terms: playerProposalTerms/,
   "Solo settlement exchanges should derive player proposal terms from the freeform message text."
 );
 assert.match(
@@ -517,10 +541,40 @@ assert.match(
   /compactSettlementBreakdownValue[\s\S]*Settlement Amount[\s\S]*amount\[0\][\s\S]*Payment Timeline[\s\S]*duration\[1\][\s\S]*Corrective Work[\s\S]*return "None"/,
   "Settlement breakdown rows should compact long proposal sentences into key datapoints."
 );
+assert.doesNotMatch(
+  caseWorkspaceSource,
+  /Latest response from across the table|latestSettlementResponse/,
+  "Settlement UI should not repeat the opposing counsel response below the main offer panel."
+);
 assert.match(
   caseWorkspaceSource,
-  /Latest response from across the table[\s\S]*latestSettlementResponse[\s\S]*getSettlementEntryText\(latestSettlementResponse\)/,
-  "Settlement UI should show the latest response before asking for the next move."
+  /settlementMessageInTransit[\s\S]*Counteroffer in motion[\s\S]*arena-settlement-dispatch[\s\S]*PaperAirplaneIcon[\s\S]*Opposing counsel is reviewing/,
+  "Settlement composer should replace the textarea with an animated dispatch state while awaiting the solo response."
+);
+assert.match(
+  caseWorkspaceSource,
+  /latestPublicNegotiationEntry[\s\S]*opposingCounselWasLatest[\s\S]*composerClientPreview[\s\S]*latestOpponentProposalSummary[\s\S]*responseAwareSettlementMessage[\s\S]*getSettlementComposerDefaultMessage/,
+  "Autopopulated settlement replies should combine the latest opposing-counsel terms with the refreshed client stance."
+);
+assert.match(
+  caseWorkspaceSource,
+  /value=\{settlementClientInstruction\}[\s\S]*onKeyDown=\{\(event\) => \{[\s\S]*event\.key !== "Enter"[\s\S]*event\.shiftKey[\s\S]*isComposing[\s\S]*requestSubmit\(\)/,
+  "Private client huddle should submit with Enter while preserving Shift+Enter and IME composition."
+);
+assert.match(
+  settlementSource,
+  /applyPrivateClientHuddleMood[\s\S]*attempts === 0 \? 1 : attempts === 1 \? 0\.5 : 0\.25[\s\S]*10 - positiveApplied[\s\S]*20 - negativeApplied/,
+  "Private huddle mood effects should have diminishing returns and per-offer positive and negative caps."
+);
+assert.match(
+  soloSettlementPreviewRouteSource,
+  /applyPrivateClientHuddleMood[\s\S]*caseSession\.settlement = huddleResult\.settlement[\s\S]*moodUpdate: huddleResult\.moodUpdate[\s\S]*caseSession: buildCasePayload/,
+  "Explicit solo private-huddle requests should persist and return the applied client mood change."
+);
+assert.match(
+  caseWorkspaceSource,
+  /Respectful reassurance, clear tradeoffs, and honest risk advice can improve their mood[\s\S]*Repeated reassurance has diminishing returns/,
+  "The settlement tour should explain the private-huddle mood mechanic and its diminishing returns."
 );
 assert.match(
   caseWorkspaceSource,
@@ -669,13 +723,13 @@ assert.match(
 );
 assert.match(
   caseWorkspaceSource,
-  /Start in the client huddle[\s\S]*Check your client's reaction[\s\S]*Check the public proposal[\s\S]*Message opposing counsel[\s\S]*Read the reply[\s\S]*Choose what to do next/,
+  /Start in the client huddle[\s\S]*Check your client's reaction[\s\S]*Check the public proposal[\s\S]*Message opposing counsel[\s\S]*Choose what to do next/,
   "Settlement tour should guide the user through the negotiation loop step by step."
 );
 assert.match(
   caseWorkspaceSource,
-  /settlement-client-reaction[\s\S]*settlement-public-terms[\s\S]*settlement-message[\s\S]*settlement-latest-response[\s\S]*settlement-next-move/,
-  "Settlement tour should target client reaction, public terms, message, latest response, and next-move controls."
+  /settlement-client-reaction[\s\S]*settlement-public-terms[\s\S]*settlement-message[\s\S]*settlement-next-move/,
+  "Settlement tour should target client reaction, public terms, message, and next-move controls."
 );
 assert.doesNotMatch(
   caseWorkspaceSource,
@@ -1039,7 +1093,7 @@ assert.match(
 );
 assert.match(
   challengeWorkspaceSource,
-  /REQUIRED_CHALLENGE_PORTRAIT_PROMPT_VERSION = 5[\s\S]*needsFreshChallengePortrait[\s\S]*promptVersion/,
+  /REQUIRED_CHALLENGE_PORTRAIT_PROMPT_VERSION = 6[\s\S]*needsFreshChallengePortrait[\s\S]*promptVersion/,
   "PVP challenge workspace should regenerate stale party portraits when the portrait prompt version changes."
 );
 assert.match(
@@ -1054,7 +1108,7 @@ assert.match(
 );
 assert.match(
   pvpChallengePortraitRouteSource,
-  /PORTRAIT_PROMPT_VERSION = 5[\s\S]*buildGenderPresentationGuidance[\s\S]*genderGuidance/,
+  /PORTRAIT_PROMPT_VERSION = 6[\s\S]*buildGenderPresentationGuidance[\s\S]*genderGuidance/,
   "PVP challenge portrait prompts should include gender-presentation guidance and invalidate older mixed portraits."
 );
 assert.match(
@@ -1064,8 +1118,28 @@ assert.match(
 );
 assert.match(
   soloClientPortraitRouteSource,
-  /PORTRAIT_PROMPT_VERSION = 6[\s\S]*masculineGivenNameCues[\s\S]*"darren"/,
+  /PORTRAIT_PROMPT_VERSION = 7[\s\S]*masculineGivenNameCues[\s\S]*"darren"/,
   "Solo case portrait prompts should invalidate older portraits and treat Darren as conventionally masculine."
+);
+assert.match(
+  portraitWardrobeSource,
+  /everydayWardrobes[\s\S]*organizationWardrobes[\s\S]*counselWardrobes[\s\S]*stableWardrobeIndex/,
+  "Portrait generation should assign deterministic wardrobe variety for clients, representatives, and counsel."
+);
+assert.match(
+  portraitWardrobeSource,
+  /Do not use denim, chambray, a jean jacket, or a blue workwear jacket/,
+  "Portrait wardrobe guidance should prevent the model from falling back to repetitive denim jackets."
+);
+assert.match(
+  soloClientPortraitRouteSource,
+  /buildPortraitWardrobeGuidance[\s\S]*role: "counsel"[\s\S]*role: isOrganization \? "organization" : "everyday"/,
+  "Solo portraits should apply role-appropriate wardrobe assignments to counsel and client portraits."
+);
+assert.match(
+  pvpChallengePortraitRouteSource,
+  /buildPortraitWardrobeGuidance[\s\S]*role: isOrganization \? "organization" : "everyday"/,
+  "PVP party portraits should apply the same wardrobe-variety system."
 );
 assert.doesNotMatch(
   pvpChallengePortraitRouteSource,

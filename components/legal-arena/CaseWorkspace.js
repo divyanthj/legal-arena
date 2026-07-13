@@ -244,7 +244,7 @@ const settlementTourSteps = [
     target: "settlement-client-reaction",
     eyebrow: "Step 2",
     title: "Check your client's reaction",
-    body: "Use the private huddle to ask what your client will accept before you speak across the table.",
+    body: "Use the private huddle to ask what your client will accept. Respectful reassurance, clear tradeoffs, and honest risk advice can improve their mood; pressure or dismissiveness can make it worse. Repeated reassurance has diminishing returns.",
   },
   {
     target: "settlement-public-terms",
@@ -259,14 +259,8 @@ const settlementTourSteps = [
     body: "Write the response you want the other player to receive.",
   },
   {
-    target: "settlement-latest-response",
-    eyebrow: "Step 5",
-    title: "Read the reply",
-    body: "After you send, the other side's latest response appears here. Read it before choosing your next move.",
-  },
-  {
     target: "settlement-next-move",
-    eyebrow: "Step 6",
+    eyebrow: "Step 5",
     title: "Choose what to do next",
     body: "Now decide: revise the offer, ask a clarifying question, accept if the terms work, or return to intake for more facts.",
   },
@@ -1016,7 +1010,9 @@ export default function CaseWorkspace({
     values: {},
     dirty: false,
   });
-  const [settlementClientPreview, setSettlementClientPreview] = useState(null);
+  const [settlementClientPreview, setSettlementClientPreview] = useState(
+    () => initialCase.settlement?.clientPreview || null
+  );
   const [settlementClientPreviewError, setSettlementClientPreviewError] = useState("");
   const [settlementAcceptAuthority, setSettlementAcceptAuthority] = useState({
     offerSignature: "",
@@ -3191,6 +3187,20 @@ export default function CaseWorkspace({
     [...settlementHumanTranscript]
       .reverse()
       .find((entry) => entry?.role === "opponent" || entry?.isViewer === false) || null;
+  const latestPublicNegotiationEntry =
+    [...settlementHumanTranscript]
+      .reverse()
+      .find(
+        (entry) =>
+          entry?.role === "player" ||
+          entry?.role === "opponent" ||
+          typeof entry?.isViewer === "boolean"
+      ) || null;
+  const opposingCounselWasLatest = Boolean(
+    latestPublicNegotiationEntry &&
+      (latestPublicNegotiationEntry.role === "opponent" ||
+        latestPublicNegotiationEntry.isViewer === false)
+  );
   const latestOpponentOfferText = formatSettlementOfferText(latestOpponentOfferEntry);
   const settlementCurrentTermRows = coerceUiSettlementTermRows(settlementTerms);
   const getStructuredSettlementTermValue = (terms = [], label = "") =>
@@ -3221,6 +3231,8 @@ export default function CaseWorkspace({
           .map((term) => [term.label, term.value]),
       })
     : "";
+  const serverSettlementClientPreview = settlement.clientPreview || null;
+  const serverSettlementClientPreviewVersion = settlement.clientPreviewUpdatedAt || "";
   const settlementDraftDefaultEntries = currentOfferTerms.map(([label, value]) => [
     label,
     String(value || "").trim(),
@@ -3234,6 +3246,30 @@ export default function CaseWorkspace({
         : { offerSignature: "", authority: "unclear", reason: "" }
     );
   }, [latestOpponentOfferSignature]);
+
+  useEffect(() => {
+    if (!serverSettlementClientPreview || !latestOpponentOfferSignature) {
+      return;
+    }
+
+    setSettlementClientPreview(serverSettlementClientPreview);
+    setSettlementClientPreviewError("");
+    setSettlementAcceptAuthority(
+      serverSettlementClientPreview.acceptanceAuthority === "accept"
+        ? {
+            offerSignature: latestOpponentOfferSignature,
+            authority: "accept",
+            reason:
+              serverSettlementClientPreview.authorityReason ||
+              "Client says the latest offer is within settlement authority.",
+          }
+        : { offerSignature: "", authority: "unclear", reason: "" }
+    );
+  }, [
+    latestOpponentOfferSignature,
+    serverSettlementClientPreview,
+    serverSettlementClientPreviewVersion,
+  ]);
 
   useEffect(() => {
     setSettlementDraftState((current) => {
@@ -3265,22 +3301,47 @@ export default function CaseWorkspace({
         .map(([label, value]) => `${label}: ${String(value || "").trim()}`)
         .join("; ")}.`
     : "Counteroffer: Please clarify which settlement terms are still open.";
+  const composerClientPreview =
+    opposingCounselWasLatest && serverSettlementClientPreview
+      ? serverSettlementClientPreview
+      : settlementClientPreview;
   const settlementClientGuidanceParts = cleanDraftList([
-    settlementClientPreview?.authorityReason,
-    settlementClientPreview?.suggestedRevision,
-    ...(Array.isArray(settlementClientPreview?.drivers)
-      ? settlementClientPreview.drivers
+    composerClientPreview?.authorityReason,
+    composerClientPreview?.suggestedRevision,
+    ...(Array.isArray(composerClientPreview?.drivers)
+      ? composerClientPreview.drivers
       : []),
   ]).slice(0, 4);
   const settlementClientGuidedMessage = settlementClientGuidanceParts.length
     ? `Counteroffer: My client can continue settlement discussions within this range: ${settlementClientGuidanceParts.join("; ")}. Please respond with concrete terms that fit those conditions.`
     : settlementDraftMessage;
+  const latestOpponentProposalSummary = latestOpponentOfferTerms
+    .filter((term) => term?.label && term?.value)
+    .slice(0, 4)
+    .map((term) => `${term.label}: ${term.value}`)
+    .join("; ");
+  const latestOpponentResponseExcerpt = String(latestOpponentOfferText || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 180);
+  const responseAwareSettlementMessage = opposingCounselWasLatest
+    ? [
+        latestOpponentProposalSummary
+          ? `We have reviewed your latest proposal (${latestOpponentProposalSummary}).`
+          : latestOpponentResponseExcerpt
+          ? `We have reviewed your latest response: "${latestOpponentResponseExcerpt}${
+              latestOpponentOfferText.length > 180 ? "..." : ""
+            }".`
+          : "We have reviewed your latest response.",
+        settlementClientGuidedMessage,
+      ].join(" ")
+    : settlementClientGuidedMessage;
   const getSettlementComposerDefaultMessage = (current = "") => {
     const cleanCurrent = String(current || "").trim();
     const genericFallback = "Counteroffer: Please clarify which settlement terms are still open.";
 
     return !cleanCurrent || cleanCurrent === genericFallback
-      ? settlementClientGuidedMessage
+      ? responseAwareSettlementMessage
       : cleanCurrent;
   };
   const settlementPreviewApiPath = `${getApiBasePath(caseSession)}/settlement/preview`;
@@ -3291,6 +3352,7 @@ export default function CaseWorkspace({
     if (
       clientWalkoutActive ||
       settlementClientInstructionWorking ||
+      transcribingSettlementClientInstruction ||
       working ||
       !settlementClientInstruction.trim()
     ) {
@@ -3317,6 +3379,9 @@ export default function CaseWorkspace({
       }
 
       const preview = payload?.preview || null;
+      if (payload?.caseSession) {
+        updateCaseFromResponse(payload);
+      }
       setSettlementClientPreview(preview);
 
       setSettlementClientInstruction("");
@@ -3375,6 +3440,22 @@ export default function CaseWorkspace({
       : Array.isArray(settlementClientPreview?.drivers) && settlementClientPreview.drivers.length
       ? settlementClientPreview.drivers.slice(0, 3)
       : [`${playerPartyName}'s private guidance will appear after you ask.`];
+  const clientHuddleUpdatedAt = new Date(
+    settlement.clientHuddle?.updatedAt || 0
+  ).getTime();
+  const clientPreviewUpdatedAt = new Date(
+    settlement.clientPreviewUpdatedAt || 0
+  ).getTime();
+  const clientHuddleMoodFeedback =
+    clientHuddleUpdatedAt >= clientPreviewUpdatedAt && settlement.clientHuddle?.lastReason
+      ? `${Number(settlement.clientHuddle.lastDelta) > 0 ? "Mood +" : "Mood "}${
+          Number(settlement.clientHuddle.lastDelta) || 0
+        }: ${settlement.clientHuddle.lastReason}`
+      : "";
+  const visibleClientReactionDrivers = cleanDraftList([
+    clientHuddleMoodFeedback,
+    ...draftClientReactionDrivers,
+  ]).slice(0, 3);
   const renderSettlementIntentNoticePanel = (className = "") =>
     isPendingSettlementIntent || settlementAuthorityReady ? (
       <div
@@ -3596,14 +3677,6 @@ export default function CaseWorkspace({
       settlementOpponentMood < 0
         ? "Open to compromise, but amount feels high."
         : "Willing to evaluate concrete terms.";
-    const latestPublicSettlementEntry = [...settlementHumanTranscript]
-      .reverse()
-      .find((entry) => entry.role !== "player" || entry.isViewer === false);
-    const latestOpponentSettlementEntry = [...settlementHumanTranscript]
-      .reverse()
-      .find((entry) => entry.role === "opponent" || entry.isViewer === false);
-    const latestSettlementResponse =
-      latestOpponentSettlementEntry || latestPublicSettlementEntry || null;
     const actionableNextMove =
       settlementClientMood < settlementOpponentMood
         ? "Your client is the constraint. Do not lower the amount yet. Offer a narrower release or clearer corrective-work limit."
@@ -3820,6 +3893,9 @@ export default function CaseWorkspace({
         }
 
         const preview = payload?.preview || null;
+        if (payload?.caseSession) {
+          updateCaseFromResponse(payload);
+        }
         setSettlementClientPreview(preview);
 
         if (
@@ -3929,6 +4005,7 @@ export default function CaseWorkspace({
         isSettlement &&
         Boolean(negotiationTurnUserId) &&
         !receivedNegotiationMessage);
+    const settlementMessageInTransit = pendingAction === "settlement";
     const settlementComposeModal =
       portalReady && showSettlementComposeModal
         ? createPortal(
@@ -3943,15 +4020,22 @@ export default function CaseWorkspace({
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
                       <p className="arena-kicker text-amber-200">Message to opposing counsel</p>
-                      <h3 className="mt-2 text-xl font-black leading-tight text-white">Send negotiation message</h3>
+                      <h3 className="mt-2 text-xl font-black leading-tight text-white">
+                        {settlementMessageInTransit
+                          ? "Counteroffer in motion"
+                          : "Send negotiation message"}
+                      </h3>
                       <p className="mt-1 text-sm leading-5 text-white/48">
-                        Write the exact response you want the other side to receive.
+                        {settlementMessageInTransit
+                          ? "Delivering your terms and waiting for opposing counsel."
+                          : "Write the exact response you want the other side to receive."}
                       </p>
                     </div>
                     <button
                       type="button"
                       className="btn btn-circle btn-ghost btn-sm shrink-0 border border-white/[0.06] text-white/65 hover:border-amber-200/25 hover:bg-white/[0.04] hover:text-white"
                       onClick={() => setShowSettlementComposeModal(false)}
+                      disabled={settlementMessageInTransit}
                       aria-label="Close message composer"
                     >
                       <HeroIcons.XMarkIcon className="h-5 w-5" aria-hidden="true" />
@@ -3964,6 +4048,41 @@ export default function CaseWorkspace({
                   onSubmit={handleSettlementMessageSubmit}
                   data-settlement-tour-target="settlement-message"
                 >
+                  {settlementMessageInTransit ? (
+                    <div
+                      className="arena-settlement-dispatch relative flex min-h-[17rem] overflow-hidden rounded-xl border border-amber-200/[0.09] bg-[radial-gradient(circle_at_center,rgba(253,224,71,0.09),rgba(0,0,0,0.18)_58%,rgba(0,0,0,0.38))] px-6 py-8"
+                      role="status"
+                      aria-live="polite"
+                    >
+                      <div className="pointer-events-none absolute inset-0 opacity-70" aria-hidden="true">
+                        <span className="arena-settlement-dispatch-orbit absolute left-1/2 top-1/2 h-40 w-40 -translate-x-1/2 -translate-y-1/2 rounded-full border border-amber-200/10" />
+                        <span className="arena-settlement-dispatch-orbit arena-settlement-dispatch-orbit-reverse absolute left-1/2 top-1/2 h-56 w-56 -translate-x-1/2 -translate-y-1/2 rounded-full border border-dashed border-amber-100/[0.08]" />
+                      </div>
+                      <div className="relative z-10 m-auto flex max-w-md flex-col items-center text-center">
+                        <div className="relative grid h-24 w-24 place-items-center rounded-full border border-amber-200/20 bg-amber-200/[0.08] shadow-[0_0_55px_rgba(253,224,71,0.12)]">
+                          <span className="arena-settlement-dispatch-trail absolute left-1 top-1/2 h-px w-9 bg-gradient-to-r from-transparent to-amber-200/70" aria-hidden="true" />
+                          <HeroIcons.PaperAirplaneIcon
+                            className="arena-settlement-dispatch-plane h-11 w-11 text-amber-100"
+                            aria-hidden="true"
+                          />
+                        </div>
+                        <p className="mt-6 text-lg font-black text-white">Opposing counsel is reviewing</p>
+                        <p className="mt-2 text-sm font-semibold leading-6 text-white/52">
+                          Your counteroffer has left the huddle. The other side is weighing the amount, timing, and release terms.
+                        </p>
+                        <div className="mt-5 flex items-center gap-2" aria-hidden="true">
+                          {[0, 1, 2].map((dot) => (
+                            <span
+                              key={dot}
+                              className="arena-settlement-dispatch-dot h-2 w-2 rounded-full bg-amber-200"
+                              style={{ animationDelay: `${dot * 180}ms` }}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
                   <div className="overflow-hidden rounded-xl border border-white/[0.04] bg-black/26">
                     <textarea
                       ref={settlementMessageTextareaRef}
@@ -4051,12 +4170,19 @@ export default function CaseWorkspace({
                       <HeroIcons.PaperAirplaneIcon className="h-5 w-5" aria-hidden="true" />
                     </button>
                   </div>
+                    </>
+                  )}
                 </form>
               </div>
               <button
                 type="button"
                 className="modal-backdrop"
-                onClick={() => setShowSettlementComposeModal(false)}
+                onClick={() => {
+                  if (!settlementMessageInTransit) {
+                    setShowSettlementComposeModal(false);
+                  }
+                }}
+                disabled={settlementMessageInTransit}
                 aria-label="Close message composer"
               >
                 close
@@ -4087,7 +4213,7 @@ export default function CaseWorkspace({
       return (
         <div id="settlement" className="mx-auto w-full max-w-[1600px] space-y-4">
           <section className="arena-surface overflow-hidden border-emerald-200/18 bg-emerald-300/[0.035]">
-            <div className="grid gap-6 p-5 sm:p-7 xl:grid-cols-[minmax(0,1fr)_24rem] xl:items-center">
+            <div className="mx-auto w-full max-w-5xl p-5 sm:p-7 lg:p-9">
               <div className="flex min-w-0 gap-4">
                 <span className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl border border-emerald-200/35 bg-emerald-300/12 text-emerald-100 shadow-[0_0_40px_rgba(110,231,183,0.12)]">
                   <HeroIcons.CheckCircleIcon className="h-9 w-9" aria-hidden="true" />
@@ -4103,46 +4229,58 @@ export default function CaseWorkspace({
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-emerald-200/18 bg-black/22 p-4">
-                <p className="arena-kicker text-emerald-200">Settlement Quality</p>
-                <div className="mt-2 flex items-end justify-between gap-3">
-                  <div>
-                    <p className="text-2xl font-black text-white">{settlementQuality.label}</p>
-                    <p className="mt-1 text-sm font-semibold text-white/54">
-                      {settlementQuality.detail}
+              <div className="mt-7 overflow-hidden rounded-2xl border border-emerald-200/18 bg-black/22">
+                <div className="grid gap-5 p-4 sm:p-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(18rem,0.8fr)] lg:items-stretch">
+                  <div className="flex min-w-0 flex-col justify-center lg:border-r lg:border-white/10 lg:pr-5">
+                    <p className="arena-kicker text-emerald-200">Settlement Quality</p>
+                    <div className="mt-2 flex items-end justify-between gap-4">
+                      <div className="min-w-0">
+                        <p className="text-2xl font-black text-white sm:text-3xl">
+                          {settlementQuality.label}
+                        </p>
+                        <p className="mt-1 text-sm font-semibold leading-6 text-white/54">
+                          {settlementQuality.detail}
+                        </p>
+                      </div>
+                      <p className="shrink-0 text-5xl font-black leading-none text-emerald-100">
+                        {settlementQuality.score}
+                      </p>
+                    </div>
+                    <div className="mt-5 h-2 overflow-hidden rounded-full bg-white/10">
+                      <div
+                        className="h-full rounded-full bg-emerald-200"
+                        style={{ width: `${settlementQuality.score}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex min-w-0 flex-col">
+                    <div className="grid grid-cols-2 gap-2 text-sm font-semibold">
+                      <div className="rounded-xl border border-white/10 bg-white/[0.025] p-3">
+                        <p className="text-white/38">XP earned</p>
+                        <p className="mt-1 text-emerald-100">{settlementXp.totalXp} XP</p>
+                      </div>
+                      <div className="rounded-xl border border-white/10 bg-white/[0.025] p-3">
+                        <p className="text-white/38">Quality bonus</p>
+                        <p className="mt-1 text-emerald-100">
+                          +{settlementXp.satisfactionBonus} XP
+                        </p>
+                      </div>
+                    </div>
+                    <p className="mt-2 rounded-xl border border-white/10 bg-white/[0.025] p-3 text-xs font-semibold leading-5 text-white/52">
+                      Base {settlementXp.baseXp} XP plus a bonus for how satisfied both parties
+                      were.
                     </p>
-                  </div>
-                  <p className="shrink-0 text-4xl font-black text-emerald-100">
-                    {settlementQuality.score}
-                  </p>
-                </div>
-                <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
-                  <div
-                    className="h-full rounded-full bg-emerald-200"
-                    style={{ width: `${settlementQuality.score}%` }}
-                  />
-                </div>
-                <div className="mt-4 grid grid-cols-2 gap-2 text-sm font-semibold">
-                  <div className="rounded-xl border border-white/10 bg-white/[0.025] p-3">
-                    <p className="text-white/38">XP earned</p>
-                    <p className="mt-1 text-emerald-100">{settlementXp.totalXp} XP</p>
-                  </div>
-                  <div className="rounded-xl border border-white/10 bg-white/[0.025] p-3">
-                    <p className="text-white/38">Quality bonus</p>
-                    <p className="mt-1 text-emerald-100">+{settlementXp.satisfactionBonus} XP</p>
+                    <Link
+                      href="/dashboard"
+                      className="arena-btn-light mt-3 flex w-full items-center justify-center gap-2 px-4 py-3 text-sm"
+                    >
+                      Back to Dashboard
+                      <HeroIcons.ArrowRightIcon className="h-4 w-4" aria-hidden="true" />
+                    </Link>
                   </div>
                 </div>
-                <p className="mt-3 rounded-xl border border-white/10 bg-white/[0.025] p-3 text-xs font-semibold leading-5 text-white/52">
-                  Base {settlementXp.baseXp} XP plus a bonus for how satisfied both parties were.
-                </p>
-                <Link
-                  href="/dashboard"
-                  className="arena-btn-light mt-4 flex w-full items-center justify-center gap-2 px-4 py-3 text-sm"
-                >
-                  Back to Dashboard
-                  <HeroIcons.ArrowRightIcon className="h-4 w-4" aria-hidden="true" />
-                </Link>
-                <p className="mt-3 text-center text-xs font-semibold leading-5 text-white/46">
+                <p className="border-t border-white/10 px-4 py-3 text-center text-xs font-semibold leading-5 text-white/46 sm:px-5">
                   This matter is closed. Pick up another case from your docket.
                 </p>
               </div>
@@ -4391,7 +4529,7 @@ export default function CaseWorkspace({
                     <span className="rounded-full border border-emerald-300/[0.075] bg-black/18 px-3 py-1.5 text-xs font-semibold text-white/58">
                       {clientAcceptanceReason}
                     </span>
-                    {draftClientReactionDrivers.slice(0, 2).map((driver) => (
+                    {visibleClientReactionDrivers.slice(0, 2).map((driver) => (
                       <span
                         key={driver}
                         className="rounded-full border border-white/[0.045] bg-black/18 px-3 py-1.5 text-xs font-semibold text-white/52"
@@ -4456,6 +4594,25 @@ export default function CaseWorkspace({
                 <textarea
                   value={settlementClientInstruction}
                   onChange={(event) => setSettlementClientInstruction(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (
+                      event.key !== "Enter" ||
+                      event.shiftKey ||
+                      event.nativeEvent?.isComposing
+                    ) {
+                      return;
+                    }
+
+                    event.preventDefault();
+                    if (
+                      !clientWalkoutActive &&
+                      !settlementClientInstructionWorking &&
+                      !transcribingSettlementClientInstruction &&
+                      settlementClientInstruction.trim()
+                    ) {
+                      event.currentTarget.form?.requestSubmit();
+                    }
+                  }}
                   rows={2}
                   className="block min-h-20 w-full resize-none border-0 bg-transparent px-3 py-3 text-sm font-semibold leading-5 text-white outline-none placeholder:text-white/32"
                   placeholder={`Ask ${playerPartyName} privately...`}
@@ -4521,13 +4678,19 @@ export default function CaseWorkspace({
                 onPointerDown={triggerSettlementHaptic}
                 disabled={settlementActionsLocked || settlementClientInstructionWorking}
               >
-                {settlementClientInstructionWorking ? "Asking client..." : "Ask client first"}
+                {settlementClientInstructionWorking
+                  ? "Asking client..."
+                  : settlementClientPreview
+                  ? "Ask client follow-up"
+                  : "Ask client first"}
                 <HeroIcons.UserIcon className="h-4 w-4" aria-hidden="true" />
               </button>
             )}
             {!clientAuthorizedLatestOffer ? (
               <p className="mt-2 text-xs font-semibold leading-5 text-white/46">
-                {hasConcreteLatestOpponentTerms
+                {settlementClientPreview?.authorityReason
+                  ? settlementClientPreview.authorityReason
+                  : hasConcreteLatestOpponentTerms
                   ? "Acceptance unlocks only after your client says the latest offer is within authority."
                   : "No definite offer can be accepted yet. Ask your client what range of terms to send."}
               </p>
@@ -4662,34 +4825,8 @@ export default function CaseWorkspace({
         {!settlementIsTerminal ? (
           <section className="arena-surface overflow-hidden" data-settlement-tour-target="settlement-next-move">
             <div className="border-b border-amber-200/10 p-4 sm:p-5">
-              <div
-                className="rounded-2xl border border-red-300/[0.055] bg-red-300/[0.04] p-4"
-                data-settlement-tour-target="settlement-latest-response"
-              >
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="min-w-0">
-                    <p className="arena-kicker text-red-200">Latest response from across the table</p>
-                    <h3 className="mt-2 text-lg font-black text-white">
-                      {latestSettlementResponse
-                        ? latestSettlementResponse.speaker || opponentPartyName
-                        : "Waiting for the other side"}
-                    </h3>
-                  </div>
-                  {latestSettlementResponse ? (
-                    <span className="shrink-0 rounded-full border border-white/[0.04] bg-black/20 px-3 py-1 text-xs font-semibold text-white/44">
-                      {formatSettlementEntryTime(latestSettlementResponse.createdAt) || "Latest"}
-                    </span>
-                  ) : null}
-                </div>
-                <p className="mt-3 text-sm font-semibold leading-6 text-white/68">
-                  {latestSettlementResponse
-                    ? getSettlementEntryText(latestSettlementResponse)
-                    : "Send a counteroffer or question, then read the reply here before making the next move."}
-                </p>
-              </div>
-
               {settlementClientCounselNote ? (
-                <div className="mt-4 rounded-2xl border border-amber-200/[0.07] bg-amber-200/[0.055] p-4">
+                <div className="rounded-2xl border border-amber-200/[0.07] bg-amber-200/[0.055] p-4">
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0">
                       <p className="arena-kicker text-amber-200">Private note to client</p>
@@ -4710,7 +4847,9 @@ export default function CaseWorkspace({
                 </div>
               ) : null}
 
-              <p className="arena-kicker mt-5 text-amber-200">Your Next Move</p>
+              <p className={`arena-kicker text-amber-200 ${settlementClientCounselNote ? "mt-5" : ""}`}>
+                Your Next Move
+              </p>
               <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                 {settlementNextMoveActions.map(({ title, body, icon: Icon, tone, featured, onClick }) => (
                   <button

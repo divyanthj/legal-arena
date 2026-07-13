@@ -6,13 +6,20 @@ export const getCourtroomDifficultyProfile = (complexity = 3) => {
     1: {
       complexity: 1,
       counselPosture: "focused",
-      opponentMinDelta: 1,
-      opponentMaxDelta: 11,
-      playerMinDelta: 5,
+      opponentMinDelta: 0,
+      opponentMaxDelta: 20,
+      playerMinDelta: 0,
       playerMaxDelta: 20,
-      partialCreditBonus: 3,
-      proofStrictnessOffset: -0.25,
-      verdictCloseCaseBand: 1,
+      partialCreditBonus: 0,
+      preparation: {
+        factLimit: 2,
+        evidenceLimit: 1,
+        evidenceLeadLimit: 0,
+        contradictionBudget: 0,
+        ruleCombinationLimit: 1,
+        maxIssuePivots: 0,
+        secondaryWeaknessBudget: 0,
+      },
       opponentResponseLimits: {
         maxParagraphs: 2,
         maxSentences: 5,
@@ -20,20 +27,27 @@ export const getCourtroomDifficultyProfile = (complexity = 3) => {
         issueBudget: 1,
       },
       promptGuidance: [
-        "Opposing counsel remains talented and professional, but should press one or two decisive points rather than every possible weakness.",
-        "The bench should credit clear, good-faith advocacy when it uses the visible record, even if it is not exhaustive.",
+        "Opposing counsel is a junior, forgiving advocate who presses one plain core theory and one directly responsive rebuttal.",
+        "Stay on that core theory throughout the case. Do not rotate to a new weakness in a later round, combine rules, exploit contradictions, or pursue secondary attacks.",
       ],
     },
     2: {
       complexity: 2,
       counselPosture: "focused",
-      opponentMinDelta: 2,
-      opponentMaxDelta: 13,
-      playerMinDelta: 5,
+      opponentMinDelta: 0,
+      opponentMaxDelta: 20,
+      playerMinDelta: 0,
       playerMaxDelta: 20,
-      partialCreditBonus: 2,
-      proofStrictnessOffset: -0.15,
-      verdictCloseCaseBand: 2,
+      partialCreditBonus: 0,
+      preparation: {
+        factLimit: 3,
+        evidenceLimit: 2,
+        evidenceLeadLimit: 0,
+        contradictionBudget: 1,
+        ruleCombinationLimit: 1,
+        maxIssuePivots: 0,
+        secondaryWeaknessBudget: 0,
+      },
       opponentResponseLimits: {
         maxParagraphs: 3,
         maxSentences: 7,
@@ -41,20 +55,27 @@ export const getCourtroomDifficultyProfile = (complexity = 3) => {
         issueBudget: 2,
       },
       promptGuidance: [
-        "Opposing counsel remains talented and professional, but should prioritize the strongest weakness over a broad issue checklist.",
-        "The bench should reward partially complete arguments that responsibly connect facts, law, and requested relief.",
+        "Opposing counsel is a capable beginner who may press two connected issues but should use plain, direct advocacy.",
+        "Keep the same connected issues throughout the case and do not introduce a new secondary weakness merely because an earlier response already used the strongest point.",
       ],
     },
     3: {
       complexity: 3,
       counselPosture: "balanced",
-      opponentMinDelta: 3,
-      opponentMaxDelta: 16,
-      playerMinDelta: 4,
+      opponentMinDelta: 0,
+      opponentMaxDelta: 20,
+      playerMinDelta: 0,
       playerMaxDelta: 20,
-      partialCreditBonus: 1,
-      proofStrictnessOffset: 0,
-      verdictCloseCaseBand: 3,
+      partialCreditBonus: 0,
+      preparation: {
+        factLimit: 4,
+        evidenceLimit: 3,
+        evidenceLeadLimit: 1,
+        contradictionBudget: 1,
+        ruleCombinationLimit: 2,
+        maxIssuePivots: 1,
+        secondaryWeaknessBudget: 1,
+      },
       opponentResponseLimits: {
         maxParagraphs: 4,
         maxSentences: 10,
@@ -69,13 +90,20 @@ export const getCourtroomDifficultyProfile = (complexity = 3) => {
     4: {
       complexity: 4,
       counselPosture: "layered",
-      opponentMinDelta: 4,
-      opponentMaxDelta: 18,
-      playerMinDelta: 3,
+      opponentMinDelta: 0,
+      opponentMaxDelta: 20,
+      playerMinDelta: 0,
       playerMaxDelta: 20,
       partialCreditBonus: 0,
-      proofStrictnessOffset: 0.1,
-      verdictCloseCaseBand: 4,
+      preparation: {
+        factLimit: 6,
+        evidenceLimit: 5,
+        evidenceLeadLimit: 2,
+        contradictionBudget: 2,
+        ruleCombinationLimit: 3,
+        maxIssuePivots: 2,
+        secondaryWeaknessBudget: 2,
+      },
       opponentResponseLimits: {
         maxParagraphs: 5,
         maxSentences: 14,
@@ -90,13 +118,20 @@ export const getCourtroomDifficultyProfile = (complexity = 3) => {
     5: {
       complexity: 5,
       counselPosture: "layered",
-      opponentMinDelta: 4,
+      opponentMinDelta: 0,
       opponentMaxDelta: 20,
-      playerMinDelta: 2,
+      playerMinDelta: 0,
       playerMaxDelta: 20,
       partialCreditBonus: 0,
-      proofStrictnessOffset: 0.18,
-      verdictCloseCaseBand: 5,
+      preparation: {
+        factLimit: 8,
+        evidenceLimit: 7,
+        evidenceLeadLimit: 3,
+        contradictionBudget: 3,
+        ruleCombinationLimit: 4,
+        maxIssuePivots: 3,
+        secondaryWeaknessBudget: 3,
+      },
       opponentResponseLimits: {
         maxParagraphs: 6,
         maxSentences: 18,
@@ -316,6 +351,22 @@ export const getOpponentResponsePromptRules = (difficultyProfile) => {
     `Press no more than ${limits.issueBudget} core issue${limits.issueBudget === 1 ? "" : "s"} in opponentResponse; choose the best issue or issues and leave lesser points alone.`,
     "Do not turn opponentResponse into an exhaustive checklist of every weakness in the file.",
     "Keep opponentResponse elegant, forceful, and court-facing, not verbose or encyclopedic.",
+  ];
+};
+
+export const getOpponentStrategyPromptRules = (difficultyProfile) => {
+  const profile = difficultyProfile || getCourtroomDifficultyProfile();
+  const preparation = profile.preparation;
+
+  return [
+    `Use no more than ${preparation.ruleCombinationLimit} materially connected lawbook rule${preparation.ruleCombinationLimit === 1 ? "" : "s"} in one response.`,
+    `Exploit no more than ${preparation.contradictionBudget} contradiction${preparation.contradictionBudget === 1 ? "" : "s"} from the prepared case file.`,
+    preparation.maxIssuePivots === 0
+      ? "Do not pivot to a new core issue across rounds; keep rebutting from the prepared core theory already used in the transcript."
+      : `Across the whole case, make at most ${preparation.maxIssuePivots} strategic issue pivot${preparation.maxIssuePivots === 1 ? "" : "s"}.`,
+    preparation.secondaryWeaknessBudget === 0
+      ? "Do not pursue secondary weaknesses outside the prepared core issues."
+      : `Pursue no more than ${preparation.secondaryWeaknessBudget} secondary weakness${preparation.secondaryWeaknessBudget === 1 ? "" : "es"} across the response.`,
   ];
 };
 
