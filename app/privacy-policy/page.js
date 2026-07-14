@@ -18,7 +18,7 @@ const sections = [
   {
     title: "2. Product and Usage Data",
     body:
-      "We may collect non-personal data such as browser type, device information, gameplay interactions, page views, analytics events, cookies, and similar signals to improve the product and troubleshoot issues.",
+      "We may collect browser type, device information, gameplay interactions, page views, analytics events, cookies, AI feature usage and token counts, and similar signals. When you sign in, analytics activity may be associated with your account identifier across sessions and devices so we can understand journeys, attribution, product performance, and pricing needs.",
   },
   {
     title: "3. How We Use Information",
@@ -62,7 +62,7 @@ export default function PrivacyPolicyPage() {
             Privacy Policy
           </h1>
           <p className="mt-6 max-w-3xl text-lg leading-8 text-white/66">
-            Last updated: March 15, 2026. This page explains how Legal Arena collects,
+            Last updated: July 14, 2026. This page explains how Legal Arena collects,
             uses, and protects information.
           </p>
 

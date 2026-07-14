@@ -59,6 +59,47 @@ export const trackGoal = (goalName, params = {}) => {
   }
 };
 
+const getValidProfileImage = (value = "") => {
+  if (typeof window === "undefined" || !value) return "";
+
+  try {
+    const image = new URL(String(value), window.location.origin).href;
+    return /^https?:\/\//i.test(image) && image.length <= 250 ? image : "";
+  } catch {
+    return "";
+  }
+};
+
+export const identifyDatafastUser = ({ userId, name = "", image = "", ...params } = {}) => {
+  if (typeof window === "undefined" || !String(userId || "").trim()) {
+    return;
+  }
+
+  const identity = {
+    user_id: String(userId).trim().slice(0, MAX_VALUE_LENGTH),
+  };
+  if (name) identity.name = String(name).slice(0, MAX_VALUE_LENGTH);
+
+  const validImage = getValidProfileImage(image);
+  if (validImage) identity.image = validImage;
+
+  Object.entries(params || {}).some(([key, value], index) => {
+    if (index >= MAX_PARAMS) return true;
+    const cleanKey = cleanParamName(key);
+    const cleanValue = cleanParamValue(value);
+    if (cleanKey && PARAM_NAME_PATTERN.test(cleanKey) && cleanValue) {
+      identity[cleanKey] = cleanValue;
+    }
+    return false;
+  });
+
+  try {
+    window.datafast?.("identify", identity);
+  } catch (error) {
+    console.error("DataFast user identification failed", error);
+  }
+};
+
 const hasDatafastAttributionCookies = () => {
   if (typeof document === "undefined") {
     return false;

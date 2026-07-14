@@ -101,7 +101,7 @@ const toDisplayTermLabel = (value = "") =>
 const getCanonicalSettlementTermLabel = (term = "") => {
   const text = String(term || "");
 
-  if (/\$|payment|pay|amount|refund|return|balance/i.test(text)) return "Settlement Amount";
+  if (/[$€£¥₹₩₽₺₫₱฿₦₴]|\b(?:USD|EUR|GBP|INR|JPY|CNY|RMB|AUD|CAD|CHF|KRW|BRL|MXN|ZAR|AED|SAR|SGD|HKD|NZD)\b|payment|pay|amount|refund|return|balance/i.test(text)) return "Settlement Amount";
   if (/day|week|month|deadline|within|timeline|date|prompt/i.test(text)) return "Payment Timeline";
   if (/punch|credit|repair|corrective|work|perform|complete/i.test(text)) return "Corrective Work";
   if (/future|relationship|release|waive|claim|dismiss/i.test(text)) return "Release Terms";
@@ -249,6 +249,7 @@ const buildSettlementPromptContext = ({ caseSession, settlement, message, actorS
   return {
     matter: {
       title: caseSession.title,
+      caseCountry: caseSession.caseCountry || template.caseCountry || null,
       category: caseSession.primaryCategory,
       complexity: caseSession.complexity,
       overview: caseSession.premise?.overview || buildOverviewForSide(template, representedSide),

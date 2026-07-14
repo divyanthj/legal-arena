@@ -9,8 +9,9 @@ import apiClient from "@/libs/api";
 import { trackGoal } from "@/libs/datafast";
 import { hasClientSettlementAuthority } from "@/libs/game/settlementAuthority";
 import CaseWorkspace from "./CaseWorkspace";
+import { CountryBadge } from "./CountryFlagPicker";
 
-const REQUIRED_CHALLENGE_PORTRAIT_PROMPT_VERSION = 6;
+const REQUIRED_CHALLENGE_PORTRAIT_PROMPT_VERSION = 7;
 
 const statusLabel = {
   pending: "Awaiting acceptance",
@@ -216,6 +217,7 @@ const challengeToCaseSession = (challenge = {}) => {
     practiceArea: challenge.practiceArea,
     primaryCategory: challenge.primaryCategory,
     complexity: challenge.complexity,
+    caseCountry: challenge.caseCountry || null,
     playerSide: viewer.side,
     playerUserId: viewer.userId || "",
     opponentUserId: opponent.userId || "",
@@ -555,6 +557,7 @@ export default function ChallengeWorkspace({ initialChallenge }) {
             </Link>
             <div className="mt-6 flex flex-wrap items-center gap-2">
               <span className="arena-pill px-3 py-1 text-xs font-semibold">PVP Challenge</span>
+              <CountryBadge caseCountry={challenge.caseCountry} />
               <span className="arena-status-caution rounded-full px-3 py-1 text-xs font-semibold">
                 {statusLabel[challenge.status] || challenge.status}
               </span>

@@ -24,6 +24,7 @@ import {
   buildDynamicCaseTemplateSnapshot,
   generateDynamicCaseState,
 } from "./dynamicCase";
+import { buildCaseCountry } from "./countries";
 import {
   buildPublicLeaderboardEntry,
   applyVerdictToProgression,
@@ -1010,11 +1011,13 @@ export const createCaseSession = async ({
   caseTemplateId,
   categorySlug = DEFAULT_CATEGORY_SLUG,
   complexity = 1,
+  countryCode = "US",
   freeGameplayCampaignAccess = null,
 }) => {
   await connectMongo();
 
   if (!caseTemplateId) {
+    const caseCountry = buildCaseCountry(countryCode, { fallback: true });
     const user = await ensureUserProfile(userId, userProfile);
     const progression = normalizeProgression(user?.progression);
     const requestedCategorySlug = categorySlug || DEFAULT_CATEGORY_SLUG;
@@ -1030,6 +1033,7 @@ export const createCaseSession = async ({
       playerLevel: dynamicDifficulty.playerLevel,
       userId,
       onUsage: usageCollector.record,
+      countryCode: caseCountry.code,
     });
     const template = buildDynamicCaseTemplateSnapshot(dynamicCase);
     template.dynamicDifficulty = dynamicDifficulty;
@@ -1057,6 +1061,7 @@ export const createCaseSession = async ({
       practiceArea: dynamicCase.practiceArea,
       primaryCategory: dynamicCase.primaryCategory,
       complexity: dynamicCase.complexity,
+      caseCountry,
       playerSide,
       status: "interview",
       playerImage: user?.image || "",
@@ -1568,9 +1573,20 @@ export const getPublicPlayerProfile = async (
       fallbackMap.get(getTemplateSlugFromSession(caseSession)) ||
       null;
 
-    return canViewFullArchive
+    const payload = canViewFullArchive
       ? buildCasePayload(caseSession, template)
       : buildPublicCasePayload(caseSession, template);
+
+    // Country selection was introduced after the first matters were completed.
+    // Keep those legacy profile records visible as U.S. matters without mutating
+    // their stored sessions. New and ongoing matters retain their locked country.
+    return {
+      ...payload,
+      caseCountry: buildCaseCountry(
+        payload.caseCountry?.code || template?.caseCountry?.code,
+        { fallback: true }
+      ),
+    };
   });
 
   const lawyerProfileSummary = await ensureStoredLawyerProfileSummary({

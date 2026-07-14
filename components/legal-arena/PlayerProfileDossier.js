@@ -23,6 +23,7 @@ import {
   summarizeCount,
 } from "./playerDossierShared";
 import { CollapseChevron } from "./caseWorkspaceUtils";
+import { CountryBadge } from "./CountryFlagPicker";
 
 const getNextRatingMilestone = (rating = 1000) => {
   const milestones = [1200, 1500, 1800, 2100];
@@ -71,6 +72,8 @@ export default function PlayerProfileDossier({
   challengeTemplates = [],
   hasArenaAccess = false,
   isAdmin = false,
+  detectedCountryCode = "US",
+  detectedCountrySource = "detected",
 }) {
   const router = useRouter();
   const { player, cases = [] } = profile;
@@ -376,6 +379,8 @@ export default function PlayerProfileDossier({
                 targetPlayerName={player.name}
                 templates={challengeTemplates}
                 hasArenaAccess={hasArenaAccess}
+                detectedCountryCode={detectedCountryCode}
+                detectedCountrySource={detectedCountrySource}
                 className="arena-btn-light px-4 py-2 text-sm"
               />
             )}
@@ -469,6 +474,8 @@ export default function PlayerProfileDossier({
                       targetPlayerName={player.name}
                       templates={challengeTemplates}
                       hasArenaAccess={hasArenaAccess}
+                      detectedCountryCode={detectedCountryCode}
+                      detectedCountrySource={detectedCountrySource}
                       className="arena-btn-light flex w-full items-center justify-center px-4 py-3 text-sm"
                     />
                   </div>
@@ -791,6 +798,7 @@ export default function PlayerProfileDossier({
                                   <span className="badge border arena-status arena-status-neutral">
                                     {outcomeLabel[caseSession.outcome] || "In Progress"}
                                   </span>
+                                  <CountryBadge caseCountry={caseSession.caseCountry} />
                                   <span className="text-xs uppercase tracking-[0.14em] text-white/42">
                                     Updated {caseSession.updatedDateLabel}
                                   </span>

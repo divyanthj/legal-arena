@@ -7,6 +7,10 @@ import {
   getCategoryTitle,
 } from "./categories";
 import { normalizeGeneratedPartyName } from "./templateBuilder/shared";
+import {
+  buildCaseCountry,
+  getCountryFlavorGuidance,
+} from "./countries";
 
 const DYNAMIC_CASE_MODEL =
   process.env.OPENAI_DYNAMIC_CASE_MODEL?.trim() ||
@@ -146,23 +150,45 @@ const normalizeCourtroomPositions = (positions = {}, evidencePool = []) => {
   };
 };
 
-const fallbackDynamicCase = ({ categorySlug, complexity }) => {
+const fallbackDynamicCase = ({ categorySlug, complexity, countryCode }) => {
   const category = getCategoryBySlug(categorySlug) || getCategoryBySlug(DEFAULT_CATEGORY_SLUG);
+  const caseCountry = buildCaseCountry(countryCode, { fallback: true });
   const categoryTitle = category?.title || getCategoryTitle(categorySlug);
   const normalizedComplexity = clampComplexity(complexity);
   const isRental = category?.slug === "rental-dispute";
+  const isIndia = caseCountry.code === "IN";
+  const isUnitedStates = caseCountry.code === "US";
+  const plaintiffName = isIndia ? "Ananya Rao" : isUnitedStates ? "Avery Morgan" : "Leila Noor";
+  const defendantName = isIndia
+    ? isRental
+      ? "Saffron Gate Properties"
+      : "Vikram Malhotra"
+    : isUnitedStates
+    ? isRental
+      ? "Harbor Gate Rentals"
+      : "Northline Services"
+    : isRental
+    ? `${caseCountry.name} Residential Services`
+    : `${caseCountry.name} Trade Services`;
+  const courtName = isIndia
+    ? "District Civil Court"
+    : isUnitedStates
+    ? isRental
+      ? "Municipal Housing Court"
+      : "County Civil Court"
+    : `${caseCountry.name} Civil Tribunal`;
 
   return {
     title: isRental ? "Deposit Deadline Dispute" : `${categoryTitle} Pressure Case`,
     shortDescription: isRental
       ? "A tenant says a landlord kept most of a deposit after a rushed move-out."
       : "Two sides disagree over performance, payment, records, and who created the loss.",
-    courtName: isRental ? "Civic Claims Court" : "County Civil Court",
+    courtName,
     practiceArea: categoryTitle,
     primaryCategory: category?.slug || DEFAULT_CATEGORY_SLUG,
     complexity: normalizedComplexity,
-    plaintiffName: isRental ? "Nora Patel" : "Avery Morgan",
-    defendantName: isRental ? "Harbor Gate Rentals" : "Northline Services",
+    plaintiffName,
+    defendantName,
     coreDispute: isRental
       ? "Whether the landlord can justify deposit deductions with records instead of vague turnover charges."
       : "Whether the plaintiff can prove the defendant breached the deal and caused the claimed loss.",
@@ -303,6 +329,7 @@ const fallbackDynamicCase = ({ categorySlug, complexity }) => {
       },
     },
     generatedBy: "fallback",
+    caseCountry,
   };
 };
 
@@ -311,8 +338,10 @@ const normalizeDynamicCaseState = ({
   categorySlug,
   complexity,
   playerLevel,
+  countryCode,
 }) => {
-  const fallback = fallbackDynamicCase({ categorySlug, complexity });
+  const caseCountry = buildCaseCountry(countryCode, { fallback: true });
+  const fallback = fallbackDynamicCase({ categorySlug, complexity, countryCode: caseCountry.code });
   const source = aiResult && typeof aiResult === "object" ? aiResult : {};
   const category = getCategoryBySlug(source.primaryCategory) ||
     getCategoryBySlug(categorySlug) ||
@@ -347,6 +376,7 @@ const normalizeDynamicCaseState = ({
     generationMode: "dynamic",
     generatedAt: new Date().toISOString(),
     generatedBy: source.generatedBy || (aiResult ? "ai" : "fallback"),
+    caseCountry,
     playabilityProfile,
     title: cleanText(source.title) || fallback.title,
     shortDescription: cleanText(source.shortDescription) || fallback.shortDescription,
@@ -416,6 +446,7 @@ export const buildDynamicCaseTemplateSnapshot = (dynamicCase = {}) => ({
   primaryCategory: dynamicCase.primaryCategory,
   secondaryCategories: [],
   complexity: dynamicCase.complexity,
+  caseCountry: dynamicCase.caseCountry || null,
   courtName: dynamicCase.courtName,
   plaintiffName: dynamicCase.plaintiffName,
   defendantName: dynamicCase.defendantName,
@@ -463,6 +494,7 @@ export const generateDynamicCaseState = async ({
   playerLevel = 1,
   userId = "system",
   onUsage,
+  countryCode = "US",
 } = {}) => {
   const category = getCategoryBySlug(categorySlug) || getCategoryBySlug(DEFAULT_CATEGORY_SLUG);
   const normalizedComplexity = clampComplexity(complexity);
@@ -471,6 +503,8 @@ export const generateDynamicCaseState = async ({
     normalizedComplexity,
     normalizedPlayerLevel
   );
+  const caseCountry = buildCaseCountry(countryCode, { fallback: true });
+  const countryGuidance = getCountryFlavorGuidance(caseCountry, category?.slug);
 
   const aiResult = await requestStructuredCompletion({
     userId,
@@ -479,6 +513,7 @@ export const generateDynamicCaseState = async ({
     maxTokens: 2600,
     retryAttempts: 1,
     usageLabel: "dynamicCase.generate",
+    serviceTier: "priority",
     onUsage,
     systemPrompt:
       "You generate session-level legal disputes for a legal strategy game. Output valid JSON only. Do not create reusable templates or canonical fact lists.",
@@ -489,6 +524,8 @@ export const generateDynamicCaseState = async ({
       complexity: normalizedComplexity,
       playerLevel: normalizedPlayerLevel,
       playabilityProfile,
+      caseCountry,
+      countryGuidance,
       designRules: [
         "Create plaintiff and defendant stories as subjective claims, not objective truth.",
         "Include contradictions, weaknesses, proof gaps, and tactical opportunities.",
@@ -503,6 +540,8 @@ export const generateDynamicCaseState = async ({
         "The opponent should be beatable by a non-lawyer who asks sensible questions and makes plain arguments from visible facts.",
         "Give each side discrete subjective courtroomPositions. Each position must express one concise claim, use an evidencePool id when linking proof, and must not reveal objective hidden truth.",
         "Give each side at least one relevant evidence item that is availableAtStart when complexity is 1; do not make missing or hard-to-get material necessary for an intro opponent's core theory.",
+        "Treat caseCountry as immutable input. Do not move the matter to another country or return a competing country value.",
+        ...countryGuidance,
       ],
       outputSchema: {
         title: "string",
@@ -595,5 +634,6 @@ export const generateDynamicCaseState = async ({
     categorySlug: category?.slug || DEFAULT_CATEGORY_SLUG,
     complexity: normalizedComplexity,
     playerLevel: normalizedPlayerLevel,
+    countryCode: caseCountry.code,
   });
 };

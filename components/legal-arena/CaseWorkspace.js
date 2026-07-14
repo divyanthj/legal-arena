@@ -24,6 +24,7 @@ import { LEGAL_CASE_CATEGORIES } from "@/libs/game/categories";
 import { sanitizeFactSheet } from "@/libs/game/factSheetSanitizer";
 import { useCaseVoiceRecorder } from "./useCaseVoiceRecorder";
 import { getCaseReportProgressLabel } from "./caseReportUi";
+import { CountryBadge } from "./CountryFlagPicker";
 
 import {
   normalizeCourtroomEntry,
@@ -2231,7 +2232,7 @@ export default function CaseWorkspace({
         : isCourtroom
         ? "Quit this court case? You will lose immediately."
         : apiConfig.exitConfirm ||
-          "Exit this case? You will not be able to start the same case again for 24 hours.";
+          "Exit this intake? This generated matter will be closed, but you can start a fresh case immediately.";
     const confirmed = window.confirm(
       exitConfirmMessage
     );
@@ -5640,6 +5641,7 @@ export default function CaseWorkspace({
               : `${playerRepresentationLabel} ${interviewContextLabel}`}
           </p>
           <div className="mt-3 flex items-center gap-2 overflow-hidden">
+            <CountryBadge caseCountry={caseSession.caseCountry} className="shrink-0" />
             <span
               className={`min-w-0 max-w-[58vw] truncate rounded-lg border px-2.5 py-1 text-xs font-semibold ${
                 caseSession.playerSide === "opponent"
@@ -5728,6 +5730,7 @@ export default function CaseWorkspace({
               </div>
 
               <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                <CountryBadge caseCountry={caseSession.caseCountry} />
                 <span
                   className={`min-w-0 max-w-xs truncate rounded-lg border px-2.5 py-1 text-xs font-semibold ${
                     caseSession.playerSide === "opponent"
@@ -6618,8 +6621,8 @@ export default function CaseWorkspace({
                   <p className="arena-kicker text-rose-300">Case Exited</p>
                   <h2 className="arena-headline mt-2 text-2xl">This intake was closed</h2>
                   <p className="mt-3 max-w-2xl text-white/66">
-                    You exited this matter during intake. The same case stays unavailable for
-                    24 hours before it can be started again.
+                    You exited this generated matter during intake. You can return to the
+                    dashboard and generate a fresh case immediately.
                   </p>
                   <div className="mt-5">
                     <Link href="/dashboard" className="arena-btn-light inline-flex px-5 py-3">

@@ -1,5 +1,7 @@
 import "server-only";
 
+import { recordAIUsageEvent } from "@/libs/aiUsage";
+
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
 const DEFAULT_MODEL = process.env.OPENAI_MODEL?.trim() || "gpt-5.4";
@@ -342,6 +344,7 @@ export const requestStructuredCompletion = async ({
   usageLabel = "",
   onUsage,
   promptCacheKey = "",
+  serviceTier = "",
 }) => {
   if (!process.env.OPENAI_API_KEY) {
     if (throwOnError) {
@@ -356,6 +359,10 @@ export const requestStructuredCompletion = async ({
     const attemptMaxTokens = getAttemptMaxTokens(maxTokens, attempt);
     const useResponsesApi = usesResponsesApi(model);
     const endpoint = useResponsesApi ? OPENAI_RESPONSES_URL : OPENAI_URL;
+    const requestedServiceTier = String(serviceTier || "").trim().toLowerCase() || "auto";
+    const serviceTierPayload = serviceTier
+      ? { service_tier: requestedServiceTier }
+      : {};
     const requestBody = useResponsesApi
       ? {
           model,
@@ -367,6 +374,7 @@ export const requestStructuredCompletion = async ({
             format: buildResponsesStructuredFormat(),
           },
           user: userId,
+          ...serviceTierPayload,
           ...(promptCacheKey
             ? { prompt_cache_key: String(promptCacheKey).trim().slice(0, 64) }
             : {}),
@@ -377,6 +385,7 @@ export const requestStructuredCompletion = async ({
           ...buildTokenPayload(model, attemptMaxTokens),
           response_format: { type: "json_object" },
           user: userId,
+          ...serviceTierPayload,
           messages: [
             {
               role: "system",
@@ -390,6 +399,7 @@ export const requestStructuredCompletion = async ({
         };
 
     try {
+      const requestStartedAt = Date.now();
       const res = await fetch(endpoint, {
         method: "POST",
         headers: {
@@ -424,6 +434,9 @@ export const requestStructuredCompletion = async ({
 
       const data = await res.json();
       const usage = extractUsage(data, useResponsesApi);
+      const actualServiceTier = String(
+        data?.service_tier || requestedServiceTier || "unknown"
+      ).toLowerCase();
       const finishReason = useResponsesApi
         ? data?.status === "incomplete"
           ? String(data?.incomplete_details?.reason || "incomplete")
@@ -434,30 +447,41 @@ export const requestStructuredCompletion = async ({
         : extractMessageText(data?.choices?.[0]?.message?.content);
       const parsed = extractJsonObject(content);
 
+      const cacheHitRate = getPromptCacheHitRate(usage);
+      const usagePayload = {
+        label: usageLabel || "unlabeled",
+        attempt: attempt + 1,
+        maxTokens: attemptMaxTokens,
+        finishReason,
+        model,
+        api: useResponsesApi ? "responses" : "chat_completions",
+        parsed: Boolean(parsed),
+        promptCacheKey: promptCacheKey ? String(promptCacheKey).trim().slice(0, 64) : "",
+        cacheHitRate,
+        requestedServiceTier,
+        serviceTier: actualServiceTier,
+        isPriority: actualServiceTier === "priority",
+        responseId: String(data?.id || ""),
+        durationMs: Date.now() - requestStartedAt,
+        ...usage,
+      };
+
       if (usageLabel) {
-        const cacheHitRate = getPromptCacheHitRate(usage);
-        const usagePayload = {
-          label: usageLabel,
-          attempt: attempt + 1,
-          maxTokens: attemptMaxTokens,
-          finishReason,
-          model,
-          api: useResponsesApi ? "responses" : "chat_completions",
-          parsed: Boolean(parsed),
-          promptCacheKey: promptCacheKey ? String(promptCacheKey).trim().slice(0, 64) : "",
-          cacheHitRate,
-          ...usage,
-        };
-
         console.log("[openai-usage]", usagePayload);
+      }
 
-        if (typeof onUsage === "function") {
-          try {
-            onUsage(usagePayload);
-          } catch (usageError) {
-            console.error("OpenAI usage callback failed:", usageError);
-          }
+      if (typeof onUsage === "function") {
+        try {
+          onUsage(usagePayload);
+        } catch (usageError) {
+          console.error("OpenAI usage callback failed:", usageError);
         }
+      }
+
+      try {
+        await recordAIUsageEvent({ userId, ...usagePayload });
+      } catch (usageError) {
+        console.error("Persistent OpenAI usage tracking failed:", usageError);
       }
 
       if (parsed) {

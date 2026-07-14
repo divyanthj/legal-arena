@@ -1,4 +1,5 @@
 import Link from "next/link";
+import HelpScreenshot from "../components/HelpScreenshot";
 
 export default function Section3({ id }) {
   return (
@@ -7,7 +8,7 @@ export default function Section3({ id }) {
       <p className="arena-kicker">04</p>
       <h2 className="arena-headline mt-2 text-3xl">{`Courtroom Playbook`}</h2>
       <p className="mt-4 text-base leading-8 text-white/72">
-        {`After the fact sheet is finalized and settlement is no longer the best path, Legal Arena shifts from investigation to advocacy. The courtroom stage is a freeform exchange where you submit arguments in rounds, respond to the opponent, and try to move the hidden bench in your favor.`}
+        {`Finalizing the fact sheet moves a solo matter directly into court. The courtroom stage is a freeform exchange where you submit arguments in rounds, answer AI opposing counsel, and respond to the judge's feedback until the matter reaches a verdict.`}
       </p>
       <ol className="mt-6 space-y-4 pl-6 text-base leading-8 text-white/72">
         <li>
@@ -32,6 +33,13 @@ export default function Section3({ id }) {
         </li>
       </ol>
 
+      <HelpScreenshot
+        src="/help/screenshots/courtroom.png"
+        alt="Legal Arena PVP courtroom showing represented parties, persuasion scores, judge signal, focus points, and match status"
+        title="Courtroom and judge signal"
+        caption="Keep the represented parties straight, watch the judge signal, and use the focus points to answer the live dispute instead of repeating your opening theory."
+      />
+
       <h3 className="mt-8 text-2xl font-semibold text-white">{`After the ruling`}</h3>
       <p className="mt-4 text-base leading-8 text-white/72">
         {`When the case ends, the verdict screen explains who prevailed, what landed, and what still hurt your side. Use that feedback as a study tool, not just a scoreboard.`}
@@ -40,13 +48,14 @@ export default function Section3({ id }) {
         <li>{`Review the highlights to see which parts of your theory persuaded the court.`}</li>
         <li>{`Review the concerns to find repeated weaknesses in your approach.`}</li>
         <li>{`Check the dashboard leaderboards to measure improvement across overall and category-specific play.`}</li>
-        <li>{`Replay different matters in the same specialty to strengthen pattern recognition.`}</li>
+        <li>{`Generate more fresh matters in the same specialty to strengthen pattern recognition.`}</li>
+        <li>{`If you choose to publish a case report, review it as a public account of the completed simulation. PVP reports require both players' consent.`}</li>
       </ul>
 
       <div className="arena-surface-soft mt-6 border border-white/10 p-4">
         <span className="text-sm leading-7 text-white/70">
           <strong className="font-medium text-white">Next stop:</strong>{" "}
-          If you still have questions about access, replays, or how sessions are assigned,
+          If you still have questions about access, generated cases, or side assignment,
           the{" "}
           <Link href="/faq" className="text-white underline underline-offset-4">
             FAQ

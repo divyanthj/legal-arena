@@ -9,6 +9,7 @@ import NextTopLoader from "nextjs-toploader";
 import { Toaster } from "react-hot-toast";
 import { Tooltip } from "react-tooltip";
 import config from "@/config";
+import { identifyDatafastUser } from "@/libs/datafast";
 import { NavigationLoadingProvider } from "@/components/NavigationLoadingProvider";
 
 // Crisp customer chat support:
@@ -82,6 +83,23 @@ const SessionGuard = () => {
   return null;
 };
 
+const DatafastIdentity = () => {
+  const { data, status } = useSession();
+
+  useEffect(() => {
+    if (status !== "authenticated" || !data?.user?.id) return;
+
+    identifyDatafastUser({
+      userId: data.user.id,
+      name: data.user.name || "",
+      image: data.user.image || "",
+      account_status: "authenticated",
+    });
+  }, [data?.user?.id, data?.user?.image, data?.user?.name, status]);
+
+  return null;
+};
+
 // All the client wrappers are here (they can't be in server components)
 // 1. SessionProvider: Allow the useSession from next-auth (find out if user is auth or not)
 // 2. NextTopLoader: Show a progress bar at the top when navigating between pages
@@ -113,6 +131,7 @@ const ClientLayout = ({ children }) => {
           />
 
           <SessionGuard />
+          <DatafastIdentity />
 
           {/* Set Crisp customer chat support */}
           <CrispChat />

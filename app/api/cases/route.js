@@ -5,6 +5,15 @@ import {
   listDashboardDataForUser,
 } from "@/libs/game/store";
 import { getSoloGameplayAccessForSession } from "@/libs/admin";
+import {
+  detectCountryCodeFromHeaders,
+  isValidCountryCode,
+  normalizeCountryCode,
+} from "@/libs/game/countries";
+import {
+  getPlayerCaseCountryPreference,
+  setPlayerCaseCountryPreference,
+} from "@/libs/game/countryPreference";
 
 export async function GET(req) {
   const { session, error: authError } = await getRequestSession(req);
@@ -63,12 +72,26 @@ export async function POST(req) {
 
   try {
     const body = await req.json();
+    if (body?.countryCode && !isValidCountryCode(body.countryCode)) {
+      return NextResponse.json({ error: "Choose a supported country." }, { status: 400 });
+    }
+    if (body?.countryCode) {
+      await setPlayerCaseCountryPreference({
+        userId: session.user.id,
+        countryCode: body.countryCode,
+      });
+    }
+    const countryCode =
+      normalizeCountryCode(body?.countryCode) ||
+      (await getPlayerCaseCountryPreference(session.user.id)) ||
+      detectCountryCodeFromHeaders(req.headers);
     const caseSession = await createCaseSession({
       userId: session.user.id,
       userProfile: session.user,
       caseTemplateId: body?.caseTemplateId,
       categorySlug: body?.categorySlug,
       complexity: body?.complexity,
+      countryCode,
       freeGameplayCampaignAccess: access.freeGameplayCampaignAccess,
     });
 

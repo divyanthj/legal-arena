@@ -5,6 +5,7 @@ import { getSEOTags } from "@/libs/seo";
 import ClientLayout from "@/components/LayoutClient";
 import Footer from "@/components/Footer";
 import config from "@/config";
+import "flag-icons/css/flag-icons.min.css";
 import "./globals.css";
 
 const DATAFAST_WEBSITE_ID =

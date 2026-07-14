@@ -15,7 +15,7 @@ export const maxDuration = 60;
 
 const OPENAI_IMAGE_GENERATION_URL = "https://api.openai.com/v1/images/generations";
 const IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL?.trim() || "gpt-image-1.5";
-const PORTRAIT_PROMPT_VERSION = 7;
+const PORTRAIT_PROMPT_VERSION = 8;
 const PORTRAIT_WIDTH = 640;
 const PORTRAIT_HEIGHT = 720;
 
@@ -209,6 +209,9 @@ const buildClientPortraitPrompt = (caseSession, target = "client") => {
     isOrganization: isOpponentCounsel ? false : isOrganization,
   });
   const context = [
+    caseSession.caseCountry?.name
+      ? `Country setting: ${caseSession.caseCountry.name}`
+      : "",
     caseSession.practiceArea,
     caseSession.primaryCategory,
     caseSession.premise?.overview,
@@ -237,6 +240,9 @@ const buildClientPortraitPrompt = (caseSession, target = "client") => {
       `Opposing counsel represents: ${name}.`,
       `Case context: ${context || "civil legal dispute"}.`,
       "Depict an adult lawyer, not the party or client. The subject should look like courtroom counsel in polished formal legal attire.",
+      caseSession.caseCountry?.name
+        ? `Make the lawyer and professional setting plausible for ${caseSession.caseCountry.name}, while reflecting the country's real diversity and avoiding ethnic, religious, or costume stereotypes.`
+        : "",
       wardrobeGuidance,
       "Use a polished legal dashboard portrait style: realistic face, composed professional expression, soft office or courthouse lighting, shoulders and upper torso visible.",
       "Compose this as a vertical rectangular case-card portrait, not a circular avatar. Do not place the person inside a circle, white badge, round mask, profile bubble, or sticker frame.",
@@ -255,6 +261,9 @@ const buildClientPortraitPrompt = (caseSession, target = "client") => {
     `Subject identity cue: ${name}.`,
     `Case context: ${context || "civil legal dispute"}.`,
     genderGuidance,
+    caseSession.caseCountry?.name
+      ? `Make the person, everyday clothing, office, and environmental details plausible for ${caseSession.caseCountry.name}. Reflect real diversity; do not turn nationality into a costume or assume one ethnicity, religion, class, or traditional style.`
+      : "",
     isOrganization
       ? "The client is an organization, so show a realistic representative or owner in credible business attire."
       : "The client is a person, so show believable everyday clothing appropriate for an ordinary client, not a lawyer headshot and not overly formal.",

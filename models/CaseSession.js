@@ -326,6 +326,18 @@ const usageEntrySchema = mongoose.Schema(
       type: String,
       default: "",
     },
+    requestedServiceTier: {
+      type: String,
+      default: "auto",
+    },
+    serviceTier: {
+      type: String,
+      default: "unknown",
+    },
+    isPriority: {
+      type: Boolean,
+      default: false,
+    },
     attempt: {
       type: Number,
       default: 0,
@@ -359,6 +371,10 @@ const usageEntrySchema = mongoose.Schema(
       default: 0,
     },
     reasoningTokens: {
+      type: Number,
+      default: 0,
+    },
+    durationMs: {
       type: Number,
       default: 0,
     },
@@ -448,6 +464,10 @@ const caseSessionSchema = mongoose.Schema(
     complexity: {
       type: Number,
       default: 1,
+    },
+    caseCountry: {
+      code: { type: String, trim: true, uppercase: true, default: "" },
+      name: { type: String, trim: true, default: "" },
     },
     playerSide: {
       type: String,

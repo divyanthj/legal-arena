@@ -60,6 +60,7 @@ const sourceForPrompt = ({ sourceType, source, users }) => ({
   title: source.title,
   practiceArea: source.practiceArea,
   category: source.primaryCategory,
+  caseCountry: source.caseCountry || null,
   premise: source.premise,
   factSheet: source.factSheet,
   courtroomTranscript: source.courtroomTranscript,

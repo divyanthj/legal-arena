@@ -691,6 +691,7 @@ export const buildInterviewAgentContext = ({ template, playerSide, factSheet }) 
   const interviewSubject = getInterviewSubjectForSide(safeTemplate, playerSide);
 
   return {
+    caseCountry: safeTemplate.caseCountry || safeTemplate.dynamicCase?.caseCountry || null,
     representedParty: {
       side: templateSide,
       name: getPartyName(safeTemplate, playerSide),

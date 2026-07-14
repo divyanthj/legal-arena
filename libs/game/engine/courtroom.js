@@ -550,6 +550,7 @@ export const buildCounselContext = ({ caseSession, template, rules }) => {
   const playerSide = getPlayerSide(caseSession);
 
   return {
+    caseCountry: caseSession.caseCountry || safeTemplate.caseCountry || null,
     representedParty: {
       side: getTemplatePartyForSessionSide(playerSide),
       name: getPartyName(safeTemplate, playerSide),
@@ -618,6 +619,7 @@ export const buildCourtroomAgentContext = ({
 
   return {
     shouldReturnVerdict,
+    caseCountry: caseSession.caseCountry || safeTemplate.caseCountry || null,
     representedCounsel: {
       side: getTemplatePartyForSessionSide(playerSide),
       partyName: getPartyName(safeTemplate, playerSide),

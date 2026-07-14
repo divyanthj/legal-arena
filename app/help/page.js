@@ -3,6 +3,7 @@ import Section2 from "./sections/Section2";
 import Section3 from "./sections/Section3";
 import Section4 from "./sections/Section4";
 import Section5 from "./sections/Section5";
+import Section6 from "./sections/Section6";
 
 export default function HelpPage() {
   return (
@@ -14,9 +15,9 @@ export default function HelpPage() {
             Learn the arena. Build the file. Win the courtroom.
           </h1>
           <p className="mt-4 max-w-3xl text-sm leading-7 text-white/66 md:text-base">
-            A practical guide to choosing disputes, building stronger fact sheets, and turning
-            better intake work into better courtroom outcomes. New players can also start with
-            the lawyer game overview for the shortest path into play.
+            A practical guide to generating fresh disputes, building stronger fact sheets,
+            negotiating when the deal is right, and turning better intake work into better
+            courtroom outcomes.
           </p>
         </div>
       </section>
@@ -26,6 +27,7 @@ export default function HelpPage() {
       <Section4 id="settlement-strategy" />
       <Section3 id="courtroom-playbook" />
       <Section5 id="asynchronous-pvp-cases" />
+      <Section6 id="country-settings" />
     </div>
   );
 }

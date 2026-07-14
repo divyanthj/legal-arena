@@ -10,6 +10,10 @@ import { useNavigationLoading } from "@/components/NavigationLoadingProvider";
 import apiClient from "@/libs/api";
 import { trackGoal } from "@/libs/datafast";
 import { DevelopmentAccessModal } from "@/components/legal-arena/DevelopmentAccessGate";
+import CountryFlagPicker, {
+  CountryBadge,
+  useCaseCountrySelection,
+} from "@/components/legal-arena/CountryFlagPicker";
 
 const statusLabel = {
   interview: "Intake",
@@ -462,6 +466,7 @@ const PvpDocketSection = ({
                         <span className="rounded-full border border-white/10 bg-black/20 px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-white/48">
                           {challenge.primaryCategory}
                         </span>
+                        <CountryBadge caseCountry={challenge.caseCountry} />
                       </div>
                       <h3 className="mt-3 break-words text-base font-semibold text-white">
                         {challenge.title}
@@ -1242,10 +1247,18 @@ export default function DashboardHub({
   userEmail = "",
   hasArenaAccess = false,
   canStartSoloCases = false,
+  detectedCountryCode = "US",
+  detectedCountrySource = "detected",
 }) {
   const router = useRouter();
   const { startNavigationLoading, stopNavigationLoading } = useNavigationLoading();
   const [browserTimeZone, setBrowserTimeZone] = useState(null);
+  const {
+    countryCode: selectedCountryCode,
+    country: selectedCountry,
+    selectionSource: countrySelectionSource,
+    selectCountry,
+  } = useCaseCountrySelection(detectedCountryCode, detectedCountrySource);
   const [selectedCategory, setSelectedCategory] = useState(categories[0]?.slug || "");
   const [activeTemplateIndex, setActiveTemplateIndex] = useState(0);
   const [showPlayableOnly, setShowPlayableOnly] = useState(true);
@@ -1506,6 +1519,8 @@ export default function DashboardHub({
       complexity: dynamicStart ? dynamicComplexity : selectedTemplateForAnalytics?.complexity,
       unlocked: dynamicStart ? true : selectedTemplateForAnalytics?.unlocked,
       generation_mode: dynamicStart ? "dynamic" : "template",
+      country: dynamicStart ? selectedCountryCode : "",
+      country_source: dynamicStart ? countrySelectionSource : "",
     });
     setCreating(true);
     startNavigationLoading(
@@ -1520,6 +1535,7 @@ export default function DashboardHub({
           ? {
               categorySlug: dynamicCategory,
               complexity: dynamicComplexity,
+              countryCode: selectedCountryCode,
             }
           : {
               caseTemplateId,
@@ -1536,6 +1552,7 @@ export default function DashboardHub({
           (dynamicStart ? dynamicComplexity : selectedTemplateForAnalytics?.complexity),
         side: caseSession.playerSide,
         generation_mode: dynamicStart ? "dynamic" : "template",
+        country: caseSession.caseCountry?.code || (dynamicStart ? selectedCountryCode : ""),
       });
       startNavigationLoading("Creating courtroom portraits", { failsafeMs: 60000 });
       const caseRef = caseSession.slug || caseSession.id;
@@ -1558,6 +1575,7 @@ export default function DashboardHub({
         category: dynamicStart ? dynamicCategory : selectedTemplateForAnalytics?.primaryCategory,
         complexity: dynamicStart ? dynamicComplexity : selectedTemplateForAnalytics?.complexity,
         generation_mode: dynamicStart ? "dynamic" : "template",
+        country: dynamicStart ? selectedCountryCode : "",
       });
       console.error(error);
     } finally {
@@ -2400,7 +2418,7 @@ export default function DashboardHub({
               />
 
               <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.65fr)]">
-                <section id="case-library" data-onboarding-target="case-library" className="arena-surface min-w-0 overflow-hidden">
+                <section id="case-library" data-onboarding-target="case-library" className="arena-surface min-w-0 overflow-visible">
                   <div className="p-4 md:p-6">
                     <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
                       <div className="min-w-0">
@@ -2436,6 +2454,25 @@ export default function DashboardHub({
                           </p>
                         </div>
                       </div>
+                    </div>
+
+                    <div className="mt-6">
+                      <CountryFlagPicker
+                        id="solo-case-country"
+                        value={selectedCountryCode}
+                        detectedCountryCode={detectedCountryCode}
+                        disabled={creating}
+                        onChange={(countryCode) => {
+                          selectCountry(countryCode);
+                          trackGoal("case_country_selected", {
+                            country: countryCode,
+                            source: "solo_case_picker",
+                          });
+                        }}
+                      />
+                      <p className="mt-2 text-xs leading-5 text-white/44">
+                        Names, setting, dispute details, and portraits will reflect this country.
+                      </p>
                     </div>
 
                     <div className="mt-6">
@@ -2570,6 +2607,7 @@ export default function DashboardHub({
                           {selectedCategoryTitle}
                         </h3>
                         <div className="mt-4 flex flex-wrap gap-2">
+                          <CountryBadge caseCountry={selectedCountry} />
                           <span className="rounded-full border border-amber-200/30 bg-amber-200/10 px-3 py-1 text-xs font-semibold text-amber-100">
                             {selectedDynamicDifficultyMeta.label}
                           </span>
@@ -4169,6 +4207,7 @@ export default function DashboardHub({
                             <div className="min-w-0">
                               <div className="flex flex-wrap items-center gap-2">
                                 <h3 className="text-base font-semibold text-white">{item.title}</h3>
+                                <CountryBadge caseCountry={item.caseCountry} />
                                 <span
                                   className={`badge border arena-status ${
                                     severityClass[caseSeverity]

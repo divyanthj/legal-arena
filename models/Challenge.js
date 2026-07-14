@@ -385,6 +385,10 @@ const challengeSchema = mongoose.Schema(
     practiceArea: { type: String, required: true, trim: true },
     primaryCategory: { type: String, required: true, trim: true },
     complexity: { type: Number, default: 1 },
+    caseCountry: {
+      code: { type: String, trim: true, uppercase: true, default: "" },
+      name: { type: String, trim: true, default: "" },
+    },
     lawbookVersion: { type: String, required: true, trim: true },
     maxCourtRounds: { type: Number, default: 3 },
     templateSnapshot: { type: mongoose.Schema.Types.Mixed, default: null },

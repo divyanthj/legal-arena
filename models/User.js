@@ -184,6 +184,18 @@ const userSchema = mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    preferredCaseCountryCode: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      default: "",
+      private: true,
+    },
+    aiUsageTotals: {
+      type: mongoose.Schema.Types.Mixed,
+      default: () => ({}),
+      private: true,
+    },
     lastGameplayResetAt: {
       type: Date,
       default: null,

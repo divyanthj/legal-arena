@@ -171,7 +171,8 @@ const withClientMemoryClaims = (clientMemory, newClaims = [], side = "client") =
   };
 };
 
-const moneyPattern = /\$[\d,]+(?:\.\d{2})?|\b\d{2,6}\s+dollars?\b/i;
+const moneyPattern =
+  /(?:[$€£¥₹₩₽₺₫₱฿₦₴₡₲₵₸]\s?[\d,.]+)|(?:\b(?:USD|EUR|GBP|INR|JPY|CNY|RMB|AUD|CAD|CHF|KRW|BRL|MXN|ZAR|AED|SAR|SGD|HKD|NZD)\s?[\d,.]+\b)|(?:\b[\d,.]+\s?(?:dollars?|euros?|pounds?|rupees?|yen|yuan|won|reais|pesos?|rand|dirhams?|riyals?|francs?)\b)/i;
 
 const extractMoneyAnchorLines = (value) =>
   String(value || "")
@@ -312,7 +313,7 @@ export const ensureClientMemory = async ({
           "Keep evidence inventory separate: invented details are party claims, not new documents, photos, messages, witnesses, records, or proof.",
           "Add 2 to 5 memoryClaims for material party-side factual assertions from the story, including any plausible invented claims.",
           "Use stable topicKey strings such as deposit-amount, withheld-amount, possession-bike, condition-wall, payment-date, consent-repair, or causation-damage.",
-          "Preserve exact dollar figures from moneyAnchors in the story when they matter to deposit, deduction, refund, invoice, rent, payment, or requested-relief questions.",
+          "Preserve exact currency figures from moneyAnchors in the story when they matter to deposit, deduction, refund, invoice, rent, payment, or requested-relief questions.",
           "For security-deposit disputes, make the original deposit amount and the amount withheld, returned, or deducted answerable unless the canonical context truly provides no such number.",
           "Do not include headings, field names, arrays, ids, fact ids, evidence ids, or JSON-looking structure inside the story.",
         ],

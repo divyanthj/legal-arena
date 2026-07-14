@@ -1,4 +1,5 @@
 import Link from "next/link";
+import HelpScreenshot from "../components/HelpScreenshot";
 
 export default function Section1({ id }) {
   return (
@@ -7,7 +8,7 @@ export default function Section1({ id }) {
       <p className="arena-kicker">01</p>
       <h2 className="arena-headline mt-2 text-3xl">{`Getting Started`}</h2>
       <p className="mt-4 text-base leading-8 text-white/72">
-        {`Legal Arena is an online lawyer game built around one repeatable loop: choose a dispute, interview your side, build a usable fact sheet, and then argue the matter in open text against AI-powered opposing counsel.`}
+        {`Legal Arena is built around a repeatable loop: choose a country, practice area, and pressure level; generate a fresh dispute; interview your side; build a usable fact sheet; then settle or argue the matter in court.`}
       </p>
       <p className="mt-5 text-base leading-8 text-white/72">
         {`If you are opening the app for the first time, this section will help you understand what each stage is for and how to get into a case quickly without wasting early turns.`}
@@ -22,28 +23,42 @@ export default function Section1({ id }) {
           {`. This is your case hub, leaderboard view, and progression screen.`}
         </li>
         <li>
-          <strong>{`Choose a category first:`}</strong>{" "}
-          {`The dashboard groups matters by specialty. Picking a category filters the live case library and helps you focus on the practice area where you want to build rating and unlock tougher complexity tiers.`}
+          <strong>{`Choose the case country:`}</strong>{" "}
+          {`The selected country shapes the names, setting, institutions, currency, dispute details, and portraits used in newly generated matters. Search the flag grid or select a flag directly. Your choice is saved to your player profile.`}
         </li>
         <li>
-          <strong>{`Read the case card before you click Start Case:`}</strong>{" "}
-          {`Each dispute shows its practice area, category, complexity, court, overview, and the parties involved. Use that preview to decide whether you want a straightforward warm-up or a higher-pressure matter.`}
+          <strong>{`Choose a practice area and pressure level:`}</strong>{" "}
+          {`Pick the kind of dispute you want, then choose the available complexity. Country changes the cultural setting; pressure level controls how many issues, contradictions, proof gaps, and tactical decisions the matter contains.`}
         </li>
         <li>
-          <strong>{`Watch the unlock message:`}</strong>{" "}
-          {`Some matters are gated by progression. If a case is locked, the dashboard tells you why. If you exited the same matter recently, you may also see a cooldown before it becomes available again.`}
+          <strong>{`Use Ready, Stretch, and Locked as your guide:`}</strong>{" "}
+          {`Your overall player level and experience in the selected practice area determine the pressure levels available to you. Ready levels sit within your current range, Stretch is one level above it, and higher levels remain locked until your record develops.`}
         </li>
         <li>
           <strong>{`Know that side assignment matters:`}</strong>{" "}
           {`A session can place you on either side of the dispute. Once the case opens, Legal Arena clearly tells you which party you represent so you can question your client and frame your theory from the correct angle.`}
         </li>
       </ol>
+      <div className="arena-surface-soft mt-6 border border-emerald-300/20 bg-emerald-300/[0.055] p-4">
+        <span className="text-sm leading-7 text-white/72">
+          <strong className="font-medium text-white">Cases are unlimited:</strong>{" "}
+          Starting a case generates a new matter with a new combination of parties, facts,
+          evidence, risks, and tactical openings. You do not need to wait for an old case card
+          or a replay cooldown before generating another one.
+        </span>
+      </div>
+      <HelpScreenshot
+        src="/help/screenshots/case-selection.png"
+        alt="Legal Arena case selection panel showing the country selector, practice areas, pressure levels, and case preview"
+        title="Case selection panel"
+        caption="Choose the country first, then the practice area and an available pressure level. The preview confirms the setting before a fresh matter is generated."
+      />
       <div className="arena-surface-soft mt-6 border border-white/10 p-4">
         <span className="text-sm leading-7 text-white/70">
           <strong className="font-medium text-white">Tip:</strong>{" "}
-          Start with a category where you already understand the rhythm of the facts.
-          Progression compounds faster when you can complete matters cleanly instead of
-          bouncing between unfamiliar specialties.
+          Completing verdicts and settlements builds XP and practice-area progress. Staying
+          in one area for a few matters is the quickest way to learn its recurring proof and
+          strategy patterns, but you can generate a case in any available category.
         </span>
       </div>
       <p className="mt-5 text-base leading-8 text-white/72">

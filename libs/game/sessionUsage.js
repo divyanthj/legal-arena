@@ -19,6 +19,9 @@ export const normalizeUsageEntry = (payload = {}, phase = "intake") => ({
   phase,
   model: String(payload.model || "").trim(),
   api: String(payload.api || "").trim(),
+  requestedServiceTier: String(payload.requestedServiceTier || "auto").trim(),
+  serviceTier: String(payload.serviceTier || "unknown").trim(),
+  isPriority: Boolean(payload.isPriority),
   attempt: Number(payload.attempt || 0),
   maxTokens: Number(payload.maxTokens || 0),
   finishReason: String(payload.finishReason || "").trim(),
@@ -28,6 +31,7 @@ export const normalizeUsageEntry = (payload = {}, phase = "intake") => ({
   totalTokens: normalizeUsageNumber(payload.totalTokens),
   cachedInputTokens: normalizeUsageNumber(payload.cachedInputTokens),
   reasoningTokens: normalizeUsageNumber(payload.reasoningTokens),
+  durationMs: normalizeUsageNumber(payload.durationMs),
   createdAt: payload.createdAt ? new Date(payload.createdAt) : new Date(),
 });
 

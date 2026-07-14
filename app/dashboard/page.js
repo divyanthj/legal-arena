@@ -1,4 +1,5 @@
 import { getServerSession } from "next-auth";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/libs/next-auth";
 import DashboardHub from "@/components/legal-arena/DashboardHub";
@@ -8,6 +9,8 @@ import { listDashboardLeaderboards } from "@/libs/game/progression";
 import { LEGAL_CASE_CATEGORIES } from "@/libs/game/categories";
 import { getSoloGameplayAccessForSession, isAdminEmail } from "@/libs/admin";
 import { toClientJSON } from "@/libs/serialize";
+import { resolveCountryDetectionFromHeaders } from "@/libs/game/countries";
+import { getPlayerCaseCountryPreference } from "@/libs/game/countryPreference";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +41,7 @@ const withOptionalTimeout = async (promise, fallback, label) => {
 
 export default async function Dashboard() {
   const session = await getServerSession(authOptions);
+  const countryDetection = resolveCountryDetectionFromHeaders(headers());
 
   if (!session?.user?.id) {
     redirect("/");
@@ -48,7 +52,7 @@ export default async function Dashboard() {
     action: "create",
   });
 
-  const [dashboardData, challengesResult, leaderboards] = await Promise.all([
+  const [dashboardData, challengesResult, leaderboards, preferredCountryCode] = await Promise.all([
     listDashboardDataForUser(session.user.id, session.user),
     withOptionalTimeout(
       listChallengesForUser(session.user.id),
@@ -64,6 +68,7 @@ export default async function Dashboard() {
       { overallLeaderboard: [], categoryLeaderboards: {} },
       "leaderboards"
     ),
+    getPlayerCaseCountryPreference(session.user.id),
   ]);
   const challenges = Array.isArray(challengesResult)
     ? challengesResult
@@ -90,6 +95,8 @@ export default async function Dashboard() {
       userEmail={session.user?.email || ""}
       hasArenaAccess={Boolean(soloCreateAccess.hasArenaAccess)}
       canStartSoloCases={soloCreateAccess.allowed}
+      detectedCountryCode={preferredCountryCode || countryDetection.countryCode}
+      detectedCountrySource={preferredCountryCode ? "profile" : countryDetection.source}
     />
   );
 }

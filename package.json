@@ -31,6 +31,7 @@
     "datafast": "^2.0.1",
     "eslint": "8.47.0",
     "eslint-config-next": "13.4.19",
+    "flag-icons": "^7.5.0",
     "mongodb": "^6.21.0",
     "mongoose": "^7.6.10",
     "next": "^14.1.4",

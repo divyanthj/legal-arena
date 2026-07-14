@@ -10,7 +10,7 @@ export const maxDuration = 60;
 
 const OPENAI_IMAGE_GENERATION_URL = "https://api.openai.com/v1/images/generations";
 const IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL?.trim() || "gpt-image-1.5";
-const PORTRAIT_PROMPT_VERSION = 6;
+const PORTRAIT_PROMPT_VERSION = 7;
 const PORTRAIT_WIDTH = 640;
 const PORTRAIT_HEIGHT = 720;
 
@@ -209,6 +209,9 @@ const buildPortraitPrompt = (challenge, participant, target) => {
     isOrganization,
   });
   const context = [
+    challenge.caseCountry?.name
+      ? `Country setting: ${challenge.caseCountry.name}`
+      : "",
     challenge.practiceArea,
     challenge.primaryCategory,
     challenge.premise?.overview,
@@ -235,6 +238,9 @@ const buildPortraitPrompt = (challenge, participant, target) => {
     `Subject identity cue: ${name}.`,
     `Case context: ${context || "civil legal dispute"}.`,
     genderGuidance,
+    challenge.caseCountry?.name
+      ? `Make the person, everyday clothing, office, and environmental details plausible for ${challenge.caseCountry.name}. Reflect real diversity; do not turn nationality into a costume or assume one ethnicity, religion, class, or traditional style.`
+      : "",
     isOrganization
       ? "The party is an organization, so show a realistic representative or owner in credible business attire."
       : "The party is a person, so show believable everyday clothing appropriate for an ordinary client, not a lawyer headshot and not overly formal.",

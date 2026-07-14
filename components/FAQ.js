@@ -60,9 +60,10 @@ export const faqList = [
     answer: (
       <div className="space-y-2 leading-relaxed">
         <p>
-          Yes. Some matters let you make settlement offers before the courtroom
-          stage. You can read the other side&apos;s leverage, revise your position,
-          and decide whether a deal is better than taking the risk of a verdict.
+          Yes. During intake, ask whether your client is willing to explore a
+          deal. Once the client gives authority, you can open settlement talks,
+          read the other side&apos;s leverage, revise your position, and decide
+          whether a deal is better than taking the risk of a verdict.
         </p>
         <p>
           Settlement is part of the strategy. A clean deal can be the smarter win
@@ -78,11 +79,13 @@ export const faqList = [
         <p>
           Yes. Legal Arena includes asynchronous PVP case challenges. You
           challenge another player, each side privately interviews their own AI
-          client, and then both players meet in court through timed rounds.
+          client, and then both players meet in court through turn-based rounds.
         </p>
         <p>
           You do not both need to be online at the same time. Once each round is
-          ready, the arguments are revealed and an AI judge evaluates the match.
+          ready, the plaintiff opens and the defendant responds. The AI judge
+          scores completed rounds, and courtroom turns carry a 24-hour response
+          deadline.
         </p>
       </div>
     ),
@@ -107,15 +110,37 @@ export const faqList = [
     answer: (
       <div className="space-y-2 leading-relaxed">
         <p>
-          Legal Arena is moving toward a larger stream of fresh legal matters.
-          Cases can vary by client, facts, stakes, party assignment, and
-          courtroom pressure, so the experience does not feel like replaying a
-          single canned puzzle.
+          Legal Arena generates a fresh legal matter when you start a dynamic
+          case. Cases vary by country, client, facts, stakes, party assignment,
+          practice area, and courtroom pressure, so the experience does not feel
+          like replaying a single canned puzzle.
+        </p>
+        <p>
+          You can keep generating new cases without waiting for a previous case
+          to become available again. Exiting intake closes only that session.
         </p>
         <p>
           Once a session starts, the matter is stored as stable state. That means
           the client interview can feel flexible while the case facts remain
           consistent enough to argue from.
+        </p>
+      </div>
+    ),
+  },
+  {
+    question: "How does country selection work?",
+    answer: (
+      <div className="space-y-2 leading-relaxed">
+        <p>
+          On your first visit, Legal Arena selects a country from the location
+          signal available to the app, or defaults to the United States. Once
+          you choose a country yourself, it is saved to your player profile and
+          remains selected across reloads and devices.
+        </p>
+        <p>
+          Country affects newly generated names, currency, setting, institutions,
+          dispute details, and portraits. It does not change your unlocked
+          complexity, and an existing matter keeps its original country.
         </p>
       </div>
     ),

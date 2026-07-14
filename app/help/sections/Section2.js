@@ -1,3 +1,5 @@
+import HelpScreenshot from "../components/HelpScreenshot";
+
 export default function Section2({ id }) {
   return (
     <section id={id} className="arena-surface scroll-mt-28">
@@ -21,6 +23,10 @@ export default function Section2({ id }) {
           {`Legal Arena surfaces follow-up prompts and proof gaps underneath the intake textarea. These hints are especially useful when you have enough narrative to argue, but not enough support to survive pushback.`}
         </li>
         <li>
+          <strong>{`Treat success chance as a live assessment:`}</strong>{" "}
+          {`Client answers and the developing file can change the displayed assessment. It is guidance about the strength of the current record, not a guaranteed verdict. When you enter court, the assessment is locked for that courtroom run.`}
+        </li>
+        <li>
           <strong>{`Separate what helps you from what is merely said:`}</strong>{" "}
           {`A strong file distinguishes corroborated facts from disputed ones. If something matters but still lacks proof, move it into the missing-evidence area so you remember to handle that weakness in court instead of pretending it is settled.`}
         </li>
@@ -29,6 +35,12 @@ export default function Section2({ id }) {
           {`When your theory, facts, risks, and requested relief all line up, use Finalize Fact Sheet to leave intake and move into the courtroom stage.`}
         </li>
       </ul>
+      <HelpScreenshot
+        src="/help/screenshots/fact-sheet.png"
+        alt="Legal Arena completed fact sheet showing discovered sections, success chance, theory, and the final ruling"
+        title="Fact sheet and case file"
+        caption="The case file tracks what you have established and what still needs work. Use Theory, Timeline, Proof, Risks, Disputed facts, Records, Gaps, and Relief as a courtroom-ready checklist."
+      />
       <h3 className="mt-8 text-2xl font-semibold text-white">{`What a strong draft usually includes`}</h3>
       <ol className="mt-5 space-y-3 pl-6 text-base leading-8 text-white/72">
         <li>{`A short summary that explains the dispute in plain language.`}</li>
@@ -40,13 +52,14 @@ export default function Section2({ id }) {
       </ol>
       <div className="arena-surface-soft mt-6 border border-amber-500/20 bg-amber-500/[0.06] p-4">
         <span className="text-sm leading-7 text-white/70">
-          <strong className="font-medium text-white">Important:</strong>{" "}
-          If you exit a case during intake, the same matter cannot be started again for
-          24 hours. Leave only if you are sure you want to abandon the run.
+          <strong className="font-medium text-white">Leaving a case:</strong>{" "}
+          Exiting during intake closes that generated matter, but you can generate a fresh
+          case immediately. Once you enter court, quitting ends the case as a loss, so finalize
+          only when you are ready to argue.
         </span>
       </div>
       <p className="mt-5 text-base leading-8 text-white/72">
-        {`A disciplined intake produces better courtroom turns, cleaner verdict summaries, and more reliable progression over time.`}
+        {`Settlement remains a separate option during intake once your client gives authority to explore a deal. Otherwise, a disciplined intake produces better courtroom turns, cleaner verdict feedback, and more reliable progression over time.`}
       </p>
       </div>
     </section>

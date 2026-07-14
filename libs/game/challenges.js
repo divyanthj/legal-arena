@@ -41,6 +41,7 @@ import {
   buildDynamicCaseTemplateSnapshot,
   generateDynamicCaseState,
 } from "./dynamicCase";
+import { buildCaseCountry } from "./countries";
 import { DEFAULT_CATEGORY_SLUG } from "./categories";
 import {
   buildJudgeProfile,
@@ -1106,6 +1107,7 @@ export const createChallenge = async ({
   caseTemplateId,
   categorySlug = DEFAULT_CATEGORY_SLUG,
   complexity = 1,
+  countryCode = "US",
 }) => {
   await connectMongo();
 
@@ -1150,6 +1152,7 @@ export const createChallenge = async ({
     templateSnapshot = buildSessionTemplateSnapshot(template);
     canonicalStory = getCanonicalStoryWorld(template);
   } else {
+    const caseCountry = buildCaseCountry(countryCode, { fallback: true });
     const progression = normalizeProgression(initiator?.progression);
     const requestedCategorySlug = categorySlug || DEFAULT_CATEGORY_SLUG;
     const dynamicDifficulty = getEffectivePvpDynamicComplexity({
@@ -1162,6 +1165,7 @@ export const createChallenge = async ({
       complexity: dynamicDifficulty.complexity,
       playerLevel: dynamicDifficulty.playerLevel,
       userId: initiatorId,
+      countryCode: caseCountry.code,
     });
 
     template = buildDynamicCaseTemplateSnapshot(dynamicCase);
@@ -1213,6 +1217,7 @@ export const createChallenge = async ({
     practiceArea: template.practiceArea,
     primaryCategory: template.primaryCategory,
     complexity: template.complexity,
+    caseCountry: template.caseCountry || null,
     lawbookVersion: LAWBOOK_VERSION,
     maxCourtRounds: Math.max(3, template.complexity + 1),
     templateSnapshot,
