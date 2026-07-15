@@ -27,7 +27,6 @@ import {
 import { buildCaseCountry } from "./countries";
 import {
   buildPublicLeaderboardEntry,
-  applyVerdictToProgression,
   ensureUserProfile,
   getEligibleComplexityForCategory,
   normalizeProgression,
@@ -1459,18 +1458,14 @@ export const exitCaseSessionForUser = async ({ userId, caseId }) => {
         opponent: caseSession.score?.opponent || 0,
       },
     };
-    await applyVerdictToProgression({
-      userId,
-      primaryCategory: caseSession.primaryCategory,
-      complexity: caseSession.complexity,
-      verdictWinner: "opponent",
-      caseTitle: caseSession.title,
-      verdictSummary: caseSession.verdict.summary,
-      highlights: caseSession.verdict.highlights,
-      lockedCourtEntryChance:
-        caseSession.caseAssessment?.lockedCourtEntryChance ?? null,
-    });
     await caseSession.save();
+
+    try {
+      const { evaluateCompletedCase } = await import("@/libs/game/awards/service");
+      await evaluateCompletedCase({ caseSession });
+    } catch (awardError) {
+      console.error("Post-forfeit award evaluation failed", awardError);
+    }
 
     return caseSession;
   }
@@ -1593,6 +1588,13 @@ export const getPublicPlayerProfile = async (
     user: hydratedUser,
     cases: publicCases,
   });
+  let awards = null;
+  try {
+    const { getPlayerAwardsProfile } = await import("@/libs/game/awards/service");
+    awards = await getPlayerAwardsProfile(playerId, { owner: canViewFullArchive });
+  } catch (error) {
+    console.error("Lawyer award profile could not be loaded", error);
+  }
 
   return {
     player: {
@@ -1612,5 +1614,6 @@ export const getPublicPlayerProfile = async (
       categoryStats: normalizeProgression(hydratedUser.progression).categoryStats,
     },
     cases: publicCases,
+    awards,
   };
 };

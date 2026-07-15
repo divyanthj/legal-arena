@@ -56,6 +56,10 @@ const courtroomEntrySchema = mongoose.Schema(
       type: [String],
       default: [],
     },
+    citedEvidenceIds: {
+      type: [String],
+      default: [],
+    },
     citedRules: {
       type: [String],
       default: [],
@@ -487,6 +491,11 @@ const caseSessionSchema = mongoose.Schema(
       type: Date,
       default: null,
     },
+    awardMetrics: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+      private: true,
+    },
     freeGameplayCampaignAccess: {
       grantedAt: {
         type: Date,
@@ -757,6 +766,14 @@ const caseSessionSchema = mongoose.Schema(
         type: [String],
         default: [],
       },
+      outcomeMetrics: {
+        disposition: { type: String, enum: ["", "dismissed", "all_claims_denied", "partial_relief", "full_relief", "other"], default: "" },
+        amountClaimed: { type: Number, default: null },
+        amountAwarded: { type: Number, default: null },
+        expectedLiabilityBefore: { type: Number, default: null },
+        actualLiability: { type: Number, default: null },
+        currency: { type: String, default: "" },
+      },
       finalScore: {
         player: {
           type: Number,
@@ -776,6 +793,7 @@ const caseSessionSchema = mongoose.Schema(
 );
 
 caseSessionSchema.plugin(toJSON);
+caseSessionSchema.index({ userId: 1, completedAt: -1 });
 
 export default mongoose.models.CaseSession ||
   mongoose.model("CaseSession", caseSessionSchema);

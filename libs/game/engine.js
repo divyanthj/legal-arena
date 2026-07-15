@@ -856,6 +856,7 @@ export const runCourtroomRound = async ({ caseSession, argument, userId }) => {
         playerTheory: "string",
         citedFacts: ["string"],
         citedClaimIds: ["string"],
+        citedEvidenceIds: ["string"],
         citedRules: ["string"],
         strengths: ["string"],
         weaknesses: ["string"],
@@ -937,6 +938,14 @@ export const runCourtroomRound = async ({ caseSession, argument, userId }) => {
               summary: "string",
               highlights: ["string"],
               concerns: ["string"],
+              outcomeMetrics: {
+                disposition: "dismissed|all_claims_denied|partial_relief|full_relief|other",
+                amountClaimed: "number|null",
+                amountAwarded: "number|null",
+                expectedLiabilityBefore: "number|null",
+                actualLiability: "number|null",
+                currency: "string",
+              },
             }
           : null,
       },

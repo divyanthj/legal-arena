@@ -30,5 +30,10 @@ export default async function CasePage({ params }) {
     notFound();
   }
 
-  return <CaseWorkspace initialCase={toClientJSON(caseSession)} />;
+  return (
+    <CaseWorkspace
+      initialCase={toClientJSON(caseSession)}
+      apiConfig={{ playerId: session.user.id }}
+    />
+  );
 }

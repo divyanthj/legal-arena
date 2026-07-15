@@ -11,6 +11,14 @@
     {
       "path": "/api/internal/challenges/courtroom-timeouts/run",
       "schedule": "0 */3 * * *"
+    },
+    {
+      "path": "/api/internal/award-evaluations/run",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/internal/award-rarity/run",
+      "schedule": "15 2 * * *"
     }
   ]
 }

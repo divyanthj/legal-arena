@@ -27,3 +27,4 @@ await import("./run-help-content-tests.mjs");
 await import("./run-markdown-email-tests.mjs");
 await import("./run-email-suppression-tests.mjs");
 await import("./run-unsubscribe-tests.mjs");
+await import("./run-awards-tests.mjs");

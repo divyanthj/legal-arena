@@ -24,6 +24,7 @@ import {
 } from "./playerDossierShared";
 import { CollapseChevron } from "./caseWorkspaceUtils";
 import { CountryBadge } from "./CountryFlagPicker";
+import AwardsMatrix from "./AwardsMatrix";
 
 const getNextRatingMilestone = (rating = 1000) => {
   const milestones = [1200, 1500, 1800, 2100];
@@ -76,7 +77,7 @@ export default function PlayerProfileDossier({
   detectedCountrySource = "detected",
 }) {
   const router = useRouter();
-  const { player, cases = [] } = profile;
+  const { player, cases = [], awards = null } = profile;
   const normalizedCases = useMemo(() => cases.map(normalizeMatter), [cases]);
   const archiveDetailsRef = useRef(null);
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -488,7 +489,9 @@ export default function PlayerProfileDossier({
                 </h1>
                 <p className="mt-3 inline-flex items-center gap-2 text-base font-semibold text-amber-200">
                   <HeroIcons.SparklesIcon className="h-5 w-5" aria-hidden="true" />
-                  Rookie Advocate
+                  {awards?.summary?.selectedTitle
+                    ? `${awards.summary.selectedTitle.emoji || ""} ${awards.summary.selectedTitle.name}`
+                    : "Rookie Advocate"}
                 </p>
                 <div className="mt-5 grid gap-4 text-sm text-white/58 sm:grid-cols-3 xl:max-w-2xl">
                   <div>
@@ -674,6 +677,11 @@ export default function PlayerProfileDossier({
                 </div>
               </div>
             </div>
+
+            <AwardsMatrix
+              data={awards}
+              owner={canEditAvatar}
+            />
 
             <div id="case-archive" className="arena-surface">
               <details ref={archiveDetailsRef} className="group" open>

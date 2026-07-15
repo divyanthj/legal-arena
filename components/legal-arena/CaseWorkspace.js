@@ -25,6 +25,7 @@ import { sanitizeFactSheet } from "@/libs/game/factSheetSanitizer";
 import { useCaseVoiceRecorder } from "./useCaseVoiceRecorder";
 import { getCaseReportProgressLabel } from "./caseReportUi";
 import { CountryBadge } from "./CountryFlagPicker";
+import AwardUnlockPanel from "./AwardUnlockPanel";
 
 import {
   normalizeCourtroomEntry,
@@ -1001,6 +1002,8 @@ export default function CaseWorkspace({
     ...initialCase,
     factSheet: initialFactSheet,
   }));
+  const [awardChanges, setAwardChanges] = useState([]);
+  const [awardEvaluationStatus, setAwardEvaluationStatus] = useState("not_started");
   const [question, setQuestion] = useState("");
   const [argument, setArgument] = useState("");
   const [settlementMessage, setSettlementMessage] = useState("");
@@ -1295,6 +1298,16 @@ export default function CaseWorkspace({
   const getResponseCase = (response) =>
     apiConfig.responseToCase ? apiConfig.responseToCase(response) : response?.caseSession;
   const updateCaseFromResponse = (response) => {
+    const changes = response?.awardEvaluation?.changes || [];
+    if (response?.awardEvaluation?.status) {
+      setAwardEvaluationStatus(response.awardEvaluation.status);
+    }
+    if (changes.length) {
+      setAwardChanges((current) => {
+        const seen = new Set(current.map((item) => `${item.code}:${item.type}:${item.tier || ""}`));
+        return [...current, ...changes.filter((item) => !seen.has(`${item.code}:${item.type}:${item.tier || ""}`))];
+      });
+    }
     const nextCase = getResponseCase(response);
 
     if (!nextCase) {
@@ -1428,6 +1441,31 @@ export default function CaseWorkspace({
   const isSettled = isSettlementAccepted;
   const isVerdict = caseSession.status === "verdict";
   const isExited = caseSession.status === "exited";
+  useEffect(() => {
+    if ((!isVerdict && !isSettled) || ["completed", "partially_completed"].includes(awardEvaluationStatus)) return;
+    const sourceType = analyticsMode === "pvp" ? "challenge" : "case";
+    const sourceId = caseSession.id || caseSession._id;
+    if (!sourceId) return;
+    let active = true;
+    const poll = async () => {
+      try {
+        const result = await apiClient.get(`/award-evaluations/${sourceType}/${sourceId}`);
+        if (!active) return;
+        setAwardEvaluationStatus(result.status || "not_started");
+        if (result.changes?.length) {
+          setAwardChanges((current) => {
+            const seen = new Set(current.map((item) => `${item.code}:${item.type}:${item.tier || ""}`));
+            return [...current, ...result.changes.filter((item) => !seen.has(`${item.code}:${item.type}:${item.tier || ""}`))];
+          });
+        }
+      } catch (error) {
+        // Award processing is intentionally non-blocking and the next poll may recover.
+      }
+    };
+    poll();
+    const interval = window.setInterval(poll, 2500);
+    return () => { active = false; window.clearInterval(interval); };
+  }, [analyticsMode, awardEvaluationStatus, caseSession.id, caseSession._id, isSettled, isVerdict]);
   const isIntakeLocked = Boolean(apiConfig.intakeLocked);
   const canSettleCase = caseSession.primaryCategory !== "criminal";
   const hasSettlementAuthority = hasClientSettlementAuthority(
@@ -7268,6 +7306,13 @@ export default function CaseWorkspace({
 
             {(isInterview || isCourtroom) &&
               renderLawbookPanel("hidden xl:block", "desktop-lawbook-details")}
+
+            {awardChanges.length ? (
+              <AwardUnlockPanel
+                changes={awardChanges}
+                playerId={apiConfig.playerId || caseSession.playerUserId || ""}
+              />
+            ) : null}
 
             {isVerdict && (
               <div

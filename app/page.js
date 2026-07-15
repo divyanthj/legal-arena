@@ -443,14 +443,15 @@ export default async function Page() {
           <div className="arena-surface-soft mx-auto mb-8 flex max-w-5xl flex-col gap-4 border-amber-200/22 bg-amber-200/[0.055] px-5 py-4 text-left md:flex-row md:items-center md:justify-between">
             <div className="min-w-0">
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-amber-100/72">
-                Infinite cases and out-of-court settlements are live
+                Awards, titles, and country-shaped cases are live
               </p>
               <h2 className="mt-2 text-xl font-semibold leading-tight text-white">
-                More disputes. More strategy. More ways to win.
+                Build a legal career worth displaying.
               </h2>
               <p className="mt-2 max-w-3xl text-sm leading-6 text-amber-50/78">
-                Play fresh legal matters, negotiate settlements, build stronger
-                case files, and decide whether to deal or fight in court.
+                Earn distinctions from your advocacy, unlock lawyer titles, collect
+                country-specific honours, and explore the latest improvements to
+                cases, settlements, portraits, and public reports.
               </p>
             </div>
             <div className="flex w-full shrink-0 flex-col gap-3 md:w-auto">

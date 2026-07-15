@@ -10,7 +10,10 @@
     "lint": "next lint",
     "blog:check": "node scripts/check-blog-content.mjs",
     "test": "node tests/run-all-tests.mjs",
+    "test:awards": "node tests/run-awards-tests.mjs",
     "reset:user-data": "node scripts/reset-user-data.mjs",
+    "awards:migrate": "node scripts/migrate-awards.mjs",
+    "awards:backfill": "node scripts/backfill-awards.mjs",
     "video:studio": "remotion studio remotion/index.jsx",
     "video:render": "remotion render remotion/index.jsx LegalArenaDashboardTutorial out/legal-arena-dashboard-tutorial.mp4",
     "video:still": "remotion still remotion/index.jsx LegalArenaDashboardTutorial out/legal-arena-dashboard-tutorial.png --frame=45 --scale=0.5"

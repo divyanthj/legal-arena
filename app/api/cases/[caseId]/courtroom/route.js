@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getRequestSession } from "@/libs/api-auth";
 import { runCourtroomRound } from "@/libs/game/engine";
-import { applyVerdictToProgression } from "@/libs/game/progression";
+import { evaluateCompletedCase } from "@/libs/game/awards/service";
 import {
   buildCasePayload,
   getCaseSessionDocumentForUser,
@@ -75,6 +75,7 @@ export async function POST(req, { params }) {
       text: argument,
       citedFacts: result.citedFacts,
       citedClaimIds: result.citedClaimIds,
+      citedEvidenceIds: result.citedEvidenceIds,
       citedRules: result.citedRules,
       judgeNotes: {
         playerDelta: result.playerDelta,
@@ -115,32 +116,36 @@ export async function POST(req, { params }) {
         summary: result.verdict.summary,
         highlights: result.verdict.highlights,
         concerns: result.verdict.concerns,
+        outcomeMetrics: result.verdict.outcomeMetrics,
         finalScore: {
           player: caseSession.score.player,
           opponent: caseSession.score.opponent,
         },
       };
 
-      await applyVerdictToProgression({
-        userId: session.user.id,
-        userProfile: session.user,
-        primaryCategory: caseSession.primaryCategory,
-        complexity: caseSession.complexity,
-        verdictWinner: result.verdict.winner,
-        caseTitle: caseSession.title,
-        verdictSummary: result.verdict.summary,
-        highlights: result.verdict.highlights,
-        lockedCourtEntryChance:
-          caseSession.caseAssessment?.lockedCourtEntryChance ?? null,
-      });
     }
 
     appendUsageEntriesToCaseSession(caseSession, result.usageEntries);
 
     await caseSession.save();
 
+    let awardEvaluation = null;
+    if (result.verdict) {
+      try {
+        awardEvaluation = await evaluateCompletedCase({
+          caseSession,
+          userProfile: session.user,
+        });
+      } catch (awardError) {
+        console.error("Post-verdict award evaluation failed", awardError);
+      }
+    }
+
     return NextResponse.json({
       caseSession: buildCasePayload(caseSession),
+      awardEvaluation: awardEvaluation
+        ? { status: awardEvaluation.status, changes: awardEvaluation.immediateChanges || [] }
+        : null,
     });
   } catch (error) {
     console.error(error);

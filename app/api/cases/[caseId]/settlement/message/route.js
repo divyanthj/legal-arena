@@ -7,7 +7,7 @@ import {
 } from "@/libs/game/store";
 import { runSettlementExchange } from "@/libs/game/settlement";
 import { appendUsageEntriesToCaseSession } from "@/libs/game/sessionUsage";
-import { applySettlementToProgression } from "@/libs/game/progression";
+import { evaluateCompletedCase } from "@/libs/game/awards/service";
 
 export async function POST(req, { params }) {
   const { session, error: authError } = await getRequestSession(req);
@@ -77,21 +77,23 @@ export async function POST(req, { params }) {
     if (result.settled) {
       caseSession.status = "settled";
       caseSession.completedAt = caseSession.completedAt || new Date();
-      await applySettlementToProgression({
-        userId: session.user.id,
-        userProfile: session.user,
-        primaryCategory: caseSession.primaryCategory,
-        complexity: caseSession.complexity,
-        finalMoods: result.settlement.moods,
-        caseTitle: caseSession.title,
-        outcomeSummary: result.settlement.outcomeSummary,
-      });
     }
 
     await caseSession.save();
+    let awardEvaluation = null;
+    if (result.settled) {
+      try {
+        awardEvaluation = await evaluateCompletedCase({ caseSession, userProfile: session.user });
+      } catch (awardError) {
+        console.error("Post-settlement award evaluation failed", awardError);
+      }
+    }
 
     return NextResponse.json({
       caseSession: buildCasePayload(caseSession),
+      awardEvaluation: awardEvaluation
+        ? { status: awardEvaluation.status, changes: awardEvaluation.immediateChanges || [] }
+        : null,
     });
   } catch (error) {
     console.error(error);

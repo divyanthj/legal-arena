@@ -150,6 +150,7 @@ const courtroomSubmissionSchema = mongoose.Schema(
     text: { type: String, required: true },
     citedFacts: { type: [String], default: [] },
     citedClaimIds: { type: [String], default: [] },
+    citedEvidenceIds: { type: [String], default: [] },
     citedRules: { type: [String], default: [] },
     judgeNotes: {
       playerDelta: { type: Number, default: 0 },
@@ -453,6 +454,11 @@ const challengeSchema = mongoose.Schema(
       index: true,
     },
     completedAt: { type: Date, default: null },
+    awardMetrics: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+      private: true,
+    },
   },
   {
     timestamps: true,
@@ -464,6 +470,16 @@ challengeSchema.index({ initiatorId: 1, challengedId: 1, status: 1 });
 challengeSchema.index({ "participants.userId": 1, updatedAt: -1 });
 
 challengeSchema.plugin(toJSON);
+
+challengeSchema.post("save", async function evaluateTerminalChallengeAwards(document) {
+  if (!["verdict", "settled"].includes(document.status)) return;
+  try {
+    const { evaluateCompletedChallenge } = await import("@/libs/game/awards/service");
+    await evaluateCompletedChallenge({ challenge: document, skipProgression: true });
+  } catch (error) {
+    console.error("Post-challenge award evaluation failed", error);
+  }
+});
 
 export default mongoose.models.Challenge ||
   mongoose.model("Challenge", challengeSchema);

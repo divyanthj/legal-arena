@@ -569,6 +569,7 @@ export const buildCounselContext = ({ caseSession, template, rules }) => {
 
 export const normalizeCounselAnalysis = ({ aiResult, caseSession, rules }) => {
   const validClaimIds = caseSession.factSheet.discoveredClaimIds || [];
+  const validEvidenceIds = caseSession.factSheet.discoveredEvidenceIds || [];
   const validRuleIds = new Set((rules || []).map((rule) => rule.id));
   const validFactText = new Set(
     [
@@ -587,6 +588,7 @@ export const normalizeCounselAnalysis = ({ aiResult, caseSession, rules }) => {
       validFactText.has(item)
     ),
     citedClaimIds: sanitizeIdList(aiResult?.citedClaimIds, validClaimIds, 4),
+    citedEvidenceIds: sanitizeIdList(aiResult?.citedEvidenceIds, validEvidenceIds, 4),
     citedRules: coerceStringList(aiResult?.citedRules, 4).filter((item) =>
       validRuleIds.has(item)
     ),
@@ -675,6 +677,10 @@ export const normalizeCourtResult = ({
   caseSession,
   rules,
 }) => {
+  const optionalNumber = (value) =>
+    value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value))
+      ? Number(value)
+      : null;
   const normalizedCounsel = normalizeCounselAnalysis({
     aiResult: counselAnalysis,
     caseSession,
@@ -692,10 +698,12 @@ export const normalizeCourtResult = ({
     ].map((item) => String(item || "").trim())
   );
   const validClaimIds = caseSession.factSheet.discoveredClaimIds || [];
+  const validEvidenceIds = caseSession.factSheet.discoveredEvidenceIds || [];
   const validRuleIds = new Set((rules || []).map((rule) => rule.id));
   const sanitizeCourtFacts = (items = []) =>
     coerceStringList(items, 4).filter((item) => validFactText.has(item));
   const sanitizeCourtClaims = (items = []) => sanitizeIdList(items, validClaimIds, 4);
+  const sanitizeCourtEvidence = (items = []) => sanitizeIdList(items, validEvidenceIds, 4);
   const sanitizeCourtRules = (items = []) =>
     coerceStringList(items, 4).filter((item) => validRuleIds.has(item));
 
@@ -744,6 +752,11 @@ export const normalizeCourtResult = ({
       : normalizedCounsel.citedClaimIds.length
       ? normalizedCounsel.citedClaimIds
       : [],
+    citedEvidenceIds: Array.isArray(aiResult.citedEvidenceIds)
+      ? sanitizeCourtEvidence(aiResult.citedEvidenceIds)
+      : normalizedCounsel.citedEvidenceIds.length
+      ? normalizedCounsel.citedEvidenceIds
+      : [],
     strengths: Array.isArray(aiResult.strengths)
       ? aiResult.strengths
       : normalizedCounsel.strengths.length
@@ -779,6 +792,14 @@ export const normalizeCourtResult = ({
       summary,
       highlights: coerceStringList(verdict?.highlights, 3),
       concerns: coerceStringList(verdict?.concerns, 3),
+      outcomeMetrics: {
+        disposition: ["dismissed", "all_claims_denied", "partial_relief", "full_relief", "other"].includes(coerceString(verdict?.outcomeMetrics?.disposition)) ? coerceString(verdict.outcomeMetrics.disposition) : "",
+        amountClaimed: optionalNumber(verdict?.outcomeMetrics?.amountClaimed),
+        amountAwarded: optionalNumber(verdict?.outcomeMetrics?.amountAwarded),
+        expectedLiabilityBefore: optionalNumber(verdict?.outcomeMetrics?.expectedLiabilityBefore),
+        actualLiability: optionalNumber(verdict?.outcomeMetrics?.actualLiability),
+        currency: coerceString(verdict?.outcomeMetrics?.currency).slice(0, 8),
+      },
     },
   };
 };

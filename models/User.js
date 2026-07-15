@@ -139,6 +139,11 @@ const userSchema = mongoose.Schema(
     image: {
       type: String,
     },
+    selectedLawyerTitleId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "LawyerTitle",
+      default: null,
+    },
     accountType: {
       type: String,
       enum: ["human", "ai"],

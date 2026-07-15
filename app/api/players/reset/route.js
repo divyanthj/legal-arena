@@ -4,6 +4,13 @@ import connectMongo from "@/libs/mongoose";
 import CaseSession from "@/models/CaseSession";
 import EmailNudgeLog from "@/models/EmailNudgeLog";
 import User from "@/models/User";
+import Challenge from "@/models/Challenge";
+import AwardEvaluation from "@/models/AwardEvaluation";
+import AwardOccurrence from "@/models/AwardOccurrence";
+import PlayerAward from "@/models/PlayerAward";
+import PlayerCareerStats from "@/models/PlayerCareerStats";
+import PlayerLawyerTitle from "@/models/PlayerLawyerTitle";
+import { evaluateCompletedChallenge } from "@/libs/game/awards/service";
 import { userCanAccessArena } from "@/libs/admin";
 import {
   getDefaultProgression,
@@ -61,6 +68,11 @@ export async function POST(req) {
     const [caseResult, nudgeResult] = await Promise.all([
       CaseSession.deleteMany({ userId: session.user.id }),
       EmailNudgeLog.deleteMany({ userId: session.user.id }),
+      AwardEvaluation.deleteMany({ playerId: session.user.id }),
+      AwardOccurrence.deleteMany({ playerId: session.user.id }),
+      PlayerAward.deleteMany({ playerId: session.user.id }),
+      PlayerCareerStats.deleteMany({ playerId: session.user.id }),
+      PlayerLawyerTitle.deleteMany({ playerId: session.user.id }),
     ]);
 
     user.progression = normalizeProgression(getDefaultProgression());
@@ -74,7 +86,28 @@ export async function POST(req) {
     user.dashboardEncouragementNoteSource = "default";
     user.dashboardEncouragementNoteUpdatedAt = new Date();
     user.lastGameplayResetAt = new Date();
+    user.selectedLawyerTitleId = null;
     await user.save();
+
+    const retainedChallenges = await Challenge.find({
+      "participants.userId": session.user.id,
+      status: { $in: ["verdict", "settled"] },
+    }).sort({ completedAt: 1 });
+    for (const challenge of retainedChallenges) {
+      try {
+        const contexts = await evaluateCompletedChallenge({
+          challenge,
+          skipProgression: true,
+          evaluationSource: "backfill",
+        });
+        void contexts;
+      } catch (awardError) {
+        console.error("Fresh Start PVP award rebuild failed", {
+          challengeId: String(challenge._id),
+          error: awardError.message,
+        });
+      }
+    }
 
     return NextResponse.json({
       ok: true,

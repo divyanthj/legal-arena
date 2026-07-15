@@ -624,6 +624,7 @@ export default function ChallengeWorkspace({ initialChallenge }) {
       workspaceNotice={<OpponentStageNotice challenge={challenge} />}
       apiConfig={{
         analyticsMode: "pvp",
+        playerId: viewer.userId,
         basePath: `/challenges/${challengeRef}`,
         workspaceHref: `/dashboard/challenges/${challengeRef}`,
         settlementHref: `/dashboard/challenges/${challengeRef}/settlement`,

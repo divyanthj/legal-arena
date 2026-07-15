@@ -2953,6 +2953,7 @@ const scoreChallengeSubmission = async ({ challenge, round, participant, submiss
 
   submission.citedFacts = result.citedFacts || [];
   submission.citedClaimIds = result.citedClaimIds || [];
+  submission.citedEvidenceIds = result.citedEvidenceIds || [];
   submission.citedRules = result.citedRules || [];
   submission.judgeNotes = {
     playerDelta: result.playerDelta || 0,
