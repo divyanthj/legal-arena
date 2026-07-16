@@ -886,7 +886,7 @@ export default function PlayerProfileDossier({
         </div>
       </nav>
       {showResetDialog ? (
-        <dialog className="modal modal-open">
+        <dialog className="arena-modal modal modal-open">
           <div className="modal-box border border-rose-400/30 bg-[#170707] text-white shadow-2xl shadow-black/60">
             <p className="arena-kicker text-rose-300">Fresh Start</p>
             <h3 className="arena-headline mt-2 text-3xl uppercase">

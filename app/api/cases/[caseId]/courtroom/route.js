@@ -1,13 +1,21 @@
 import { NextResponse } from "next/server";
 import { getRequestSession } from "@/libs/api-auth";
-import { runCourtroomRound } from "@/libs/game/engine";
+import {
+  evaluateCourtAdjournment,
+  runCourtroomRound,
+} from "@/libs/game/engine";
 import { evaluateCompletedCase } from "@/libs/game/awards/service";
 import {
   buildCasePayload,
   getCaseSessionDocumentForUser,
 } from "@/libs/game/store";
 import { appendUsageEntriesToCaseSession } from "@/libs/game/sessionUsage";
+import { ensurePlaintiffCourtOpening } from "@/libs/game/courtroomOpening";
 import { getSoloGameplayAccessForSession } from "@/libs/admin";
+import {
+  getAdjournmentRemaining,
+  recordAdjournmentDecision,
+} from "@/libs/game/adjournment";
 
 export async function POST(req, { params }) {
   const { session, error: authError } = await getRequestSession(req);
@@ -61,6 +69,12 @@ export async function POST(req, { params }) {
         { status: 400 }
       );
     }
+
+    const openingResult = await ensurePlaintiffCourtOpening({
+      caseSession,
+      userId: session.user.id,
+    });
+    appendUsageEntriesToCaseSession(caseSession, openingResult.usageEntries);
 
     const round = caseSession.score.roundsCompleted + 1;
     const result = await runCourtroomRound({
@@ -127,10 +141,42 @@ export async function POST(req, { params }) {
 
     appendUsageEntriesToCaseSession(caseSession, result.usageEntries);
 
-    await caseSession.save();
-
     let awardEvaluation = null;
-    if (result.verdict) {
+    let automaticAdjournment = null;
+    if (
+      !result.verdict &&
+      getAdjournmentRemaining(caseSession.adjournment, caseSession.complexity) > 0
+    ) {
+      automaticAdjournment = await evaluateCourtAdjournment({
+        caseSession,
+        userId: session.user.id,
+        requested: false,
+      });
+      appendUsageEntriesToCaseSession(
+        caseSession,
+        automaticAdjournment.usageEntries
+      );
+
+      if (automaticAdjournment.granted) {
+        recordAdjournmentDecision({
+          source: caseSession,
+          trigger: "judge",
+          courtroomRound: round,
+          reason: automaticAdjournment.curableGap,
+          ruling: automaticAdjournment.ruling,
+          granted: true,
+        });
+        caseSession.status = "interview";
+        caseSession.factSheet.ready = false;
+        caseSession.caseAssessment.lockedCourtEntryChance = null;
+        caseSession.caseAssessment.lockedReasons = [];
+        caseSession.caseAssessment.lockedAt = null;
+        caseSession.maxCourtRounds += 1;
+      }
+    }
+
+    if (result.verdict && !automaticAdjournment?.granted) {
+      await caseSession.save();
       try {
         awardEvaluation = await evaluateCompletedCase({
           caseSession,
@@ -139,10 +185,19 @@ export async function POST(req, { params }) {
       } catch (awardError) {
         console.error("Post-verdict award evaluation failed", awardError);
       }
+    } else {
+      await caseSession.save();
     }
 
     return NextResponse.json({
       caseSession: buildCasePayload(caseSession),
+      adjournmentRuling: automaticAdjournment?.granted
+        ? {
+            granted: true,
+            ruling: automaticAdjournment.ruling,
+            curableGap: automaticAdjournment.curableGap,
+          }
+        : null,
       awardEvaluation: awardEvaluation
         ? { status: awardEvaluation.status, changes: awardEvaluation.immediateChanges || [] }
         : null,

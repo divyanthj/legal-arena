@@ -794,6 +794,7 @@ const recordSentNudge = async ({
     meta: {
       reason: candidate.reason,
       subject: emailContent.subject,
+      message: emailContent.text,
       ctaUrl: emailContent.ctaUrl,
       templateRecommendationId: recommendedTemplate?.id || null,
       ...candidate.meta,

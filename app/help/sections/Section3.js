@@ -31,6 +31,10 @@ export default function Section3({ id }) {
           <strong>{`Argue from the file you built:`}</strong>{" "}
           {`The transcript and scoring are stronger when you lean on corroborated facts, acknowledge risks honestly, and avoid over-claiming unsupported details.`}
         </li>
+        <li>
+          <strong>{`Use adjournment for a curable gap:`}</strong>{" "}
+          {`You may ask the judge to reopen intake when a specific missing fact, clarification, witness detail, or obtainable record could materially change the case. A denied request does not consume your argument turn. The judge may also adjourn after identifying the same kind of gap.`}
+        </li>
       </ol>
 
       <HelpScreenshot

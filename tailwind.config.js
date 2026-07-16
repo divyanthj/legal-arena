@@ -7,6 +7,10 @@ module.exports = {
   ],
   theme: {
     extend: {
+      // Fine-grained alpha steps used by layered arena surfaces and typography.
+      opacity: Object.fromEntries(
+        [2, 3, 4, 6, 8, 9, 12, 14, 15, 16, 18, 22, 24, 26, 28, 32, 34, 35, 36, 38, 42, 44, 45, 46, 48, 52, 54, 55, 56, 58, 62, 64, 65, 66, 68, 72, 74, 76, 78, 82, 84, 85, 86, 88, 92].map((value) => [String(value), String(value / 100)])
+      ),
       backgroundImage: {
         gradient:
           "linear-gradient(60deg, #f79533, #f37055, #ef4e7b, #a166ab, #5073b8, #1098ad, #07b39b, #6fba82)",

@@ -408,8 +408,8 @@ assert.match(
 );
 assert.match(
   settlementSource,
-  /acceptable settlement range[\s\S]*qualitative band of acceptable value/,
-  "Settlement client previews should express authority as a qualitative acceptable range, not a precise term set."
+  /acceptable settlement range[\s\S]*general authority questions, describe a qualitative acceptable band[\s\S]*expressly asks the client to choose exact figures/,
+  "Settlement client previews should use qualitative ranges generally while answering direct requests for concrete authority."
 );
 assert.match(
   soloSettlementPreviewRouteSource,
@@ -418,8 +418,8 @@ assert.match(
 );
 assert.match(
   pvpSettlementPreviewRouteSource,
-  /previewChallengeSettlementDraft[\s\S]*preview: result\.preview/,
-  "PVP settlement preview route should return an AI client preview."
+  /previewChallengeSettlementDraft[\s\S]*mode: body\?\.mode[\s\S]*NextResponse\.json\(result\)/,
+  "PVP settlement preview route should return the persisted private preview and refreshed challenge state."
 );
 assert.match(
   caseWorkspaceSource,
@@ -468,8 +468,8 @@ assert.match(
 );
 assert.match(
   caseWorkspaceSource,
-  /settlementClientGuidanceParts[\s\S]*settlementClientPreview\?\.authorityReason[\s\S]*settlementClientGuidedMessage[\s\S]*getSettlementComposerDefaultMessage[\s\S]*setSettlementMessageAndFocus\(getSettlementComposerDefaultMessage\)/,
-  "Opening the opposing-counsel composer should prefill it with the client's settlement range or conditions."
+  /buildPublicSettlementDraft\(\{[\s\S]*clientPreview: composerClientPreview[\s\S]*terms: editableSettlementTerms[\s\S]*getSettlementComposerDefaultMessage[\s\S]*setSettlementMessageAndFocus\(getSettlementComposerDefaultMessage\)/,
+  "Opening the opposing-counsel composer should translate the client's settlement range into a public-facing draft."
 );
 assert.match(
   caseWorkspaceSource,
@@ -518,8 +518,8 @@ assert.doesNotMatch(
 );
 assert.match(
   caseWorkspaceSource,
-  /Last exchanged proposal[\s\S]*latestOpponentOfferText[\s\S]*Breakdown[\s\S]*sidePanelTermRows\.map[\s\S]*opponent-\$\{term\.label\}[\s\S]*\{term\.value\}/,
-  "Opponent settlement panel should show the freeform proposal first and a player-facing breakdown below."
+  /Adjustments requested[\s\S]*latestOpponentAdjustmentPoints\.length[\s\S]*opponent-issue-\$\{index\}[\s\S]*Already aligned[\s\S]*latestOpponentAgreedTerms\.map/,
+  "Opponent settlement panel should foreground unresolved adjustments and collapse already-aligned terms."
 );
 assert.match(
   caseWorkspaceSource,
@@ -533,8 +533,8 @@ assert.match(
 );
 assert.match(
   caseWorkspaceSource,
-  /sidePanelTermRows\.length \? sidePanelTermRows\.map[\s\S]*No separate terms were stated\. Read the proposal text above as the source of truth/,
-  "Settlement breakdown should only show terms parsed from the message and otherwise defer to the proposal text."
+  /extractSettlementAdjustmentPoints[\s\S]*entry\?\.openIssues[\s\S]*unresolvedPattern[\s\S]*focused\.length \? focused : sentences\.slice\(-1\)/,
+  "Settlement panel should use explicit open issues with a concise fallback for older turns."
 );
 assert.match(
   caseWorkspaceSource,
@@ -548,13 +548,13 @@ assert.doesNotMatch(
 );
 assert.match(
   caseWorkspaceSource,
-  /settlementMessageInTransit[\s\S]*Counteroffer in motion[\s\S]*arena-settlement-dispatch[\s\S]*PaperAirplaneIcon[\s\S]*Opposing counsel is reviewing/,
+  /settlementMessageInTransit[\s\S]*Message in motion[\s\S]*arena-settlement-dispatch[\s\S]*PaperAirplaneIcon[\s\S]*Opposing counsel is reviewing/,
   "Settlement composer should replace the textarea with an animated dispatch state while awaiting the solo response."
 );
 assert.match(
   caseWorkspaceSource,
-  /latestPublicNegotiationEntry[\s\S]*opposingCounselWasLatest[\s\S]*composerClientPreview[\s\S]*latestOpponentProposalSummary[\s\S]*responseAwareSettlementMessage[\s\S]*getSettlementComposerDefaultMessage/,
-  "Autopopulated settlement replies should combine the latest opposing-counsel terms with the refreshed client stance."
+  /latestPublicNegotiationEntry[\s\S]*opposingCounselWasLatest[\s\S]*composerClientPreview[\s\S]*buildPublicSettlementDraft[\s\S]*responseAwareSettlementMessage[\s\S]*getSettlementComposerDefaultMessage/,
+  "Autopopulated settlement replies should turn refreshed private client guidance into a public-facing message."
 );
 assert.match(
   caseWorkspaceSource,
@@ -568,7 +568,7 @@ assert.match(
 );
 assert.match(
   soloSettlementPreviewRouteSource,
-  /applyPrivateClientHuddleMood[\s\S]*caseSession\.settlement = huddleResult\.settlement[\s\S]*moodUpdate: huddleResult\.moodUpdate[\s\S]*caseSession: buildCasePayload/,
+  /applyPrivateClientHuddleMood[\s\S]*caseSession\.settlement = \{[\s\S]*huddleResult\.settlement[\s\S]*clientPreview: result\.preview[\s\S]*moodUpdate: huddleResult\.moodUpdate[\s\S]*caseSession: buildCasePayload/,
   "Explicit solo private-huddle requests should persist and return the applied client mood change."
 );
 assert.match(
@@ -688,7 +688,7 @@ assert.match(
 );
 assert.match(
   caseWorkspaceSource,
-  /type="button"[\s\S]*submitSettlementMessage\(\{[\s\S]*messageOverride: settlementMessage\.trim\(\)[\s\S]*recordingSettlementMessage[\s\S]*transcribingSettlementMessage[\s\S]*!settlementMessage\.trim\(\)[\s\S]*Send Counteroffer/,
+  /type="button"[\s\S]*submitSettlementMessage\(\{[\s\S]*messageOverride: settlementMessage\.trim\(\)[\s\S]*recordingSettlementMessage[\s\S]*transcribingSettlementMessage[\s\S]*!settlementMessage\.trim\(\)[\s\S]*Send Message/,
   "Settlement message modal should own the actual send action and post only the visible textarea message."
 );
 assert.match(
@@ -853,8 +853,8 @@ assert.match(
 );
 assert.match(
   soloSettlementPreviewRouteSource,
-  /clientInstruction: body\?\.clientInstruction \|\| ""/,
-  "Solo settlement preview should pass private client instructions."
+  /clientInstruction:[\s\S]*body\?\.mode === "assisted_follow_up" \? "" : body\?\.clientInstruction \|\| ""/,
+  "Solo settlement preview should pass manual instructions while deriving assisted context server-side."
 );
 assert.match(
   soloSettlementMessageRouteSource,
@@ -1028,13 +1028,13 @@ assert.match(
 );
 assert.match(
   caseWorkspaceSource,
-  /clientWalkoutActive[\s\S]*isSettlement[\s\S]*settlementClientMood <= -100[\s\S]*settlement\.resolution === "failed"[\s\S]*setShowClientWalkoutModal\(true\)[\s\S]*setShowSettlementComposeModal\(false\)/,
-  "Own-client walkout should open a blocking modal only while still in settlement mode."
+  /settlementFailureActive[\s\S]*clientWalkoutActive[\s\S]*settlementClientMood <= -100[\s\S]*setShowClientWalkoutModal\(true\)[\s\S]*setShowSettlementComposeModal\(false\)/,
+  "Own-client walkout should open a blocking modal while the failed settlement returns to intake."
 );
 assert.match(
   caseWorkspaceSource,
-  /if \(isSettlement \|\| !showClientWalkoutModal\)[\s\S]*setShowClientWalkoutModal\(false\)[\s\S]*setClientWalkoutCountdown\(0\)/,
-  "Walkout modal should be cleared once the workspace is already back in intake."
+  /if \(clientWalkoutActive \|\| !showClientWalkoutModal\)[\s\S]*setShowClientWalkoutModal\(false\)[\s\S]*setClientWalkoutCountdown\(0\)/,
+  "Walkout modal should be cleared once the own-client walkout state is no longer active."
 );
 assert.match(
   caseWorkspaceSource,
@@ -1093,7 +1093,7 @@ assert.match(
 );
 assert.match(
   challengeWorkspaceSource,
-  /REQUIRED_CHALLENGE_PORTRAIT_PROMPT_VERSION = 6[\s\S]*needsFreshChallengePortrait[\s\S]*promptVersion/,
+  /REQUIRED_CHALLENGE_PORTRAIT_PROMPT_VERSION = 7[\s\S]*needsFreshChallengePortrait[\s\S]*promptVersion/,
   "PVP challenge workspace should regenerate stale party portraits when the portrait prompt version changes."
 );
 assert.match(
@@ -1108,7 +1108,7 @@ assert.match(
 );
 assert.match(
   pvpChallengePortraitRouteSource,
-  /PORTRAIT_PROMPT_VERSION = 6[\s\S]*buildGenderPresentationGuidance[\s\S]*genderGuidance/,
+  /PORTRAIT_PROMPT_VERSION = 7[\s\S]*buildGenderPresentationGuidance[\s\S]*genderGuidance/,
   "PVP challenge portrait prompts should include gender-presentation guidance and invalidate older mixed portraits."
 );
 assert.match(
@@ -1118,7 +1118,7 @@ assert.match(
 );
 assert.match(
   soloClientPortraitRouteSource,
-  /PORTRAIT_PROMPT_VERSION = 7[\s\S]*masculineGivenNameCues[\s\S]*"darren"/,
+  /PORTRAIT_PROMPT_VERSION = 8[\s\S]*masculineGivenNameCues[\s\S]*"darren"/,
   "Solo case portrait prompts should invalidate older portraits and treat Darren as conventionally masculine."
 );
 assert.match(

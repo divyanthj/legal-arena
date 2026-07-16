@@ -3,7 +3,12 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/libs/next-auth";
 import CaseWorkspace from "@/components/legal-arena/CaseWorkspace";
 import DevelopmentAccessGate from "@/components/legal-arena/DevelopmentAccessGate";
-import { getCaseSessionForUser } from "@/libs/game/store";
+import {
+  buildCasePayload,
+  getCaseSessionDocumentForUser,
+} from "@/libs/game/store";
+import { ensurePlaintiffCourtOpening } from "@/libs/game/courtroomOpening";
+import { appendUsageEntriesToCaseSession } from "@/libs/game/sessionUsage";
 import { getSoloGameplayAccessForSession } from "@/libs/admin";
 import { toClientJSON } from "@/libs/serialize";
 
@@ -21,14 +26,24 @@ export default async function CasePage({ params }) {
     return <DevelopmentAccessGate email={session.user?.email || ""} />;
   }
 
-  const caseSession = await getCaseSessionForUser({
+  const caseDocument = await getCaseSessionDocumentForUser({
     userId: session.user.id,
     caseId: params.caseId,
   });
 
-  if (!caseSession) {
+  if (!caseDocument) {
     notFound();
   }
+
+  const openingResult = await ensurePlaintiffCourtOpening({
+    caseSession: caseDocument,
+    userId: session.user.id,
+  });
+  if (openingResult.created) {
+    appendUsageEntriesToCaseSession(caseDocument, openingResult.usageEntries);
+    await caseDocument.save();
+  }
+  const caseSession = buildCasePayload(caseDocument);
 
   return (
     <CaseWorkspace

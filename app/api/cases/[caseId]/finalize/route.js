@@ -3,9 +3,9 @@ import { getRequestSession } from "@/libs/api-auth";
 import {
   assessCaseSuccessChance,
   finalizeFactSheetInput,
-  generatePlaintiffCourtOpeningStatement,
   lockAssessmentForCourt,
 } from "@/libs/game/engine";
+import { ensurePlaintiffCourtOpening } from "@/libs/game/courtroomOpening";
 import {
   buildCasePayload,
   getCaseSessionDocumentForUser,
@@ -15,6 +15,7 @@ import {
   createUsageCollector,
 } from "@/libs/game/sessionUsage";
 import { getSoloGameplayAccessForSession } from "@/libs/admin";
+import { resolveActiveAdjournment } from "@/libs/game/adjournment";
 
 export async function POST(req, { params }) {
   const { session, error: authError } = await getRequestSession(req);
@@ -89,32 +90,13 @@ export async function POST(req, { params }) {
       caseSession.caseAssessment = lockedAssessment;
     }
     caseSession.status = "courtroom";
+    resolveActiveAdjournment(caseSession);
 
-    if (
-      caseSession.playerSide === "opponent" &&
-      !caseSession.courtroomTranscript?.length
-    ) {
-      const openingStatement = await generatePlaintiffCourtOpeningStatement({
-        caseSession,
-        userId: session.user.id,
-        onUsage: usageCollector.record,
-      });
-      caseSession.courtroomTranscript.push({
-        round: 1,
-        speaker: "opponent",
-        text: openingStatement,
-        citedFacts: [],
-        citedClaimIds: [],
-        citedRules: [],
-        judgeNotes: {
-          playerDelta: 0,
-          opponentDelta: 0,
-          strengths: [],
-          weaknesses: [],
-          benchSignal: "",
-        },
-      });
-    }
+    const openingResult = await ensurePlaintiffCourtOpening({
+      caseSession,
+      userId: session.user.id,
+    });
+    openingResult.usageEntries.forEach(usageCollector.record);
 
     appendUsageEntriesToCaseSession(caseSession, usageCollector.entries);
 

@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { toast } from "react-hot-toast";
 import apiClient from "@/libs/api";
 
 export const useCaseVoiceRecorder = ({
   setQuestion,
   setArgument,
   setSettlementClientInstruction,
+  setSettlementMessage,
 }) => {
   const [recordingQuestion, setRecordingQuestion] = useState(false);
   const [transcribingQuestion, setTranscribingQuestion] = useState(false);
@@ -17,6 +19,9 @@ export const useCaseVoiceRecorder = ({
   const [recordingSettlementClientInstruction, setRecordingSettlementClientInstruction] = useState(false);
   const [transcribingSettlementClientInstruction, setTranscribingSettlementClientInstruction] = useState(false);
   const [settlementClientInstructionAudioLevel, setSettlementClientInstructionAudioLevel] = useState(0);
+  const [recordingSettlementMessage, setRecordingSettlementMessage] = useState(false);
+  const [transcribingSettlementMessage, setTranscribingSettlementMessage] = useState(false);
+  const [settlementMessageAudioLevel, setSettlementMessageAudioLevel] = useState(0);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const streamRef = useRef(null);
@@ -118,6 +123,7 @@ export const useCaseVoiceRecorder = ({
 
     if (!navigator?.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
       console.error("Voice input is not supported in this browser.");
+      toast.error("Voice recording is not supported in this browser. You can still type your message.");
       return;
     }
 
@@ -175,6 +181,11 @@ export const useCaseVoiceRecorder = ({
       setRecording(true);
     } catch (error) {
       console.error(error);
+      if (error?.name === "NotAllowedError" || error?.name === "SecurityError") {
+        toast.error("Microphone access is blocked. Allow microphone access and try again.");
+      } else {
+        toast.error("The microphone could not start. You can still type your message.");
+      }
       streamRef.current?.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
       mediaRecorderRef.current = null;
@@ -211,6 +222,15 @@ export const useCaseVoiceRecorder = ({
       setAudioLevel: setSettlementClientInstructionAudioLevel,
     });
 
+  const handleSettlementMessageVoiceInput = () =>
+    handleVoiceInput({
+      recording: recordingSettlementMessage,
+      setRecording: setRecordingSettlementMessage,
+      setTranscribing: setTranscribingSettlementMessage,
+      setText: setSettlementMessage,
+      setAudioLevel: setSettlementMessageAudioLevel,
+    });
+
   return {
     recordingQuestion,
     transcribingQuestion,
@@ -221,8 +241,12 @@ export const useCaseVoiceRecorder = ({
     recordingSettlementClientInstruction,
     transcribingSettlementClientInstruction,
     settlementClientInstructionAudioLevel,
+    recordingSettlementMessage,
+    transcribingSettlementMessage,
+    settlementMessageAudioLevel,
     handleQuestionVoiceInput,
     handleArgumentVoiceInput,
     handleSettlementClientInstructionVoiceInput,
+    handleSettlementMessageVoiceInput,
   };
 };

@@ -149,6 +149,8 @@ export const NavigationLoadingProvider = ({ children }) => {
   const showDelayRef = useRef(null);
   const routeKeyRef = useRef("");
   const loadingVisibleRef = useRef(false);
+  const minimumVisibleUntilRef = useRef(0);
+  const minimumStopRef = useRef(null);
 
   const clearFailsafe = useCallback(() => {
     if (timeoutRef.current) {
@@ -164,16 +166,37 @@ export const NavigationLoadingProvider = ({ children }) => {
     }
   }, []);
 
+  const clearMinimumStop = useCallback(() => {
+    if (minimumStopRef.current) {
+      window.clearTimeout(minimumStopRef.current);
+      minimumStopRef.current = null;
+    }
+  }, []);
+
   const stopNavigationLoading = useCallback(() => {
+    const remainingMinimumMs = loadingVisibleRef.current
+      ? Math.max(0, minimumVisibleUntilRef.current - Date.now())
+      : 0;
+    if (remainingMinimumMs > 0) {
+      clearMinimumStop();
+      minimumStopRef.current = window.setTimeout(
+        stopNavigationLoading,
+        remainingMinimumMs
+      );
+      return;
+    }
+
     clearShowDelay();
     clearFailsafe();
+    clearMinimumStop();
     loadingVisibleRef.current = false;
+    minimumVisibleUntilRef.current = 0;
     setLoadingState((current) =>
       current.isLoading
         ? { isLoading: false, label: DEFAULT_LOADING_LABEL }
         : current
     );
-  }, [clearFailsafe, clearShowDelay]);
+  }, [clearFailsafe, clearMinimumStop, clearShowDelay]);
 
   const startNavigationLoading = useCallback(
     (label = DEFAULT_LOADING_LABEL, options = {}) => {
@@ -189,16 +212,26 @@ export const NavigationLoadingProvider = ({ children }) => {
             : options.delayMs
         )
       );
+      const minimumVisibleMs = Math.max(
+        0,
+        Number(options?.minimumVisibleMs || 0)
+      );
       clearFailsafe();
       clearShowDelay();
+      clearMinimumStop();
 
       if (loadingVisibleRef.current || delayMs === 0) {
         loadingVisibleRef.current = true;
+        minimumVisibleUntilRef.current = Math.max(
+          minimumVisibleUntilRef.current,
+          Date.now() + minimumVisibleMs
+        );
         setLoadingState({ isLoading: true, label });
       } else {
         showDelayRef.current = window.setTimeout(() => {
           showDelayRef.current = null;
           loadingVisibleRef.current = true;
+          minimumVisibleUntilRef.current = Date.now() + minimumVisibleMs;
           setLoadingState({ isLoading: true, label });
         }, delayMs);
       }
@@ -208,7 +241,7 @@ export const NavigationLoadingProvider = ({ children }) => {
         failsafeMs
       );
     },
-    [clearFailsafe, clearShowDelay, stopNavigationLoading]
+    [clearFailsafe, clearMinimumStop, clearShowDelay, stopNavigationLoading]
   );
 
   const handleRouteSettled = useCallback(
@@ -256,8 +289,9 @@ export const NavigationLoadingProvider = ({ children }) => {
       window.removeEventListener("popstate", handlePopState);
       clearShowDelay();
       clearFailsafe();
+      clearMinimumStop();
     };
-  }, [clearFailsafe, clearShowDelay, startNavigationLoading]);
+  }, [clearFailsafe, clearMinimumStop, clearShowDelay, startNavigationLoading]);
 
   useEffect(() => {
     if (!loadingState.isLoading) {

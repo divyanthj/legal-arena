@@ -11,6 +11,7 @@ import {
 import { getSEOTags } from "@/libs/seo";
 import config from "@/config";
 import LandingCategoryCarousel from "@/components/legal-arena/LandingCategoryCarousel";
+import LandingAnalytics from "@/components/legal-arena/LandingAnalytics";
 import WhatsNewDialog from "@/components/legal-arena/WhatsNewDialog";
 
 export const dynamic = "force-dynamic";
@@ -372,6 +373,7 @@ export default async function Page() {
 
   return (
     <main className="arena-landing arena-app-shell min-h-screen overflow-hidden text-white">
+      <LandingAnalytics />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(homepageSchema) }}
@@ -394,7 +396,15 @@ export default async function Page() {
 
           <nav className="hidden items-center gap-8 text-sm text-white/72 lg:flex">
             {navItems.map((item) => (
-              <a key={item.href} href={item.href} className="transition hover:text-white">
+              <a
+                key={item.href}
+                href={item.href}
+                className="transition hover:text-white"
+                data-landing-event="landing_navigation_clicked"
+                data-landing-source="header"
+                data-landing-destination={item.href.slice(1)}
+                data-landing-label={item.label}
+              >
                 {item.label}
               </a>
             ))}
@@ -404,12 +414,18 @@ export default async function Page() {
             <Link
               href="/api/auth/signin"
               className="hidden text-sm text-white/72 transition hover:text-white md:inline-flex"
+              data-landing-event="landing_auth_clicked"
+              data-landing-source="header"
+              data-landing-destination="signin"
             >
               Log in
             </Link>
             <Link
               href="/dashboard"
               className="arena-btn-light inline-flex px-5 py-3 text-sm"
+              data-landing-event="landing_cta_clicked"
+              data-landing-source="header"
+              data-landing-destination="dashboard"
             >
               {campaignCtaLabel}
             </Link>
@@ -435,6 +451,9 @@ export default async function Page() {
               <Link
                 href={freeGameplayAnnouncement.ctaHref || "/dashboard"}
                 className="arena-btn-light inline-flex shrink-0 justify-center px-5 py-3 text-sm"
+                data-landing-event="landing_cta_clicked"
+                data-landing-source="campaign_banner"
+                data-landing-destination="dashboard"
               >
                 {freeGameplayAnnouncement.ctaLabel || "Try a Case"}
               </Link>
@@ -472,19 +491,25 @@ export default async function Page() {
                 <Link
                   href="/dashboard"
                   className="arena-btn-light px-6 py-4 text-sm"
+                  data-landing-event="landing_cta_clicked"
+                  data-landing-source="hero"
+                  data-landing-destination="dashboard"
                 >
                   {freeGameplayCampaignActive ? campaignCtaLabel : "Try a Case"}
                 </Link>
                 <a
                   href="#how-it-works"
                   className="arena-btn-dark px-6 py-4 text-sm"
+                  data-landing-event="landing_navigation_clicked"
+                  data-landing-source="hero"
+                  data-landing-destination="how_it_works"
                 >
                   How the Game Works
                 </a>
               </div>
 
               <div className="mt-10 grid gap-6 border-t border-white/10 pt-8 sm:grid-cols-2 xl:grid-cols-6">
-                {featureHighlights.map((item, index) => {
+                {featureHighlights.map((item) => {
                   return (
                     <div
                       key={item.title}
@@ -506,7 +531,7 @@ export default async function Page() {
         </div>
       </section>
 
-      <section id="how-it-works" className="border-y border-white/10 bg-black/45">
+      <section id="how-it-works" data-landing-section="how_it_works" className="border-y border-white/10 bg-black/45">
         <div className="mx-auto max-w-7xl px-5 py-16 md:px-8 md:py-20">
           <p className="text-center text-sm font-semibold uppercase tracking-[0.34em] text-white/45">
             How It Works
@@ -537,7 +562,7 @@ export default async function Page() {
         </div>
       </section>
 
-      <section id="features" className="mx-auto max-w-7xl px-5 py-16 md:px-8 md:py-20">
+      <section id="features" data-landing-section="features" className="mx-auto max-w-7xl px-5 py-16 md:px-8 md:py-20">
         <div className="grid gap-10 xl:grid-cols-[minmax(0,0.86fr)_minmax(0,1.14fr)] xl:items-start">
           <div className="xl:pr-6">
             <p className="text-sm font-semibold uppercase tracking-[0.3em] text-white/45">
@@ -562,6 +587,9 @@ export default async function Page() {
             <Link
               href="/dashboard"
               className="arena-btn-dark mt-10 inline-flex px-5 py-4 text-sm"
+              data-landing-event="landing_cta_clicked"
+              data-landing-source="features"
+              data-landing-destination="dashboard"
             >
               Start Playing
             </Link>
@@ -583,7 +611,7 @@ export default async function Page() {
         </div>
       </section>
 
-      <section id="case-library" className="border-y border-white/10 bg-black/45">
+      <section id="case-library" data-landing-section="case_library" className="border-y border-white/10 bg-black/45">
         <div className="mx-auto max-w-7xl px-5 py-16 md:px-8 md:py-20">
           <p className="text-center text-sm font-semibold uppercase tracking-[0.28em] text-white/45">
             Cases You Can Play
@@ -624,7 +652,7 @@ export default async function Page() {
             What You Actually Do
         </p>
           <div className="mt-12 grid gap-5 md:grid-cols-2 xl:grid-cols-5">
-          {practiceCards.map((item, index) => {
+          {practiceCards.map((item) => {
             return (
             <div key={item.title} className="arena-surface-soft p-6">
               <div className="flex items-center gap-4">
@@ -663,7 +691,7 @@ export default async function Page() {
         </div>
       </section>
 
-      <section className="arena-column-bg border-t border-white/10">
+      <section data-landing-section="final_cta" className="arena-column-bg border-t border-white/10">
         <div className="mx-auto max-w-7xl px-5 py-16 text-center md:px-8 md:py-20">
           <p className="text-sm font-semibold uppercase tracking-[0.28em] text-white/45">
             Ready to step into the arena?
@@ -677,6 +705,9 @@ export default async function Page() {
           <Link
             href="/dashboard"
             className="arena-btn-light mt-8 inline-flex px-6 py-4 text-sm"
+            data-landing-event="landing_cta_clicked"
+            data-landing-source="final_cta"
+            data-landing-destination="dashboard"
           >
             Start Your First Case
           </Link>

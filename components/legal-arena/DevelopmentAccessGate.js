@@ -281,7 +281,7 @@ export function DevelopmentAccessModal({ email = "", onClose }) {
   };
 
   return (
-    <dialog className={`modal ${isVisible ? "modal-open" : ""}`}>
+    <dialog className={`arena-modal modal ${isVisible ? "modal-open" : ""}`}>
       <DevelopmentAccessPanel email={email} variant="modal" onClose={closeWithTransition} />
       <form method="dialog" className="modal-backdrop bg-black/60 backdrop-blur-[2px]">
         <button type="button" onClick={handleBackdropClose}>

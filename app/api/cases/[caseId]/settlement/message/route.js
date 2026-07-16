@@ -5,7 +5,10 @@ import {
   buildCasePayload,
   getCaseSessionDocumentForUser,
 } from "@/libs/game/store";
-import { runSettlementExchange } from "@/libs/game/settlement";
+import {
+  acceptLatestSoloSettlementOffer,
+  runSettlementExchange,
+} from "@/libs/game/settlement";
 import { appendUsageEntriesToCaseSession } from "@/libs/game/sessionUsage";
 import { evaluateCompletedCase } from "@/libs/game/awards/service";
 
@@ -63,12 +66,18 @@ export async function POST(req, { params }) {
       );
     }
 
-    const result = await runSettlementExchange({
-      caseSession,
-      message,
-      userId: session.user.id,
-      terms: body?.terms || {},
-    });
+    const result = body?.acceptTerms === true
+      ? acceptLatestSoloSettlementOffer({
+          caseSession,
+          message,
+          userId: session.user.id,
+        })
+      : await runSettlementExchange({
+          caseSession,
+          message,
+          userId: session.user.id,
+          terms: body?.terms || {},
+        });
 
     caseSession.settlement = result.settlement;
     caseSession.markModified?.("settlement");
@@ -77,6 +86,8 @@ export async function POST(req, { params }) {
     if (result.settled) {
       caseSession.status = "settled";
       caseSession.completedAt = caseSession.completedAt || new Date();
+    } else if (result.failed) {
+      caseSession.status = "interview";
     }
 
     await caseSession.save();
@@ -97,6 +108,9 @@ export async function POST(req, { params }) {
     });
   } catch (error) {
     console.error(error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { error: error.message },
+      { status: Number(error?.status) || 500 }
+    );
   }
 }

@@ -58,9 +58,11 @@ export async function POST(req, { params }) {
 
     const result = await previewSettlementDraftForClient({
       caseSession,
-      offerTerms: body?.terms || {},
-      message: body?.message || "",
-      clientInstruction: body?.clientInstruction || "",
+      offerTerms: body?.mode === "assisted_follow_up" ? {} : body?.terms || {},
+      message: body?.mode === "assisted_follow_up" ? "" : body?.message || "",
+      clientInstruction:
+        body?.mode === "assisted_follow_up" ? "" : body?.clientInstruction || "",
+      mode: body?.mode || "manual",
       userId: session.user.id,
     });
     const huddleResult = applyPrivateClientHuddleMood({
@@ -68,7 +70,11 @@ export async function POST(req, { params }) {
       preview: result.preview,
     });
 
-    caseSession.settlement = huddleResult.settlement;
+    caseSession.settlement = {
+      ...huddleResult.settlement,
+      clientPreview: result.preview,
+      clientPreviewUpdatedAt: new Date(),
+    };
     caseSession.markModified?.("settlement");
 
     appendUsageEntriesToCaseSession(caseSession, result.usageEntries);

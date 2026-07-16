@@ -9,7 +9,12 @@ import ButtonAccount from "@/components/ButtonAccount";
 import { useNavigationLoading } from "@/components/NavigationLoadingProvider";
 import apiClient from "@/libs/api";
 import { trackGoal } from "@/libs/datafast";
+import {
+  buildCaseAssemblyBrief,
+  buildCaseAssemblyPreview,
+} from "@/libs/caseAssemblyCore.mjs";
 import { DevelopmentAccessModal } from "@/components/legal-arena/DevelopmentAccessGate";
+import CaseAssemblyOverlay from "@/components/legal-arena/CaseAssemblyOverlay";
 import CountryFlagPicker, {
   CountryBadge,
   useCaseCountrySelection,
@@ -139,6 +144,11 @@ const getPvpTurnSummary = (challenge = {}) => {
   }
 
   if (displayStatus === "active") {
+    if (challenge.adjournment?.active) {
+      return challenge.viewer?.status === "ready"
+        ? "Adjourned: waiting for both lawyers"
+        : "Adjourned: rebuild your file";
+    }
     return challenge.viewer?.status === "ready"
       ? "Waiting for opponent"
       : "Your turn: finish intake";
@@ -216,6 +226,9 @@ const getPvpUrgencyLabel = (challenge = {}) => {
   }
 
   if (displayStatus === "active") {
+    if (challenge.adjournment?.active) {
+      return challenge.viewer?.status === "ready" ? "Waiting" : "Rebuild file";
+    }
     return challenge.viewer?.status === "ready" ? "Waiting" : "Finish intake";
   }
 
@@ -241,7 +254,7 @@ const getPvpActionLabel = (challenge = {}) => {
   }
 
   if (displayStatus === "active") {
-    return "Resume";
+    return challenge.adjournment?.active ? "Resume Intake" : "Resume";
   }
 
   if (displayStatus === "courtroom") {
@@ -271,6 +284,7 @@ const getPvpStatusTone = (challenge = {}) => {
 
   if (
     isIncomingPendingChallenge(challenge) ||
+    challenge.adjournment?.active ||
     displayStatus === "courtroom" ||
     displayStatus === "settlement"
   ) {
@@ -456,7 +470,9 @@ const PvpDocketSection = ({
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className={`badge border arena-status ${getPvpStatusTone(challenge)}`}>
-                          {challengeStatusLabel[visibleStatus] || visibleStatus}
+                          {challenge.adjournment?.active
+                            ? "Adjourned — intake reopened"
+                            : challengeStatusLabel[visibleStatus] || visibleStatus}
                         </span>
                         {needsPlayerAction ? (
                           <span className="rounded-full border border-amber-100/40 bg-amber-200 px-2.5 py-1 text-[0.68rem] font-black uppercase tracking-[0.08em] text-black">
@@ -826,6 +842,14 @@ const getCaseProgress = (caseSession = null) => {
 
   const displayStatus = getSoloDisplayStatus(caseSession);
 
+  if (caseSession.adjournment?.active) {
+    return {
+      label: "Adjourned — intake reopened",
+      percent: 62,
+      nextStep: "Investigate the gap and re-finalize",
+    };
+  }
+
   if (displayStatus === "courtroom") {
     return { label: "Courtroom", percent: 75, nextStep: "Argue in court" };
   }
@@ -842,6 +866,11 @@ const getCaseProgress = (caseSession = null) => {
 
   return { label: "Client interview", percent: 42, nextStep: "Build your fact sheet" };
 };
+
+const getSoloStatusLabel = (caseSession = {}) =>
+  caseSession.adjournment?.active
+    ? "Adjourned — intake reopened"
+    : statusLabel[getSoloDisplayStatus(caseSession)] || getCaseProgress(caseSession).label;
 
 const getComparableId = (value) => {
   if (!value) {
@@ -1264,6 +1293,7 @@ export default function DashboardHub({
   const [showPlayableOnly, setShowPlayableOnly] = useState(true);
   const [showPaywallModal, setShowPaywallModal] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [caseAssembly, setCaseAssembly] = useState(null);
   const [caseLibrarySearch, setCaseLibrarySearch] = useState("");
   const [selectedDifficulty, setSelectedDifficulty] = useState(1);
   const [caseArchiveTab, setCaseArchiveTab] = useState("ongoing");
@@ -1522,11 +1552,51 @@ export default function DashboardHub({
       country: dynamicStart ? selectedCountryCode : "",
       country_source: dynamicStart ? countrySelectionSource : "",
     });
+    const startedAt = Date.now();
+    const creationRequest = {
+      caseTemplateId: caseTemplateId || "",
+      options: {
+        dynamic: dynamicStart,
+        categorySlug: dynamicCategory,
+        complexity: dynamicComplexity,
+      },
+    };
+    const brief = buildCaseAssemblyBrief({
+      mode: dynamicStart ? "dynamic" : "template",
+      categorySlug: dynamicStart
+        ? dynamicCategory
+        : selectedTemplateForAnalytics?.primaryCategory || dynamicCategory,
+      categoryTitle:
+        categories.find(
+          (category) =>
+            category.slug ===
+            (dynamicStart
+              ? dynamicCategory
+              : selectedTemplateForAnalytics?.primaryCategory || dynamicCategory)
+        )?.title || selectedCategoryTitle,
+      difficultyLabel: dynamicStart
+        ? `${getDynamicDifficultyMeta(dynamicComplexity).label} - ${getDynamicDifficultyMeta(dynamicComplexity).name}`
+        : `${getDifficultyMeta(selectedTemplateForAnalytics?.complexity || dynamicComplexity).label} - Level ${selectedTemplateForAnalytics?.complexity || dynamicComplexity}`,
+      countryName: dynamicStart
+        ? selectedCountry?.name || selectedCountryCode
+        : "Jurisdiction set by selected matter",
+      templateTitle: selectedTemplateForAnalytics?.title || "",
+    });
     setCreating(true);
-    startNavigationLoading(
-      dynamicStart ? "Starting your case" : "Preparing your client intake",
-      { failsafeMs: 60000 }
-    );
+    stopNavigationLoading();
+    setCaseAssembly({
+      status: "generating",
+      startedAt,
+      brief,
+      request: creationRequest,
+      casePreview: null,
+      portraits: {
+        client: { status: "queued", image: "" },
+        opponent: { status: "queued", image: "" },
+      },
+      error: "",
+      timings: {},
+    });
 
     try {
       const { caseSession } = await apiClient.post(
@@ -1554,19 +1624,87 @@ export default function DashboardHub({
         generation_mode: dynamicStart ? "dynamic" : "template",
         country: caseSession.caseCountry?.code || (dynamicStart ? selectedCountryCode : ""),
       });
-      startNavigationLoading("Creating courtroom portraits", { failsafeMs: 60000 });
+      const generationCompletedAt = Date.now();
       const caseRef = caseSession.slug || caseSession.id;
       const caseHref = `/dashboard/cases/${caseRef}`;
       router.prefetch(caseHref);
-      const portraitResults = await Promise.allSettled([
-        apiClient.post(`/cases/${caseRef}/client-portrait`),
-        apiClient.post(`/cases/${caseRef}/client-portrait?target=opponent`),
-      ]);
-      portraitResults
-        .filter((result) => result.status === "rejected")
-        .forEach((result) => console.error(result.reason));
+      const casePreview = buildCaseAssemblyPreview(
+        caseSession,
+        selectedTemplateForAnalytics?.title || "New matter"
+      );
+      setCaseAssembly((current) => ({
+        ...current,
+        status: "portraits",
+        brief: {
+          ...current?.brief,
+          countryName: caseSession.caseCountry?.name || current?.brief?.countryName,
+        },
+        casePreview,
+        portraits: {
+          client: { status: "generating", image: "" },
+          opponent: { status: "generating", image: "" },
+        },
+        timings: {
+          ...current?.timings,
+          generationMs: generationCompletedAt - startedAt,
+        },
+      }));
 
-      startNavigationLoading("Opening the matter", { failsafeMs: 60000 });
+      const generatePortrait = async (target) => {
+        try {
+          const suffix = target === "opponent" ? "?target=opponent" : "";
+          const response = await apiClient.post(
+            `/cases/${caseRef}/client-portrait${suffix}`,
+            undefined,
+            { suppressToast: true }
+          );
+          setCaseAssembly((current) => ({
+            ...current,
+            portraits: {
+              ...current?.portraits,
+              [target]: { status: "complete", image: response.image || "" },
+            },
+          }));
+          return { target, ok: true };
+        } catch (portraitError) {
+          console.error(portraitError);
+          setCaseAssembly((current) => ({
+            ...current,
+            portraits: {
+              ...current?.portraits,
+              [target]: { status: "failed", image: "" },
+            },
+          }));
+          return { target, ok: false };
+        }
+      };
+
+      const portraitStartedAt = Date.now();
+      const portraitResults = await Promise.all([
+        generatePortrait("client"),
+        generatePortrait("opponent"),
+      ]);
+      const completedAt = Date.now();
+      const portraitFailures = portraitResults.filter((result) => !result.ok).length;
+      setCaseAssembly((current) => ({
+        ...current,
+        status: "opening",
+        timings: {
+          ...current?.timings,
+          portraitsMs: completedAt - portraitStartedAt,
+          totalMs: completedAt - startedAt,
+        },
+      }));
+      trackGoal("case_creation_wait_completed", {
+        generation_mode: dynamicStart ? "dynamic" : "template",
+        category: caseSession.primaryCategory || dynamicCategory,
+        complexity: caseSession.complexity || dynamicComplexity,
+        country: caseSession.caseCountry?.code || (dynamicStart ? selectedCountryCode : ""),
+        generation_ms: generationCompletedAt - startedAt,
+        portraits_ms: completedAt - portraitStartedAt,
+        total_ms: completedAt - startedAt,
+        portrait_failures: portraitFailures,
+      });
       router.push(caseHref);
     } catch (error) {
       stopNavigationLoading();
@@ -1576,11 +1714,27 @@ export default function DashboardHub({
         complexity: dynamicStart ? dynamicComplexity : selectedTemplateForAnalytics?.complexity,
         generation_mode: dynamicStart ? "dynamic" : "template",
         country: dynamicStart ? selectedCountryCode : "",
+        duration_ms: Date.now() - startedAt,
       });
       console.error(error);
+      setCaseAssembly((current) => ({
+        ...current,
+        status: "error",
+        error: error.message || "Legal Arena could not finish this case. Please try again.",
+        timings: {
+          ...current?.timings,
+          totalMs: Date.now() - startedAt,
+        },
+      }));
     } finally {
       setCreating(false);
     }
+  };
+
+  const retryCaseAssembly = () => {
+    if (creating || !caseAssembly?.request) return;
+    const request = caseAssembly.request;
+    handleCreateCase(request.caseTemplateId || null, request.options || {});
   };
 
   const visibleTemplates = filteredTemplates;
@@ -3395,7 +3549,7 @@ export default function DashboardHub({
                                   severityClass[featuredSeverity]
                                 }`}
                               >
-                                {statusLabel[featuredStatus] || featuredProgress.label}
+                                {getSoloStatusLabel(featuredCase)}
                               </span>
                               <span className="flex h-10 w-10 items-center justify-center rounded-full border border-emerald-300/30 bg-emerald-300/10 text-xs font-semibold text-emerald-200">
                                 {featuredProgress.percent}%
@@ -3467,7 +3621,9 @@ export default function DashboardHub({
                                     <span
                                       className={`rounded-full border px-2 py-0.5 text-[0.6rem] font-semibold uppercase tracking-[0.06em] arena-status ${severityClass[caseSeverity]}`}
                                     >
-                                      {statusLabel[itemStatus] || caseProgress.label}
+                                      {item.adjournment?.active
+                                        ? "Adjourned — intake reopened"
+                                        : statusLabel[itemStatus] || caseProgress.label}
                                     </span>
                                     <span className="mt-1.5 line-clamp-1 block text-sm font-semibold text-white">
                                       {item.title}
@@ -3566,7 +3722,7 @@ export default function DashboardHub({
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
                                 <span className={`badge border arena-status ${severityClass[caseSeverity]}`}>
-                                  {statusLabel[itemStatus] || caseProgress.label}
+                                  {getSoloStatusLabel(item)}
                                 </span>
                                 <h3 className="mt-3 break-words text-base font-semibold text-white">
                                   {item.title}
@@ -3754,6 +3910,13 @@ export default function DashboardHub({
           <DevelopmentAccessModal
             email={userEmail}
             onClose={() => setShowPaywallModal(false)}
+          />
+        ) : null}
+        {caseAssembly ? (
+          <CaseAssemblyOverlay
+            assembly={caseAssembly}
+            onRetry={retryCaseAssembly}
+            onReturn={() => setCaseAssembly(null)}
           />
         ) : null}
       </main>
@@ -4194,7 +4357,6 @@ export default function DashboardHub({
                   ) : (
                     initialCases.map((item) => {
                       const itemStatus = getSoloDisplayStatus(item);
-                      const caseProgress = getCaseProgress(item);
                       const caseSeverity = statusSeverity[itemStatus] || "neutral";
 
                       return (
@@ -4213,7 +4375,7 @@ export default function DashboardHub({
                                     severityClass[caseSeverity]
                                   }`}
                                 >
-                                  {statusLabel[itemStatus] || caseProgress.label}
+                                  {getSoloStatusLabel(item)}
                                 </span>
                               </div>
                               <div className="mt-2 flex flex-wrap gap-3 text-sm text-white/52">
@@ -4457,6 +4619,13 @@ export default function DashboardHub({
         <DevelopmentAccessModal
           email={userEmail}
           onClose={() => setShowPaywallModal(false)}
+        />
+      ) : null}
+      {caseAssembly ? (
+        <CaseAssemblyOverlay
+          assembly={caseAssembly}
+          onRetry={retryCaseAssembly}
+          onReturn={() => setCaseAssembly(null)}
         />
       ) : null}
       <Tooltip

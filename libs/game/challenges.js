@@ -15,10 +15,18 @@ import {
   continueInterview,
   ensureClientMemory,
   finalizeFactSheetInput,
+  evaluateCourtAdjournment,
   lockAssessmentForCourt,
   runCourtroomRound,
   runPvpCourtroomTimeoutVerdict,
 } from "./engine";
+import {
+  getAdjournmentRemaining,
+  getAdjournmentRound,
+  hasAdjournmentRequestForRound,
+  recordAdjournmentDecision,
+  resolveActiveAdjournment,
+} from "./adjournment";
 import {
   buildDesiredReliefForSide,
   buildOverviewForSide,
@@ -61,9 +69,12 @@ import {
 } from "./memoryClaims";
 import {
   clampMood,
+  applyPrivateClientHuddleMood,
   generateOpeningSettlementMessage,
+  getSettlementOfferSignature,
   getSettlementCooldownState,
   normalizeSettlement,
+  MAX_SETTLEMENT_PUBLIC_EXCHANGES,
   previewSettlementDraftForClient,
   extractSettlementTermsFromMessage,
 } from "./settlement";
@@ -363,6 +374,16 @@ const advanceChallengeToCourtIfPlaintiffReady = (challenge) => {
     return false;
   }
 
+  if (
+    challenge.adjournment?.active &&
+    !(challenge.participants || []).every(
+      (participant) =>
+        participant.status === "ready" || Boolean(participant.factSheet?.ready)
+    )
+  ) {
+    return false;
+  }
+
   const plaintiffParticipant = (challenge.participants || []).find(
     (participant) => participant.side === "client"
   );
@@ -374,6 +395,7 @@ const advanceChallengeToCourtIfPlaintiffReady = (challenge) => {
     return false;
   }
 
+  if (challenge.adjournment?.active) resolveActiveAdjournment(challenge);
   challenge.status = "courtroom";
   const now = new Date();
   challenge.courtroomLastActivityAt = now;
@@ -758,6 +780,28 @@ const resetChallengeCourtroomTimer = (challenge, now = new Date()) => {
   return true;
 };
 
+const pauseChallengeForAdjournment = (challenge) => {
+  challenge.status = "active";
+  challenge.courtroomLastActivityAt = null;
+  challenge.courtroomDeadlineAt = null;
+  challenge.courtroomTimeoutStartedAt = null;
+  challenge.courtroomTimedOutAt = null;
+  challenge.courtroomTimeoutFinalizingAt = null;
+  challenge.maxCourtRounds += 1;
+
+  (challenge.participants || []).forEach((participant) => {
+    participant.status = "active";
+    participant.readyAt = null;
+    if (participant.factSheet) participant.factSheet.ready = false;
+    if (participant.caseAssessment) {
+      participant.caseAssessment.lockedCourtEntryChance = null;
+      participant.caseAssessment.lockedReasons = [];
+      participant.caseAssessment.lockedAt = null;
+    }
+  });
+  markParticipantsModified(challenge);
+};
+
 const ensureChallengeCourtroomTimer = (challenge) => {
   if (!challenge || challenge.status !== "courtroom") {
     return false;
@@ -977,7 +1021,13 @@ const buildParticipantCaseSession = ({ challenge, participant, otherParticipant 
     opponentPortrait: otherParticipant
       ? getStableChallengePortrait({ challenge, participant: otherParticipant })
       : {},
-    settlement: challenge.settlement || {},
+    settlement: {
+      ...(challenge.settlement || {}),
+      clientPreview: participant.settlementAssistant?.preview || null,
+      clientPreviewUpdatedAt: participant.settlementAssistant?.updatedAt || null,
+      clientHuddle: participant.settlementAssistant?.clientHuddle || null,
+    },
+    adjournment: challenge.adjournment || {},
     courtroomTranscript: judgedRounds.flatMap((round) =>
       (round.submissions || []).map((submission) => ({
         round: round.round,
@@ -1631,9 +1681,11 @@ export const markChallengeReady = async ({ userId, challengeId, factSheet }) => 
   participant.readyAt = new Date();
   markParticipantsModified(challenge);
 
+  const resumingAdjournment = Boolean(challenge.adjournment?.active);
   const allReady = challenge.participants.every((item) => item.status === "ready");
-  const plaintiffReady = participant.side === "client";
+  const plaintiffReady = participant.side === "client" && !resumingAdjournment;
   if (allReady || plaintiffReady) {
+    if (resumingAdjournment) resolveActiveAdjournment(challenge);
     challenge.status = "courtroom";
     resetChallengeCourtroomTimer(challenge);
     appendOpenRoundIfNeeded(challenge);
@@ -2108,6 +2160,7 @@ export const continueChallengeSettlement = async ({
   challengeId,
   message,
   terms = {},
+  acceptTerms = false,
 }) => {
   const challenge = await getChallengeDocumentForUser({ userId, challengeId });
   if (!challenge) {
@@ -2154,6 +2207,38 @@ export const continueChallengeSettlement = async ({
   const requestProposalTerms = coerceSettlementProposalTerms(terms);
   const parsedProposalTerms = extractSettlementTermsFromMessage(message);
   const proposalTerms = requestProposalTerms.length ? requestProposalTerms : parsedProposalTerms;
+  const latestOwnProposalEntry = [...transcript]
+    .reverse()
+    .find(
+      (entry) =>
+        entry?.role === "player" &&
+        entry?.userId &&
+        isSameId(entry.userId, userId)
+    );
+  const repeatedOwnProposal = Boolean(
+    latestOwnProposalEntry &&
+      getPvpSettlementProposalSignature({ terms: proposalTerms, message }) ===
+        getPvpSettlementProposalSignature({
+          terms: latestOwnProposalEntry.terms,
+          message: latestOwnProposalEntry.text,
+        })
+  );
+  const noProgressCount = repeatedOwnProposal
+    ? activeSettlement.noProgressCount + 1
+    : 0;
+  const tacticShiftTriggered =
+    repeatedOwnProposal && noProgressCount >= 2 && !activeSettlement.tacticShiftUsed;
+  const tacticShiftFailed = Boolean(
+    repeatedOwnProposal &&
+      activeSettlement.tacticShiftUsed &&
+      activeSettlement.tacticShiftRequired
+  );
+  const tacticShiftUsed = repeatedOwnProposal
+    ? activeSettlement.tacticShiftUsed || tacticShiftTriggered
+    : false;
+  const tacticShiftRequired = tacticShiftTriggered;
+  const publicExchangeCount = transcript.filter((entry) => entry?.role === "player").length + 1;
+  const exchangeLimitReached = publicExchangeCount >= MAX_SETTLEMENT_PUBLIC_EXCHANGES;
   const latestOtherProposalEntry = [...transcript]
     .reverse()
     .find(
@@ -2165,6 +2250,22 @@ export const continueChallengeSettlement = async ({
   const latestOtherProposalTerms =
     getStoredOrParsedSettlementProposalTerms(latestOtherProposalEntry);
   const latestOtherProposalText = String(latestOtherProposalEntry?.text || "").trim();
+  if (acceptTerms) {
+    const assistantPreview = participant.settlementAssistant?.preview || {};
+    const currentOfferSignature = getSettlementOfferSignature({
+      settlement: activeSettlement,
+      playerSide: participant.side,
+    });
+    if (
+      !currentOfferSignature ||
+      assistantPreview.sourceOfferSignature !== currentOfferSignature ||
+      assistantPreview.acceptanceAuthority !== "accept"
+    ) {
+      const error = new Error("Ask your client about the latest offer before accepting it.");
+      error.status = 409;
+      throw error;
+    }
+  }
   const acceptedByPlainLanguage = Boolean(
     latestOtherProposalEntry && (acceptTerms || isSettlementAcceptanceMessage(message))
   );
@@ -2184,6 +2285,9 @@ export const continueChallengeSettlement = async ({
             : "Accepted the other side's latest settlement proposal.",
         ]
       : [];
+  const acceptedCandidate = Boolean(
+    (acceptedMatchingTerms || acceptedByPlainLanguage) && finalAcceptedTerms.length > 0
+  );
   const moods = {
     player: clampMood(activeSettlement.moods?.player || 0),
     opponent: clampMood(activeSettlement.moods?.opponent || 0),
@@ -2200,17 +2304,17 @@ export const continueChallengeSettlement = async ({
       : moods[recipientMoodKey] <= -100
       ? recipientMoodKey
       : "";
-  const failed = Boolean(failedMoodKey);
+  const convergenceFailed = Boolean(
+    !acceptedCandidate && (tacticShiftFailed || exchangeLimitReached)
+  );
+  const failed = Boolean(failedMoodKey || convergenceFailed);
   const failedParticipant =
     failedMoodKey === senderMoodKey
       ? participant
       : failedMoodKey === recipientMoodKey
       ? otherParticipant
       : null;
-  const settled =
-    (acceptedMatchingTerms || acceptedByPlainLanguage) &&
-    finalAcceptedTerms.length > 0 &&
-    !failed;
+  const settled = acceptedCandidate && !failed;
   const now = new Date();
   const negotiationTurnFields = {
     latestNegotiationMessageUserId: participant.userId,
@@ -2244,6 +2348,10 @@ export const continueChallengeSettlement = async ({
     status: settled ? "settled" : failed ? "active" : "settlement",
     "settlement.status": settled ? "settled" : failed ? "failed" : "active",
     "settlement.moods": moods,
+    "settlement.noProgressCount": noProgressCount,
+    "settlement.tacticShiftUsed": tacticShiftUsed,
+    "settlement.tacticShiftRequired": tacticShiftRequired,
+    "settlement.publicExchangeCount": publicExchangeCount,
     "settlement.finalTerms": settled ? finalAcceptedTerms : [],
     "settlement.resolved": settled || failed,
     "settlement.resolution": settled ? "settled" : failed ? "failed" : "",
@@ -2284,7 +2392,11 @@ export const continueChallengeSettlement = async ({
 
   if (failed) {
     settlementSetFields["settlement.failureReason"] =
-      "Negotiations broke down because a client wants to walk out.";
+      exchangeLimitReached
+        ? "Negotiations reached the eight-exchange limit without agreement."
+        : tacticShiftFailed
+        ? "Negotiations reached an impasse after the remaining blocker did not change."
+        : "Negotiations broke down because a client wants to walk out.";
   }
 
   if (settled) {
@@ -2324,6 +2436,7 @@ export const previewChallengeSettlementDraft = async ({
   terms,
   message = "",
   clientInstruction = "",
+  mode = "manual",
 }) => {
   const challenge = await getChallengeDocumentForUser({ userId, challengeId });
   if (!challenge) {
@@ -2348,13 +2461,63 @@ export const previewChallengeSettlementDraft = async ({
     otherParticipant,
   });
 
-  return previewSettlementDraftForClient({
+  const previewResult = await previewSettlementDraftForClient({
     caseSession,
-    offerTerms: terms,
-    message,
-    clientInstruction,
+    offerTerms: mode === "assisted_follow_up" ? {} : terms,
+    message: mode === "assisted_follow_up" ? "" : message,
+    clientInstruction: mode === "assisted_follow_up" ? "" : clientInstruction,
+    mode,
     userId,
   });
+  const huddleResult = applyPrivateClientHuddleMood({
+    caseSession,
+    preview: previewResult.preview,
+  });
+  const updatedAt = new Date();
+  const updatedChallenge = await Challenge.findOneAndUpdate(
+    {
+      _id: challenge._id,
+      status: "settlement",
+      "participants.userId": participant.userId,
+    },
+    {
+      $set: {
+        "settlement.moods": huddleResult.settlement.moods,
+        "participants.$.settlementAssistant": {
+          preview: previewResult.preview,
+          clientHuddle: huddleResult.settlement.clientHuddle,
+          updatedAt,
+        },
+        updatedAt,
+      },
+    },
+    { new: true, returnDocument: "after" }
+  );
+
+  if (!updatedChallenge) {
+    const error = new Error("The settlement changed while consulting your client. Please try again.");
+    error.status = 409;
+    throw error;
+  }
+
+  return {
+    preview: previewResult.preview,
+    moodUpdate: huddleResult.moodUpdate,
+    challenge: await buildChallengePayload({
+      challenge: updatedChallenge,
+      viewerUserId: userId,
+    }),
+  };
+};
+
+const getPvpSettlementProposalSignature = ({ terms = [], message = "" } = {}) => {
+  const structured = coerceSettlementProposalTerms(terms)
+    .map((term) => `${normalizeSettlementTermKey(term.label)}:${normalizeSettlementTermValue(term.value)}`)
+    .filter(Boolean)
+    .sort()
+    .join("|");
+
+  return structured || String(message || "").toLowerCase().replace(/[^a-z0-9₹$€£]+/g, " ").trim();
 };
 
 export const exitChallengeSettlement = async ({ userId, challengeId }) => {
@@ -2968,7 +3131,12 @@ const scoreChallengeSubmission = async ({ challenge, round, participant, submiss
   markCourtroomRoundsModified(challenge);
 };
 
-const closeRoundIfReady = async ({ challenge, round }) => {
+const closeRoundIfReady = async ({
+  challenge,
+  round,
+  allowAutomaticAdjournment = false,
+  userId = "",
+}) => {
   if ((round.submissions || []).length < challenge.participants.length) {
     return;
   }
@@ -2977,6 +3145,40 @@ const closeRoundIfReady = async ({ challenge, round }) => {
   round.judgedAt = new Date();
   round.benchSummary = round.benchSummary || summarizeScoredRound(round);
   markCourtroomRoundsModified(challenge);
+
+  if (
+    allowAutomaticAdjournment &&
+    (challenge.courtroomRounds || []).filter((item) => item.status === "judged").length <
+      challenge.maxCourtRounds &&
+    getAdjournmentRemaining(challenge.adjournment, challenge.complexity) > 0
+  ) {
+    const participant = getParticipant(challenge, userId) || challenge.participants?.[0];
+    const otherParticipant = getOtherParticipant(challenge, participant?.userId);
+    const caseSession = buildParticipantCaseSession({
+      challenge,
+      participant,
+      otherParticipant,
+    });
+    const ruling = await evaluateCourtAdjournment({
+      caseSession,
+      userId: toObjectIdString(userId || participant?.userId),
+      requested: false,
+    });
+
+    if (ruling.granted) {
+      recordAdjournmentDecision({
+        source: challenge,
+        trigger: "judge",
+        courtroomRound: round.round,
+        reason: ruling.curableGap,
+        ruling: ruling.ruling,
+        granted: true,
+      });
+      pauseChallengeForAdjournment(challenge);
+      return;
+    }
+  }
+
   await finalizeChallengeIfComplete(challenge);
   appendOpenRoundIfNeeded(challenge);
 };
@@ -3080,7 +3282,12 @@ export const submitChallengeCourtroomArgument = async ({
     submission: savedSubmission,
     userId,
   });
-  await closeRoundIfReady({ challenge, round });
+  await closeRoundIfReady({
+    challenge,
+    round,
+    allowAutomaticAdjournment: true,
+    userId,
+  });
   if (challenge.status === "courtroom") {
     resetChallengeCourtroomTimer(challenge);
   }
@@ -3089,12 +3296,101 @@ export const submitChallengeCourtroomArgument = async ({
   return buildChallengePayload({ challenge, viewerUserId: userId });
 };
 
+export const requestChallengeAdjournment = async ({
+  userId,
+  challengeId,
+  reason,
+}) => {
+  const challenge = await getChallengeDocumentForUser({ userId, challengeId });
+  if (!challenge) return null;
+  if (challenge.status !== "courtroom" || challenge.adjournment?.active) {
+    const error = new Error(
+      "An adjournment may only be requested while court is in session."
+    );
+    error.status = 400;
+    throw error;
+  }
+
+  const participant = getParticipant(challenge, userId);
+  const otherParticipant = getOtherParticipant(challenge, userId);
+  const round = getOpenRound(challenge);
+  if (!participant || !round || participant.status !== "ready") {
+    const error = new Error(
+      "No courtroom round is available for an adjournment request."
+    );
+    error.status = 400;
+    throw error;
+  }
+  if (getSubmissionForParticipant(round, participant)) {
+    const error = new Error(
+      "You already filed your substantive argument this round."
+    );
+    error.status = 409;
+    throw error;
+  }
+
+  const courtroomRound = getAdjournmentRound(challenge);
+  if (
+    hasAdjournmentRequestForRound({
+      adjournment: challenge.adjournment,
+      round: courtroomRound,
+      requestedByUserId: userId,
+    })
+  ) {
+    const error = new Error("You already requested an adjournment this round.");
+    error.status = 409;
+    throw error;
+  }
+
+  const caseSession = buildParticipantCaseSession({
+    challenge,
+    participant,
+    otherParticipant,
+  });
+  const decision = await evaluateCourtAdjournment({
+    caseSession,
+    userId,
+    reason,
+    requested: true,
+  });
+  recordAdjournmentDecision({
+    source: challenge,
+    trigger: "player_request",
+    requestedByUserId: userId,
+    courtroomRound,
+    reason,
+    ruling: decision.ruling,
+    granted: decision.granted,
+  });
+
+  if (decision.granted) pauseChallengeForAdjournment(challenge);
+  try {
+    await challenge.save();
+  } catch (error) {
+    if (!isMongooseVersionConflict(error)) throw error;
+    const conflict = new Error(
+      "The courtroom changed while the judge was considering the request. Refresh before requesting again."
+    );
+    conflict.status = 409;
+    throw conflict;
+  }
+
+  return {
+    challenge: await buildChallengePayload({ challenge, viewerUserId: userId }),
+    adjournmentRuling: {
+      granted: decision.granted,
+      ruling: decision.ruling,
+      curableGap: decision.curableGap,
+    },
+  };
+};
+
 export const buildChallengePayload = async ({ challenge, viewerUserId }) => {
   const plainChallenge = toPlain(challenge);
   const publicChallenge = {
     ...plainChallenge,
     participants: (plainChallenge.participants || []).map((participant) => {
-      const { clientMemory, ...publicParticipant } = participant;
+      const { clientMemory, settlementAssistant, ...publicParticipant } = participant;
       return publicParticipant;
     }),
   };
@@ -3301,6 +3597,7 @@ export const buildChallengePayload = async ({ challenge, viewerUserId }) => {
           }),
           partyName: getPartyName(plainChallenge.templateSnapshot, participant.side),
           clientMemoryExcerpt: participant.clientMemoryExcerpt || "",
+          settlementAssistant: participant.settlementAssistant || null,
           interviewSubjectName:
             viewerInterviewSubject?.name ||
             getPartyName(plainChallenge.templateSnapshot, participant.side),

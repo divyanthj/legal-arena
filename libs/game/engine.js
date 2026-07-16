@@ -43,6 +43,10 @@ import {
   mergeMemoryClaims,
   normalizeMemoryClaims,
 } from "./memoryClaims";
+import {
+  getAdjournmentRemaining,
+  normalizeAdjournmentState,
+} from "./adjournment";
 
 const INTERVIEW_RESPONSE_MAX_TOKENS = 1500;
 const INTERVIEW_RESPONSE_TEMPERATURE = 0.7;
@@ -968,6 +972,93 @@ export const runCourtroomRound = async ({ caseSession, argument, userId }) => {
       caseSession,
       rules,
     }),
+    usageEntries: usageCollector.entries,
+  };
+};
+
+export const evaluateCourtAdjournment = async ({
+  caseSession,
+  userId,
+  reason = "",
+  requested = false,
+} = {}) => {
+  const usageCollector = createUsageCollector("courtroom");
+  const remaining = getAdjournmentRemaining(
+    caseSession?.adjournment,
+    caseSession?.complexity
+  );
+  const cleanReason = coerceString(reason).slice(0, 1200);
+
+  if (remaining <= 0) {
+    return {
+      granted: false,
+      reason: cleanReason || "No adjournments remain for this matter.",
+      ruling: "The request is denied because this matter has exhausted its adjournment allowance.",
+      curableGap: "",
+      usageEntries: [],
+    };
+  }
+
+  const aiResult = await requestStructuredCompletion({
+    userId,
+    model: GAMEPLAY_MODEL,
+    temperature: 0.35,
+    maxTokens: 700,
+    retryAttempts: 1,
+    usageLabel: requested
+      ? "courtroom.adjournmentRequest"
+      : "courtroom.judgeAdjournment",
+    promptCacheKey: buildGameplayPromptCacheKey({
+      caseSession,
+      phase: "courtroom",
+      family: requested ? "adjournmentRequest" : "judgeAdjournment",
+      model: GAMEPLAY_MODEL,
+    }),
+    onUsage: usageCollector.record,
+    systemPrompt:
+      "You are the judge deciding whether to adjourn a simulated legal matter and reopen client intake. Grant only when the existing courtroom record exposes a specific, material gap that further client questioning or obtainable proof could realistically cure. Weak advocacy, a losing position, a desire for more time, repetition, or speculative fishing is not enough. Keep the ruling record-bound, concise, neutral, and player-facing. Output valid JSON only.",
+    userPrompt: JSON.stringify({
+      task: requested
+        ? "Rule on counsel's application for an adjournment."
+        : "Decide whether the court itself must adjourn before the next courtroom round.",
+      applicationReason: cleanReason,
+      requested,
+      remainingAdjournments: remaining,
+      currentRound: (caseSession?.score?.roundsCompleted || 0) + 1,
+      factSheet: caseSession?.factSheet || {},
+      recentCourtroomTranscript: (caseSession?.courtroomTranscript || []).slice(-8),
+      latestBenchSignal: caseSession?.score?.lastBenchSignal || "",
+      priorAdjournments: normalizeAdjournmentState(
+        caseSession?.adjournment,
+        caseSession?.complexity
+      ).history,
+      rules: [
+        "Grant only if curableGap identifies one concrete missing fact, clarification, record, witness detail, or evidence item.",
+        "The gap must matter to liability, a defense, burden, credibility, or remedy.",
+        "Deny if intake could not realistically cure the identified problem.",
+        "Deny requests made merely to improve presentation or delay the case.",
+      ],
+      outputSchema: {
+        granted: "boolean",
+        curableGap: "string",
+        ruling: "string",
+      },
+    }),
+  });
+
+  const curableGap = coerceString(aiResult?.curableGap).slice(0, 800);
+  const granted = aiResult?.granted === true && Boolean(curableGap);
+  const ruling = coerceString(aiResult?.ruling).slice(0, 1200);
+
+  if (!ruling) {
+    throw new Error("Adjournment ruling generation returned no ruling.");
+  }
+
+  return {
+    granted,
+    reason: cleanReason || curableGap,
+    curableGap,
+    ruling,
     usageEntries: usageCollector.entries,
   };
 };

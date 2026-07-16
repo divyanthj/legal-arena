@@ -123,6 +123,40 @@ progress::-webkit-progress-value {
 }
 
 @layer components {
+  .arena-modal {
+    background: rgba(0, 0, 0, 0.74);
+    backdrop-filter: blur(10px);
+  }
+
+  .arena-modal.modal-open {
+    animation: arena-modal-backdrop-enter 360ms ease-out both;
+  }
+
+  .arena-modal.modal-open > .modal-box {
+    animation: arena-modal-panel-enter 440ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    transform-origin: center bottom;
+    will-change: opacity, transform;
+  }
+
+  .arena-modal-close,
+  .arena-modal .btn-circle[aria-label^="Close"] {
+    transition:
+      color 220ms ease,
+      background-color 220ms ease,
+      border-color 220ms ease,
+      transform 320ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .arena-modal-close:hover,
+  .arena-modal .btn-circle[aria-label^="Close"]:hover {
+    transform: rotate(90deg);
+  }
+
+  .arena-modal-card-enter {
+    animation: arena-modal-card-enter 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    will-change: opacity, transform;
+  }
+
   .arena-glass {
     border: 1px solid rgba(255, 255, 255, 0.075);
     background:
@@ -677,6 +711,39 @@ progress::-webkit-progress-value {
   }
 }
 
+@keyframes arena-modal-backdrop-enter {
+  from {
+    background-color: rgba(0, 0, 0, 0);
+    backdrop-filter: blur(0);
+  }
+  to {
+    background-color: rgba(0, 0, 0, 0.74);
+    backdrop-filter: blur(10px);
+  }
+}
+
+@keyframes arena-modal-panel-enter {
+  from {
+    opacity: 0;
+    transform: translateY(22px) scale(0.965);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes arena-modal-card-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @keyframes arena-enter {
   0% {
     opacity: 0;
@@ -794,6 +861,9 @@ progress::-webkit-progress-value {
 
 @media (prefers-reduced-motion: reduce) {
   .arena-reveal,
+  .arena-modal.modal-open,
+  .arena-modal.modal-open > .modal-box,
+  .arena-modal-card-enter,
   .arena-pulse,
   .arena-round-transition,
   .arena-fact-progress-pop,
@@ -807,6 +877,16 @@ progress::-webkit-progress-value {
 
   .arena-voice-waveform-bar {
     transition: none !important;
+  }
+
+  .arena-modal-close,
+  .arena-modal .btn-circle[aria-label^="Close"] {
+    transition: none !important;
+  }
+
+  .arena-modal-close:hover,
+  .arena-modal .btn-circle[aria-label^="Close"]:hover {
+    transform: none !important;
   }
 
   .arena-progress-fill {

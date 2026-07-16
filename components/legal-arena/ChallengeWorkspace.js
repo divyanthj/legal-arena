@@ -257,7 +257,13 @@ const challengeToCaseSession = (challenge = {}) => {
     interviewTranscript: viewer.interviewTranscript || [],
     factSheet: viewer.factSheet || {},
     caseAssessment: viewer.caseAssessment || {},
-    settlement: challenge.settlement || {},
+    settlement: {
+      ...(challenge.settlement || {}),
+      clientPreview: viewer.settlementAssistant?.preview || null,
+      clientPreviewUpdatedAt: viewer.settlementAssistant?.updatedAt || null,
+      clientHuddle: viewer.settlementAssistant?.clientHuddle || null,
+    },
+    adjournment: challenge.adjournment || {},
     courtroomTranscript,
     score: {
       player: viewer.score || 0,
@@ -630,7 +636,9 @@ export default function ChallengeWorkspace({ initialChallenge }) {
         settlementHref: `/dashboard/challenges/${challengeRef}/settlement`,
         finalizePath: "ready",
         finalizeSuccessMessage:
-          viewer.side === "client" || challenge.opponent?.status === "ready"
+          challenge.adjournment?.active
+            ? "Fact sheet finalized. Waiting for both lawyers to re-finalize."
+            : viewer.side === "client" || challenge.opponent?.status === "ready"
             ? "Fact sheet finalized. Court is open."
             : "Fact sheet finalized. Waiting for your opponent.",
         intakeLocked: challenge.status === "active" && viewer.status === "ready",

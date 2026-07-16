@@ -127,6 +127,11 @@ const participantSchema = mongoose.Schema(
       default: "",
       trim: true,
     },
+    settlementAssistant: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+      private: true,
+    },
     clientPortrait: {
       type: portraitSchema,
       default: () => ({}),
@@ -182,6 +187,42 @@ const courtroomRoundSchema = mongoose.Schema(
   { _id: false }
 );
 
+const adjournmentHistoryEntrySchema = mongoose.Schema(
+  {
+    trigger: {
+      type: String,
+      enum: ["judge", "player_request"],
+      required: true,
+    },
+    requestedByUserId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    courtroomRound: { type: Number, required: true },
+    reason: { type: String, required: true, trim: true },
+    ruling: { type: String, required: true, trim: true },
+    outcome: {
+      type: String,
+      enum: ["granted", "denied"],
+      required: true,
+    },
+    createdAt: { type: Date, default: Date.now },
+    resumedAt: { type: Date, default: null },
+  },
+  { _id: false }
+);
+
+const adjournmentSchema = mongoose.Schema(
+  {
+    active: { type: Boolean, default: false },
+    grantsUsed: { type: Number, default: 0 },
+    grantsAllowed: { type: Number, default: 0 },
+    history: { type: [adjournmentHistoryEntrySchema], default: [] },
+  },
+  { _id: false }
+);
+
 const settlementEntrySchema = mongoose.Schema(
   {
     role: {
@@ -210,6 +251,8 @@ const settlementEntrySchema = mongoose.Schema(
       ],
       default: [],
     },
+    openIssues: { type: [String], default: [] },
+    agreedTerms: { type: [String], default: [] },
     moodSnapshot: {
       player: { type: Number, default: 0 },
       opponent: { type: Number, default: 0 },
@@ -342,6 +385,10 @@ const settlementSchema = mongoose.Schema(
     },
     endedAt: { type: Date, default: null },
     rejectionCount: { type: Number, default: 0 },
+    noProgressCount: { type: Number, default: 0 },
+    tacticShiftUsed: { type: Boolean, default: false },
+    tacticShiftRequired: { type: Boolean, default: false },
+    publicExchangeCount: { type: Number, default: 0 },
     cooldownUntil: { type: Date, default: null },
     startedAt: { type: Date, default: null },
     completedAt: { type: Date, default: null },
@@ -416,6 +463,10 @@ const challengeSchema = mongoose.Schema(
     courtroomTimeoutStartedAt: { type: Date, default: null },
     courtroomTimedOutAt: { type: Date, default: null },
     courtroomTimeoutFinalizingAt: { type: Date, default: null },
+    adjournment: {
+      type: adjournmentSchema,
+      default: () => ({}),
+    },
     settlement: {
       type: settlementSchema,
       default: () => ({}),

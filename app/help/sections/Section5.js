@@ -40,6 +40,10 @@ export default function Section5({ id }) {
             {`The workspace shows a 24-hour response window during court. Activity refreshes the deadline. If time expires, the court prepares a timeout verdict from the arguments already filed; if neither side filed, the result is a draw.`}
           </li>
           <li>
+            <strong>{`Adjournment reopens both private files:`}</strong>{" "}
+            {`When the judge grants an adjournment, the response clock stops and both lawyers return to private intake. Filed arguments and scores remain on the record, and court resumes only after both lawyers re-finalize their fact sheets.`}
+          </li>
+          <li>
             <strong>{`Settlement is available before court:`}</strong>{" "}
             {`A player can send settlement intent after receiving authority from their own client. The other lawyer must obtain authority from their client before negotiations open, and messages then alternate between the two players.`}
           </li>

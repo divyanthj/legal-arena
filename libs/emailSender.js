@@ -91,6 +91,8 @@ export async function sendBroadcastEmail({
   content,
   type = "announcement",
   footerNote = "",
+  ctaLabel,
+  ctaUrl,
 }) {
   await connectMongo();
 
@@ -119,6 +121,8 @@ export async function sendBroadcastEmail({
         title: subject,
         content: bodyText,
         unsubscribeUrl,
+        ...(ctaLabel ? { ctaLabel } : {}),
+        ...(ctaUrl ? { ctaUrl } : {}),
       }),
     };
   });
@@ -144,6 +148,8 @@ export async function sendCustomEmail({
   subject,
   content,
   type = "announcement",
+  ctaLabel,
+  ctaUrl,
 }) {
   return sendBroadcastEmail({
     audience: audience || (email ? "single_user" : "all_users"),
@@ -151,6 +157,8 @@ export async function sendCustomEmail({
     subject,
     content,
     type,
+    ctaLabel,
+    ctaUrl,
   });
 }
 

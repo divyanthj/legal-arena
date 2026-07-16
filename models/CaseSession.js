@@ -161,6 +161,8 @@ const settlementSchema = mongoose.Schema(
       type: [String],
       default: [],
     },
+    openIssues: { type: [String], default: [] },
+    agreedTerms: { type: [String], default: [] },
     clientPreview: {
       type: mongoose.Schema.Types.Mixed,
       default: null,
@@ -295,6 +297,10 @@ const settlementSchema = mongoose.Schema(
       type: Number,
       default: 0,
     },
+    noProgressCount: { type: Number, default: 0 },
+    tacticShiftUsed: { type: Boolean, default: false },
+    tacticShiftRequired: { type: Boolean, default: false },
+    publicExchangeCount: { type: Number, default: 0 },
     cooldownUntil: {
       type: Date,
       default: null,
@@ -417,6 +423,42 @@ const usageBucketSchema = mongoose.Schema(
       default: [],
       private: true,
     },
+  },
+  { _id: false }
+);
+
+const adjournmentHistoryEntrySchema = mongoose.Schema(
+  {
+    trigger: {
+      type: String,
+      enum: ["judge", "player_request"],
+      required: true,
+    },
+    requestedByUserId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    courtroomRound: { type: Number, required: true },
+    reason: { type: String, required: true, trim: true },
+    ruling: { type: String, required: true, trim: true },
+    outcome: {
+      type: String,
+      enum: ["granted", "denied"],
+      required: true,
+    },
+    createdAt: { type: Date, default: Date.now },
+    resumedAt: { type: Date, default: null },
+  },
+  { _id: false }
+);
+
+const adjournmentSchema = mongoose.Schema(
+  {
+    active: { type: Boolean, default: false },
+    grantsUsed: { type: Number, default: 0 },
+    grantsAllowed: { type: Number, default: 0 },
+    history: { type: [adjournmentHistoryEntrySchema], default: [] },
   },
   { _id: false }
 );
@@ -716,6 +758,10 @@ const caseSessionSchema = mongoose.Schema(
     },
     settlement: {
       type: settlementSchema,
+      default: () => ({}),
+    },
+    adjournment: {
+      type: adjournmentSchema,
       default: () => ({}),
     },
     courtroomTranscript: {

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import * as HeroIcons from "@heroicons/react/24/outline";
 import { LEGAL_CASE_CATEGORIES } from "@/libs/game/categories";
+import { trackGoal } from "@/libs/datafast";
 
 const categoryIconMap = {
   "rental-dispute": HeroIcons.BuildingOffice2Icon,
@@ -75,12 +76,22 @@ export default function LandingCategoryCarousel() {
   const previousCategory = getWrappedCategory(activeIndex - 1);
   const nextCategory = getWrappedCategory(activeIndex + 1);
 
-  const goToPrevious = () => {
-    setActiveIndex((current) => (current === 0 ? total - 1 : current - 1));
+  const selectCategory = (index, source) => {
+    const nextIndex = (index + total) % total;
+    const category = getWrappedCategory(nextIndex);
+    setActiveIndex(nextIndex);
+    trackGoal("landing_case_category_selected", {
+      category: category.slug,
+      source,
+    });
   };
 
-  const goToNext = () => {
-    setActiveIndex((current) => (current >= total - 1 ? 0 : current + 1));
+  const goToPrevious = (source = "previous_arrow") => {
+    selectCategory(activeIndex - 1, source);
+  };
+
+  const goToNext = (source = "next_arrow") => {
+    selectCategory(activeIndex + 1, source);
   };
 
   return (
@@ -89,7 +100,7 @@ export default function LandingCategoryCarousel() {
         <button
           type="button"
           className="arena-btn-dark flex h-11 w-11 items-center justify-center !border-white/[0.075] p-0"
-          onClick={goToPrevious}
+          onClick={() => goToPrevious()}
           aria-label="Show previous category"
         >
           <HeroIcons.ChevronLeftIcon className="h-5 w-5" aria-hidden="true" />
@@ -99,7 +110,7 @@ export default function LandingCategoryCarousel() {
           <div className="hidden opacity-60 md:block">
             <CategoryCard
               category={previousCategory}
-              onClick={goToPrevious}
+              onClick={() => goToPrevious("previous_card")}
             />
           </div>
           <CategoryCard
@@ -110,7 +121,7 @@ export default function LandingCategoryCarousel() {
           <div className="hidden opacity-60 md:block">
             <CategoryCard
               category={nextCategory}
-              onClick={goToNext}
+              onClick={() => goToNext("next_card")}
             />
           </div>
         </div>
@@ -118,7 +129,7 @@ export default function LandingCategoryCarousel() {
         <button
           type="button"
           className="arena-btn-dark flex h-11 w-11 items-center justify-center !border-white/[0.075] p-0"
-          onClick={goToNext}
+          onClick={() => goToNext()}
           aria-label="Show next category"
         >
           <HeroIcons.ChevronRightIcon className="h-5 w-5" aria-hidden="true" />
@@ -139,7 +150,7 @@ export default function LandingCategoryCarousel() {
                   ? "border-amber-200/20 bg-amber-200/[0.07] text-amber-100"
                   : "border-white/[0.055] bg-white/[0.018] text-white/45 hover:border-white/10 hover:text-white/72"
               }`}
-              onClick={() => setActiveIndex(index)}
+              onClick={() => selectCategory(index, "category_picker")}
               aria-label={`Show ${category.title}`}
               aria-pressed={selected}
             >

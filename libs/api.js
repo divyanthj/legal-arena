@@ -34,11 +34,13 @@ apiClient.interceptors.response.use(
 
     console.error(error.message);
 
-    // Automatically display errors to the user
-    if (error.message) {
-      toast.error(error.message);
-    } else {
-      toast.error("something went wrong...");
+    // Some non-blocking requests render their own contextual fallback state.
+    if (!error.config?.suppressToast) {
+      if (error.message) {
+        toast.error(error.message);
+      } else {
+        toast.error("something went wrong...");
+      }
     }
     return Promise.reject(error);
   }

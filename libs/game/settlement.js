@@ -3,6 +3,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 import { requestStructuredCompletion } from "@/libs/gpt";
 import { createUsageCollector } from "./sessionUsage";
+import { buildPublicSettlementDraft } from "./settlementComposer.mjs";
 import {
   buildDesiredReliefForSide,
   buildOverviewForSide,
@@ -25,6 +26,14 @@ const SETTLEMENT_PREVIEW_MODEL =
   "gpt-5.4-mini";
 
 const SETTLEMENT_REJECTION_BASE_COOLDOWN_MS = 60 * 1000;
+export const MAX_SETTLEMENT_PUBLIC_EXCHANGES = 8;
+
+const settlementProgressSignature = (value = []) =>
+  (Array.isArray(value) ? value : [])
+    .map((item) => coerceString(item).toLowerCase().replace(/[^a-z0-9₹$€£]+/g, " ").trim())
+    .filter(Boolean)
+    .sort()
+    .join("|");
 
 export const clampMood = (value) =>
   Math.max(-100, Math.min(100, Math.round(Number(value) || 0)));
@@ -187,6 +196,40 @@ const cleanClientPreviewCopy = (value = "", fallback = "") => {
   return text;
 };
 
+const normalizeSettlementEntryTerms = (terms = []) =>
+  (Array.isArray(terms) ? terms : [])
+    .map((term) => ({
+      label: coerceString(term?.label),
+      value: coerceString(term?.value),
+    }))
+    .filter((term) => term.label && term.value);
+
+const getLatestOpposingSettlementEntry = ({ settlement = {}, playerSide = "client" } = {}) =>
+  [...(settlement.transcript || [])]
+    .reverse()
+    .find(
+      (entry) =>
+        entry?.role === "opponent" ||
+        (entry?.role === "player" && entry?.side && entry.side !== playerSide)
+    ) || null;
+
+export const getSettlementOfferSignature = ({ settlement = {}, playerSide = "client" } = {}) => {
+  const entry = getLatestOpposingSettlementEntry({ settlement, playerSide });
+  if (!entry) return "";
+
+  return createHash("sha256")
+    .update(
+      JSON.stringify({
+        side: entry.side || "opponent",
+        text: coerceString(entry.text),
+        terms: normalizeSettlementEntryTerms(entry.terms),
+        createdAt: entry.createdAt || "",
+      })
+    )
+    .digest("hex")
+    .slice(0, 20);
+};
+
 const hashInt = (value = "") =>
   parseInt(createHash("sha256").update(String(value)).digest("hex").slice(0, 8), 16);
 
@@ -235,6 +278,10 @@ export const normalizeSettlement = (settlement = {}, caseSession = {}) => ({
   outcomeSummary: coerceString(settlement?.outcomeSummary),
   failureReason: coerceString(settlement?.failureReason),
   rejectionCount: Math.max(0, Number(settlement?.rejectionCount) || 0),
+  noProgressCount: Math.max(0, Number(settlement?.noProgressCount) || 0),
+  tacticShiftUsed: Boolean(settlement?.tacticShiftUsed),
+  tacticShiftRequired: Boolean(settlement?.tacticShiftRequired),
+  publicExchangeCount: Math.max(0, Number(settlement?.publicExchangeCount) || 0),
   cooldownUntil: settlement?.cooldownUntil || null,
   startedAt: settlement?.startedAt || null,
   completedAt: settlement?.completedAt || null,
@@ -284,6 +331,13 @@ const buildSettlementPromptContext = ({ caseSession, settlement, message, actorS
     actorSide: representedSide,
     respondingSide: otherSide,
     currentTerms: settlement.currentTerms,
+    convergence: {
+      noProgressCount: settlement.noProgressCount,
+      tacticShiftRequired: settlement.tacticShiftRequired,
+      tacticShiftUsed: settlement.tacticShiftUsed,
+      publicExchangeCount: settlement.publicExchangeCount,
+      maximumPublicExchanges: MAX_SETTLEMENT_PUBLIC_EXCHANGES,
+    },
     recentTranscript: settlement.transcript.slice(-8),
     latestMessage: message,
   };
@@ -333,6 +387,8 @@ const normalizeAiSettlementResult = (
     status: settled ? "settled" : failed ? "failed" : "active",
     accepted: settled,
     rejected: Boolean(aiResult?.initialRejected) && !settled && !failed,
+    openIssues: coerceStringList(aiResult?.openIssues, 4),
+    agreedTerms: coerceStringList(aiResult?.agreedTerms, 6),
   };
 };
 
@@ -399,6 +455,12 @@ const fallbackAiSettlementPreview = () => ({
   drivers: ["Keep the amount, timing, release, costs, and fault language concrete."],
   privateClientLine: "Walk me through why this protects me before you offer it.",
   suggestedRevision: "Make the amount, timing, release, costs, and fault language concrete.",
+  outgoingDraft: "",
+  sourceOfferSignature: "",
+  sourceOfferCreatedAt: null,
+  consultationMode: "manual",
+  recommendedAction: "clarify",
+  consultedAt: null,
   acceptanceAuthority: "unclear",
   authorityReason: "The client has not described an acceptable settlement range yet.",
   moodDelta: 0,
@@ -407,7 +469,7 @@ const fallbackAiSettlementPreview = () => ({
   source: "fallback",
 });
 
-const normalizeAiSettlementPreview = (aiResult = {}) => {
+const normalizeAiSettlementPreview = (aiResult = {}, metadata = {}) => {
   const score = clampMood(aiResult?.score);
   const rawTone = coerceString(aiResult?.tone).toLowerCase();
   const tone = ["emerald", "amber", "red"].includes(rawTone)
@@ -428,6 +490,14 @@ const normalizeAiSettlementPreview = (aiResult = {}) => {
   )
     ? rawAcceptanceAuthority
     : "unclear";
+  const rawRecommendedAction = coerceString(aiResult?.recommendedAction).toLowerCase();
+  const recommendedAction = ["counter", "clarify", "accept", "hold"].includes(
+    rawRecommendedAction
+  )
+    ? rawRecommendedAction
+    : acceptanceAuthority === "accept"
+    ? "accept"
+    : "counter";
 
   return {
     label: cleanClientPreviewCopy(aiResult?.label, "Client reaction ready"),
@@ -443,6 +513,12 @@ const normalizeAiSettlementPreview = (aiResult = {}) => {
       : ["The client is weighing the practical tradeoffs."],
     privateClientLine: cleanClientPreviewCopy(aiResult?.privateClientLine),
     suggestedRevision: cleanClientPreviewCopy(aiResult?.suggestedRevision),
+    outgoingDraft: cleanClientPreviewCopy(aiResult?.outgoingDraft),
+    sourceOfferSignature: coerceString(metadata.sourceOfferSignature),
+    sourceOfferCreatedAt: metadata.sourceOfferCreatedAt || null,
+    consultationMode: metadata.consultationMode || "manual",
+    recommendedAction,
+    consultedAt: metadata.consultedAt || new Date().toISOString(),
     acceptanceAuthority,
     authorityReason: cleanClientPreviewCopy(
       aiResult?.authorityReason,
@@ -463,12 +539,37 @@ export const previewSettlementDraftForClient = async ({
   offerTerms,
   message = "",
   clientInstruction = "",
+  mode = "manual",
   userId,
 }) => {
   const usageCollector = createUsageCollector("settlement");
   const currentSettlement = normalizeSettlement(caseSession.settlement || {}, caseSession);
   const playerSide = getPlayerSide(caseSession);
   const normalizedOfferTerms = normalizeDraftTerms(offerTerms);
+  const assistedMode = mode === "assisted_follow_up";
+  const latestOpposingEntry = getLatestOpposingSettlementEntry({
+    settlement: currentSettlement,
+    playerSide,
+  });
+  const sourceOfferSignature = getSettlementOfferSignature({
+    settlement: currentSettlement,
+    playerSide,
+  });
+  const privateInstruction = assistedMode
+    ? "Give me the best balanced next move within my authority after the other side's latest response. If they supplied an acceptable offer, authorize acceptance. Otherwise produce a concrete outward-facing reply that addresses their blocker, makes measured movement without sacrificing my core priority, and does not repeat our last proposal. If a historical input is missing, ask only the precise clarification needed while deciding every negotiable term you can."
+    : coerceString(clientInstruction);
+  const effectiveMessage = assistedMode
+    ? coerceString(latestOpposingEntry?.text)
+    : message;
+  const effectiveOfferTerms = assistedMode
+    ? normalizeSettlementEntryTerms(latestOpposingEntry?.terms)
+    : normalizedOfferTerms;
+  const concreteAuthorityRequested = Boolean(
+    privateInstruction &&
+      /\b(?:exact|specific|figure|amount|balance|price|payment|inspection|deadline|remedy|cap|per day|per week)\b/i.test(
+        privateInstruction
+      )
+  );
   const representedClientMoneyPosture =
     playerSide === "opponent"
       ? "If the draft makes the represented client pay money, lower payment is normally better. Treat a higher payment only as a pragmatic concession for certainty, speed, or risk control."
@@ -479,7 +580,7 @@ export const previewSettlementDraftForClient = async ({
       userId,
       model: SETTLEMENT_PREVIEW_MODEL,
       temperature: 0.35,
-      maxTokens: 550,
+      maxTokens: 750,
       retryAttempts: 0,
       usageLabel: "settlement.clientPreview",
       onUsage: usageCollector.record,
@@ -487,7 +588,9 @@ export const previewSettlementDraftForClient = async ({
         "You simulate the represented client privately during settlement negotiations in a legal strategy game. The player is the lawyer. Evaluate either the latest offer received from opposing counsel or the lawyer's proposed reply, as identified by the supplied context and private instruction. This is always a private client huddle. Output valid JSON only.",
       userPrompt: JSON.stringify({
         task: clientInstruction
-          ? "The lawyer is privately talking to the represented client. Respond with concise client guidance and describe the acceptable settlement range or conditions where possible."
+          ? concreteAuthorityRequested
+            ? "The lawyer is asking the represented client for concrete settlement authority. Answer directly with usable figures, calculations, timing, and caps wherever the supplied record permits. Decide negotiable preferences instead of sending the lawyer back to obtain 'specifics'."
+            : "The lawyer is privately talking to the represented client. Respond with concise client guidance and describe the acceptable settlement range or conditions where possible."
           : "Give concise private client guidance about the latest settlement offer or proposed reply before it is presented to the other side.",
         rules: [
           "Speak from the represented client's practical perspective, not as a judge and not as opposing counsel.",
@@ -500,13 +603,28 @@ export const previewSettlementDraftForClient = async ({
           "Use the case facts, requested relief, current settlement moods, current public terms, and recent transcript.",
           "Flag unclear or risky wording. Reward concrete timing, protected fault language, clear release scope, and terms that match client priorities.",
           "If the lawyer privately asks the client for authority, preferences, reassurance, or a new settlement direction, answer in plain client guidance rather than editing structured terms.",
+          "When the lawyer asks for concrete authority, directly choose and authorize reasonable negotiable terms such as an inspection window, payment trigger, delivery deadline, per-day remedy, and total remedy cap. These are client decisions, not invented historical facts.",
+          "Use exact amounts already present anywhere in the supplied context and perform straightforward arithmetic when all necessary inputs are available.",
+          "Never answer a request for concrete figures merely by saying to provide specifics, clearer terms, concrete pricing, an exact balance, or a capped remedy.",
+          "If a historical input needed for arithmetic is genuinely absent, name only that missing input. Still decide every other requested negotiable term and give a usable formula, such as revised total = original contract price minus authorized discount.",
+          "For a concrete-authority request, privateClientLine must contain the client's direct answer rather than a general reaction.",
+          "For assisted follow-up, choose a balanced client-first next move. Improve settlement prospects within authority, but do not concede beyond the client's supported range merely to secure agreement.",
+          "The assisted outgoingDraft must materially address the latest blocker and must not repeat the represented lawyer's most recent public message.",
+          "For assisted follow-up, do not repeat terms the parties already appear to agree on. Draft only the unresolved adjustments or precise clarification still needed.",
+          "Acknowledge existing alignment in no more than one short clause when necessary, and keep outgoingDraft under 120 words.",
+          "If context.convergence.tacticShiftRequired is true, make one decisive different move: use a supported conditional formula, offer a materially different authorized trade, or ask one answerable binary clarification. Do not repeat the stalled request.",
+          "If the latest opposing offer is acceptable, set both acceptanceAuthority and recommendedAction to accept. Otherwise recommendedAction must be counter, clarify, or hold.",
           "Evaluate the effect of the lawyer's private communication on the represented client's trust and willingness. Honest reassurance, useful clarity, and respectful risk explanation may improve mood; dismissiveness, pressure, false certainty, or ignoring stated priorities should reduce it.",
           "Base moodDelta on the lawyer's communication quality, not merely whether the current offer is favorable. A routine neutral question should usually be 0 to +2, genuinely helpful communication may be +3 to +8, and harmful communication may be -3 to -15.",
           "If the lawyer asks whether the client can live with the latest offer, set acceptanceAuthority to accept only if that offer is within the represented client's acceptable settlement range. Otherwise use counter, reject, or unclear.",
           "When acceptanceAuthority is accept, authorityReason must briefly describe the acceptable range or conditions that make the latest offer livable.",
-          "Do not turn settlement authority into one precise required term set; describe a qualitative band of acceptable value, timing, release, cost, fault, or certainty tradeoffs.",
+          "For general authority questions, describe a qualitative acceptable band. This does not apply when the lawyer expressly asks the client to choose exact figures or mechanics for the next offer.",
           "Do not invent new facts or legal outcomes.",
-          "Keep label under 7 words, note under 24 words, each driver under 12 words, and privateClientLine under 20 words.",
+          "Write outgoingDraft as a polished message from the lawyer to opposing counsel using only supported terms and the client's authorized range.",
+          "outgoingDraft must contain no greeting, sign-off, private client quotation, internal instruction, drafting commentary, labels such as Counteroffer, or requests for the lawyer to add details.",
+          "Do not copy authorityReason, suggestedRevision, drivers, or privateClientLine into outgoingDraft. Translate their supported substance into natural outward-facing prose.",
+          "If an exact figure is unknown, do not claim that 'exact balance' is a term. State that it will be specified in the final agreement or omit it.",
+          "Keep label under 7 words, note under 24 words, each driver under 12 words, and privateClientLine under 55 words.",
           "acceptanceAuthority must be one of: accept, counter, reject, unclear.",
           "Never mention AI, models, prompts, previews, scoring, schemas, or generation.",
           "Tone must be one of: emerald, amber, red.",
@@ -520,6 +638,8 @@ export const previewSettlementDraftForClient = async ({
           drivers: ["string"],
           privateClientLine: "string",
           suggestedRevision: "string",
+          outgoingDraft: "polished message to opposing counsel with no greeting or sign-off",
+          recommendedAction: "counter | clarify | accept | hold",
           acceptanceAuthority: "accept | counter | reject | unclear",
           authorityReason: "string",
           moodDelta: "number from -15 to 8",
@@ -529,59 +649,101 @@ export const previewSettlementDraftForClient = async ({
           ...buildSettlementPromptContext({
             caseSession,
             settlement: currentSettlement,
-            message,
+            message: effectiveMessage,
             actorSide: playerSide,
           }),
           representedSide: playerSide,
+          assistedMode,
+          sourceOfferSignature,
+          concreteAuthorityRequested,
           clientMoneyPosture: representedClientMoneyPosture,
-          offerTerms: normalizedOfferTerms,
-          privateLawyerMessageToClient: coerceString(clientInstruction),
+          offerTerms: effectiveOfferTerms,
+          privateLawyerMessageToClient: privateInstruction,
+          representedClientMemory: coerceString(caseSession.clientMemoryExcerpt),
           factSheet: caseSession.factSheet || {},
           recentIntake: (caseSession.interviewTranscript || []).slice(-8),
         },
       }),
     });
 
+    let preview = aiResult
+        ? normalizeAiSettlementPreview(aiResult, {
+            sourceOfferSignature,
+            sourceOfferCreatedAt: latestOpposingEntry?.createdAt || null,
+            consultationMode: assistedMode ? "assisted_follow_up" : "manual",
+            consultedAt: new Date().toISOString(),
+          })
+        : {
+            ...fallbackAiSettlementPreview(),
+            sourceOfferSignature,
+            sourceOfferCreatedAt: latestOpposingEntry?.createdAt || null,
+            consultationMode: assistedMode ? "assisted_follow_up" : "manual",
+            consultedAt: new Date().toISOString(),
+          };
+    if (assistedMode) {
+      const latestOwnMessage = [...(currentSettlement.transcript || [])]
+        .reverse()
+        .find(
+          (entry) =>
+            entry?.role === "player" && (!entry.side || entry.side === playerSide)
+        )?.text;
+      const assistedDraft =
+        cleanClientPreviewCopy(preview.outgoingDraft) ||
+        buildPublicSettlementDraft({
+          clientPreview: preview,
+          terms: effectiveOfferTerms,
+        });
+      const repeatedDraft =
+        assistedDraft &&
+        coerceString(assistedDraft).toLowerCase() ===
+          coerceString(latestOwnMessage).toLowerCase();
+      preview = {
+        ...preview,
+        outgoingDraft: repeatedDraft
+          ? "Before we revise further, please identify the single remaining term preventing agreement and state the concrete change your client requires. We will respond directly to that point."
+          : assistedDraft,
+        recommendedAction: repeatedDraft ? "clarify" : preview.recommendedAction,
+      };
+    }
+
     return {
-      preview: aiResult
-        ? normalizeAiSettlementPreview(aiResult)
-        : fallbackAiSettlementPreview(),
+      preview,
       usageEntries: usageCollector.entries,
     };
   } catch (error) {
     console.error("settlement client preview failed", error);
+    const fallbackPreview = {
+      ...fallbackAiSettlementPreview(),
+      sourceOfferSignature,
+      sourceOfferCreatedAt: latestOpposingEntry?.createdAt || null,
+      consultationMode: assistedMode ? "assisted_follow_up" : "manual",
+      consultedAt: new Date().toISOString(),
+    };
     return {
-      preview: fallbackAiSettlementPreview(),
+      preview: assistedMode
+        ? {
+            ...fallbackPreview,
+            outgoingDraft:
+              buildPublicSettlementDraft({
+                clientPreview: fallbackPreview,
+                terms: effectiveOfferTerms,
+              }) ||
+              "Please identify the single remaining term preventing agreement and the concrete change your client requires. We will respond directly to that point.",
+          }
+        : fallbackPreview,
       usageEntries: usageCollector.entries,
     };
   }
 };
 
-const getPrivateHuddleRoundKey = (settlement = {}) => {
-  const latestOpponentEntry = [...(settlement.transcript || [])]
-    .reverse()
-    .find((entry) => entry?.role === "opponent");
-  const source = latestOpponentEntry
-    ? {
-        text: latestOpponentEntry.text || "",
-        terms: latestOpponentEntry.terms || [],
-      }
-    : {
-        text: "opening-huddle",
-        terms: settlement.currentTerms || [],
-      };
-
-  return createHash("sha256")
-    .update(JSON.stringify(source))
-    .digest("hex")
-    .slice(0, 16);
-};
+const getPrivateHuddleRoundKey = (settlement = {}, playerSide = "client") =>
+  getSettlementOfferSignature({ settlement, playerSide }) || "opening-huddle";
 
 export const applyPrivateClientHuddleMood = ({ caseSession, preview } = {}) => {
   const settlement = normalizeSettlement(caseSession?.settlement || {}, caseSession || {});
   const playerSide = getPlayerSide(caseSession || {});
   const moodKey = getSettlementMoodKeyForSide(playerSide);
-  const roundKey = getPrivateHuddleRoundKey(settlement);
+  const roundKey = getPrivateHuddleRoundKey(settlement, playerSide);
   const priorState = settlement.clientHuddle || {};
   const sameRound = priorState.roundKey === roundKey;
   const attempts = sameRound ? Math.max(0, Number(priorState.attempts) || 0) : 0;
@@ -637,6 +799,71 @@ export const applyPrivateClientHuddleMood = ({ caseSession, preview } = {}) => {
       reason: moodReason,
       capped: appliedDelta !== requestedDelta,
     },
+  };
+};
+
+export const acceptLatestSoloSettlementOffer = ({ caseSession, userId, message = "" } = {}) => {
+  const settlement = normalizeSettlement(caseSession?.settlement || {}, caseSession || {});
+  const playerSide = getPlayerSide(caseSession || {});
+  const latestOffer = getLatestOpposingSettlementEntry({ settlement, playerSide });
+  const currentSignature = getSettlementOfferSignature({ settlement, playerSide });
+  const preview = settlement.clientPreview || {};
+
+  if (!latestOffer || !currentSignature) {
+    const error = new Error("There is no current opposing offer to accept.");
+    error.status = 409;
+    throw error;
+  }
+  if (
+    preview.sourceOfferSignature !== currentSignature ||
+    preview.acceptanceAuthority !== "accept"
+  ) {
+    const error = new Error("Ask your client about the latest offer before accepting it.");
+    error.status = 409;
+    throw error;
+  }
+
+  const acceptedTerms = normalizeSettlementEntryTerms(latestOffer.terms);
+  const finalTerms = acceptedTerms.length
+    ? acceptedTerms.map((term) => `${term.label}: ${term.value}`)
+    : [`Accepted proposal: ${coerceString(latestOffer.text).slice(0, 500)}`];
+  const now = new Date();
+  const acceptanceMessage =
+    coerceString(message) ||
+    "My client accepts your latest settlement proposal. Please confirm we have agreement.";
+  const nextSettlement = {
+    ...settlement,
+    status: "settled",
+    finalTerms,
+    resolved: true,
+    resolution: "settled",
+    resolvedAt: now,
+    accepted: true,
+    acceptedAt: now,
+    acceptedByUserId: userId || null,
+    acceptedBySide: playerSide,
+    outcomeSummary: "The represented client accepted the opposing side's latest offer.",
+    failureReason: "",
+    completedAt: now,
+    transcript: [
+      ...settlement.transcript,
+      {
+        role: "player",
+        speaker: "You",
+        text: acceptanceMessage,
+        terms: acceptedTerms,
+        moodSnapshot: settlement.moods,
+        createdAt: now,
+      },
+    ],
+  };
+
+  return {
+    settlement: nextSettlement,
+    usageEntries: [],
+    rejected: false,
+    settled: true,
+    failed: false,
   };
 };
 
@@ -738,6 +965,9 @@ export const runSettlementExchange = async ({
           "Both clientAccepts and opponentAccepts must be true only when both simulated parties accept the same currentTerms.",
           "For the initial message, set initialRejected true if the responding side refuses to enter settlement talks.",
           "Keep responseText in the voice of the responding opposing party or opposing counsel.",
+          "Do not restate terms that both sides already appear to accept. Focus responseText on the remaining adjustments, missing facts, or decision needed now.",
+          "Keep responseText concise: normally 2 to 4 short sentences and under 110 words.",
+          "List only unresolved items in openIssues. List settled or aligned term labels in agreedTerms without explaining them again.",
           "Keep clientReaction as a short note from the represented client/party about whether they can live with the proposal.",
           "playerMoodDelta changes the representedClient mood. opponentMoodDelta changes the opposingClient mood.",
           "Mood deltas must be numbers between -35 and 35.",
@@ -754,6 +984,8 @@ export const runSettlementExchange = async ({
           negotiationFailed: "boolean",
           failureReason: "string",
           outcomeSummary: "string",
+          openIssues: ["short unresolved adjustment, missing fact, or decision"],
+          agreedTerms: ["short label for a term both sides already align on"],
         },
         context: buildSettlementPromptContext({
           caseSession,
@@ -770,6 +1002,49 @@ export const runSettlementExchange = async ({
   } catch (error) {
     console.error("settlement exchange failed", error);
     result = fallbackSettlementResult({ settlement: activeSettlement, message, actorSide: playerSide });
+  }
+
+  const previousOpponentEntry = [...activeSettlement.transcript]
+    .reverse()
+    .find((entry) => entry?.role === "opponent");
+  const priorIssueSignature = settlementProgressSignature(previousOpponentEntry?.openIssues);
+  const nextIssueSignature = settlementProgressSignature(result.openIssues);
+  const priorTermsSignature = settlementProgressSignature(activeSettlement.currentTerms);
+  const nextTermsSignature = settlementProgressSignature(result.currentTerms);
+  const sameBlocker = Boolean(
+    !initial &&
+      priorTermsSignature === nextTermsSignature &&
+      ((priorIssueSignature && priorIssueSignature === nextIssueSignature) ||
+        (!priorIssueSignature && !nextIssueSignature))
+  );
+  const noProgressCount = sameBlocker
+    ? activeSettlement.noProgressCount + 1
+    : 0;
+  const tacticShiftTriggered =
+    sameBlocker && noProgressCount >= 2 && !activeSettlement.tacticShiftUsed;
+  const tacticShiftFailed = Boolean(
+    sameBlocker &&
+      activeSettlement.tacticShiftUsed &&
+      activeSettlement.tacticShiftRequired
+  );
+  const tacticShiftUsed = sameBlocker
+    ? activeSettlement.tacticShiftUsed || tacticShiftTriggered
+    : false;
+  const tacticShiftRequired = tacticShiftTriggered;
+  const publicExchangeCount =
+    activeSettlement.transcript.filter((entry) => entry?.role === "player").length + 1;
+  const exchangeLimitReached = publicExchangeCount >= MAX_SETTLEMENT_PUBLIC_EXCHANGES;
+
+  if (result.status !== "settled" && (tacticShiftFailed || exchangeLimitReached)) {
+    result = {
+      ...result,
+      status: "failed",
+      accepted: false,
+      finalTerms: [],
+      failureReason: exchangeLimitReached
+        ? "Negotiations reached the eight-exchange limit without agreement."
+        : "Negotiations reached an impasse after the remaining blocker did not change.",
+    };
   }
 
   if (initial && result.rejected) {
@@ -792,13 +1067,20 @@ export const runSettlementExchange = async ({
     speaker: getPartyName(template, getOpposingSide(playerSide)),
     text: result.responseText,
     terms: normalizeSettlementTermsAsRows(result.currentTerms),
+    openIssues: result.openIssues,
+    agreedTerms: result.agreedTerms,
     moodSnapshot: result.moods,
+    createdAt: new Date(),
   };
   const provisionalSettlement = {
     ...activeSettlement,
     status: result.status,
     moods: result.moods,
     currentTerms: result.currentTerms,
+    noProgressCount,
+    tacticShiftUsed,
+    tacticShiftRequired,
+    publicExchangeCount,
     transcript: [
       ...activeSettlement.transcript,
       {
@@ -806,7 +1088,10 @@ export const runSettlementExchange = async ({
         speaker: "You",
         text: message,
         terms: playerProposalTerms,
+        openIssues: [],
+        agreedTerms: [],
         moodSnapshot: activeSettlement.moods,
+        createdAt: new Date(),
       },
       opponentEntry,
     ],
@@ -851,6 +1136,10 @@ export const runSettlementExchange = async ({
     acceptedBySide: settled ? playerSide : "",
     outcomeSummary: result.outcomeSummary,
     failureReason: result.failureReason,
+    noProgressCount,
+    tacticShiftUsed,
+    tacticShiftRequired,
+    publicExchangeCount,
     rejectionCount,
     cooldownUntil,
     completedAt,
@@ -861,6 +1150,8 @@ export const runSettlementExchange = async ({
         speaker: "You",
         text: message,
         terms: playerProposalTerms,
+        openIssues: [],
+        agreedTerms: [],
         moodSnapshot: activeSettlement.moods,
       },
       opponentEntry,

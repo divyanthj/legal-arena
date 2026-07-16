@@ -18,6 +18,7 @@ export async function POST(req, { params }) {
       terms: body?.terms || {},
       message: body?.message || "",
       clientInstruction: body?.clientInstruction || "",
+      mode: body?.mode || "manual",
     });
 
     if (!result) {
@@ -27,7 +28,7 @@ export async function POST(req, { params }) {
       );
     }
 
-    return NextResponse.json({ preview: result.preview });
+    return NextResponse.json(result);
   } catch (error) {
     console.error(error);
     return NextResponse.json({ error: error.message }, { status: 500 });

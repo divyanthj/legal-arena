@@ -1,69 +1,31 @@
 "use client";
 
 import { Dialog, Transition } from "@headlessui/react";
+import { XMarkIcon } from "@heroicons/react/24/outline";
 import { Fragment } from "react";
 
-// A simple modal component which can be shown/hidden with a boolean and a function
-// Because of the setIsModalOpen function, you can't use it in a server component.
-const Modal = ({ isModalOpen, setIsModalOpen }) => {
-  return (
-    <Transition appear show={isModalOpen} as={Fragment}>
-      <Dialog
-        as="div"
-        className="relative z-50"
-        onClose={() => setIsModalOpen(false)}
-      >
-        <Transition.Child
-          as={Fragment}
-          enter="ease-out duration-300"
-          enterFrom="opacity-0"
-          enterTo="opacity-100"
-          leave="ease-in duration-200"
-          leaveFrom="opacity-100"
-          leaveTo="opacity-0"
-        >
-          <div className="fixed inset-0 bg-neutral-focus bg-opacity-50" />
-        </Transition.Child>
-
-        <div className="fixed inset-0 overflow-y-auto">
-          <div className="flex min-h-full overflow-hidden items-start md:items-center justify-center p-2">
-            <Transition.Child
-              as={Fragment}
-              enter="ease-out duration-300"
-              enterFrom="opacity-0 scale-95"
-              enterTo="opacity-100 scale-100"
-              leave="ease-in duration-200"
-              leaveFrom="opacity-100 scale-100"
-              leaveTo="opacity-0 scale-95"
-            >
-              <Dialog.Panel className="relative w-full max-w-3xl h-full overflow-visible transform text-left align-middle shadow-xl transition-all rounded-xl bg-base-100 p-6 md:p-8">
-                <div className="flex justify-between items-center mb-4">
-                  <Dialog.Title as="h2" className="font-semibold">
-                    I&apos;m a modal
-                  </Dialog.Title>
-                  <button
-                    className="btn btn-square btn-ghost btn-sm"
-                    onClick={() => setIsModalOpen(false)}
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                      className="w-5 h-5"
-                    >
-                      <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
-                    </svg>
-                  </button>
-                </div>
-
-                <section>And here is my content</section>
-              </Dialog.Panel>
-            </Transition.Child>
-          </div>
+const Modal = ({ isModalOpen, setIsModalOpen, title = "Legal Arena", eyebrow = "Case desk", children, footer }) => (
+  <Transition appear show={isModalOpen} as={Fragment}>
+    <Dialog as="div" className="relative z-50 text-white" onClose={() => setIsModalOpen(false)}>
+      <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="opacity-0" enterTo="opacity-100" leave="ease-in duration-200" leaveFrom="opacity-100" leaveTo="opacity-0">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md" />
+      </Transition.Child>
+      <div className="fixed inset-0 overflow-y-auto p-3 sm:p-6">
+        <div className="flex min-h-full items-end justify-center sm:items-center">
+          <Transition.Child as={Fragment} enter="ease-out duration-300" enterFrom="translate-y-6 opacity-0 scale-[0.98]" enterTo="translate-y-0 opacity-100 scale-100" leave="ease-in duration-200" leaveFrom="translate-y-0 opacity-100 scale-100" leaveTo="translate-y-6 opacity-0 scale-[0.98]">
+            <Dialog.Panel className="arena-glass w-full max-w-3xl overflow-hidden rounded-t-[2rem] shadow-2xl shadow-black/70 sm:rounded-[2rem]">
+              <header className="flex items-start justify-between gap-6 border-b border-white/10 px-6 py-5 sm:px-8 sm:py-6">
+                <div><p className="arena-kicker">{eyebrow}</p><Dialog.Title as="h2" className="mt-2 text-2xl font-semibold tracking-tight text-white">{title}</Dialog.Title></div>
+                <button type="button" className="arena-modal-close btn btn-circle btn-ghost btn-sm border border-white/10 text-white/70 hover:border-white/20 hover:bg-white/10 hover:text-white" onClick={() => setIsModalOpen(false)} aria-label="Close modal"><XMarkIcon className="h-5 w-5" /></button>
+              </header>
+              <div className="max-h-[70vh] overflow-y-auto px-6 py-6 text-white/70 sm:px-8">{children}</div>
+              {footer ? <footer className="flex flex-wrap justify-end gap-3 border-t border-white/10 bg-black/20 px-6 py-5 sm:px-8">{footer}</footer> : null}
+            </Dialog.Panel>
+          </Transition.Child>
         </div>
-      </Dialog>
-    </Transition>
-  );
-};
+      </div>
+    </Dialog>
+  </Transition>
+);
 
 export default Modal;

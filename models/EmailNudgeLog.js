@@ -26,6 +26,7 @@ const emailNudgeLogSchema = mongoose.Schema(
         "leaderboard_milestone",
         "new_content_relevant",
         "dormant_winback",
+        "manual_admin",
       ],
       required: true,
       trim: true,
