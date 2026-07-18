@@ -12,6 +12,7 @@ export default function EarlyAccessCheckoutButton({
   className = "btn btn-block min-h-16 rounded-xl border-0 bg-[#fee88a] px-6 text-base font-bold normal-case tracking-normal text-black shadow-[0_18px_42px_rgba(245,158,11,0.16)] transition hover:scale-[1.01] hover:bg-[#fff0a6] hover:shadow-[0_20px_48px_rgba(245,158,11,0.2)] disabled:scale-100 disabled:bg-[#fee88a]/70 md:text-lg",
   onIntent = null,
   showArrow = false,
+  continuationCaseId = "",
 }) {
   const [isLoading, setIsLoading] = useState(false);
 
@@ -27,10 +28,13 @@ export default function EarlyAccessCheckoutButton({
     try {
       await waitForDatafastAttribution();
 
-      const purchaseSuccessUrl = new URL("/purchase-success", window.location.origin).toString();
+      const purchaseSuccessUrl = new URL("/purchase-success", window.location.origin);
+      if (continuationCaseId) {
+        purchaseSuccessUrl.searchParams.set("nextFrom", continuationCaseId);
+      }
       const response = await apiClient.post("/lemonsqueezy/create-checkout", {
         variantId,
-        redirectUrl: purchaseSuccessUrl,
+        redirectUrl: purchaseSuccessUrl.toString(),
       });
 
       if (response?.url) {
@@ -45,9 +49,13 @@ export default function EarlyAccessCheckoutButton({
           provider: "lemonsqueezy",
           variant_id: variantId,
           source,
+          continuation: continuationCaseId ? "next_case" : "",
         });
         window.location.href = response.url;
+        return;
       }
+
+      setIsLoading(false);
     } catch (error) {
       trackGoal("early_access_checkout_failed", {
         provider: "lemonsqueezy",
@@ -55,7 +63,6 @@ export default function EarlyAccessCheckoutButton({
         source,
       });
       console.error(error);
-    } finally {
       setIsLoading(false);
     }
   };

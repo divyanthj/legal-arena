@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { createLemonSqueezyCheckout } from "../libs/lemonsqueezy.js";
 
 async function runTest(name, fn) {
@@ -20,6 +21,13 @@ process.env.LEMONSQUEEZY_API_KEY = "test-key";
 process.env.LEMONSQUEEZY_STORE_ID = "12345";
 
 const results = [];
+
+const checkoutButtonSource = await readFile(
+  new URL("../components/legal-arena/EarlyAccessCheckoutButton.js", import.meta.url),
+  "utf8"
+);
+assert.match(checkoutButtonSource, /window\.location\.href = response\.url;\s*return;/);
+assert.doesNotMatch(checkoutButtonSource, /finally\s*\{\s*setIsLoading\(false\)/);
 
 results.push(
   await runTest("returns null when variant id is missing", async () => {

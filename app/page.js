@@ -1,5 +1,6 @@
 ﻿import Link from "next/link";
 import Image from "next/image";
+import { GiftIcon } from "@heroicons/react/24/outline";
 import connectMongo from "@/libs/mongoose";
 import CaseTemplate from "@/models/CaseTemplate";
 import { getCategoryTitle } from "@/libs/game/categories";
@@ -29,7 +30,7 @@ const searchIntentKeywords = [
 export const metadata = getSEOTags({
   title: "Legal Arena | AI Lawyer Game",
   description:
-    "Play an AI lawyer game with endless legal matters, client interviews, settlement talks, courtroom arguments, and player challenges.",
+    "Play one complete AI legal case free. Interview your client, negotiate, build your case, argue in court, and receive a detailed verdict.",
   keywords: [
     "lawyer game",
     "online lawyer game",
@@ -43,7 +44,7 @@ export const metadata = getSEOTags({
   openGraph: {
     title: "Legal Arena | AI Lawyer Game",
     description:
-      "Interview AI clients, negotiate settlements, build your case, and argue in court before an AI judge.",
+      "Your first complete case is free. Interview an AI client, negotiate, build your case, and argue before an AI judge.",
   },
 });
 
@@ -335,7 +336,7 @@ export default async function Page() {
   const freeGameplayCampaignActive = freeGameplayCampaignStatus.active;
   const campaignCtaLabel =
     freeGameplayAnnouncement?.ctaLabel ||
-    (freeGameplayCampaignActive ? "Play Free Case" : "Start Free");
+    (freeGameplayCampaignActive ? "Play Free Case" : "Play 1 Case Free");
   const totalCasesLabel =
     totalActiveCases > 0 ? totalActiveCases.toLocaleString("en-US") : "Growing";
   const infiniteCasesStat = (
@@ -459,22 +460,37 @@ export default async function Page() {
               </Link>
             </div>
           ) : null}
-          <div className="arena-surface-soft mx-auto mb-8 flex max-w-5xl flex-col gap-4 border-amber-200/22 bg-amber-200/[0.055] px-5 py-4 text-left md:flex-row md:items-center md:justify-between">
-            <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-amber-100/72">
-                Awards, titles, and country-shaped cases are live
-              </p>
-              <h2 className="mt-2 text-xl font-semibold leading-tight text-white">
-                Build a legal career worth displaying.
-              </h2>
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-amber-50/78">
-                Earn distinctions from your advocacy, unlock lawyer titles, collect
-                country-specific honours, and explore the latest improvements to
-                cases, settlements, portraits, and public reports.
-              </p>
-            </div>
-            <div className="flex w-full shrink-0 flex-col gap-3 md:w-auto">
-              <WhatsNewDialog buttonLabel="See what's new" />
+          <div className="arena-surface-soft mx-auto mb-8 max-w-5xl overflow-hidden border-amber-200/30 bg-amber-200/[0.065] shadow-[0_22px_60px_rgba(245,158,11,0.08)]">
+            <div className="flex flex-col gap-5 px-5 py-5 text-left sm:px-6 md:flex-row md:items-center md:justify-between">
+              <div className="flex min-w-0 items-start gap-4">
+                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-amber-200/25 bg-amber-200/10 text-amber-100" aria-hidden="true">
+                  <GiftIcon className="h-5 w-5" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-xs font-bold uppercase tracking-[0.22em] text-amber-100/76">
+                    One complete case — free
+                  </p>
+                  <h2 className="mt-2 text-xl font-semibold leading-tight text-white sm:text-2xl">
+                    Your first case is now free to play.
+                  </h2>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-amber-50/72">
+                    Choose the category and country, interview your AI client, negotiate,
+                    argue in court, and receive your verdict. No payment required.
+                  </p>
+                </div>
+              </div>
+              <div className="flex w-full shrink-0 flex-col gap-2.5 sm:flex-row md:w-auto md:flex-col">
+                <Link
+                  href="/dashboard"
+                  className="arena-btn-light inline-flex min-h-12 items-center justify-center px-5 py-3 text-sm"
+                  data-landing-event="landing_cta_clicked"
+                  data-landing-source="evergreen_free_case_banner"
+                  data-landing-destination="dashboard"
+                >
+                  Play Your Free Case
+                </Link>
+                <WhatsNewDialog buttonLabel="See what's new" />
+              </div>
             </div>
           </div>
           <div className="mx-auto max-w-6xl">
@@ -495,7 +511,7 @@ export default async function Page() {
                   data-landing-source="hero"
                   data-landing-destination="dashboard"
                 >
-                  {freeGameplayCampaignActive ? campaignCtaLabel : "Try a Case"}
+                  {campaignCtaLabel}
                 </Link>
                 <a
                   href="#how-it-works"

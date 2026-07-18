@@ -30,6 +30,7 @@ await import("./run-template-title-tests.mjs");
 await import("./run-lemonsqueezy-tests.mjs");
 await import("./run-independence-day-promo-tests.mjs");
 await import("./run-free-gameplay-campaign-tests.mjs");
+await import("./run-free-trial-funnel-tests.mjs");
 await import("./run-timed-solo-campaign-tests.mjs");
 await import("./run-api-credential-tests.mjs");
 await import("./run-case-report-tests.mjs");

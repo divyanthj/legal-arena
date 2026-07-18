@@ -90,6 +90,7 @@ export const resolveSoloGameplayAccessDecision = ({
   campaignStatus = { active: false, state: "inactive", campaign: {} },
   timedCampaignStatus = null,
   timedCampaignAccess = null,
+  soloTrial = { state: "available" },
   caseSession = null,
   action = "play",
   buildCampaignGrant = null,
@@ -110,6 +111,7 @@ export const resolveSoloGameplayAccessDecision = ({
       reason: "full_access",
       hasArenaAccess: true,
       freeGameplayCampaignAccess: null,
+      trialState: soloTrial?.state || "available",
     };
   }
 
@@ -119,6 +121,18 @@ export const resolveSoloGameplayAccessDecision = ({
       reason: "completed_verdict_read",
       hasArenaAccess: false,
       readOnly: true,
+      trialState: soloTrial?.state || "resolved",
+    };
+  }
+
+  if (action === "list") {
+    return {
+      allowed: true,
+      reason: "dashboard_read",
+      hasArenaAccess: false,
+      readOnly: soloTrial?.state === "resolved",
+      trialState: soloTrial?.state || "available",
+      trialCaseId: soloTrial?.caseSessionId || "",
     };
   }
 
@@ -197,6 +211,35 @@ export const resolveSoloGameplayAccessDecision = ({
     };
   }
 
+  const trialState = soloTrial?.state || "available";
+  const trialCaseId = String(soloTrial?.caseSessionId || "");
+  const requestedCaseId = String(caseSession?._id || caseSession?.id || "");
+
+  if (
+    trialState === "active" &&
+    trialCaseId &&
+    requestedCaseId &&
+    trialCaseId === requestedCaseId
+  ) {
+    return {
+      allowed: true,
+      reason: "evergreen_trial_continuation",
+      hasArenaAccess: false,
+      trialState,
+      trialCaseId,
+    };
+  }
+
+  if (trialState === "available" && action === "create") {
+    return {
+      allowed: true,
+      reason: "evergreen_trial_available",
+      hasArenaAccess: false,
+      trialState,
+      requiresTrialClaim: true,
+    };
+  }
+
   return {
     allowed: false,
     reason:
@@ -207,5 +250,8 @@ export const resolveSoloGameplayAccessDecision = ({
     status: 403,
     message: FREE_GAMEPLAY_PAYWALL_MESSAGE,
     hasArenaAccess: false,
+    upgradeRequired: true,
+    trialState,
+    trialCaseId,
   };
 };

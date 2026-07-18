@@ -32,6 +32,7 @@ import { useCaseVoiceRecorder } from "./useCaseVoiceRecorder";
 import { getCaseReportProgressLabel } from "./caseReportUi";
 import { CountryBadge } from "./CountryFlagPicker";
 import AwardUnlockPanel from "./AwardUnlockPanel";
+import PostResolutionNextCaseCard from "./PostResolutionNextCaseCard";
 
 const WITNESS_RESPONSE_TIMEOUT_MS = 45_000;
 
@@ -4900,6 +4901,13 @@ export default function CaseWorkspace({
                   This matter is closed. Pick up another case from your docket.
                 </p>
               </div>
+
+              {analyticsMode === "solo" ? (
+                <PostResolutionNextCaseCard
+                  caseSession={caseSession}
+                  hasArenaAccess={Boolean(apiConfig.hasArenaAccess)}
+                />
+              ) : null}
             </div>
           </section>
 
@@ -8059,6 +8067,13 @@ export default function CaseWorkspace({
                       </p>
                     </div>
                   </div>
+
+                  {analyticsMode === "solo" ? (
+                    <PostResolutionNextCaseCard
+                      caseSession={caseSession}
+                      hasArenaAccess={Boolean(apiConfig.hasArenaAccess)}
+                    />
+                  ) : null}
 
                   <section className="mt-5 rounded-2xl border border-amber-200/20 bg-black/22 p-4 sm:p-5">
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">

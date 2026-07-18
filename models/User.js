@@ -255,6 +255,31 @@ const userSchema = mongoose.Schema(
         default: null,
       },
     },
+    soloTrial: {
+      state: {
+        type: String,
+        enum: ["available", "active", "resolved"],
+        default: "available",
+      },
+      caseSessionId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "CaseSession",
+        default: null,
+      },
+      claimedAt: {
+        type: Date,
+        default: null,
+      },
+      resolvedAt: {
+        type: Date,
+        default: null,
+      },
+      resolution: {
+        type: String,
+        enum: ["", "verdict", "settled", "forfeit", "exited", "legacy"],
+        default: "",
+      },
+    },
     onboarding: {
       type: onboardingSchema,
       default: () => ({}),

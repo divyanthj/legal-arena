@@ -716,9 +716,22 @@ progress::-webkit-progress-value {
     background-color: rgba(0, 0, 0, 0);
     backdrop-filter: blur(0);
   }
+
   to {
     background-color: rgba(0, 0, 0, 0.74);
     backdrop-filter: blur(10px);
+  }
+}
+
+.post-resolution-card {
+  container-type: inline-size;
+}
+
+@container (min-width: 48rem) {
+  .post-resolution-card__layout {
+    grid-template-columns: minmax(0, 1fr) 20rem;
+    align-items: center;
+    gap: 1.75rem;
   }
 }
 

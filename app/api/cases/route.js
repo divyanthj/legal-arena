@@ -1,10 +1,16 @@
 import { NextResponse } from "next/server";
+import mongoose from "mongoose";
+import CaseSession from "@/models/CaseSession";
 import { getRequestSession } from "@/libs/api-auth";
 import {
   createCaseSession,
   listDashboardDataForUser,
 } from "@/libs/game/store";
-import { getSoloGameplayAccessForSession } from "@/libs/admin";
+import {
+  claimEvergreenSoloTrial,
+  getSoloGameplayAccessForSession,
+  releaseEvergreenSoloTrialClaim,
+} from "@/libs/admin";
 import {
   detectCountryCodeFromHeaders,
   isValidCountryCode,
@@ -28,7 +34,12 @@ export async function GET(req) {
   });
   if (!access.allowed) {
     return NextResponse.json(
-      { error: access.message },
+      {
+        error: access.message,
+        code: access.upgradeRequired ? "upgrade_required" : "access_denied",
+        trialState: access.trialState,
+        trialCaseId: access.trialCaseId || "",
+      },
       { status: access.status || 403 }
     );
   }
@@ -65,11 +76,17 @@ export async function POST(req) {
   });
   if (!access.allowed) {
     return NextResponse.json(
-      { error: access.message },
+      {
+        error: access.message,
+        code: access.upgradeRequired ? "upgrade_required" : "access_denied",
+        trialState: access.trialState,
+        trialCaseId: access.trialCaseId || "",
+      },
       { status: access.status || 403 }
     );
   }
 
+  let claimedTrialCaseId = null;
   try {
     const body = await req.json();
     if (body?.countryCode && !isValidCountryCode(body.countryCode)) {
@@ -85,18 +102,53 @@ export async function POST(req) {
       normalizeCountryCode(body?.countryCode) ||
       (await getPlayerCaseCountryPreference(session.user.id)) ||
       detectCountryCodeFromHeaders(req.headers);
+    if (access.requiresTrialClaim) {
+      claimedTrialCaseId = new mongoose.Types.ObjectId();
+      const claim = await claimEvergreenSoloTrial({
+        userId: session.user.id,
+        caseSessionId: claimedTrialCaseId,
+      });
+      if (!claim) {
+        return NextResponse.json(
+          {
+            error: "Your free case has already been claimed.",
+            code: "upgrade_required",
+            trialState: "active",
+          },
+          { status: 409 }
+        );
+      }
+    }
+
     const caseSession = await createCaseSession({
       userId: session.user.id,
       userProfile: session.user,
+      caseSessionId: claimedTrialCaseId,
       caseTemplateId: body?.caseTemplateId,
       categorySlug: body?.categorySlug,
-      complexity: body?.complexity,
+      complexity: access.requiresTrialClaim ? 1 : body?.complexity,
       countryCode,
       freeGameplayCampaignAccess: access.freeGameplayCampaignAccess,
     });
 
-    return NextResponse.json({ caseSession });
+    return NextResponse.json({
+      caseSession,
+      trialState: access.requiresTrialClaim ? "active" : access.trialState,
+      isFreeTrialCase: Boolean(access.requiresTrialClaim),
+    });
   } catch (error) {
+    if (claimedTrialCaseId) {
+      const savedTrialCase = await CaseSession.exists({
+        _id: claimedTrialCaseId,
+        userId: session.user.id,
+      });
+      if (!savedTrialCase) {
+        await releaseEvergreenSoloTrialClaim({
+          userId: session.user.id,
+          caseSessionId: claimedTrialCaseId,
+        });
+      }
+    }
     console.error(error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

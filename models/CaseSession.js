@@ -337,6 +337,11 @@ const settlementSchema = mongoose.Schema(
       type: Date,
       default: null,
     },
+    continuationOfCaseId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "CaseSession",
+      default: null,
+    },
   },
   { _id: false }
 );
@@ -895,6 +900,13 @@ const caseSessionSchema = mongoose.Schema(
 
 caseSessionSchema.plugin(toJSON);
 caseSessionSchema.index({ userId: 1, completedAt: -1 });
+caseSessionSchema.index(
+  { userId: 1, continuationOfCaseId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { continuationOfCaseId: { $type: "objectId" } },
+  }
+);
 
 export default mongoose.models.CaseSession ||
   mongoose.model("CaseSession", caseSessionSchema);

@@ -94,7 +94,7 @@ const ButtonAccount = () => {
             leaveFrom="transform scale-100 opacity-100"
             leaveTo="transform scale-95 opacity-0"
           >
-            <Popover.Panel className="absolute bottom-full left-0 z-10 mb-3 w-screen max-w-[16rem] transform">
+            <Popover.Panel className="absolute right-0 top-full z-10 mt-3 w-screen max-w-[16rem] origin-top-right transform">
               <div className="arena-surface overflow-hidden rounded-2xl p-1.5 text-white shadow-xl">
                 <div className="space-y-1 text-sm text-white/85">
                   <button

@@ -95,6 +95,8 @@ export default async function Dashboard() {
       userEmail={session.user?.email || ""}
       hasArenaAccess={Boolean(soloCreateAccess.hasArenaAccess)}
       canStartSoloCases={soloCreateAccess.allowed}
+      trialState={soloCreateAccess.trialState || soloCreateAccess.soloTrial?.state || "available"}
+      trialCaseId={soloCreateAccess.trialCaseId || soloCreateAccess.soloTrial?.caseSessionId || ""}
       detectedCountryCode={preferredCountryCode || countryDetection.countryCode}
       detectedCountrySource={preferredCountryCode ? "profile" : countryDetection.source}
     />

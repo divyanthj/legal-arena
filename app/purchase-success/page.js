@@ -1,4 +1,5 @@
 import { getSEOTags } from "@/libs/seo";
+import { Suspense } from "react";
 import PurchaseSuccessRedirect from "./PurchaseSuccessRedirect";
 
 export const metadata = getSEOTags({
@@ -8,5 +9,9 @@ export const metadata = getSEOTags({
 });
 
 export default function PurchaseSuccessPage() {
-  return <PurchaseSuccessRedirect />;
+  return (
+    <Suspense fallback={<main className="arena-app-shell min-h-screen bg-black" />}>
+      <PurchaseSuccessRedirect />
+    </Suspense>
+  );
 }

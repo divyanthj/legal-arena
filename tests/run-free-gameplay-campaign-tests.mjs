@@ -27,6 +27,54 @@ assert.equal(
   "full_access"
 );
 
+assert.deepEqual(
+  resolveSoloGameplayAccessDecision({
+    action: "create",
+    soloTrial: { state: "available" },
+  }),
+  {
+    allowed: true,
+    reason: "evergreen_trial_available",
+    hasArenaAccess: false,
+    trialState: "available",
+    requiresTrialClaim: true,
+  }
+);
+
+assert.equal(
+  resolveSoloGameplayAccessDecision({
+    action: "play",
+    soloTrial: { state: "active", caseSessionId: "case-1" },
+    caseSession: { _id: "case-1", status: "interview" },
+  }).reason,
+  "evergreen_trial_continuation"
+);
+
+assert.equal(
+  resolveSoloGameplayAccessDecision({
+    action: "create",
+    soloTrial: { state: "active", caseSessionId: "case-1" },
+  }).upgradeRequired,
+  true
+);
+
+assert.equal(
+  resolveSoloGameplayAccessDecision({
+    action: "create",
+    progression: { completedCases: 1 },
+    soloTrial: { state: "resolved", caseSessionId: "case-1" },
+  }).reason,
+  "free_verdict_completed"
+);
+
+assert.equal(
+  resolveSoloGameplayAccessDecision({
+    action: "list",
+    soloTrial: { state: "resolved", caseSessionId: "case-1" },
+  }).reason,
+  "dashboard_read"
+);
+
 assert.equal(
   resolveSoloGameplayAccessDecision({
     progression: { completedCases: 0 },
@@ -122,5 +170,7 @@ assert.match(landingPageSource, /freeGameplayAnnouncement\.ctaHref/);
 assert.match(casesRouteSource, /getSoloGameplayAccessForSession/);
 assert.match(casesRouteSource, /freeGameplayCampaignAccess: access\.freeGameplayCampaignAccess/);
 assert.match(courtroomRouteSource, /getSoloGameplayAccessForSession/);
+assert.match(casesRouteSource, /claimEvergreenSoloTrial/);
+assert.match(casesRouteSource, /access\.requiresTrialClaim \? 1 : body\?\.complexity/);
 
 console.log("Free gameplay campaign tests passed");

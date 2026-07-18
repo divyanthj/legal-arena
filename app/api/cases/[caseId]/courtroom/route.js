@@ -11,7 +11,10 @@ import {
 } from "@/libs/game/store";
 import { appendUsageEntriesToCaseSession } from "@/libs/game/sessionUsage";
 import { ensurePlaintiffCourtOpening } from "@/libs/game/courtroomOpening";
-import { getSoloGameplayAccessForSession } from "@/libs/admin";
+import {
+  getSoloGameplayAccessForSession,
+  resolveEvergreenSoloTrial,
+} from "@/libs/admin";
 import {
   getAdjournmentRemaining,
   recordAdjournmentDecision,
@@ -184,6 +187,12 @@ export async function POST(req, { params }) {
 
     if (result.verdict && !automaticAdjournment?.granted) {
       await caseSession.save();
+      await resolveEvergreenSoloTrial({
+        userId: session.user.id,
+        caseSessionId: caseSession._id,
+        resolution: "verdict",
+        resolvedAt: caseSession.completedAt,
+      });
       try {
         awardEvaluation = await evaluateCompletedCase({
           caseSession,

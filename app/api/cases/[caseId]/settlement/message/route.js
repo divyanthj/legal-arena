@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { getRequestSession } from "@/libs/api-auth";
-import { getSoloGameplayAccessForSession } from "@/libs/admin";
+import {
+  getSoloGameplayAccessForSession,
+  resolveEvergreenSoloTrial,
+} from "@/libs/admin";
 import {
   buildCasePayload,
   getCaseSessionDocumentForUser,
@@ -91,6 +94,14 @@ export async function POST(req, { params }) {
     }
 
     await caseSession.save();
+    if (result.settled) {
+      await resolveEvergreenSoloTrial({
+        userId: session.user.id,
+        caseSessionId: caseSession._id,
+        resolution: "settled",
+        resolvedAt: caseSession.completedAt,
+      });
+    }
     let awardEvaluation = null;
     if (result.settled) {
       try {

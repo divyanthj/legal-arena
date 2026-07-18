@@ -1010,11 +1010,13 @@ export const listScenarioOptions = async (userId, userProfile = null) => {
 export const createCaseSession = async ({
   userId,
   userProfile = null,
+  caseSessionId = null,
   caseTemplateId,
   categorySlug = DEFAULT_CATEGORY_SLUG,
   complexity = 1,
   countryCode = "US",
   freeGameplayCampaignAccess = null,
+  continuationOfCaseId = null,
 }) => {
   await connectMongo();
 
@@ -1056,6 +1058,7 @@ export const createCaseSession = async ({
     const desiredRelief = buildDesiredReliefForSide(template, playerSide);
 
     const caseSession = new CaseSession({
+      ...(caseSessionId ? { _id: caseSessionId } : {}),
       userId,
       title: dynamicCase.title,
       templateSlug: template.slug,
@@ -1068,6 +1071,7 @@ export const createCaseSession = async ({
       status: "interview",
       playerImage: user?.image || "",
       freeGameplayCampaignAccess: freeGameplayCampaignAccess || undefined,
+      continuationOfCaseId: continuationOfCaseId || undefined,
       lawbookVersion: LAWBOOK_VERSION,
       maxCourtRounds: Math.max(3, dynamicCase.complexity + 1),
       templateSnapshot: template,
@@ -1182,6 +1186,7 @@ export const createCaseSession = async ({
   }
 
   const caseSession = new CaseSession({
+    ...(caseSessionId ? { _id: caseSessionId } : {}),
     userId,
     title: template.title,
     caseTemplateId: templateDocument._id,
@@ -1194,6 +1199,7 @@ export const createCaseSession = async ({
     status: "interview",
     playerImage: user?.image || "",
     freeGameplayCampaignAccess: freeGameplayCampaignAccess || undefined,
+    continuationOfCaseId: continuationOfCaseId || undefined,
     lawbookVersion: LAWBOOK_VERSION,
     maxCourtRounds: Math.max(3, template.complexity + 1),
     templateSnapshot,

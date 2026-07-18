@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { getRequestSession } from "@/libs/api-auth";
 import { buildCasePayload, exitCaseSessionForUser } from "@/libs/game/store";
-import { getSoloGameplayAccessForSession } from "@/libs/admin";
+import {
+  getSoloGameplayAccessForSession,
+  resolveEvergreenSoloTrial,
+} from "@/libs/admin";
 
 export async function POST(req, { params }) {
   const { session, error: authError } = await getRequestSession(req);
@@ -31,6 +34,13 @@ export async function POST(req, { params }) {
     if (!caseSession) {
       return NextResponse.json({ error: "Case not found" }, { status: 404 });
     }
+
+    await resolveEvergreenSoloTrial({
+      userId: session.user.id,
+      caseSessionId: caseSession._id,
+      resolution: caseSession.status === "verdict" ? "forfeit" : "exited",
+      resolvedAt: caseSession.completedAt || caseSession.exitedAt || new Date(),
+    });
 
     return NextResponse.json({
       success: true,

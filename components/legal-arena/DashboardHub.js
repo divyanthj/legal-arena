@@ -14,7 +14,9 @@ import {
   buildCaseAssemblyPreview,
 } from "@/libs/caseAssemblyCore.mjs";
 import { DevelopmentAccessModal } from "@/components/legal-arena/DevelopmentAccessGate";
+import EarlyAccessCheckoutButton from "@/components/legal-arena/EarlyAccessCheckoutButton";
 import CaseAssemblyOverlay from "@/components/legal-arena/CaseAssemblyOverlay";
+import config from "@/config";
 import CountryFlagPicker, {
   CountryBadge,
   useCaseCountrySelection,
@@ -1258,6 +1260,131 @@ const DashboardOnboardingOverlay = ({ isOpen, onComplete }) => {
   );
 };
 
+const FreeTrialConfirmationModal = ({
+  categoryTitle = "your chosen category",
+  countryName = "your chosen jurisdiction",
+  onCancel,
+  onConfirm,
+}) => {
+  const lifetimePlan = config.lemonsqueezy.plans[0];
+  const features = [
+    {
+      icon: HeroIcons.ChatBubbleLeftRightIcon,
+      title: "Interview your AI client",
+      body: "Ask questions, uncover claims, and find the facts that shape the dispute.",
+    },
+    {
+      icon: HeroIcons.ClipboardDocumentCheckIcon,
+      title: "Build a complete case file",
+      body: "Develop your theory, timeline, evidence, risks, and requested relief.",
+    },
+    {
+      icon: HeroIcons.HandRaisedIcon,
+      title: "Negotiate a settlement",
+      body: "Test leverage, make offers, and resolve the matter before judgment when appropriate.",
+    },
+    {
+      icon: HeroIcons.BuildingLibraryIcon,
+      title: "Argue before an AI judge",
+      body: "Present courtroom arguments, answer the opposition, and react to the bench.",
+    },
+    {
+      icon: HeroIcons.ScaleIcon,
+      title: "Receive a detailed verdict",
+      body: "See who prevailed, what helped your side, and what weakened your argument.",
+    },
+    {
+      icon: HeroIcons.TrophyIcon,
+      title: "Earn XP and build your record",
+      body: "Keep the completed result on your dashboard and player profile permanently.",
+    },
+  ];
+
+  return (
+    <dialog className="arena-modal modal modal-open" aria-labelledby="free-case-confirmation-title">
+      <div className="modal-box max-h-[92vh] max-w-4xl overflow-y-auto rounded-[2rem] border border-amber-200/20 bg-[#080806] p-0 text-white shadow-2xl shadow-black/80">
+        <header className="relative overflow-hidden border-b border-white/10 bg-gradient-to-br from-amber-200/[0.15] via-white/[0.035] to-transparent px-5 py-6 sm:px-8 sm:py-8">
+          <div className="pointer-events-none absolute -right-20 -top-28 h-64 w-64 rounded-full bg-amber-200/10 blur-3xl" aria-hidden="true" />
+          <button
+            type="button"
+            className="absolute right-4 top-4 grid h-10 w-10 place-items-center rounded-full border border-white/10 bg-black/25 text-white/62 transition hover:border-white/25 hover:text-white"
+            onClick={onCancel}
+            aria-label="Close free-case confirmation"
+          >
+            <HeroIcons.XMarkIcon className="h-5 w-5" aria-hidden="true" />
+          </button>
+          <div className="relative max-w-2xl pr-10">
+            <span className="inline-flex items-center gap-2 rounded-full border border-amber-200/25 bg-amber-200/10 px-3 py-1.5 text-xs font-black uppercase tracking-[0.16em] text-amber-100">
+              <HeroIcons.GiftIcon className="h-4 w-4" aria-hidden="true" />
+              One complete case — free
+            </span>
+            <p className="arena-kicker mt-5 text-amber-200">Are you sure?</p>
+            <h2 id="free-case-confirmation-title" className="arena-headline mt-2 text-4xl uppercase leading-[0.95] text-white sm:text-5xl">
+              Use your one free case?
+            </h2>
+            <p className="mt-4 text-sm font-semibold leading-6 text-white/62 sm:text-base sm:leading-7">
+              Legal Arena will generate a full level-1 {categoryTitle.toLowerCase()} matter in {countryName}. Once it is successfully created, your free-case allowance is used—but the case stays yours to resume and finish anytime.
+            </p>
+          </div>
+        </header>
+
+        <div className="px-5 py-6 sm:px-8 sm:py-7">
+          <div className="grid items-stretch gap-3 sm:grid-cols-2">
+            {features.map((feature) => {
+              const Icon = feature.icon;
+              return (
+                <article key={feature.title} className="flex min-h-[6.5rem] items-start gap-3 rounded-2xl border border-white/[0.09] bg-white/[0.035] p-4 text-left">
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-amber-200/18 bg-amber-200/[0.09] text-amber-100">
+                    <Icon className="h-5 w-5" aria-hidden="true" />
+                  </span>
+                  <div className="min-w-0 flex-1 text-left">
+                    <h3 className="text-sm font-black leading-5 text-white">{feature.title}</h3>
+                    <p className="mt-1 text-xs font-medium leading-5 text-white/52">{feature.body}</p>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+
+          <div className="mt-5 flex items-start gap-3 rounded-2xl border border-rose-200/16 bg-rose-300/[0.055] p-4 text-left text-sm leading-6 text-rose-50/78">
+            <HeroIcons.LockClosedIcon className="mt-0.5 h-5 w-5 shrink-0 text-rose-200" aria-hidden="true" />
+            <p>
+              After this matter is resolved, starting more solo cases and accessing unlimited matters and PVP requires the one-time <strong className="text-white">$15.99 lifetime unlock</strong>.
+            </p>
+          </div>
+
+          <div className="mt-6 grid gap-3 sm:grid-cols-[auto_minmax(0,0.9fr)_minmax(0,1.25fr)] sm:items-stretch">
+            <button type="button" className="arena-btn-dark order-3 min-h-14 px-6 py-3 text-sm sm:order-1" onClick={onCancel}>
+              Not Yet
+            </button>
+            <button type="button" className="arena-btn-dark order-2 flex min-h-14 w-full items-center justify-center gap-2 px-5 py-3 text-sm" onClick={onConfirm}>
+              <HeroIcons.GiftIcon className="h-4 w-4 text-amber-100" aria-hidden="true" />
+              Start My Free Case
+            </button>
+            <EarlyAccessCheckoutButton
+              variantId={lifetimePlan.variantId}
+              label={`Unlock Unlimited — $${lifetimePlan.price.toFixed(2)}`}
+              source="free_trial_confirmation"
+              showArrow
+              className="arena-btn-light order-1 flex min-h-14 w-full items-center justify-center gap-2 px-6 py-3 text-sm font-black shadow-[0_16px_38px_rgba(245,158,11,0.18)] transition hover:shadow-[0_18px_44px_rgba(245,158,11,0.25)] disabled:opacity-60 sm:order-3"
+              onIntent={() =>
+                trackGoal("free_trial_confirmation_purchase_clicked", {
+                  price: lifetimePlan.price,
+                  category: categoryTitle,
+                  country: countryName,
+                })
+              }
+            />
+          </div>
+        </div>
+      </div>
+      <form method="dialog" className="modal-backdrop bg-black/70 backdrop-blur-[3px]">
+        <button type="button" onClick={onCancel}>close</button>
+      </form>
+    </dialog>
+  );
+};
+
 export default function DashboardHub({
   initialCases,
   templates,
@@ -1276,6 +1403,8 @@ export default function DashboardHub({
   userEmail = "",
   hasArenaAccess = false,
   canStartSoloCases = false,
+  trialState = "available",
+  trialCaseId = "",
   detectedCountryCode = "US",
   detectedCountrySource = "detected",
 }) {
@@ -1292,6 +1421,7 @@ export default function DashboardHub({
   const [activeTemplateIndex, setActiveTemplateIndex] = useState(0);
   const [showPlayableOnly, setShowPlayableOnly] = useState(true);
   const [showPaywallModal, setShowPaywallModal] = useState(false);
+  const [pendingFreeTrialStart, setPendingFreeTrialStart] = useState(null);
   const [creating, setCreating] = useState(false);
   const [caseAssembly, setCaseAssembly] = useState(null);
   const [caseLibrarySearch, setCaseLibrarySearch] = useState("");
@@ -1358,6 +1488,8 @@ export default function DashboardHub({
       cases_finished: finishedCases.length,
       pvp_total: challenges.length,
       pvp_attention: pvpAttentionCount,
+      trial_state: trialState,
+      trial_case_id: trialCaseId,
     });
   }, [
     canStartSoloCases,
@@ -1366,6 +1498,8 @@ export default function DashboardHub({
     hasArenaAccess,
     initialCases.length,
     pvpAttentionCount,
+    trialState,
+    trialCaseId,
   ]);
 
   const selectedLeaderboard = categoryLeaderboards[selectedCategory] || [];
@@ -1532,6 +1666,31 @@ export default function DashboardHub({
 
     if (!dynamicStart && !caseTemplateId) return;
 
+    if (trialAvailable && !options.freeTrialConfirmed) {
+      const confirmation = {
+        caseTemplateId: caseTemplateId || null,
+        options: {
+          ...options,
+          dynamic: dynamicStart,
+          categorySlug: dynamicCategory,
+          complexity: 1,
+        },
+        categoryTitle:
+          categories.find((category) => category.slug === dynamicCategory)?.title ||
+          selectedCategoryTitle,
+        countryName: dynamicStart
+          ? selectedCountry?.name || selectedCountryCode
+          : "the selected matter's jurisdiction",
+      };
+      trackGoal("free_trial_confirmation_viewed", {
+        category: dynamicCategory,
+        country: dynamicStart ? selectedCountryCode : "template",
+        generation_mode: dynamicStart ? "dynamic" : "template",
+      });
+      setPendingFreeTrialStart(confirmation);
+      return;
+    }
+
     if (!canStartSoloCases) {
       trackGoal("paywall_prompt_viewed", {
         source: "case_start",
@@ -1599,7 +1758,7 @@ export default function DashboardHub({
     });
 
     try {
-      const { caseSession } = await apiClient.post(
+      const { caseSession, isFreeTrialCase } = await apiClient.post(
         "/cases",
         dynamicStart
           ? {
@@ -1623,7 +1782,16 @@ export default function DashboardHub({
         side: caseSession.playerSide,
         generation_mode: dynamicStart ? "dynamic" : "template",
         country: caseSession.caseCountry?.code || (dynamicStart ? selectedCountryCode : ""),
+        free_trial: Boolean(isFreeTrialCase),
       });
+      if (isFreeTrialCase) {
+        trackGoal("free_trial_case_started", {
+          case_id: caseSession.id || caseSession._id || "",
+          category: caseSession.primaryCategory,
+          country: caseSession.caseCountry?.code,
+          complexity: caseSession.complexity,
+        });
+      }
       const generationCompletedAt = Date.now();
       const caseRef = caseSession.slug || caseSession.id;
       const caseHref = `/dashboard/cases/${caseRef}`;
@@ -1743,7 +1911,9 @@ export default function DashboardHub({
       ? visibleTemplates[Math.min(activeTemplateIndex, visibleTemplates.length - 1)]
       : null;
   const isNewUser = (progression.completedCases || 0) === 0;
-  const shouldSellLifetimeAccess = !hasArenaAccess;
+  const trialAvailable = !hasArenaAccess && trialState === "available";
+  const trialActive = !hasArenaAccess && trialState === "active";
+  const shouldSellLifetimeAccess = !hasArenaAccess && trialState === "resolved";
   const searchedLibraryTemplates = useMemo(() => {
     const query = normalizeSearchText(caseLibrarySearch);
 
@@ -1889,6 +2059,10 @@ export default function DashboardHub({
   const canContinueDesktopHeroCase = Boolean(desktopHeroCase) && !shouldSellLifetimeAccess;
   const primaryCtaLabel = shouldSellLifetimeAccess
     ? "Unlock Lifetime Access"
+    : trialActive && canResumeLastCase
+    ? "Continue Your Free Case"
+    : trialAvailable
+    ? "Start Your Free Case"
     : canResumeLastCase
     ? "Continue Case"
     : "Start New Case";
@@ -1902,9 +2076,13 @@ export default function DashboardHub({
     ? "Unlock Legal Arena"
     : desktopFeaturedTemplate?.title || "Start a new case";
   const desktopFeatureKicker = canContinueDesktopHeroCase
-    ? "Continue Your Case"
+    ? trialActive
+      ? "Continue Your Free Case"
+      : "Continue Your Case"
     : shouldSellLifetimeAccess
     ? "Unlock Your Arena"
+    : trialAvailable
+    ? "Your First Case Is Free"
     : isNewUser
     ? "Start Your First Case"
     : "Start New Case";
@@ -1927,6 +2105,8 @@ export default function DashboardHub({
     ? `${desktopHeroCaseProgress.nextStep}. ${desktopHeroCase.primaryCategory || "Your case"} is ready.`
     : shouldSellLifetimeAccess
     ? "Get permanent access to infinite legal matters, player challenges, and future updates."
+    : trialAvailable
+    ? "Choose a category and country, then play one complete level-1 matter through verdict or settlement."
     : desktopFeaturedTemplate?.overview ||
       "Choose a dispute, interview your client, and prepare for court.";
   const desktopPlaintiffName =
@@ -3912,6 +4092,29 @@ export default function DashboardHub({
             onClose={() => setShowPaywallModal(false)}
           />
         ) : null}
+        {pendingFreeTrialStart ? (
+          <FreeTrialConfirmationModal
+            categoryTitle={pendingFreeTrialStart.categoryTitle}
+            countryName={pendingFreeTrialStart.countryName}
+            onCancel={() => {
+              trackGoal("free_trial_confirmation_cancelled", {
+                category: pendingFreeTrialStart.options.categorySlug,
+              });
+              setPendingFreeTrialStart(null);
+            }}
+            onConfirm={() => {
+              const pending = pendingFreeTrialStart;
+              trackGoal("free_trial_confirmation_accepted", {
+                category: pending.options.categorySlug,
+              });
+              setPendingFreeTrialStart(null);
+              handleCreateCase(pending.caseTemplateId, {
+                ...pending.options,
+                freeTrialConfirmed: true,
+              });
+            }}
+          />
+        ) : null}
         {caseAssembly ? (
           <CaseAssemblyOverlay
             assembly={caseAssembly}
@@ -4619,6 +4822,21 @@ export default function DashboardHub({
         <DevelopmentAccessModal
           email={userEmail}
           onClose={() => setShowPaywallModal(false)}
+        />
+      ) : null}
+      {pendingFreeTrialStart ? (
+        <FreeTrialConfirmationModal
+          categoryTitle={pendingFreeTrialStart.categoryTitle}
+          countryName={pendingFreeTrialStart.countryName}
+          onCancel={() => setPendingFreeTrialStart(null)}
+          onConfirm={() => {
+            const pending = pendingFreeTrialStart;
+            setPendingFreeTrialStart(null);
+            handleCreateCase(pending.caseTemplateId, {
+              ...pending.options,
+              freeTrialConfirmed: true,
+            });
+          }}
         />
       ) : null}
       {caseAssembly ? (

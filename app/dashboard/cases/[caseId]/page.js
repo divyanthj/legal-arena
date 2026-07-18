@@ -59,7 +59,12 @@ export default async function CasePage({ params }) {
   return (
     <CaseWorkspace
       initialCase={toClientJSON(caseSession)}
-      apiConfig={{ playerId: session.user.id }}
+      apiConfig={{
+        playerId: session.user.id,
+        hasArenaAccess: Boolean(access.hasArenaAccess),
+        trialState: access.trialState || access.soloTrial?.state || "available",
+        trialCaseId: access.trialCaseId || access.soloTrial?.caseSessionId || "",
+      }}
     />
   );
 }

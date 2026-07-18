@@ -120,7 +120,157 @@ const getUserForAccess = async (session) => {
 
   await connectMongo();
   return User.findById(session.user.id).select(
-    "_id email hasAccess freeAccessGranted progression timedSoloCampaignAccess"
+    "_id email hasAccess freeAccessGranted progression timedSoloCampaignAccess soloTrial"
+  );
+};
+
+const getSoloTrialResolution = (caseSession = {}) => {
+  if (!caseSession) return "";
+  if (caseSession.status === "settled") return "settled";
+  if (caseSession.status === "verdict") {
+    return caseSession.verdict?.summary?.toLowerCase().includes("quit")
+      ? "forfeit"
+      : "verdict";
+  }
+  if (caseSession.status === "exited") return "exited";
+  return "";
+};
+
+const toSoloTrialPayload = (soloTrial = {}) => ({
+  state: soloTrial?.state || "available",
+  caseSessionId: soloTrial?.caseSessionId
+    ? String(soloTrial.caseSessionId)
+    : "",
+  claimedAt: soloTrial?.claimedAt || null,
+  resolvedAt: soloTrial?.resolvedAt || null,
+  resolution: soloTrial?.resolution || "",
+});
+
+const reconcileSoloTrialForUser = async (user) => {
+  if (!user?._id) return toSoloTrialPayload();
+
+  let trial = toSoloTrialPayload(user.soloTrial);
+  let trialCase = trial.caseSessionId
+    ? await CaseSession.findOne({
+        _id: trial.caseSessionId,
+        userId: user._id,
+      }).select("_id status createdAt completedAt verdict.summary")
+    : null;
+
+  if (!trial.caseSessionId && trial.state === "available") {
+    trialCase = await CaseSession.findOne({ userId: user._id })
+      .sort({ createdAt: 1 })
+      .select("_id status createdAt completedAt verdict.summary");
+  }
+
+  const legacyCompletion = Number(user.progression?.completedCases || 0) > 0;
+  const resolution = getSoloTrialResolution(trialCase);
+  const nextTrial = trialCase
+    ? {
+        state: resolution ? "resolved" : "active",
+        caseSessionId: trialCase._id,
+        claimedAt: trial.claimedAt || trialCase.createdAt || new Date(),
+        resolvedAt: resolution
+          ? trial.resolvedAt || trialCase.completedAt || new Date()
+          : null,
+        resolution: resolution || "",
+      }
+    : legacyCompletion
+    ? {
+        state: "resolved",
+        caseSessionId: null,
+        claimedAt: trial.claimedAt || null,
+        resolvedAt: trial.resolvedAt || new Date(),
+        resolution: "legacy",
+      }
+    : {
+        state: "available",
+        caseSessionId: null,
+        claimedAt: null,
+        resolvedAt: null,
+        resolution: "",
+      };
+
+  if (JSON.stringify(toSoloTrialPayload(user.soloTrial)) !== JSON.stringify(toSoloTrialPayload(nextTrial))) {
+    await User.updateOne({ _id: user._id }, { $set: { soloTrial: nextTrial } });
+  }
+
+  return toSoloTrialPayload(nextTrial);
+};
+
+export const claimEvergreenSoloTrial = async ({ userId, caseSessionId }) => {
+  await connectMongo();
+  const user = await User.findById(userId).select("_id progression soloTrial");
+  const trial = await reconcileSoloTrialForUser(user);
+  if (trial.state !== "available") return null;
+
+  const claimedAt = new Date();
+  const claimed = await User.findOneAndUpdate(
+    {
+      _id: userId,
+      $or: [
+        { "soloTrial.state": "available" },
+        { "soloTrial.state": { $exists: false } },
+      ],
+      "soloTrial.caseSessionId": null,
+    },
+    {
+      $set: {
+        soloTrial: {
+          state: "active",
+          caseSessionId,
+          claimedAt,
+          resolvedAt: null,
+          resolution: "",
+        },
+      },
+    },
+    { new: true }
+  ).select("soloTrial");
+
+  return claimed ? toSoloTrialPayload(claimed.soloTrial) : null;
+};
+
+export const releaseEvergreenSoloTrialClaim = async ({ userId, caseSessionId }) => {
+  await User.updateOne(
+    {
+      _id: userId,
+      "soloTrial.state": "active",
+      "soloTrial.caseSessionId": caseSessionId,
+    },
+    {
+      $set: {
+        soloTrial: {
+          state: "available",
+          caseSessionId: null,
+          claimedAt: null,
+          resolvedAt: null,
+          resolution: "",
+        },
+      },
+    }
+  );
+};
+
+export const resolveEvergreenSoloTrial = async ({
+  userId,
+  caseSessionId,
+  resolution,
+  resolvedAt = new Date(),
+}) => {
+  if (!userId || !caseSessionId) return;
+  await User.updateOne(
+    {
+      _id: userId,
+      "soloTrial.caseSessionId": caseSessionId,
+    },
+    {
+      $set: {
+        "soloTrial.state": "resolved",
+        "soloTrial.resolvedAt": resolvedAt,
+        "soloTrial.resolution": resolution,
+      },
+    }
   );
 };
 
@@ -228,12 +378,13 @@ export const getSoloGameplayAccessForSession = async ({
   const timedCampaignStatus = getTimedSoloCampaignStatus(
     config.timedSoloCampaign
   );
+  const soloTrial = await reconcileSoloTrialForUser(user);
 
   let caseSession = null;
   if (caseId) {
     caseSession = await CaseSession.findOne(
       buildCaseAccessQuery({ userId: session.user.id, caseId })
-    ).select("status freeGameplayCampaignAccess");
+    ).select("_id status freeGameplayCampaignAccess");
   }
 
   const decision = resolveSoloGameplayAccessDecision({
@@ -244,6 +395,7 @@ export const getSoloGameplayAccessForSession = async ({
     campaignStatus,
     timedCampaignStatus,
     timedCampaignAccess: user?.timedSoloCampaignAccess,
+    soloTrial,
     action,
     buildCampaignGrant: buildFreeCampaignGrant,
   });
@@ -252,6 +404,7 @@ export const getSoloGameplayAccessForSession = async ({
     ...decision,
     message: decision.message || FREE_GAMEPLAY_PAYWALL_MESSAGE,
     caseSession,
+    soloTrial,
   };
 };
 

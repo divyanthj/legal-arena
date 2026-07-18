@@ -1,47 +1,56 @@
-# Design QA
+# Post-resolution continuation card design QA
 
-- Source visual truth: `C:\Users\Admin\AppData\Local\Temp\codex-clipboard-4f034a86-472f-441d-8e1a-467c7de6c387.png`
-- Implementation target: `C:\projects\legal-arena\components\legal-arena\CaseWorkspace.js`
-- Intended viewport: desktop, approximately 1700 × 1230
-- State: completed solo settlement
-- Implementation screenshot: unavailable; the local production preview returned a 500 before the case UI rendered.
+- Source visual truth: `C:/Users/Admin/AppData/Local/Temp/codex-clipboard-f8c563af-69af-4699-9061-0ba3bb56513d.png`
+- Desktop implementation evidence: `C:/projects/legal-arena/design-qa-case-viewport.png`
+- Focused implementation evidence: `C:/projects/legal-arena/design-qa-post-resolution-card.png`
+- Mobile implementation evidence: `C:/projects/legal-arena/design-qa-post-resolution-mobile.png`
+- Desktop viewport: 1280 × 720
+- Mobile viewport: 390 × 844
+- State: completed solo verdict. The browser account has paid access, so the rendered CTA is “Fight the Next Case”; the supplied source shows the structurally equivalent free-user checkout CTA.
 
 ## Full-view comparison evidence
 
-The source shows the settlement-quality card isolated against the far-right edge of an oversized completion hero. The implementation replaces that split with a centered `max-w-5xl` completion composition and places settlement quality directly beneath the completion heading in a full-width result panel. At desktop widths the panel uses two balanced internal columns; at smaller widths it stacks naturally.
+The source exposed a visually weak offer card between the ruling and case-report panels. Its checkout label wrapped onto two lines and its arrow detached below the button. The post-fix desktop capture shows the continuation card as a distinct near-black docket panel, clearly separated from the verdict surface, with a single-line primary action and a compact reassurance line. The card remains visually subordinate to the ruling while clearly preceding the report-publishing workflow.
 
-## Focused region comparison evidence
+## Focused comparison evidence
 
-Focused browser comparison was blocked before the completed-settlement region rendered. The preview failed while loading Next.js server output because `.next/server/vendor-chunks/next-auth.js` was missing. The existing development preview separately returns a `useContext` server error. Neither failure originated in the edited completion JSX.
-
-## Findings
-
-- P1 — Browser-rendered verification unavailable.
-  - Location: local preview runtime.
-  - Evidence: both available preview modes fail before rendering the target state.
-  - Impact: spacing, wrapping, and responsive behavior cannot be visually compared against the reference screenshot.
-  - Fix: repair or restart the project's preview environment, then open a completed settlement and capture the same desktop viewport.
-
-## Fidelity surfaces
-
-- Fonts and typography: existing product typography and weights were preserved; browser comparison blocked.
-- Spacing and layout rhythm: source-level layout was changed from a far-right 24rem result rail to a centered, bounded result composition; browser comparison blocked.
-- Colors and visual tokens: existing emerald, white-opacity, border, button, and surface tokens were preserved.
-- Image quality and asset fidelity: no raster assets were added or changed; the existing Heroicons remain in use.
-- Copy and content: all settlement result copy and values were preserved.
+The focused and mobile captures confirm that the component now responds to its own width. At 727px it uses a stacked composition with an aligned icon, heading, copy, full-width CTA, and supporting note. At 317px it preserves padding, readable wrapping, full CTA visibility, and touch-target sizing without horizontal overflow. A separate crop was not required beyond these component-level captures because the card contains no raster assets or dense data.
 
 ## Comparison history
 
-1. Initial source finding: settlement result is visually stranded at the far right, leaving excessive empty space between it and the completion message.
-2. Fix made: centered the completion content, moved quality beneath the heading, enlarged the score hierarchy, grouped XP and CTA beside it, and added responsive stacking.
-3. Post-fix evidence: production build compiled successfully; browser render remained blocked by the unrelated runtime errors described above.
+### Iteration 1
 
-## Implementation checklist
+- P1: The free checkout label wrapped and the chevron appeared on a separate line, weakening the primary action.
+- P2: The offer blended into the verdict’s red/green outcome surface and lacked a clear internal hierarchy.
+- P2: Viewport-based responsive columns forced a cramped split when the component lived in a narrow content rail.
 
-- [x] Center the completion composition.
-- [x] Keep settlement quality adjacent to the completion message.
-- [x] Preserve XP, quality bonus, explanation, and dashboard action.
-- [x] Stack the result cleanly below the large breakpoint.
-- [ ] Re-run browser comparison after the local preview runtime is repaired.
+Fixes made:
 
-final result: blocked
+- Rebuilt the CTA as an explicit flex row with a shorter single-line label and consistent icon gap.
+- Introduced a neutral docket surface, leading status icon, stronger typography hierarchy, inset CTA well, and purchase/access reassurance.
+- Replaced viewport-based splitting with a 48rem container query so layout follows actual component width.
+
+### Iteration 2
+
+- Desktop browser evidence shows aligned typography, balanced spacing, a visually dominant action, and no detached icon.
+- Mobile browser evidence shows no clipping or horizontal overflow at 390px.
+- Browser console errors: none.
+- Primary interaction contract checked: the paid continuation button is present and enabled; checkout behavior remains covered by the existing funnel tests.
+
+## Fidelity surfaces
+
+- Fonts and typography: Existing Legal Arena display and UI fonts are preserved. Heading weight, line height, kicker tracking, and button optical weight now establish a clear hierarchy with intentional mobile wrapping.
+- Spacing and layout rhythm: Card padding, icon alignment, CTA inset, border radius, and vertical gaps are consistent. Container-aware stacking prevents cramped columns.
+- Colors and visual tokens: The near-black surface and restrained amber accents match the existing arena palette while separating the offer from outcome-state colors. Contrast remains strong.
+- Image quality and asset fidelity: No raster assets are used or required. All visible icons come from the project’s existing Heroicons library.
+- Copy and content: Category, country, resolution type, price, and access state remain dynamic. The CTA reassurance clarifies lifetime access or next-case similarity without adding clutter.
+
+## Findings
+
+No actionable P0, P1, or P2 issues remain in the verified desktop and mobile states.
+
+## Follow-up polish
+
+- P3: Capture the free-account checkout variant in-browser when a free authenticated session is available; its layout uses the same verified CTA container and a shorter label.
+
+final result: passed
