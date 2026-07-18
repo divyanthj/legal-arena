@@ -69,6 +69,23 @@ const recentBenchCorpus = (caseSession = {}) =>
     .filter(Boolean)
     .join(" ");
 
+const buildAdmittedWitnessRecord = (caseSession = {}) =>
+  (Array.isArray(caseSession.courtroomTranscript) ? caseSession.courtroomTranscript : [])
+    .filter(
+      (entry) =>
+        entry?.speaker === "witness" &&
+        entry?.entryType === "answer" &&
+        entry?.admitted === true
+    )
+    .map((entry) => ({
+      witnessId: entry.witnessId || "",
+      witnessName: entry.witnessName || entry.speakerName || "Witness",
+      examinationType: entry.examinationType || "",
+      testimony: entry.text || "",
+      admittedFacts: entry.citedFacts || [],
+    }))
+    .slice(-16);
+
 const extractProofGaps = (factSheet = {}) =>
   uniqueList([...(factSheet.missingEvidence || []), ...(factSheet.risks || [])].filter(
     (item) => PROOF_GAP_PATTERN.test(item) || WEAK_PROOF_PATTERN.test(item)
@@ -561,6 +578,7 @@ export const buildCounselContext = ({ caseSession, template, rules }) => {
       name: getPartyName(safeTemplate, getOpposingSide(playerSide)),
     },
     publicCaseFile: caseSession.factSheet,
+    admittedWitnessTestimony: buildAdmittedWitnessRecord(caseSession),
     proofStrategy: buildProofStrategyContext({ caseSession }),
     lawbookRules: rules,
     recentCourtroomTranscript: caseSession.courtroomTranscript.slice(-6),
@@ -618,6 +636,7 @@ export const buildCourtroomAgentContext = ({
     opponentSide,
     complexity: caseSession.complexity,
   });
+  const admittedWitnessTestimony = buildAdmittedWitnessRecord(caseSession);
 
   return {
     shouldReturnVerdict,
@@ -627,6 +646,7 @@ export const buildCourtroomAgentContext = ({
       partyName: getPartyName(safeTemplate, playerSide),
       objective: buildDesiredReliefForSide(safeTemplate, playerSide),
       publicCaseFile: caseSession.factSheet,
+      admittedWitnessTestimony,
       analysis: counselAnalysis,
       proofStrategy,
     },
@@ -645,6 +665,7 @@ export const buildCourtroomAgentContext = ({
       score: caseSession.score,
       judgeProfile: caseSession.judgeProfile || null,
       recentCourtroomTranscript: caseSession.courtroomTranscript.slice(-6),
+      admittedWitnessTestimony,
       proofStrategy,
       ruleApplicationGuidance,
       scoringRules: [
@@ -652,6 +673,7 @@ export const buildCourtroomAgentContext = ({
         "Score the opponent only from opposingCounsel.preparedCaseFile, lawbook rules, and courtroom transcript.",
         "Do not infer, cite, or credit facts, claims, story details, or evidence outside those visible side files.",
         "Treat missing or unsurfaced proof as unavailable, even if an argument alludes to it.",
+        "Treat admittedWitnessTestimony as part of the shared courtroom record. Do not use private witness profiles, excluded answers, sustained questions, or facts that a witness never stated.",
         ...ruleApplicationGuidance,
       ],
       courtroomCalibration: {

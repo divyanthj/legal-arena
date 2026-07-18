@@ -70,6 +70,13 @@ export async function POST(req, { params }) {
       );
     }
 
+    if (caseSession.witnessExamination?.activeWitnessId) {
+      return NextResponse.json(
+        { error: "Finish the active witness examination before presenting another argument." },
+        { status: 400 }
+      );
+    }
+
     const openingResult = await ensurePlaintiffCourtOpening({
       caseSession,
       userId: session.user.id,

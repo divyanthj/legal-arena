@@ -24,7 +24,10 @@ assert.match(
   /but the other side frames that point differently/
 );
 
-assert.match(interviewSource, /const partyResponse = coerceString\(aiResult\.partyResponse\)/);
+assert.match(
+  interviewSource,
+  /const partyResponse = cleanPartyResponseAddress\(coerceString\(aiResult\.partyResponse\)\)/
+);
 assert.match(interviewSource, /throw new Error\("Interview response generation returned no answer\."\)/);
 assert.doesNotMatch(interviewSource, /buildInterviewFallback/);
 assert.doesNotMatch(interviewSource, /FallbackPartyResponse/);
@@ -86,7 +89,7 @@ assert.match(caseWorkspaceSource, /const getEvidenceFollowUpQuestions = /);
 assert.match(caseWorkspaceSource, /const latestEvidenceProductionQuestions =/);
 assert.match(caseWorkspaceSource, /Turn evidence into proof/);
 assert.match(caseWorkspaceSource, /Ask them to read, quote, or describe the record/);
-assert.match(caseWorkspaceSource, /useSuggestedIntakeQuestion\(questionText/);
+assert.match(caseWorkspaceSource, /applySuggestedIntakeQuestion\(questionText/);
 assert.match(caseWorkspaceSource, /closeFactSheetDialog: true/);
 assert.match(caseWorkspaceSource, /Read me the portal message, including the date and exact wording\./);
 

@@ -1,7 +1,9 @@
 import "server-only";
 
+import crypto from "node:crypto";
 import connectMongo from "@/libs/mongoose";
 import AdminOpsConfig from "@/models/AdminOpsConfig";
+import { resolveTimedSoloCampaignStatus } from "@/libs/freeGameplayCampaignAccess";
 
 export const DEFAULT_RETENTION_SETTINGS = {
   automationEnabled: true,
@@ -52,6 +54,16 @@ export const DEFAULT_FREE_GAMEPLAY_CAMPAIGN = {
     "Start any solo case and play through your first verdict while this campaign is live.",
   announcementCtaLabel: "Play Free Case",
   announcementCtaHref: "/dashboard",
+};
+
+export const DEFAULT_TIMED_SOLO_CAMPAIGN = {
+  enabled: false,
+  mode: "fixed_window",
+  startsAt: "",
+  endsAt: "",
+  durationHours: 24,
+  campaignId: "",
+  launchedAt: "",
 };
 
 const toPositiveInt = (value, fallback) => {
@@ -203,6 +215,32 @@ export const sanitizeFreeGameplayCampaign = (input = {}) => ({
   ),
 });
 
+export const sanitizeTimedSoloCampaign = (input = {}) => ({
+  enabled:
+    typeof input.enabled === "boolean"
+      ? input.enabled
+      : DEFAULT_TIMED_SOLO_CAMPAIGN.enabled,
+  mode:
+    input.mode === "after_login" ? "after_login" : "fixed_window",
+  startsAt: normalizeDateString(input.startsAt),
+  endsAt: normalizeDateString(input.endsAt),
+  durationHours: toPositiveInt(
+    input.durationHours,
+    DEFAULT_TIMED_SOLO_CAMPAIGN.durationHours
+  ),
+  campaignId:
+    typeof input.campaignId === "string" ? input.campaignId.trim().slice(0, 100) : "",
+  launchedAt: normalizeDateString(input.launchedAt),
+});
+
+export const getTimedSoloCampaignStatus = (
+  campaign = {},
+  nowInput = new Date()
+) => {
+  const normalized = sanitizeTimedSoloCampaign(campaign);
+  return resolveTimedSoloCampaignStatus(normalized, nowInput);
+};
+
 export const getFreeGameplayCampaignStatus = (
   campaign = {},
   nowInput = new Date()
@@ -270,6 +308,7 @@ export const normalizeAdminOpsConfig = (config = {}) => ({
   freeGameplayCampaign: sanitizeFreeGameplayCampaign(
     config.freeGameplayCampaign || {}
   ),
+  timedSoloCampaign: sanitizeTimedSoloCampaign(config.timedSoloCampaign || {}),
 });
 
 export const getAdminOpsConfig = async () => {
@@ -283,6 +322,7 @@ export const upsertAdminOpsConfig = async ({
   retention,
   digest,
   freeGameplayCampaign,
+  timedSoloCampaign,
 } = {}) => {
   await connectMongo();
 
@@ -318,6 +358,21 @@ export const upsertAdminOpsConfig = async ({
           ...freeGameplayCampaign,
         })
       : current.freeGameplayCampaign,
+    timedSoloCampaign: timedSoloCampaign
+      ? sanitizeTimedSoloCampaign({
+          ...current.timedSoloCampaign,
+          ...timedSoloCampaign,
+          enabled:
+            timedSoloCampaign.mode === "after_login"
+              ? current.timedSoloCampaign.mode === "after_login" &&
+                current.timedSoloCampaign.enabled &&
+                timedSoloCampaign.enabled !== false
+              : timedSoloCampaign.enabled,
+          // Campaign identity is only changed by the dedicated launch operation.
+          campaignId: current.timedSoloCampaign.campaignId,
+          launchedAt: current.timedSoloCampaign.launchedAt,
+        })
+      : current.timedSoloCampaign,
   };
 
   await AdminOpsConfig.findOneAndUpdate(
@@ -332,4 +387,44 @@ export const upsertAdminOpsConfig = async ({
   );
 
   return nextConfig;
+};
+
+export const launchTimedSoloCampaign = async ({ durationHours } = {}) => {
+  await connectMongo();
+
+  const current = await getAdminOpsConfig();
+  const now = new Date();
+  const timedSoloCampaign = sanitizeTimedSoloCampaign({
+    ...current.timedSoloCampaign,
+    enabled: true,
+    mode: "after_login",
+    durationHours,
+    campaignId: crypto.randomUUID(),
+    launchedAt: now.toISOString(),
+  });
+
+  await AdminOpsConfig.findOneAndUpdate(
+    { scope: "global" },
+    {
+      $set: {
+        scope: "global",
+        timedSoloCampaign,
+      },
+    },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  );
+
+  return timedSoloCampaign;
+};
+
+export const disableTimedSoloCampaign = async () => {
+  await connectMongo();
+
+  const config = await AdminOpsConfig.findOneAndUpdate(
+    { scope: "global" },
+    { $set: { "timedSoloCampaign.enabled": false } },
+    { new: true }
+  ).lean();
+
+  return sanitizeTimedSoloCampaign(config?.timedSoloCampaign || {});
 };

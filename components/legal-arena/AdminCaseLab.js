@@ -19,7 +19,6 @@ import {
 } from "./adminCaseLabUtils";
 
 const adminTabs = [
-  { id: "case-authoring", label: "Case Authoring" },
   { id: "email-updates", label: "Email Updates" },
   { id: "retention", label: "Retention Ops" },
   { id: "system", label: "System" },
@@ -77,6 +76,15 @@ const defaultFreeGameplayCampaign = {
     "Start any solo case and play through your first verdict while this campaign is live.",
   announcementCtaLabel: "Play Free Case",
   announcementCtaHref: "/dashboard",
+};
+const defaultTimedSoloCampaign = {
+  enabled: false,
+  mode: "fixed_window",
+  startsAt: "",
+  endsAt: "",
+  durationHours: 24,
+  campaignId: "",
+  launchedAt: "",
 };
 const FREE_GAMEPLAY_START_NOW_DEFAULT_DAYS = 7;
 
@@ -149,6 +157,44 @@ const getCampaignStatusLabel = (campaign = {}) => {
   };
 };
 
+const getTimedSoloCampaignStatusLabel = (campaign = {}) => {
+  if (!campaign.enabled) {
+    return { label: "Inactive", body: "Timed unlimited solo play is closed.", tone: "text-white/56" };
+  }
+
+  if (campaign.mode === "after_login") {
+    const launchedAt = campaign.launchedAt ? new Date(campaign.launchedAt) : null;
+    if (!campaign.campaignId || !launchedAt || Number.isNaN(launchedAt.getTime())) {
+      return { label: "Ready to launch", body: "Set a duration, then launch the campaign.", tone: "text-amber-300" };
+    }
+    return {
+      label: "Active",
+      body: `${campaign.durationHours} hours per user; launched ${launchedAt.toLocaleString()}.`,
+      tone: "text-emerald-300",
+    };
+  }
+
+  const startsAt = campaign.startsAt ? new Date(campaign.startsAt) : null;
+  const endsAt = campaign.endsAt ? new Date(campaign.endsAt) : null;
+  if (
+    !startsAt ||
+    !endsAt ||
+    Number.isNaN(startsAt.getTime()) ||
+    Number.isNaN(endsAt.getTime()) ||
+    startsAt >= endsAt
+  ) {
+    return { label: "Invalid Window", body: "Add a valid start and end date.", tone: "text-amber-300" };
+  }
+  const now = new Date();
+  if (now < startsAt) {
+    return { label: "Scheduled", body: `Opens ${startsAt.toLocaleString()}.`, tone: "text-sky-300" };
+  }
+  if (now >= endsAt) {
+    return { label: "Expired", body: `Closed ${endsAt.toLocaleString()}.`, tone: "text-white/48" };
+  }
+  return { label: "Active", body: `Open until ${endsAt.toLocaleString()}.`, tone: "text-emerald-300" };
+};
+
 export default function AdminCaseLab({
   categories,
   initialTemplates,
@@ -161,7 +207,7 @@ export default function AdminCaseLab({
     () => new Map(categories.map((category) => [category.slug, category.title])),
     [categories]
   );
-  const [activeTab, setActiveTab] = useState("case-authoring");
+  const [activeTab, setActiveTab] = useState("system");
   const [templates, setTemplates] = useState(initialTemplates);
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [sortConfig, setSortConfig] = useState({
@@ -205,6 +251,11 @@ export default function AdminCaseLab({
   const [freeGameplayCampaign, setFreeGameplayCampaign] = useState(
     defaultFreeGameplayCampaign
   );
+  const [timedSoloCampaign, setTimedSoloCampaign] = useState(
+    defaultTimedSoloCampaign
+  );
+  const [timedCampaignLaunching, setTimedCampaignLaunching] = useState(false);
+  const [timedCampaignDisabling, setTimedCampaignDisabling] = useState(false);
   const [retentionRunForm, setRetentionRunForm] = useState({
     dryRun: true,
     limit: 50,
@@ -301,6 +352,8 @@ export default function AdminCaseLab({
     inventoryFilters.complexity !== ALL_FILTER_OPTION;
   const freeGameplayCampaignStatus =
     getCampaignStatusLabel(freeGameplayCampaign);
+  const timedSoloCampaignStatus =
+    getTimedSoloCampaignStatusLabel(timedSoloCampaign);
 
   useEffect(() => {
     let cancelled = false;
@@ -318,6 +371,10 @@ export default function AdminCaseLab({
         setFreeGameplayCampaign({
           ...defaultFreeGameplayCampaign,
           ...(result.config?.freeGameplayCampaign || {}),
+        });
+        setTimedSoloCampaign({
+          ...defaultTimedSoloCampaign,
+          ...(result.config?.timedSoloCampaign || {}),
         });
         setRecentNudges(result.recentNudges || []);
         setRetentionRunForm((current) => ({
@@ -799,6 +856,7 @@ export default function AdminCaseLab({
         retention: retentionConfig,
         digest: digestConfig,
         freeGameplayCampaign,
+        timedSoloCampaign,
       });
 
       setRetentionConfig(result.config.retention);
@@ -806,6 +864,10 @@ export default function AdminCaseLab({
       setFreeGameplayCampaign({
         ...defaultFreeGameplayCampaign,
         ...(result.config.freeGameplayCampaign || {}),
+      });
+      setTimedSoloCampaign({
+        ...defaultTimedSoloCampaign,
+        ...(result.config.timedSoloCampaign || {}),
       });
       setRetentionRunForm((current) => ({
         ...current,
@@ -843,6 +905,60 @@ export default function AdminCaseLab({
       announcementCtaHref:
         current.announcementCtaHref || defaultFreeGameplayCampaign.announcementCtaHref,
     }));
+  };
+
+  const launchTimedSoloCampaign = async () => {
+    const durationHours = Number.parseInt(timedSoloCampaign.durationHours, 10);
+    if (!Number.isFinite(durationHours) || durationHours <= 0) {
+      toast.error("Enter a positive campaign duration in hours.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Launch a new after-login campaign? Any previous rolling campaign timers will stop."
+    );
+    if (!confirmed) return;
+
+    setTimedCampaignLaunching(true);
+    try {
+      const result = await apiClient.post("/admin/timed-solo-campaign/launch", {
+        durationHours,
+      });
+      setTimedSoloCampaign({
+        ...defaultTimedSoloCampaign,
+        ...(result.timedSoloCampaign || {}),
+      });
+      toast.success("Timed solo campaign launched.");
+    } catch (error) {
+      toast.error(
+        error?.response?.data?.error || error?.message || "Failed to launch campaign."
+      );
+    } finally {
+      setTimedCampaignLaunching(false);
+    }
+  };
+
+  const disableTimedSoloCampaign = async () => {
+    const confirmed = window.confirm(
+      "Disable this timed solo campaign now? Users relying on it will see the paywall on their next action."
+    );
+    if (!confirmed) return;
+
+    setTimedCampaignDisabling(true);
+    try {
+      const result = await apiClient.delete("/admin/timed-solo-campaign");
+      setTimedSoloCampaign({
+        ...defaultTimedSoloCampaign,
+        ...(result.timedSoloCampaign || {}),
+      });
+      toast.success("Timed solo campaign disabled.");
+    } catch (error) {
+      toast.error(
+        error?.response?.data?.error || error?.message || "Failed to disable campaign."
+      );
+    } finally {
+      setTimedCampaignDisabling(false);
+    }
   };
 
   const handleRunRetention = async (event) => {
@@ -1351,8 +1467,8 @@ export default function AdminCaseLab({
                   Arena Operations Console
                 </h1>
                 <p className="mt-4 max-w-3xl text-sm leading-7 text-white/66 md:text-base">
-                  Manage case authoring, send product updates to existing users, and keep
-                  operational workflows in one consistent control surface.
+                  Manage access campaigns, user communications, and operational workflows
+                  in one consistent control surface.
                 </p>
                 <p className="mt-4 text-sm text-white/48">
                   Allowed admins: {adminEmails.length ? adminEmails.join(", ") : "none configured"}
@@ -1363,13 +1479,7 @@ export default function AdminCaseLab({
               </Link>
             </div>
 
-            <div className="mt-6 grid gap-3 md:grid-cols-3">
-              <div className="arena-stat-card !p-4">
-                <p className="arena-kicker">Templates</p>
-                <p className="mt-2 text-3xl font-semibold text-white">
-                  {adminStats.templateCount || templates.length}
-                </p>
-              </div>
+            <div className="mt-6 grid gap-3 md:grid-cols-2">
               <div className="arena-stat-card !p-4">
                 <p className="arena-kicker">Users</p>
                 <p className="mt-2 text-3xl font-semibold text-white">
@@ -1401,9 +1511,7 @@ export default function AdminCaseLab({
           </div>
         </div>
 
-        {activeTab === "case-authoring" ? (
-          renderCaseAuthoring()
-        ) : null}
+        {activeTab === "case-authoring" ? renderCaseAuthoring() : null}
 
         {activeTab === "email-updates" ? (
           <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
@@ -2213,6 +2321,202 @@ export default function AdminCaseLab({
                     />
                   </label>
                 </div>
+              </div>
+            </form>
+
+            <section className="arena-surface">
+              <div className="p-6">
+                <div className="flex items-end justify-between gap-3">
+                  <div>
+                    <p className="arena-kicker">Campaign Management</p>
+                    <h2 className="arena-headline mt-2 text-2xl">Timed campaigns</h2>
+                    <p className="mt-2 text-sm text-white/56">
+                      Enabled campaigns remain listed here until you disable them.
+                    </p>
+                  </div>
+                  <span className="badge badge-outline text-white/72">
+                    {timedSoloCampaign.enabled ? "1 enabled" : "0 enabled"}
+                  </span>
+                </div>
+
+                <div className="mt-5">
+                  {timedSoloCampaign.enabled ? (
+                    <div className="arena-surface-soft flex flex-col gap-4 p-5 lg:flex-row lg:items-center lg:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-semibold text-white">Unlimited solo access</p>
+                          <span className={`text-xs font-bold uppercase tracking-[0.18em] ${timedSoloCampaignStatus.tone}`}>
+                            {timedSoloCampaignStatus.label}
+                          </span>
+                        </div>
+                        <p className="mt-2 text-sm text-white/62">
+                          {timedSoloCampaign.mode === "after_login"
+                            ? `${timedSoloCampaign.durationHours} hours after each user's first qualifying login`
+                            : `${
+                                timedSoloCampaign.startsAt
+                                  ? new Date(timedSoloCampaign.startsAt).toLocaleString()
+                                  : "Start not set"
+                              } to ${
+                                timedSoloCampaign.endsAt
+                                  ? new Date(timedSoloCampaign.endsAt).toLocaleString()
+                                  : "end not set"
+                              }`}
+                        </p>
+                        {timedSoloCampaign.mode === "after_login" && timedSoloCampaign.launchedAt ? (
+                          <p className="mt-1 text-xs uppercase tracking-[0.18em] text-white/42">
+                            Launched {new Date(timedSoloCampaign.launchedAt).toLocaleString()}
+                          </p>
+                        ) : null}
+                      </div>
+                      <button
+                        type="button"
+                        className="arena-btn-danger min-h-0 shrink-0 px-4 py-3 text-sm"
+                        disabled={timedCampaignDisabling}
+                        onClick={disableTimedSoloCampaign}
+                      >
+                        {timedCampaignDisabling ? "Disabling..." : "Disable Now"}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="arena-surface-soft p-5 text-sm text-white/56">
+                      No timed solo campaigns are enabled.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </section>
+
+            <form className="arena-surface" onSubmit={handleSaveOpsConfig}>
+              <div className="p-6">
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <p className="arena-kicker">Timed Solo Campaign</p>
+                    <h2 className="arena-headline mt-2 text-2xl">
+                      Unlimited solo access
+                    </h2>
+                    <p className={`mt-2 text-sm ${timedSoloCampaignStatus.tone}`}>
+                      {timedSoloCampaignStatus.label}: {timedSoloCampaignStatus.body}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-3">
+                    {timedSoloCampaign.mode === "after_login" ? (
+                      <button
+                        type="button"
+                        className="arena-btn-dark px-5 py-3"
+                        disabled={opsSaving || timedCampaignLaunching}
+                        onClick={launchTimedSoloCampaign}
+                      >
+                        {timedCampaignLaunching ? "Launching..." : "Launch New Campaign"}
+                      </button>
+                    ) : null}
+                    <button className="arena-btn-light px-5 py-3" disabled={opsSaving}>
+                      {opsSaving ? "Saving..." : "Save Timed Campaign"}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                  <label className="form-control">
+                    <span className="label-text font-semibold text-white">Timing mode</span>
+                    <select
+                      className={arenaSelectClass}
+                      value={timedSoloCampaign.mode}
+                      onChange={(event) =>
+                        setTimedSoloCampaign((current) => ({
+                          ...current,
+                          mode: event.target.value,
+                          enabled:
+                            event.target.value === "after_login" ? false : current.enabled,
+                        }))
+                      }
+                    >
+                      <option value="fixed_window">Shared fixed window</option>
+                      <option value="after_login">X hours after login</option>
+                    </select>
+                  </label>
+
+                  <label className="arena-surface-soft flex items-center justify-between gap-4 p-4">
+                    <div>
+                      <p className="text-sm font-semibold text-white">Campaign enabled</p>
+                      <p className="mt-1 text-sm text-white/56">
+                        Turning this off immediately paywalls users relying on this offer.
+                      </p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      className={arenaToggleClass}
+                      checked={timedSoloCampaign.enabled}
+                      disabled={
+                        timedSoloCampaign.mode === "after_login" &&
+                        !timedSoloCampaign.enabled
+                      }
+                      onChange={(event) =>
+                        setTimedSoloCampaign((current) => ({
+                          ...current,
+                          enabled: event.target.checked,
+                        }))
+                      }
+                    />
+                  </label>
+                </div>
+
+                {timedSoloCampaign.mode === "fixed_window" ? (
+                  <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                    <label className="form-control">
+                      <span className="label-text font-semibold text-white">Starts at</span>
+                      <input
+                        className={arenaInputClass}
+                        type="datetime-local"
+                        value={toDatetimeLocal(timedSoloCampaign.startsAt)}
+                        onChange={(event) =>
+                          setTimedSoloCampaign((current) => ({
+                            ...current,
+                            startsAt: fromDatetimeLocal(event.target.value),
+                          }))
+                        }
+                      />
+                    </label>
+                    <label className="form-control">
+                      <span className="label-text font-semibold text-white">Ends at</span>
+                      <input
+                        className={arenaInputClass}
+                        type="datetime-local"
+                        value={toDatetimeLocal(timedSoloCampaign.endsAt)}
+                        onChange={(event) =>
+                          setTimedSoloCampaign((current) => ({
+                            ...current,
+                            endsAt: fromDatetimeLocal(event.target.value),
+                          }))
+                        }
+                      />
+                    </label>
+                  </div>
+                ) : (
+                  <div className="mt-4 grid gap-4 lg:grid-cols-[0.5fr_1fr]">
+                    <label className="form-control">
+                      <span className="label-text font-semibold text-white">
+                        Hours after qualifying login
+                      </span>
+                      <input
+                        className={arenaInputClass}
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={timedSoloCampaign.durationHours}
+                        onChange={(event) =>
+                          setTimedSoloCampaign((current) => ({
+                            ...current,
+                            durationHours: event.target.value,
+                          }))
+                        }
+                      />
+                    </label>
+                    <div className="arena-surface-soft p-4 text-sm leading-6 text-white/56">
+                      Launching creates a new campaign. Each unpaid user receives one timer on
+                      their first fresh login after launch; later logins do not extend it.
+                    </div>
+                  </div>
+                )}
               </div>
             </form>
 

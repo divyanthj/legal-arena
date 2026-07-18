@@ -41,12 +41,36 @@ const courtroomEntrySchema = mongoose.Schema(
     },
     speaker: {
       type: String,
-      enum: ["player", "opponent"],
+      enum: ["player", "opponent", "witness", "judge"],
       required: true,
+    },
+    speakerName: {
+      type: String,
+      default: "",
+      trim: true,
     },
     text: {
       type: String,
       required: true,
+    },
+    entryType: {
+      type: String,
+      enum: ["argument", "question", "answer", "objection", "ruling", "system", ""],
+      default: "argument",
+    },
+    witnessId: { type: String, default: "", trim: true },
+    witnessName: { type: String, default: "", trim: true },
+    examinationType: {
+      type: String,
+      enum: ["direct", "cross", ""],
+      default: "",
+    },
+    admitted: { type: Boolean, default: false },
+    objectionGround: { type: String, default: "", trim: true },
+    ruling: {
+      type: String,
+      enum: ["sustained", "overruled", "none", ""],
+      default: "",
     },
     citedFacts: {
       type: [String],
@@ -763,6 +787,37 @@ const caseSessionSchema = mongoose.Schema(
     adjournment: {
       type: adjournmentSchema,
       default: () => ({}),
+    },
+    witnesses: {
+      type: [mongoose.Schema.Types.Mixed],
+      default: [],
+      private: true,
+    },
+    witnessRosterVersion: {
+      type: Number,
+      default: 0,
+      private: true,
+    },
+    witnessExamination: {
+      phase: {
+        type: String,
+        enum: ["idle", "direct", "cross"],
+        default: "idle",
+      },
+      activeWitnessId: { type: String, default: "", trim: true },
+      examinationType: {
+        type: String,
+        enum: ["direct", "cross", ""],
+        default: "",
+      },
+      calledBy: {
+        type: String,
+        enum: ["player", "opponent", ""],
+        default: "",
+      },
+      questionsUsed: { type: Number, default: 0, min: 0 },
+      maxQuestions: { type: Number, default: 3, min: 1, max: 6 },
+      completedWitnessIds: { type: [String], default: [] },
     },
     courtroomTranscript: {
       type: [courtroomEntrySchema],

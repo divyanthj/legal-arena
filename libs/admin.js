@@ -6,10 +6,12 @@ import CaseSession from "@/models/CaseSession";
 import {
   getAdminOpsConfig,
   getFreeGameplayCampaignStatus,
+  getTimedSoloCampaignStatus,
 } from "@/libs/adminOps";
 import {
   FREE_GAMEPLAY_PAYWALL_MESSAGE,
   resolveSoloGameplayAccessDecision,
+  resolveTimedSoloLoginEnrollment,
 } from "@/libs/freeGameplayCampaignAccess";
 
 const normalizeEmail = (value = "") => value.trim().toLowerCase();
@@ -118,8 +120,69 @@ const getUserForAccess = async (session) => {
 
   await connectMongo();
   return User.findById(session.user.id).select(
-    "_id email hasAccess freeAccessGranted progression"
+    "_id email hasAccess freeAccessGranted progression timedSoloCampaignAccess"
   );
+};
+
+export const recordTimedSoloCampaignLogin = async ({
+  userId,
+  email = "",
+  nowInput = new Date(),
+} = {}) => {
+  const now = nowInput instanceof Date ? nowInput : new Date(nowInput);
+  if (!userId || Number.isNaN(now.getTime()) || hasGameAccess(email)) {
+    return null;
+  }
+
+  const config = await getAdminOpsConfig();
+  const status = getTimedSoloCampaignStatus(config.timedSoloCampaign, now);
+  const campaign = status.campaign || {};
+  if (!status.active || campaign.mode !== "after_login") {
+    return null;
+  }
+
+  await connectMongo();
+  const selectors = [];
+  const normalizedEmail = normalizeEmail(email);
+  if (mongoose.Types.ObjectId.isValid(userId)) selectors.push({ _id: userId });
+  if (normalizedEmail) selectors.push({ email: normalizedEmail });
+  if (!selectors.length) return null;
+
+  const user = await User.findOne({ $or: selectors }).select(
+    "_id hasAccess freeAccessGranted timedSoloCampaignAccess"
+  );
+  if (!user) return null;
+  const enrollment = resolveTimedSoloLoginEnrollment({
+    campaignStatus: status,
+    currentAccess: user.timedSoloCampaignAccess,
+    hasFullAccess: user.hasAccess || user.freeAccessGranted,
+    loginAtInput: now,
+  });
+  if (!enrollment) return null;
+  if (user.timedSoloCampaignAccess?.campaignId === campaign.campaignId) {
+    return enrollment;
+  }
+
+  const result = await User.findOneAndUpdate(
+    {
+      _id: user._id,
+      "timedSoloCampaignAccess.campaignId": { $ne: campaign.campaignId },
+      hasAccess: { $ne: true },
+      freeAccessGranted: { $ne: true },
+    },
+    {
+      $set: {
+        timedSoloCampaignAccess: {
+          campaignId: enrollment.campaignId,
+          startedAt: enrollment.startedAt,
+          endsAt: enrollment.endsAt,
+        },
+      },
+    },
+    { new: true }
+  ).select("timedSoloCampaignAccess");
+
+  return result?.timedSoloCampaignAccess || null;
 };
 
 const buildFreeCampaignGrant = (campaign) => ({
@@ -162,6 +225,9 @@ export const getSoloGameplayAccessForSession = async ({
   const campaignStatus = getFreeGameplayCampaignStatus(
     config.freeGameplayCampaign
   );
+  const timedCampaignStatus = getTimedSoloCampaignStatus(
+    config.timedSoloCampaign
+  );
 
   let caseSession = null;
   if (caseId) {
@@ -176,6 +242,8 @@ export const getSoloGameplayAccessForSession = async ({
     progression: user?.progression,
     caseSession,
     campaignStatus,
+    timedCampaignStatus,
+    timedCampaignAccess: user?.timedSoloCampaignAccess,
     action,
     buildCampaignGrant: buildFreeCampaignGrant,
   });

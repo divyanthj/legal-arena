@@ -33,6 +33,8 @@ import { getCaseReportProgressLabel } from "./caseReportUi";
 import { CountryBadge } from "./CountryFlagPicker";
 import AwardUnlockPanel from "./AwardUnlockPanel";
 
+const WITNESS_RESPONSE_TIMEOUT_MS = 45_000;
+
 import {
   normalizeCourtroomEntry,
   winnerLabel,
@@ -1012,6 +1014,7 @@ export default function CaseWorkspace({
   const [awardEvaluationStatus, setAwardEvaluationStatus] = useState("not_started");
   const [question, setQuestion] = useState("");
   const [argument, setArgument] = useState("");
+  const [witnessQuestion, setWitnessQuestion] = useState("");
   const [settlementMessage, setSettlementMessage] = useState("");
   const [settlementClientInstruction, setSettlementClientInstruction] = useState("");
   const [settlementClientInstructionWorking, setSettlementClientInstructionWorking] = useState(false);
@@ -2825,12 +2828,218 @@ export default function CaseWorkspace({
     ["Handle proof gap", proofGapSnippet()],
     ["Cite lawbook", lawbookSnippet()],
   ].filter((tool) => tool[1]);
+  const courtroomWitnesses = Array.isArray(caseSession.courtroomWitnesses)
+    ? caseSession.courtroomWitnesses
+    : [];
+  const witnessExamination = caseSession.witnessExamination || {};
+  const activeWitness = courtroomWitnesses.find(
+    (item) => item.id === witnessExamination.activeWitnessId
+  );
+  const activeWitnessEntries = activeWitness
+    ? normalizedCourtroomTranscript
+        .filter((entry) => entry.witnessId === activeWitness.id)
+        .slice(-8)
+    : [];
+  const witnessQuestionsRemaining = Math.max(
+    0,
+    (Number(witnessExamination.maxQuestions) || 3) -
+      (Number(witnessExamination.questionsUsed) || 0)
+  );
+  const showWitnessStand =
+    analyticsMode !== "pvp" && courtroomWitnesses.length > 0 && !isVerdict;
+  const renderWitnessStand = (layoutKey) => {
+    if (!showWitnessStand) return null;
+
+    const speakerTone = {
+      player: "border-sky-300/20 bg-sky-400/[0.055] text-sky-100",
+      opponent: "border-rose-300/20 bg-rose-400/[0.055] text-rose-100",
+      witness: "border-amber-300/20 bg-amber-300/[0.055] text-amber-50",
+      judge: "border-violet-300/20 bg-violet-300/[0.055] text-violet-100",
+    };
+
+    return (
+      <section className="arena-surface overflow-hidden border-amber-200/15 bg-amber-200/[0.025]">
+        <div className="border-b border-white/8 px-4 py-4 sm:px-5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-amber-200/25 bg-amber-200/10 text-amber-100">
+                <HeroIcons.UserGroupIcon className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <div>
+                <p className="arena-kicker text-amber-200/70">Evidence in person</p>
+                <h2 className="mt-1 font-serif text-xl font-semibold text-white">Witness stand</h2>
+              </div>
+            </div>
+            {activeWitness ? (
+              <span className="rounded-full border border-amber-200/25 bg-amber-200/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.14em] text-amber-100">
+                {witnessExamination.examinationType === "cross" ? "Cross" : "Direct"}
+              </span>
+            ) : null}
+          </div>
+        </div>
+
+        {activeWitness ? (
+          <div className="space-y-4 p-4 sm:p-5">
+            <div className="flex items-start gap-4">
+              <div className="h-24 w-20 shrink-0 overflow-hidden rounded-2xl border border-white/12 bg-black/30">
+                {activeWitness.portrait?.image ? (
+                  <img
+                    src={activeWitness.portrait.image}
+                    alt={`${activeWitness.name} witness portrait`}
+                    className="h-full w-full object-cover"
+                    width={640}
+                    height={720}
+                  />
+                ) : (
+                  <span className="flex h-full w-full items-center justify-center text-2xl font-semibold text-white/45">
+                    {activeWitness.name?.charAt(0) || "W"}
+                  </span>
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-lg font-semibold text-white">{activeWitness.name}</h3>
+                <p className="mt-1 text-sm font-semibold text-amber-100/72">{activeWitness.role}</p>
+                <p className="mt-2 text-sm leading-6 text-white/58">{activeWitness.publicSummary}</p>
+                <p className="mt-2 text-xs font-semibold uppercase tracking-[0.12em] text-white/38">
+                  {witnessQuestionsRemaining} question{witnessQuestionsRemaining === 1 ? "" : "s"} remaining
+                </p>
+              </div>
+            </div>
+
+            {activeWitnessEntries.length ? (
+              <div className="max-h-72 space-y-2 overflow-y-auto rounded-2xl border border-white/8 bg-black/18 p-3">
+                {activeWitnessEntries.map((entry, index) => (
+                  <div
+                    key={`${layoutKey}-${entry.createdAt || index}-${entry.entryType || "entry"}`}
+                    className={`rounded-xl border px-3 py-2.5 ${
+                      speakerTone[entry.speaker] || "border-white/10 bg-white/[0.035] text-white/78"
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-center gap-2 text-[0.68rem] font-semibold uppercase tracking-[0.12em] opacity-65">
+                      <span>{entry.speakerName || (entry.speaker === "player" ? "You" : entry.speaker)}</span>
+                      <span>·</span>
+                      <span>{entry.entryType || "testimony"}</span>
+                      {entry.ruling && entry.ruling !== "none" ? <span>· {entry.ruling}</span> : null}
+                    </div>
+                    <p className="mt-1.5 text-sm leading-6 text-white/78">{entry.text}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-white/8 bg-black/16 px-4 py-3 text-sm leading-6 text-white/55">
+                {witnessExamination.examinationType === "cross"
+                  ? "Opposing counsel has finished direct. Test the witness's memory, personal knowledge, and inconsistencies."
+                  : "Begin with non-leading questions that let the witness describe what they personally saw, heard, or did."}
+              </div>
+            )}
+
+            <form className="space-y-3" onSubmit={handleWitnessQuestion}>
+              <textarea
+                className="textarea textarea-bordered arena-textarea arena-field h-24 w-full text-slate-100"
+                placeholder={
+                  witnessExamination.examinationType === "cross"
+                    ? `Cross-examine ${activeWitness.name}...`
+                    : `Ask ${activeWitness.name} a direct question...`
+                }
+                value={witnessQuestion}
+                onChange={(event) => setWitnessQuestion(event.target.value)}
+                disabled={working || witnessQuestionsRemaining <= 0}
+              />
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <button
+                  type="submit"
+                  className="flex-1 rounded-xl bg-amber-200 px-4 py-3 text-sm font-bold text-black transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+                  disabled={working || !witnessQuestion.trim() || witnessQuestionsRemaining <= 0}
+                >
+                  {pendingAction === "witness-question" ? "The court is considering..." : "Ask the witness"}
+                </button>
+                <button
+                  type="button"
+                  className="rounded-xl border border-white/15 px-4 py-3 text-sm font-semibold text-white/72 transition hover:border-white/30 hover:text-white disabled:opacity-50"
+                  disabled={working}
+                  onClick={handleEndWitnessExamination}
+                >
+                  {pendingAction === "witness-end" ? "Closing..." : "End examination"}
+                </button>
+              </div>
+            </form>
+          </div>
+        ) : (
+          <div className="grid gap-3 p-4 sm:grid-cols-2 sm:p-5">
+            {courtroomWitnesses.map((witness) => {
+              const completed = witness.examinationStatus === "completed";
+              return (
+                <article
+                  key={`${layoutKey}-${witness.id}`}
+                  className="overflow-hidden rounded-2xl border border-white/9 bg-black/18"
+                >
+                  <div className="flex gap-3 p-3">
+                    <div className="h-20 w-16 shrink-0 overflow-hidden rounded-xl border border-white/10 bg-black/28">
+                      {witness.portrait?.image ? (
+                        <img
+                          src={witness.portrait.image}
+                          alt={`${witness.name} witness portrait`}
+                          className="h-full w-full object-cover"
+                          width={640}
+                          height={720}
+                        />
+                      ) : (
+                        <span className="flex h-full w-full items-center justify-center text-xl font-semibold text-white/40">
+                          {witness.name?.charAt(0) || "W"}
+                        </span>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="truncate font-semibold text-white">{witness.name}</h3>
+                        <span className={`rounded-full border px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-[0.12em] ${
+                          witness.side === "yours"
+                            ? "border-sky-300/25 bg-sky-300/10 text-sky-100"
+                            : "border-rose-300/25 bg-rose-300/10 text-rose-100"
+                        }`}>
+                          {witness.side === "yours" ? "Your witness" : "Other side"}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs font-semibold text-amber-100/65">{witness.role}</p>
+                      <p className="mt-2 line-clamp-2 text-xs leading-5 text-white/48">{witness.publicSummary}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="w-full border-t border-white/8 px-3 py-2.5 text-sm font-semibold text-amber-100 transition hover:bg-amber-200/8 disabled:cursor-not-allowed disabled:text-white/32"
+                    disabled={working || completed}
+                    onClick={() => handleCallWitness(witness.id)}
+                  >
+                    {completed
+                      ? "Testimony complete"
+                      : pendingAction === "witness-call"
+                      ? "Calling witness..."
+                      : witness.side === "yours"
+                      ? "Call for direct examination"
+                      : "Begin cross-examination"}
+                  </button>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </section>
+    );
+  };
   const lastOpponentCourtEntry = [...normalizedCourtroomTranscript]
     .reverse()
-    .find((entry) => entry.speaker !== "player");
+    .find(
+      (entry) =>
+        entry.speaker === "opponent" &&
+        (!entry.entryType || entry.entryType === "argument")
+    );
   const lastPlayerCourtEntry = [...normalizedCourtroomTranscript]
     .reverse()
-    .find((entry) => entry.speaker === "player");
+    .find(
+      (entry) =>
+        entry.speaker === "player" &&
+        (!entry.entryType || entry.entryType === "argument")
+    );
   const lastOpponentCourtEntryKey = lastOpponentCourtEntry
     ? `${lastOpponentCourtEntry.round || ""}-${lastOpponentCourtEntry.text || ""}`
     : "";
@@ -3412,6 +3621,101 @@ export default function CaseWorkspace({
       .replace(/\.\s*\./g, ".")
       .replace(/\s+/g, " ")
       .trim();
+  };
+
+  const generateWitnessPortrait = async (witnessId) => {
+    if (!witnessId || apiConfig.turnBasedCourtroom) return;
+    try {
+      const response = await apiClient.post(
+        `${getApiBasePath(caseSession)}/witness-portrait?witnessId=${encodeURIComponent(
+          witnessId
+        )}`
+      );
+      updateCaseFromResponse(response);
+    } catch (error) {
+      console.error("Witness portrait generation failed", error);
+    }
+  };
+
+  const handleCallWitness = async (witnessId) => {
+    if (working || !witnessId) return;
+    setWorking(true);
+    setPendingAction("witness-call");
+    try {
+      const response = await apiClient.post(
+        `${getApiBasePath(caseSession)}/witness`,
+        {
+          action: "call",
+          witnessId,
+        },
+        { timeout: WITNESS_RESPONSE_TIMEOUT_MS }
+      );
+      const nextCase = updateCaseFromResponse(response);
+      setWitnessQuestion("");
+      trackGoal("courtroom_witness_called", caseAnalyticsParams({ witness_id: witnessId }));
+      if (!nextCase?.courtroomWitnesses?.find((item) => item.id === witnessId)?.portrait?.image) {
+        generateWitnessPortrait(witnessId);
+      }
+    } catch (error) {
+      toast.error(error?.message || "Could not call the witness.");
+      console.error(error);
+    } finally {
+      setPendingAction("");
+      setWorking(false);
+    }
+  };
+
+  const handleWitnessQuestion = async (event) => {
+    event.preventDefault();
+    const submittedQuestion = witnessQuestion.trim();
+    if (working || !submittedQuestion) return;
+    setWorking(true);
+    setPendingAction("witness-question");
+    setWitnessQuestion("");
+    try {
+      const response = await apiClient.post(
+        `${getApiBasePath(caseSession)}/witness`,
+        {
+          action: "question",
+          question: submittedQuestion,
+        },
+        { timeout: WITNESS_RESPONSE_TIMEOUT_MS }
+      );
+      updateCaseFromResponse(response);
+      trackGoal("courtroom_witness_questioned", caseAnalyticsParams({
+        question_chars: submittedQuestion.length,
+        examination_type: caseSession.witnessExamination?.examinationType || "",
+      }));
+    } catch (error) {
+      setWitnessQuestion(submittedQuestion);
+      toast.error(error?.message || "The witness could not answer that question.");
+      console.error(error);
+    } finally {
+      setPendingAction("");
+      setWorking(false);
+    }
+  };
+
+  const handleEndWitnessExamination = async () => {
+    if (working) return;
+    setWorking(true);
+    setPendingAction("witness-end");
+    try {
+      const response = await apiClient.post(
+        `${getApiBasePath(caseSession)}/witness`,
+        { action: "end" },
+        { timeout: WITNESS_RESPONSE_TIMEOUT_MS }
+      );
+      updateCaseFromResponse(response);
+      setWitnessQuestion("");
+      trackGoal("courtroom_witness_completed", caseAnalyticsParams());
+    } catch (error) {
+      toast.error(error?.message || "Could not end the examination.");
+      console.error(error);
+    } finally {
+      setPendingAction("");
+      setWorking(false);
+    }
   };
   const extractSettlementAdjustmentPoints = (entry) => {
     const explicitIssues = cleanDraftList(entry?.openIssues).slice(0, 4);
@@ -7180,6 +7484,8 @@ export default function CaseWorkspace({
                   </div>
                 </section>
 
+                {renderWitnessStand("mobile")}
+
                 {lastOpponentCourtEntry ? (
                   <section className="rounded-2xl border border-rose-400/35 bg-rose-950/18 p-4">
                     <div className="flex items-start gap-3">
@@ -7267,7 +7573,7 @@ export default function CaseWorkspace({
                   </section>
                 ) : null}
 
-                {!isVerdict && !showCourtroomWaitingCard ? (
+                {!isVerdict && !showCourtroomWaitingCard && !activeWitness ? (
                   <section className="rounded-2xl border border-sky-300/30 bg-sky-500/[0.055] p-4">
                     <form className="min-w-0 space-y-4" onSubmit={handleCourtroomSubmit}>
                       <div className="flex items-start justify-between gap-3">
@@ -7464,6 +7770,8 @@ export default function CaseWorkspace({
                   </div>
                 </section>
 
+                {renderWitnessStand("desktop")}
+
                 {lastOpponentCourtEntry ? (
                   <section className="rounded-2xl border border-rose-400/35 bg-rose-950/18 p-4 sm:p-5">
                     <div className="flex items-start gap-3">
@@ -7551,7 +7859,7 @@ export default function CaseWorkspace({
                   </section>
                 ) : null}
 
-                {!isVerdict && !showCourtroomWaitingCard ? (
+                {!isVerdict && !showCourtroomWaitingCard && !activeWitness ? (
                   <section className="rounded-2xl border border-sky-300/30 bg-sky-500/[0.055] p-4 sm:p-5">
                     <form className="min-w-0 space-y-4" onSubmit={handleCourtroomSubmit}>
                       <div className="flex items-start justify-between gap-3">

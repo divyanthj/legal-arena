@@ -240,6 +240,21 @@ const userSchema = mongoose.Schema(
       lowercase: true,
       default: "",
     },
+    timedSoloCampaignAccess: {
+      campaignId: {
+        type: String,
+        trim: true,
+        default: "",
+      },
+      startedAt: {
+        type: Date,
+        default: null,
+      },
+      endsAt: {
+        type: Date,
+        default: null,
+      },
+    },
     onboarding: {
       type: onboardingSchema,
       default: () => ({}),

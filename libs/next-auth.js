@@ -7,6 +7,7 @@ import connectMongo from "./mongo";
 import connectMongoose from "@/libs/mongoose";
 import { sendMagicLinkEmail } from "@/libs/emailSender";
 import User from "@/models/User";
+import { recordTimedSoloCampaignLogin } from "@/libs/admin";
 
 const findUserForSessionToken = async (token = {}) => {
   const selectors = [];
@@ -101,6 +102,20 @@ export const authOptions = {
     },
     redirect: async ({ baseUrl }) => {
       return `${baseUrl}${config.auth.callbackUrl}`;
+    },
+  },
+  events: {
+    signIn: async ({ user }) => {
+      try {
+        await recordTimedSoloCampaignLogin({
+          userId: user?.id,
+          email: user?.email || "",
+          nowInput: new Date(),
+        });
+      } catch (error) {
+        // Campaign enrollment must never prevent authentication.
+        console.error("timed solo campaign login enrollment failed", error);
+      }
     },
   },
   session: {

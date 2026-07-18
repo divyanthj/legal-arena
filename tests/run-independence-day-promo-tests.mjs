@@ -46,9 +46,9 @@ const promoBannerSource = await readFile(
   "utf8"
 );
 
-assert.match(landingPageSource, /IndependenceDayPromoBanner/);
+assert.doesNotMatch(landingPageSource, /IndependenceDayPromoBanner/);
 assert.doesNotMatch(landingPageSource, /Brand new UI/);
-assert.doesNotMatch(landingPageSource, /WhatsNewDialog/);
+assert.match(landingPageSource, /WhatsNewDialog/);
 assert.match(promoBannerSource, /INDEPENDENCE DAY OFFER/);
 assert.match(promoBannerSource, /Your courtroom\. Your arguments\. Your verdict\./);
 assert.match(promoBannerSource, /every\s+argument is yours to make/);

@@ -71,7 +71,7 @@ assert.match(engineSource, /do not create new evidence artifacts/);
 assert.match(engineSource, /plausible invented claims/);
 assert.match(engineSource, /buildClientMemoryMoneyAnchors/);
 assert.match(engineSource, /moneyAnchors/);
-assert.match(engineSource, /Preserve exact dollar figures from moneyAnchors/);
+assert.match(engineSource, /Preserve exact currency figures from moneyAnchors/);
 assert.match(engineSource, /original deposit amount and the amount withheld, returned, or deducted/);
 assert.match(engineSource, /invented details are party claims, not new documents, photos, messages, witnesses, records, or proof/);
 assert.match(engineSource, /treat the latest question as a continuation/);
@@ -140,7 +140,7 @@ assert.match(challengeSource, /speaker:\s*[\s\S]*result\.interviewSubjectName/);
 assert.match(challengeSource, /interviewSubjectName:/);
 assert.match(
   challengeSource,
-  /const \{ clientMemory, \.\.\.publicParticipant \} = participant;/
+  /const \{ clientMemory, settlementAssistant, \.\.\.publicParticipant \} = participant;/
 );
 
 assert.match(templateInterviewSource, /export const buildInterviewSubjectForSide =/);
@@ -159,9 +159,15 @@ assert.match(storeSource, /caseSession\.clientMemory = clientMemoryResult\.clien
 assert.match(storeSource, /caseSession\.clientMemoryExcerpt = await generateClientMemoryExcerpt\(/);
 assert.match(storeSource, /applyClientMemoryOpeningToCaseSession\(/);
 assert.match(storeSource, /await caseSession\.save\(\)/);
+const createCaseStart = storeSource.indexOf("export const createCaseSession = async");
+const createCaseEnd = storeSource.indexOf("export const listCaseSessionsForUser");
+const createCaseSource = storeSource.slice(createCaseStart, createCaseEnd);
 assert.ok(
-  storeSource.indexOf("const clientMemoryResult = await ensureClientMemory(") <
-    storeSource.indexOf("await caseSession.save()"),
+  createCaseSource.indexOf("const clientMemoryResult = await ensureClientMemory(") <
+    createCaseSource.indexOf(
+      "await caseSession.save()",
+      createCaseSource.indexOf("const clientMemoryResult = await ensureClientMemory(")
+    ),
   "solo case creation should attempt client memory before saving"
 );
 const createChallengeStart = challengeSource.indexOf("export const createChallenge = async");

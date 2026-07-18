@@ -44,6 +44,7 @@ import {
   appendUsageEntriesToCaseSession,
   createUsageCollector,
 } from "./sessionUsage";
+import { buildPublicWitnessPayload } from "./witnesses";
 
 const toPlain = (doc) => (doc?.toJSON ? doc.toJSON() : doc);
 const stripUsageEntries = (usage = {}) => {
@@ -805,6 +806,7 @@ const buildTemplateCard = ({
 };
 
 export const buildCasePayload = (caseSession, templateOverride = null) => {
+  const courtroomWitnesses = buildPublicWitnessPayload(caseSession);
   const plainCase = toPlain(caseSession);
   const rawTemplateSource =
     templateOverride ||
@@ -864,6 +866,7 @@ export const buildCasePayload = (caseSession, templateOverride = null) => {
 
   return {
     ...plainCase,
+    courtroomWitnesses,
     settlement: {
       ...settlement,
       transcript: settlementTranscript,

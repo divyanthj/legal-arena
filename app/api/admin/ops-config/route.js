@@ -69,6 +69,7 @@ export async function PATCH(req) {
       retention: body.retention,
       digest: body.digest,
       freeGameplayCampaign: body.freeGameplayCampaign,
+      timedSoloCampaign: body.timedSoloCampaign,
     });
 
     return NextResponse.json({ config });

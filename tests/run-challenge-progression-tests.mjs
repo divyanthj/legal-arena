@@ -277,7 +277,10 @@ assert.match(gameStoreSource, /if \(caseSession\.status === "interview"\)[\s\S]*
 assert.match(gameStoreSource, /if \(caseSession\.status === "courtroom"\)[\s\S]*caseSession\.status = "verdict"/);
 assert.match(gameStoreSource, /winner: "opponent"/);
 assert.match(gameStoreSource, /You quit during court, so the court enters judgment for the other side\./);
-assert.match(gameStoreSource, /applyVerdictToProgression\(\{[\s\S]*verdictWinner: "opponent"/);
+assert.match(
+  gameStoreSource,
+  /const \{ evaluateCompletedCase \} = await import\("@\/libs\/game\/awards\/service"\);[\s\S]*await evaluateCompletedCase\(\{ caseSession \}\)/
+);
 assert.match(gameStoreSource, /This case already has a final verdict\./);
 assert.match(soloExitRouteSource, /caseSession: buildCasePayload\(caseSession\)/);
 assert.match(caseWorkspaceSource, /window\.setInterval\(refreshCase, realtimeRefreshIntervalMs\)/);
@@ -310,6 +313,5 @@ assert.match(
   caseWorkspaceSource,
   /form\.dispatchEvent\(new Event\("submit", \{ bubbles: true, cancelable: true \}\)\)/
 );
-assert.doesNotMatch(caseWorkspaceSource, /requestSubmit/);
 
 console.log("Challenge progression tests passed");

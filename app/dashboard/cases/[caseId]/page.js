@@ -11,6 +11,7 @@ import { ensurePlaintiffCourtOpening } from "@/libs/game/courtroomOpening";
 import { appendUsageEntriesToCaseSession } from "@/libs/game/sessionUsage";
 import { getSoloGameplayAccessForSession } from "@/libs/admin";
 import { toClientJSON } from "@/libs/serialize";
+import { ensureCaseWitnesses } from "@/libs/game/witnesses";
 
 export const dynamic = "force-dynamic";
 
@@ -39,8 +40,18 @@ export default async function CasePage({ params }) {
     caseSession: caseDocument,
     userId: session.user.id,
   });
-  if (openingResult.created) {
-    appendUsageEntriesToCaseSession(caseDocument, openingResult.usageEntries);
+  const witnessResult =
+    caseDocument.status === "courtroom"
+      ? await ensureCaseWitnesses({
+          caseSession: caseDocument,
+          userId: session.user.id,
+        })
+      : { created: false, usageEntries: [] };
+  if (openingResult.created || witnessResult.created) {
+    appendUsageEntriesToCaseSession(caseDocument, [
+      ...openingResult.usageEntries,
+      ...witnessResult.usageEntries,
+    ]);
     await caseDocument.save();
   }
   const caseSession = buildCasePayload(caseDocument);

@@ -22,6 +22,10 @@ const adminOpsConfigSchema = mongoose.Schema(
       type: mongoose.Schema.Types.Mixed,
       default: {},
     },
+    timedSoloCampaign: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
   },
   {
     timestamps: true,

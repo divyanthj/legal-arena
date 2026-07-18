@@ -16,6 +16,7 @@ import {
 } from "@/libs/game/sessionUsage";
 import { getSoloGameplayAccessForSession } from "@/libs/admin";
 import { resolveActiveAdjournment } from "@/libs/game/adjournment";
+import { ensureCaseWitnesses } from "@/libs/game/witnesses";
 
 export async function POST(req, { params }) {
   const { session, error: authError } = await getRequestSession(req);
@@ -97,6 +98,12 @@ export async function POST(req, { params }) {
       userId: session.user.id,
     });
     openingResult.usageEntries.forEach(usageCollector.record);
+
+    const witnessResult = await ensureCaseWitnesses({
+      caseSession,
+      userId: session.user.id,
+    });
+    witnessResult.usageEntries.forEach(usageCollector.record);
 
     appendUsageEntriesToCaseSession(caseSession, usageCollector.entries);
 
