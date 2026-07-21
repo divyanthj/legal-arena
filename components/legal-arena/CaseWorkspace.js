@@ -36,6 +36,31 @@ import PostResolutionNextCaseCard from "./PostResolutionNextCaseCard";
 
 const WITNESS_RESPONSE_TIMEOUT_MS = 45_000;
 
+const portraitTimestamp = (portrait = {}) => {
+  const timestamp = new Date(portrait?.generatedAt || 0).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+};
+
+const keepNewestPortrait = (currentPortrait = {}, incomingPortrait = {}) => {
+  const currentImage = String(currentPortrait?.image || "");
+  const incomingImage = String(incomingPortrait?.image || "");
+  if (!incomingImage) return currentPortrait;
+  if (!currentImage) return incomingPortrait;
+  if (currentImage === incomingImage) {
+    return { ...currentPortrait, ...incomingPortrait, image: currentImage };
+  }
+
+  const currentVersion = Number(currentPortrait?.promptVersion || 0);
+  const incomingVersion = Number(incomingPortrait?.promptVersion || 0);
+  if (incomingVersion !== currentVersion) {
+    return incomingVersion > currentVersion ? incomingPortrait : currentPortrait;
+  }
+
+  const currentGeneratedAt = portraitTimestamp(currentPortrait);
+  const incomingGeneratedAt = portraitTimestamp(incomingPortrait);
+  return incomingGeneratedAt > currentGeneratedAt ? incomingPortrait : currentPortrait;
+};
+
 import {
   normalizeCourtroomEntry,
   winnerLabel,
@@ -1328,10 +1353,16 @@ export default function CaseWorkspace({
       return null;
     }
 
-    setCaseSession({
+    setCaseSession((current) => ({
+      ...current,
       ...nextCase,
+      clientPortrait: keepNewestPortrait(current.clientPortrait, nextCase.clientPortrait),
+      opponentPortrait: keepNewestPortrait(
+        current.opponentPortrait,
+        nextCase.opponentPortrait
+      ),
       factSheet: sanitizeFactSheet(nextCase.factSheet || {}),
-    });
+    }));
     realtimeVersionKeyRef.current = buildRealtimeVersionKey({
       updatedAt: nextCase.updatedAt,
       status: nextCase.status,
@@ -6780,12 +6811,14 @@ export default function CaseWorkspace({
                       className="relative mt-3 rounded-2xl border border-amber-200/20 bg-amber-200/[0.035] p-2"
                       data-intake-tour-target="intake-question-box"
                     >
-                      <label className="mb-2 flex items-center gap-2 px-1 text-xs font-semibold uppercase tracking-[0.14em] text-amber-200">
-                        <HeroIcons.ChatBubbleLeftRightIcon className="h-4 w-4" aria-hidden="true" />
-                        Your question
-                      </label>
+                      <div className="mb-2 px-1">
+                        <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-amber-200">
+                          <HeroIcons.ChatBubbleLeftRightIcon className="h-4 w-4" aria-hidden="true" />
+                          Your question
+                        </label>
+                      </div>
                       <textarea
-                        className={`textarea textarea-bordered arena-textarea arena-field h-24 min-w-0 w-full text-slate-100 ${recordingQuestion ? "pr-28" : "pr-12"}`}
+                        className="textarea textarea-bordered arena-textarea arena-field h-24 min-w-0 w-full text-slate-100"
                         placeholder={
                           settlementAuthorityReady
                             ? "Settlement authority is ready. Send settlement intent before asking more questions."
@@ -6798,28 +6831,30 @@ export default function CaseWorkspace({
                         onKeyDown={handleChatTextareaKeyDown}
                         disabled={transcribingQuestion || awaitingSettlementResponse || settlementAuthorityReady}
                       />
-                      <button
-                        type="button"
-                        className={`absolute bottom-3 right-3 inline-flex h-10 items-center justify-center gap-2 rounded-full border transition-all ${
-                          recordingQuestion
-                            ? "w-24 border-rose-300/40 bg-rose-400/15 px-3 text-rose-100 shadow-[0_0_28px_rgba(253,164,175,0.12)]"
-                            : "w-10 border-white/10 bg-black/30 text-white/65 hover:border-amber-200/30 hover:bg-amber-200/10 hover:text-amber-100"
-                        }`}
-                        disabled={working || transcribingQuestion || awaitingSettlementResponse || settlementAuthorityReady}
-                        onClick={handleQuestionVoiceInput}
-                        aria-label={recordingQuestion ? "Stop recording" : "Record question"}
-                      >
-                        {transcribingQuestion ? (
-                          <span className="loading loading-spinner loading-xs" aria-hidden="true" />
-                        ) : recordingQuestion ? (
-                          <>
-                            <span className="text-xs font-bold">Stop</span>
-                            <VoiceWaveform level={questionAudioLevel} />
-                          </>
-                        ) : (
-                          <HeroIcons.MicrophoneIcon className="h-5 w-5" aria-hidden="true" />
-                        )}
-                      </button>
+                      <div className="mt-2 flex justify-end px-1">
+                        <button
+                          type="button"
+                          className={`inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-full border transition-all ${
+                            recordingQuestion
+                              ? "min-w-24 border-rose-300/40 bg-rose-400/15 px-3 text-rose-100 shadow-[0_0_28px_rgba(253,164,175,0.12)]"
+                              : "w-9 border-amber-200/15 bg-black/30 text-white/65 hover:border-amber-200/35 hover:bg-amber-200/10 hover:text-amber-100"
+                          }`}
+                          disabled={working || transcribingQuestion || awaitingSettlementResponse || settlementAuthorityReady}
+                          onClick={handleQuestionVoiceInput}
+                          aria-label={recordingQuestion ? "Stop recording" : "Record question"}
+                        >
+                          {transcribingQuestion ? (
+                            <span className="loading loading-spinner loading-xs" aria-hidden="true" />
+                          ) : recordingQuestion ? (
+                            <>
+                              <span className="text-xs font-bold">Stop</span>
+                              <VoiceWaveform level={questionAudioLevel} />
+                            </>
+                          ) : (
+                            <HeroIcons.MicrophoneIcon className="h-4 w-4" aria-hidden="true" />
+                          )}
+                        </button>
+                      </div>
                     </div>
                     <button
                       type={settlementAuthorityReady ? "button" : "submit"}
@@ -7236,12 +7271,14 @@ export default function CaseWorkspace({
                       className="relative mt-4 rounded-2xl border border-amber-200/20 bg-amber-200/[0.035] p-2"
                       data-intake-tour-target="intake-question-box"
                     >
-                      <label className="mb-2 flex items-center gap-2 px-1 text-xs font-semibold uppercase tracking-[0.14em] text-amber-200">
-                        <HeroIcons.ChatBubbleLeftRightIcon className="h-4 w-4" aria-hidden="true" />
-                        Your question
-                      </label>
+                      <div className="mb-2 px-1">
+                        <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-amber-200">
+                          <HeroIcons.ChatBubbleLeftRightIcon className="h-4 w-4" aria-hidden="true" />
+                          Your question
+                        </label>
+                      </div>
                       <textarea
-                        className={`textarea textarea-bordered arena-textarea arena-field h-24 min-w-0 w-full text-slate-100 ${recordingQuestion ? "pr-28" : "pr-12"}`}
+                        className="textarea textarea-bordered arena-textarea arena-field h-24 min-w-0 w-full text-slate-100"
                         placeholder={
                           settlementAuthorityReady
                             ? "Settlement authority is ready. Send settlement intent before asking more questions."
@@ -7254,38 +7291,40 @@ export default function CaseWorkspace({
                         onKeyDown={handleChatTextareaKeyDown}
                         disabled={transcribingQuestion || awaitingSettlementResponse || settlementAuthorityReady}
                       />
-                      <button
-                        type="button"
-                        className={`absolute bottom-3 right-3 inline-flex h-10 items-center justify-center gap-2 rounded-full border transition-all ${
-                          recordingQuestion
-                            ? "w-24 border-rose-300/40 bg-rose-400/15 px-3 text-rose-100 shadow-[0_0_28px_rgba(253,164,175,0.12)]"
-                            : "w-10 border-white/10 bg-black/30 text-white/65 hover:border-amber-200/30 hover:bg-amber-200/10 hover:text-amber-100"
-                        }`}
-                        disabled={working || transcribingQuestion || awaitingSettlementResponse || settlementAuthorityReady}
-                        onClick={handleQuestionVoiceInput}
-                        data-tooltip-id="tooltip"
-                        data-tooltip-content={
-                          recordingQuestion
-                            ? "Stop recording and transcribe"
-                            : "Record a question with your microphone"
-                        }
-                        aria-label={
-                          recordingQuestion
-                            ? "Stop recording and transcribe"
-                            : "Record a question with your microphone"
-                        }
-                      >
-                        {transcribingQuestion ? (
-                          <span className="loading loading-spinner loading-xs" aria-hidden="true" />
-                        ) : recordingQuestion ? (
-                          <>
-                            <span className="text-xs font-bold">Stop</span>
-                            <VoiceWaveform level={questionAudioLevel} />
-                          </>
-                        ) : (
-                          <HeroIcons.MicrophoneIcon className="h-5 w-5" aria-hidden="true" />
-                        )}
-                      </button>
+                      <div className="mt-2 flex justify-end px-1">
+                        <button
+                          type="button"
+                          className={`inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-full border transition-all ${
+                            recordingQuestion
+                              ? "min-w-24 border-rose-300/40 bg-rose-400/15 px-3 text-rose-100 shadow-[0_0_28px_rgba(253,164,175,0.12)]"
+                              : "w-9 border-amber-200/15 bg-black/30 text-white/65 hover:border-amber-200/35 hover:bg-amber-200/10 hover:text-amber-100"
+                          }`}
+                          disabled={working || transcribingQuestion || awaitingSettlementResponse || settlementAuthorityReady}
+                          onClick={handleQuestionVoiceInput}
+                          data-tooltip-id="tooltip"
+                          data-tooltip-content={
+                            recordingQuestion
+                              ? "Stop recording and transcribe"
+                              : "Record a question with your microphone"
+                          }
+                          aria-label={
+                            recordingQuestion
+                              ? "Stop recording and transcribe"
+                              : "Record a question with your microphone"
+                          }
+                        >
+                          {transcribingQuestion ? (
+                            <span className="loading loading-spinner loading-xs" aria-hidden="true" />
+                          ) : recordingQuestion ? (
+                            <>
+                              <span className="text-xs font-bold">Stop</span>
+                              <VoiceWaveform level={questionAudioLevel} />
+                            </>
+                          ) : (
+                            <HeroIcons.MicrophoneIcon className="h-4 w-4" aria-hidden="true" />
+                          )}
+                        </button>
+                      </div>
                     </div>
 
                     <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center">

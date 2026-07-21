@@ -9,10 +9,20 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const OPENAI_IMAGE_GENERATION_URL = "https://api.openai.com/v1/images/generations";
-const IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL?.trim() || "gpt-image-1.5";
+const IMAGE_MODEL =
+  process.env.OPENAI_PORTRAIT_IMAGE_MODEL?.trim() ||
+  process.env.OPENAI_IMAGE_MODEL?.trim() ||
+  "gpt-image-2";
+const configuredImageQuality =
+  process.env.OPENAI_PORTRAIT_IMAGE_QUALITY?.trim().toLowerCase() || "low";
+const IMAGE_QUALITY = ["low", "medium", "high"].includes(configuredImageQuality)
+  ? configuredImageQuality
+  : "low";
+const IMAGE_SIZE = IMAGE_MODEL === "gpt-image-2" ? "816x816" : "1024x1024";
 const PORTRAIT_PROMPT_VERSION = 7;
-const PORTRAIT_WIDTH = 640;
-const PORTRAIT_HEIGHT = 720;
+const PORTRAIT_WIDTH = 256;
+const PORTRAIT_HEIGHT = 288;
+const PORTRAIT_OUTPUT_QUALITY = 58;
 
 const organizationPattern =
   /\b(llc|inc|corp|corporation|company|co\.|ltd|limited|partners|partnership|group|holdings|apartments|properties|renovations|services|studio|agency|association|school|university|department|city|county|state)\b/i;
@@ -209,13 +219,8 @@ const buildPortraitPrompt = (challenge, participant, target) => {
     isOrganization,
   });
   const context = [
-    challenge.caseCountry?.name
-      ? `Country setting: ${challenge.caseCountry.name}`
-      : "",
     challenge.practiceArea,
     challenge.primaryCategory,
-    challenge.premise?.overview,
-    participant?.clientMemoryExcerpt,
   ]
     .filter(Boolean)
     .join(" | ");
@@ -236,16 +241,17 @@ const buildPortraitPrompt = (challenge, participant, target) => {
   return [
     `Create a photorealistic portrait for a fictional legal game ${target === "opponent" ? "opposing party" : "client"} seated across a table from their lawyer in a quiet lawyer's office.`,
     `Subject identity cue: ${name}.`,
-    `Case context: ${context || "civil legal dispute"}.`,
+    `Practice context: ${context || "civil dispute"}.`,
     genderGuidance,
     challenge.caseCountry?.name
-      ? `Make the person, everyday clothing, office, and environmental details plausible for ${challenge.caseCountry.name}. Reflect real diversity; do not turn nationality into a costume or assume one ethnicity, religion, class, or traditional style.`
+      ? `Country setting: ${challenge.caseCountry.name}; portray a plausible local person without stereotypes.`
       : "",
     isOrganization
       ? "The party is an organization, so show a realistic representative or owner in credible business attire."
       : "The party is a person, so show believable everyday clothing appropriate for an ordinary client, not a lawyer headshot and not overly formal.",
     wardrobeGuidance,
     "Use a realistic face, natural expression, soft office lighting, lawyer-office background, client seated at a consultation table, shoulders and upper torso visible.",
+    "Keep rendering detail moderate: prioritize a clear recognizable face and use a simple softly blurred background without intricate fabric, skin, hair, or office texture.",
     "Compose this as a vertical rectangular case-card portrait, not a circular avatar. Do not place the person inside a circle, white badge, round mask, profile bubble, or sticker frame.",
     "Avoid text, logos, badges, robes, gavels, courtroom props, caricature, illustration, celebrity resemblance, and dramatic fashion styling.",
   ].join(" ");
@@ -265,10 +271,10 @@ const createPortrait = async (prompt) => {
     body: JSON.stringify({
       model: IMAGE_MODEL,
       prompt,
-      size: "1024x1024",
-      quality: "medium",
+      size: IMAGE_SIZE,
+      quality: IMAGE_QUALITY,
       output_format: "webp",
-      output_compression: 82,
+      output_compression: PORTRAIT_OUTPUT_QUALITY,
     }),
   });
 
@@ -295,7 +301,7 @@ const resizePortrait = async (imageBuffer) =>
       fit: "cover",
       position: "attention",
     })
-    .webp({ quality: 82 })
+    .webp({ quality: PORTRAIT_OUTPUT_QUALITY })
     .toBuffer();
 
 const storePortrait = async ({ buffer, challenge, participant }) => {

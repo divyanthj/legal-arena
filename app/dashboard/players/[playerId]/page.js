@@ -8,6 +8,7 @@ import { getPublicPlayerProfile, listScenarioOptions } from "@/libs/game/store";
 import { toClientJSON } from "@/libs/serialize";
 import { resolveCountryDetectionFromHeaders } from "@/libs/game/countries";
 import { getPlayerCaseCountryPreference } from "@/libs/game/countryPreference";
+import { recordProfileView } from "@/libs/game/profileViews";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,15 @@ export default async function PlayerProfilePage({ params }) {
 
   if (!profile) {
     notFound();
+  }
+
+  try {
+    await recordProfileView({
+      profileUserId: params.playerId,
+      viewerUserId: session.user.id,
+    });
+  } catch (error) {
+    console.error("Could not record player profile view.", error);
   }
 
   return (

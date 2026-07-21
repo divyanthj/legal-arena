@@ -19,6 +19,8 @@ assert.match(gpt, /data\?\.service_tier \|\| requestedServiceTier/);
 assert.match(gpt, /recordAIUsageEvent\(\{ userId, \.\.\.usagePayload \}\)/);
 assert.match(gpt, /durationMs: Date\.now\(\) - requestStartedAt/);
 assert.match(dynamicCase, /serviceTier: "priority"/);
+assert.match(dynamicCase, /"gpt-5\.4-mini"/);
+assert.match(dynamicCase, /promptCacheKey: "la:dynamic-case:v2"/);
 
 assert.match(tracker, /AIUsageEvent\.create\(entry\)/);
 assert.match(tracker, /aiUsageTotals\.total/);

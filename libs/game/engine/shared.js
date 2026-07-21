@@ -530,10 +530,12 @@ export const mergeFactSheet = (current, patch, template, options = {}) => {
       ...(normalizedCurrent.summary || []),
       ...(normalizedPatch.summary || []),
     ]),
-    timeline: uniqueList([
-      ...(normalizedCurrent.timeline || []),
-      ...(normalizedPatch.timeline || []),
-    ]),
+    timeline: normalizedPatch.replaceTimeline
+      ? uniqueList(normalizedPatch.timeline || [])
+      : uniqueList([
+          ...(normalizedCurrent.timeline || []),
+          ...(normalizedPatch.timeline || []),
+        ]),
     supportingFacts: uniqueList([
       ...(normalizedCurrent.supportingFacts || []),
       ...(normalizedPatch.supportingFacts || []),

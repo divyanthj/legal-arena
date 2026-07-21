@@ -21,6 +21,11 @@ assert.match(workspaceSource, /questionAudioLevel/);
 assert.match(workspaceSource, /<VoiceWaveform level=\{questionAudioLevel\}/);
 assert.match(workspaceSource, /<VoiceWaveform level=\{settlementMessageAudioLevel\}/);
 assert.match(workspaceSource, /<VoiceWaveform level=\{settlementClientInstructionAudioLevel\}/);
+assert.match(workspaceSource, /mt-2 flex justify-end px-1/);
+assert.doesNotMatch(
+  workspaceSource,
+  /absolute bottom-3 right-3 inline-flex h-10 items-center justify-center gap-2 rounded-full/
+);
 assert.match(workspaceSource, /Send Message/);
 assert.doesNotMatch(workspaceSource, /Send Counteroffer/);
 assert.doesNotMatch(workspaceSource, /Delivering your terms and waiting for opposing counsel/);

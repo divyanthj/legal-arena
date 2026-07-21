@@ -138,7 +138,7 @@ export default function CaseAssemblyOverlay({ assembly, onRetry, onReturn }) {
       return "The case file could not be completed. Your selections are still here and ready to retry.";
     }
     if (assembly.status === "portraits") {
-      return "The playable matter is ready. Legal Arena is now creating the two portraits that bring the opening intake to life.";
+      return "The playable matter is ready. Legal Arena is creating and saving your client's portrait before opening intake.";
     }
     if (assembly.status === "opening") {
       return "Everything is assembled. Your new client file is opening now.";
@@ -263,18 +263,12 @@ export default function CaseAssemblyOverlay({ assembly, onRetry, onReturn }) {
                     ) : null}
                   </div>
 
-                  <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="max-w-md">
                     <PortraitStatus
                       label="Client portrait"
                       name={preview.clientName || preview.playerPartyName}
                       status={portraits.client?.status}
                       image={portraits.client?.image}
-                    />
-                    <PortraitStatus
-                      label="Opposing counsel"
-                      name={preview.opponentName ? `Counsel for ${preview.opponentName}` : "Opposing counsel"}
-                      status={portraits.opponent?.status}
-                      image={portraits.opponent?.image}
                     />
                   </div>
                 </div>

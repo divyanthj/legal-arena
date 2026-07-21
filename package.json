@@ -16,7 +16,13 @@
     "awards:backfill": "node scripts/backfill-awards.mjs",
     "video:studio": "remotion studio remotion/index.jsx",
     "video:render": "remotion render remotion/index.jsx LegalArenaDashboardTutorial out/legal-arena-dashboard-tutorial.mp4",
-    "video:still": "remotion still remotion/index.jsx LegalArenaDashboardTutorial out/legal-arena-dashboard-tutorial.png --frame=45 --scale=0.5"
+    "video:still": "remotion still remotion/index.jsx LegalArenaDashboardTutorial out/legal-arena-dashboard-tutorial.png --frame=45 --scale=0.5",
+    "video:promo:audio": "node scripts/generate-promo-audio.cjs",
+    "video:promo:render": "remotion render remotion/index.jsx LegalArenaInstagramPromo out/legal-arena-instagram-promo.mp4 --codec=h264 --crf=18 --pixel-format=yuv420p",
+    "video:promo:v2:audio": "node scripts/generate-promo-v2-audio.cjs",
+    "video:promo:v2:render": "remotion render remotion/index.jsx LegalArenaInstagramPromoV2 out/legal-arena-instagram-promo-v2.mp4 --codec=h264 --crf=18 --pixel-format=yuv420p",
+    "video:promo:v3:audio": "node scripts/generate-promo-v3-audio.cjs",
+    "video:promo:v3:render": "remotion render remotion/index.jsx LegalArenaInstagramPromoV3 out/legal-arena-instagram-promo-v3.mp4 --codec=h264 --crf=18 --pixel-format=yuv420p"
   },
   "dependencies": {
     "@auth/mongodb-adapter": "^3.11.1",

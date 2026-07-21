@@ -87,6 +87,17 @@ const getPvpRecordLabel = (entry = {}) => {
   return `${pvp.wins || 0}-${pvp.losses || 0}-${pvp.draws || 0}-${pvp.settlements || 0}`;
 };
 
+const formatProfileViewDate = (value) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Recently";
+
+  return `Viewed ${new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  }).format(date)}`;
+};
+
 const NUDGE_TYPE_LABELS = {
   manual_admin: "Admin nudge",
   resume_interview: "Resume intake",
@@ -195,6 +206,7 @@ export default function BarAssociationDirectory({
   players = [],
   viewerUserId = "",
   viewerName = "Counsel",
+  recentProfileViewers = [],
   isAdmin = false,
 }) {
   const [search, setSearch] = useState("");
@@ -365,6 +377,57 @@ export default function BarAssociationDirectory({
             </div>
           </div>
         </div>
+
+        <section className="arena-surface">
+          <div className="p-5 md:p-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="arena-kicker">Profile Activity</p>
+                <h2 className="arena-headline mt-2 text-2xl">Who viewed your dossier</h2>
+                <p className="mt-3 max-w-2xl text-sm leading-6 text-white/56">
+                  Your six most recent unique visitors from the last 90 days. Your own visits
+                  are never included.
+                </p>
+              </div>
+              {recentProfileViewers.length ? (
+                <span className="badge badge-outline border-white/15 text-white/64">
+                  {recentProfileViewers.length} recent
+                </span>
+              ) : null}
+            </div>
+
+            {recentProfileViewers.length ? (
+              <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {recentProfileViewers.map((player) => (
+                  <Link
+                    key={player.id}
+                    href={`/dashboard/players/${player.id}`}
+                    className="arena-surface-soft group flex min-w-0 items-center gap-3 border border-white/10 p-4 transition hover:-translate-y-0.5 hover:border-emerald-200/30"
+                  >
+                    <LawyerPortrait image={player.image} name={player.name} />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-white group-hover:text-emerald-100">
+                        {player.name}
+                      </p>
+                      <p className="mt-1 text-xs text-white/44">
+                        {formatProfileViewDate(player.viewedAt)} · Rating {player.overallRating || 1000}
+                      </p>
+                    </div>
+                    <HeroIcons.ChevronRightIcon className="h-4 w-4 shrink-0 text-white/28" aria-hidden="true" />
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <div className="arena-surface-soft mt-5 border-dashed p-6 text-center">
+                <HeroIcons.EyeIcon className="mx-auto h-6 w-6 text-white/32" aria-hidden="true" />
+                <p className="mt-3 font-semibold text-white">No recent visitors yet</p>
+                <p className="mt-2 text-sm text-white/52">
+                  When another signed-in player opens your public dossier, they will appear here.
+                </p>
+              </div>
+            )}
+          </div>
+        </section>
 
         <section className="arena-surface">
           <div className="p-5 md:p-6">

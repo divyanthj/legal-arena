@@ -11,13 +11,14 @@ const links = [
   { href: "#courtroom-playbook", label: "Courtroom Playbook" },
   { href: "#asynchronous-pvp-cases", label: "Async PVP Cases" },
   { href: "#country-settings", label: "Country Settings" },
+  { href: "#ratings-xp-leaderboards", label: "Ratings, XP & Boards" },
 ];
 
 export async function generateMetadata() {
   return getSEOTags({
     title: `Help Center & Tutorials | ${config.appName}`,
     description:
-      "Detailed tutorials for the Legal Arena lawyer game. Learn how to choose a country and dispute, build a fact sheet, negotiate settlements, argue in court, challenge other players, and improve your courtroom results.",
+      "Detailed tutorials for the Legal Arena lawyer game. Learn how to choose a country and dispute, build a fact sheet, negotiate settlements, argue in court, challenge other players, and understand ratings, XP, and leaderboards.",
     keywords: [
       "Legal Arena help",
       "Legal Arena tutorials",

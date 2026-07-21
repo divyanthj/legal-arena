@@ -1795,7 +1795,6 @@ export default function DashboardHub({
       const generationCompletedAt = Date.now();
       const caseRef = caseSession.slug || caseSession.id;
       const caseHref = `/dashboard/cases/${caseRef}`;
-      router.prefetch(caseHref);
       const casePreview = buildCaseAssemblyPreview(
         caseSession,
         selectedTemplateForAnalytics?.title || "New matter"
@@ -1810,7 +1809,7 @@ export default function DashboardHub({
         casePreview,
         portraits: {
           client: { status: "generating", image: "" },
-          opponent: { status: "generating", image: "" },
+          opponent: { status: "queued", image: "" },
         },
         timings: {
           ...current?.timings,
@@ -1818,49 +1817,30 @@ export default function DashboardHub({
         },
       }));
 
-      const generatePortrait = async (target) => {
-        try {
-          const suffix = target === "opponent" ? "?target=opponent" : "";
-          const response = await apiClient.post(
-            `/cases/${caseRef}/client-portrait${suffix}`,
-            undefined,
-            { suppressToast: true }
-          );
-          setCaseAssembly((current) => ({
-            ...current,
-            portraits: {
-              ...current?.portraits,
-              [target]: { status: "complete", image: response.image || "" },
-            },
-          }));
-          return { target, ok: true };
-        } catch (portraitError) {
-          console.error(portraitError);
-          setCaseAssembly((current) => ({
-            ...current,
-            portraits: {
-              ...current?.portraits,
-              [target]: { status: "failed", image: "" },
-            },
-          }));
-          return { target, ok: false };
-        }
-      };
-
       const portraitStartedAt = Date.now();
-      const portraitResults = await Promise.all([
-        generatePortrait("client"),
-        generatePortrait("opponent"),
-      ]);
-      const completedAt = Date.now();
-      const portraitFailures = portraitResults.filter((result) => !result.ok).length;
+      const portraitResponse = await apiClient.post(
+        `/cases/${caseRef}/client-portrait`,
+        undefined,
+        { suppressToast: true }
+      );
+      const clientPortraitImage =
+        portraitResponse?.portrait?.image || portraitResponse?.image || "";
+      if (!clientPortraitImage) {
+        throw new Error("The client portrait could not be saved.");
+      }
+      const portraitCompletedAt = Date.now();
+
       setCaseAssembly((current) => ({
         ...current,
         status: "opening",
+        portraits: {
+          ...current?.portraits,
+          client: { status: "complete", image: clientPortraitImage },
+        },
         timings: {
           ...current?.timings,
-          portraitsMs: completedAt - portraitStartedAt,
-          totalMs: completedAt - startedAt,
+          portraitMs: portraitCompletedAt - portraitStartedAt,
+          totalMs: portraitCompletedAt - startedAt,
         },
       }));
       trackGoal("case_creation_wait_completed", {
@@ -1869,10 +1849,14 @@ export default function DashboardHub({
         complexity: caseSession.complexity || dynamicComplexity,
         country: caseSession.caseCountry?.code || (dynamicStart ? selectedCountryCode : ""),
         generation_ms: generationCompletedAt - startedAt,
-        portraits_ms: completedAt - portraitStartedAt,
-        total_ms: completedAt - startedAt,
-        portrait_failures: portraitFailures,
+        portrait_ms: portraitCompletedAt - portraitStartedAt,
+        portrait_reused: Boolean(portraitResponse?.reused),
+        portraits_background: false,
+        total_ms: portraitCompletedAt - startedAt,
       });
+      // Prefetch only after the portrait endpoint has persisted the image so
+      // intake cannot receive a stale, portrait-less case payload.
+      router.prefetch(caseHref);
       router.push(caseHref);
     } catch (error) {
       stopNavigationLoading();

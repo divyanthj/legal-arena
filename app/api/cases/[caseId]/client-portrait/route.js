@@ -14,10 +14,20 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const OPENAI_IMAGE_GENERATION_URL = "https://api.openai.com/v1/images/generations";
-const IMAGE_MODEL = process.env.OPENAI_IMAGE_MODEL?.trim() || "gpt-image-1.5";
+const IMAGE_MODEL =
+  process.env.OPENAI_PORTRAIT_IMAGE_MODEL?.trim() ||
+  process.env.OPENAI_IMAGE_MODEL?.trim() ||
+  "gpt-image-2";
+const configuredImageQuality =
+  process.env.OPENAI_PORTRAIT_IMAGE_QUALITY?.trim().toLowerCase() || "low";
+const IMAGE_QUALITY = ["low", "medium", "high"].includes(configuredImageQuality)
+  ? configuredImageQuality
+  : "low";
+const IMAGE_SIZE = IMAGE_MODEL === "gpt-image-2" ? "816x816" : "1024x1024";
 const PORTRAIT_PROMPT_VERSION = 8;
-const PORTRAIT_WIDTH = 640;
-const PORTRAIT_HEIGHT = 720;
+const PORTRAIT_WIDTH = 256;
+const PORTRAIT_HEIGHT = 288;
+const PORTRAIT_OUTPUT_QUALITY = 58;
 
 const organizationPattern =
   /\b(llc|inc|corp|corporation|company|co\.|ltd|limited|partners|partnership|group|holdings|apartments|properties|renovations|services|studio|agency|association|school|university|department|city|county|state)\b/i;
@@ -209,13 +219,8 @@ const buildClientPortraitPrompt = (caseSession, target = "client") => {
     isOrganization: isOpponentCounsel ? false : isOrganization,
   });
   const context = [
-    caseSession.caseCountry?.name
-      ? `Country setting: ${caseSession.caseCountry.name}`
-      : "",
     caseSession.practiceArea,
     caseSession.primaryCategory,
-    caseSession.premise?.overview,
-    caseSession.clientMemoryExcerpt,
   ]
     .filter(Boolean)
     .join(" | ");
@@ -238,13 +243,14 @@ const buildClientPortraitPrompt = (caseSession, target = "client") => {
     return [
       "Create a photorealistic portrait for a fictional legal game of opposing counsel in a courtroom dispute.",
       `Opposing counsel represents: ${name}.`,
-      `Case context: ${context || "civil legal dispute"}.`,
+      `Practice context: ${context || "civil dispute"}.`,
       "Depict an adult lawyer, not the party or client. The subject should look like courtroom counsel in polished formal legal attire.",
       caseSession.caseCountry?.name
-        ? `Make the lawyer and professional setting plausible for ${caseSession.caseCountry.name}, while reflecting the country's real diversity and avoiding ethnic, religious, or costume stereotypes.`
+        ? `Country setting: ${caseSession.caseCountry.name}; portray a plausible local professional without stereotypes.`
         : "",
       wardrobeGuidance,
       "Use a polished legal dashboard portrait style: realistic face, composed professional expression, soft office or courthouse lighting, shoulders and upper torso visible.",
+      "Keep rendering detail moderate: use a simple softly blurred background and avoid intricate fabric, skin, hair, or environmental texture.",
       "Compose this as a vertical rectangular case-card portrait, not a circular avatar. Do not place the person inside a circle, white badge, round mask, profile bubble, or sticker frame.",
       "Frame the subject as a counsel headshot: full head, face, neck, and upper shoulders visible with a clean legal-office or courthouse background.",
       "Avoid text, logos, badges, robes, gavels, courtroom props, caricature, illustration, celebrity resemblance, and dramatic fashion styling.",
@@ -259,16 +265,17 @@ const buildClientPortraitPrompt = (caseSession, target = "client") => {
   return [
     `Create a photorealistic portrait for a fictional legal game ${target === "opponent" ? "opposing party" : "client"} seated across a table from their lawyer in a quiet lawyer's office.`,
     `Subject identity cue: ${name}.`,
-    `Case context: ${context || "civil legal dispute"}.`,
+    `Practice context: ${context || "civil dispute"}.`,
     genderGuidance,
     caseSession.caseCountry?.name
-      ? `Make the person, everyday clothing, office, and environmental details plausible for ${caseSession.caseCountry.name}. Reflect real diversity; do not turn nationality into a costume or assume one ethnicity, religion, class, or traditional style.`
+      ? `Country setting: ${caseSession.caseCountry.name}; portray a plausible local person without stereotypes.`
       : "",
     isOrganization
       ? "The client is an organization, so show a realistic representative or owner in credible business attire."
       : "The client is a person, so show believable everyday clothing appropriate for an ordinary client, not a lawyer headshot and not overly formal.",
     wardrobeGuidance,
     "Use the same visual family as a polished legal dashboard portrait: realistic face, natural expression, soft office lighting, lawyer-office background, client seated at a consultation table, shoulders and upper torso visible.",
+    "Keep rendering detail moderate: prioritize a clear recognizable face and use a simple softly blurred background without intricate fabric, skin, hair, or office texture.",
     "Compose this as a vertical rectangular case-card portrait, not a circular avatar. Do not place the person inside a circle, white badge, round mask, profile bubble, or sticker frame.",
     "Frame the subject as if the viewer is the lawyer sitting across from them: slight conversational distance, natural seated posture, full head, face, neck, and upper shoulders visible with enough office background for a clean rectangular crop.",
     "Avoid text, logos, badges, robes, gavels, courtroom props, caricature, illustration, celebrity resemblance, and dramatic fashion styling.",
@@ -289,10 +296,10 @@ const createClientPortrait = async (prompt) => {
     body: JSON.stringify({
       model: IMAGE_MODEL,
       prompt,
-      size: "1024x1024",
-      quality: "medium",
+      size: IMAGE_SIZE,
+      quality: IMAGE_QUALITY,
       output_format: "webp",
-      output_compression: 82,
+      output_compression: PORTRAIT_OUTPUT_QUALITY,
     }),
   });
 
@@ -319,7 +326,7 @@ const resizeClientPortrait = async (imageBuffer) =>
       fit: "cover",
       position: "attention",
     })
-    .webp({ quality: 82 })
+    .webp({ quality: PORTRAIT_OUTPUT_QUALITY })
     .toBuffer();
 
 const getCaseObjectId = (caseSession) =>
@@ -379,7 +386,7 @@ export async function GET(request, { params }) {
 
     const blob = await get(getPortraitBlobPath(caseSession, target), {
       access: "private",
-      useCache: false,
+      useCache: true,
     });
 
     if (!blob || blob.statusCode === 304 || !blob.stream) {
@@ -390,7 +397,7 @@ export async function GET(request, { params }) {
       status: 200,
       headers: {
         "Content-Type": blob.blob.contentType || "image/webp",
-        "Cache-Control": "private, no-store, max-age=0",
+        "Cache-Control": "private, max-age=31536000, immutable",
         ETag: blob.blob.etag,
       },
     });
@@ -401,6 +408,7 @@ export async function GET(request, { params }) {
 }
 
 export async function POST(request, { params }) {
+  const requestStartedAt = Date.now();
   const target = getPortraitTarget(request);
   const portraitField = getPortraitField(target);
   const { session, error: authError } = await getRequestSession(request);
@@ -428,32 +436,77 @@ export async function POST(request, { params }) {
         ok: true,
         caseSession: buildCasePayload(caseSession),
         image: existingPortrait.image,
+        target,
+        portrait: {
+          target,
+          image: existingPortrait.image,
+          generatedAt: existingPortrait.generatedAt,
+          promptVersion: existingPortrait.promptVersion,
+        },
         reused: true,
+        timings: {
+          generationMs: 0,
+          resizeMs: 0,
+          storageMs: 0,
+          persistenceMs: 0,
+          totalMs: Date.now() - requestStartedAt,
+        },
       });
     }
 
     const prompt = buildClientPortraitPrompt(caseSession, target);
+    const generationStartedAt = Date.now();
     const generatedImage = await createClientPortrait(prompt);
+    const generationCompletedAt = Date.now();
     const resizedPortrait = await resizeClientPortrait(generatedImage);
+    const resizeCompletedAt = Date.now();
     const image = await storeClientPortrait({
       buffer: resizedPortrait,
       caseSession,
       target,
     });
+    const storageCompletedAt = Date.now();
 
+    const generatedAt = new Date();
     caseSession[portraitField] = {
       image,
-      generatedAt: new Date(),
+      generatedAt,
       prompt,
       promptVersion: PORTRAIT_PROMPT_VERSION,
     };
     caseSession.markModified?.(portraitField);
     await caseSession.save();
+    const completedAt = Date.now();
+    const timings = {
+      generationMs: generationCompletedAt - generationStartedAt,
+      resizeMs: resizeCompletedAt - generationCompletedAt,
+      storageMs: storageCompletedAt - resizeCompletedAt,
+      persistenceMs: completedAt - storageCompletedAt,
+      totalMs: completedAt - requestStartedAt,
+    };
+
+    console.log("[portrait-usage]", {
+      caseId: getCaseObjectId(caseSession),
+      target,
+      model: IMAGE_MODEL,
+      quality: IMAGE_QUALITY,
+      reused: false,
+      ...timings,
+    });
 
     return NextResponse.json({
       ok: true,
       caseSession: buildCasePayload(caseSession),
       image,
+      target,
+      portrait: {
+        target,
+        image,
+        generatedAt,
+        promptVersion: PORTRAIT_PROMPT_VERSION,
+      },
+      reused: false,
+      timings,
       width: PORTRAIT_WIDTH,
       height: PORTRAIT_HEIGHT,
       contentType: "image/webp",

@@ -682,7 +682,14 @@ const buildConversationFactSheetPatch = async ({
           "Use neutral lawyer-note voice only. Never write in first person.",
           "Do not copy the client's answer into the fact sheet.",
           "Each note should usually be 4 to 12 words.",
-          "Add at most one new note per section for this exchange.",
+          "For sections other than timeline, add at most one new note per section for this exchange.",
+          "For timeline, return the complete revised timeline, not merely one new event.",
+          "Preserve every material existing timeline event and add every material event stated or clearly implied by the latest exchange.",
+          "Atomize compound stories: use one timeline note per event instead of compressing several events into one note.",
+          "Order timeline notes chronologically. When exact dates are absent, preserve the relative order conveyed by words such as before, after, then, later, and finally.",
+          "Timeline events commonly include agreements, possession or occupancy, payments or deposits, duration, performance, move-out or key return, notices or itemized statements sent, charges or deductions, and demands or refusals.",
+          "Put static conditions, damage descriptions, arguments, and evidence labels in their appropriate non-timeline sections unless they also describe a distinct event.",
+          "Retain names, unit identifiers, durations, dates, and exact amounts when supplied or clearly implied.",
           "Do not start any note with 'I,' 'my,' 'we,' 'our,' 'I recall,' 'I believe,' or 'what I have.'",
           "Avoid boilerplate prefixes; write the note itself.",
           "Merge with existing notes mentally and only add a note if it is materially new, sharper, or more specific.",
@@ -693,7 +700,7 @@ const buildConversationFactSheetPatch = async ({
           "If the client says proof your side needs does not exist, was not shown, cannot be provided, or still needs to be found, put that note in missingEvidence.",
           "If the client says the opposing side controls or failed to provide proof for its own position, do not put that in missingEvidence. Put it in supportingFacts or disputedFacts as an opponent proof problem.",
           "Do not mention canonical truth, hidden facts, templates, schemas, or source of truth.",
-          "Return only new or revised notes supported by the visible conversation.",
+          "Except for the complete timeline, return only new or revised notes supported by the visible conversation.",
         ],
         outputSchema: {
           summary: ["string"],
@@ -708,6 +715,7 @@ const buildConversationFactSheetPatch = async ({
           sourceLinks: ["string"],
           missingEvidence: ["string"],
           openQuestions: ["string"],
+          replaceTimeline: true,
         },
         currentFactSheet,
         recentTranscript,
@@ -718,11 +726,12 @@ const buildConversationFactSheetPatch = async ({
       }),
     });
 
+    const revisedTimeline = coerceStringList(aiResult?.timeline, 8);
     const patch = normalizeFactSheetPatch({
       summary: coerceStringList(aiResult?.summary, 3),
       theory: coerceStringList(aiResult?.theory, 3),
       desiredRelief: coerceStringList(aiResult?.desiredRelief, 2),
-      timeline: coerceStringList(aiResult?.timeline, 4),
+      timeline: revisedTimeline,
       supportingFacts: coerceStringList(aiResult?.supportingFacts, 5),
       risks: coerceStringList(aiResult?.risks, 4),
       knownFacts: [],
@@ -735,6 +744,7 @@ const buildConversationFactSheetPatch = async ({
       discoveredFactIds: [],
       discoveredClaimIds: [],
       discoveredEvidenceIds: [],
+      replaceTimeline: revisedTimeline.length > 0,
     });
 
     if (

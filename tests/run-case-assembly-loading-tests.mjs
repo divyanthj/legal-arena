@@ -75,15 +75,74 @@ const dashboardSource = await readFile(
   new URL("../components/legal-arena/DashboardHub.js", import.meta.url),
   "utf8"
 );
+const workspaceSource = await readFile(
+  new URL("../components/legal-arena/CaseWorkspace.js", import.meta.url),
+  "utf8"
+);
+const portraitRouteSource = await readFile(
+  new URL("../app/api/cases/[caseId]/client-portrait/route.js", import.meta.url),
+  "utf8"
+);
+const challengePortraitRouteSource = await readFile(
+  new URL("../app/api/challenges/[challengeId]/client-portrait/route.js", import.meta.url),
+  "utf8"
+);
 const createStart = dashboardSource.indexOf("const handleCreateCase");
 const createEnd = dashboardSource.indexOf("const retryCaseAssembly", createStart);
 const createSource = dashboardSource.slice(createStart, createEnd);
 assert.match(createSource, /status: "generating"/);
 assert.match(createSource, /status: "portraits"/);
-assert.match(createSource, /generatePortrait\("client"\)/);
-assert.match(createSource, /generatePortrait\("opponent"\)/);
-assert.match(createSource, /portrait_failures/);
+assert.match(createSource, /status: "opening"/);
+assert.match(createSource, /`\/cases\/\$\{caseRef\}\/client-portrait`/);
+assert.match(createSource, /client: \{ status: "generating", image: "" \}/);
+assert.match(createSource, /client: \{ status: "complete", image: clientPortraitImage \}/);
+assert.match(createSource, /portraits_background: false/);
+assert.doesNotMatch(createSource, /await Promise\.all\(\[\s*generatePortrait/);
+assert.ok(
+  createSource.indexOf("router.push(caseHref)") >
+    createSource.indexOf('trackGoal("case_creation_wait_completed"'),
+  "case creation should navigate only after recording the portrait generation wait"
+);
+assert.ok(
+  createSource.indexOf("router.prefetch(caseHref)") >
+    createSource.indexOf("portraitCompletedAt"),
+  "intake must not be prefetched before the saved portrait is available"
+);
 assert.doesNotMatch(createSource, /startNavigationLoading\(/);
+
+assert.match(workspaceSource, /const keepNewestPortrait = \(currentPortrait = \{\}, incomingPortrait = \{\}\) =>/);
+assert.match(workspaceSource, /clientPortrait: keepNewestPortrait\(current\.clientPortrait, nextCase\.clientPortrait\)/);
+assert.doesNotMatch(workspaceSource, /requestCasePortraitOnce/);
+assert.doesNotMatch(workspaceSource, /portrait_background_completed/);
+
+assert.match(portraitRouteSource, /OPENAI_PORTRAIT_IMAGE_MODEL/);
+assert.match(portraitRouteSource, /OPENAI_PORTRAIT_IMAGE_QUALITY/);
+assert.match(portraitRouteSource, /"gpt-image-2"/);
+assert.match(portraitRouteSource, /\["low", "medium", "high"\]\.includes/);
+assert.match(portraitRouteSource, /quality: IMAGE_QUALITY/);
+assert.match(portraitRouteSource, /const IMAGE_SIZE = IMAGE_MODEL === "gpt-image-2" \? "816x816" : "1024x1024"/);
+assert.match(portraitRouteSource, /size: IMAGE_SIZE/);
+assert.match(portraitRouteSource, /const PORTRAIT_WIDTH = 256/);
+assert.match(portraitRouteSource, /const PORTRAIT_HEIGHT = 288/);
+assert.match(portraitRouteSource, /const PORTRAIT_OUTPUT_QUALITY = 58/);
+assert.match(portraitRouteSource, /Keep rendering detail moderate/);
+assert.match(challengePortraitRouteSource, /OPENAI_PORTRAIT_IMAGE_QUALITY/);
+assert.match(challengePortraitRouteSource, /OPENAI_PORTRAIT_IMAGE_MODEL/);
+assert.match(challengePortraitRouteSource, /"gpt-image-2"/);
+assert.match(challengePortraitRouteSource, /quality: IMAGE_QUALITY/);
+assert.match(challengePortraitRouteSource, /const IMAGE_SIZE = IMAGE_MODEL === "gpt-image-2" \? "816x816" : "1024x1024"/);
+assert.match(challengePortraitRouteSource, /size: IMAGE_SIZE/);
+assert.match(challengePortraitRouteSource, /const PORTRAIT_WIDTH = 256/);
+assert.match(challengePortraitRouteSource, /const PORTRAIT_HEIGHT = 288/);
+assert.match(challengePortraitRouteSource, /const PORTRAIT_OUTPUT_QUALITY = 58/);
+assert.match(challengePortraitRouteSource, /Keep rendering detail moderate/);
+assert.match(portraitRouteSource, /useCache: true/);
+assert.match(portraitRouteSource, /private, max-age=31536000, immutable/);
+assert.match(portraitRouteSource, /generationMs:/);
+assert.match(portraitRouteSource, /resizeMs:/);
+assert.match(portraitRouteSource, /storageMs:/);
+assert.match(portraitRouteSource, /persistenceMs:/);
+assert.match(portraitRouteSource, /portrait: \{/);
 const activationReturnStart = dashboardSource.indexOf("if (useActivationDashboard)");
 const activationReturnEnd = dashboardSource.indexOf(
   '<main className="arena-app-shell min-h-screen overflow-x-hidden',

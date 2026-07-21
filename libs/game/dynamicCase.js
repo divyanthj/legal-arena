@@ -16,7 +16,7 @@ const DYNAMIC_CASE_MODEL =
   process.env.OPENAI_DYNAMIC_CASE_MODEL?.trim() ||
   process.env.OPENAI_GENERATION_MODEL?.trim() ||
   process.env.OPENAI_MODEL?.trim() ||
-  "gpt-5.4";
+  "gpt-5.4-mini";
 
 const clampComplexity = (value = 1) =>
   Math.max(1, Math.min(5, Number(value) || 1));
@@ -513,19 +513,13 @@ export const generateDynamicCaseState = async ({
     maxTokens: 2600,
     retryAttempts: 1,
     usageLabel: "dynamicCase.generate",
+    promptCacheKey: "la:dynamic-case:v2",
     serviceTier: "priority",
     onUsage,
     systemPrompt:
       "You generate session-level legal disputes for a legal strategy game. Output valid JSON only. Do not create reusable templates or canonical fact lists.",
     userPrompt: JSON.stringify({
       task: "Generate one playable dynamic legal case initial state.",
-      category: category?.slug || DEFAULT_CATEGORY_SLUG,
-      categoryTitle: category?.title || "General",
-      complexity: normalizedComplexity,
-      playerLevel: normalizedPlayerLevel,
-      playabilityProfile,
-      caseCountry,
-      countryGuidance,
       designRules: [
         "Create plaintiff and defendant stories as subjective claims, not objective truth.",
         "Include contradictions, weaknesses, proof gaps, and tactical opportunities.",
@@ -541,7 +535,6 @@ export const generateDynamicCaseState = async ({
         "Give each side discrete subjective courtroomPositions. Each position must express one concise claim, use an evidencePool id when linking proof, and must not reveal objective hidden truth.",
         "Give each side at least one relevant evidence item that is availableAtStart when complexity is 1; do not make missing or hard-to-get material necessary for an intro opponent's core theory.",
         "Treat caseCountry as immutable input. Do not move the matter to another country or return a competing country value.",
-        ...countryGuidance,
       ],
       outputSchema: {
         title: "string",
@@ -626,6 +619,13 @@ export const generateDynamicCaseState = async ({
           },
         },
       },
+      category: category?.slug || DEFAULT_CATEGORY_SLUG,
+      categoryTitle: category?.title || "General",
+      complexity: normalizedComplexity,
+      playerLevel: normalizedPlayerLevel,
+      playabilityProfile,
+      caseCountry,
+      countryGuidance,
     }),
   });
 

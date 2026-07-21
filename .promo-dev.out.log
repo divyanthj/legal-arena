@@ -1,0 +1,499 @@
+
+> ship-fast-code@0.1.0 dev
+> next dev -H 0.0.0.0 -p 3000
+
+  ▲ Next.js 14.2.35
+  - Local:        http://localhost:3000
+  - Network:      http://0.0.0.0:3000
+  - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 2.4s
+ ○ Compiling /middleware ...
+ ✓ Compiled /middleware in 618ms (73 modules)
+ ○ Compiling / ...
+
+🌼   [35mdaisyUI[39m [2m4.10.1[22m
+├─ [32m✔︎[39m 3 themes added[2m		https://daisyui.com/docs/themes[22m
+╰─ [32m★[39m [0mStar daisyUI on GitHub[0m	[2mhttps://github.com/saadeghi/daisyui[22m
+
+ ✓ Compiled / in 9.7s (2004 modules)
+ ✓ Compiled in 2.2s (685 modules)
+ GET / 200 in 12600ms
+ ○ Compiling /api/auth/[...nextauth] ...
+ ✓ Compiled /api/auth/[...nextauth] in 8.2s (1233 modules)
+ GET /api/auth/session 200 in 11222ms
+ ✓ Compiled /api/auth/session-status in 374ms (1257 modules)
+ GET /api/auth/session 200 in 745ms
+ GET /api/auth/session-status 200 in 770ms
+ ○ Compiling /dashboard ...
+ ✓ Compiled /dashboard in 3.2s (2344 modules)
+ ○ Compiling /api/players/avatar/[playerId] ...
+ ✓ Compiled /api/players/avatar/[playerId] in 1054ms (1697 modules)
+ GET /dashboard 200 in 9441ms
+ GET /api/auth/session 200 in 130ms
+ GET /api/auth/session 200 in 82ms
+ GET /api/auth/session-status 200 in 123ms
+ GET /api/players/avatar/69e8df9c5452c0821bdfd6d9?v=1778348211121 200 in 2744ms
+ GET /api/players/avatar/6a41f0aa485177a20e890fa9?v=1782885976199 200 in 2373ms
+ ○ Compiling /dashboard/cases/[caseId] ...
+ ✓ Compiled /dashboard/cases/[caseId] in 2.4s (2518 modules)
+ GET /dashboard?_rsc=syt8b 200 in 3727ms
+ GET /dashboard/cases/security-deposit-for-the-hall-street-apartment-62de8a 200 in 7824ms
+ GET /api/players/avatar/69e8df9c5452c0821bdfd6d9?v=1778348211121 200 in 861ms
+ GET /api/auth/session 200 in 87ms
+ GET /api/auth/session 200 in 48ms
+ GET /api/auth/session-status 200 in 86ms
+ ✓ Compiled /api/cases/[caseId]/courtroom in 283ms (1590 modules)
+[openai-usage] {
+  label: 'courtroom.counselAnalysis',
+  attempt: 1,
+  maxTokens: 900,
+  finishReason: 'completed',
+  model: 'gpt-5.4',
+  api: 'responses',
+  parsed: true,
+  promptCacheKey: 'la:courtroom:counselAnalysis:2a7b79b0:6ca27df4',
+  cacheHitRate: 0,
+  requestedServiceTier: 'auto',
+  serviceTier: 'default',
+  isPriority: false,
+  responseId: 'resp_03c98b681f108773006a5e0125b55c81a2ada7bedaa11a1a94',
+  durationMs: 8070,
+  inputTokens: 4937,
+  outputTokens: 513,
+  totalTokens: 5450,
+  cachedInputTokens: 0,
+  reasoningTokens: 0
+}
+[openai-usage] {
+  label: 'courtroom.round',
+  attempt: 1,
+  maxTokens: 1500,
+  finishReason: 'completed',
+  model: 'gpt-5.4',
+  api: 'responses',
+  parsed: true,
+  promptCacheKey: 'la:courtroom:round:2a7b79b0:6ca27df4',
+  cacheHitRate: 0,
+  requestedServiceTier: 'auto',
+  serviceTier: 'default',
+  isPriority: false,
+  responseId: 'resp_0f28ef9223ef5f01006a5e012ce948819d8ad5b3838fe6a525',
+  durationMs: 6450,
+  inputTokens: 9042,
+  outputTokens: 458,
+  totalTokens: 9500,
+  cachedInputTokens: 0,
+  reasoningTokens: 0
+}
+[openai-usage] {
+  label: 'courtroom.judgeAdjournment',
+  attempt: 1,
+  maxTokens: 700,
+  finishReason: 'completed',
+  model: 'gpt-5.4',
+  api: 'responses',
+  parsed: true,
+  promptCacheKey: 'la:courtroom:judgeAdjournment:2a7b79b0:6ca27df4',
+  cacheHitRate: 0,
+  requestedServiceTier: 'auto',
+  serviceTier: 'default',
+  isPriority: false,
+  responseId: 'resp_09c8727532ecc014006a5e01337afc81a3995fafb5e074fcf8',
+  durationMs: 6179,
+  inputTokens: 1480,
+  outputTokens: 157,
+  totalTokens: 1637,
+  cachedInputTokens: 0,
+  reasoningTokens: 0
+}
+ POST /api/cases/security-deposit-for-the-hall-street-apartment-62de8a/courtroom 200 in 22264ms
+ ✓ Compiled /api/cases/[caseId]/client-portrait in 200ms (1719 modules)
+ GET /dashboard/cases/security-deposit-for-the-hall-street-apartment-62de8a?_rsc=x0ko9 200 in 651ms
+ GET /api/cases/security-deposit-for-the-hall-street-apartment-62de8a/client-portrait?v=1783971050749 200 in 2275ms
+ ✓ Compiled /api/cases/[caseId]/interview in 350ms (1719 modules)
+[openai-usage] {
+  label: 'intake.partyResponse',
+  attempt: 1,
+  maxTokens: 1500,
+  finishReason: 'completed',
+  model: 'gpt-5.4',
+  api: 'responses',
+  parsed: true,
+  promptCacheKey: 'la:intake:partyResponse:2a7b79b0:6ca27df4',
+  cacheHitRate: 0,
+  requestedServiceTier: 'auto',
+  serviceTier: 'default',
+  isPriority: false,
+  responseId: 'resp_056de136f47dbc95006a5e01769d64819db5d49d73ad02bf26',
+  durationMs: 5731,
+  inputTokens: 1834,
+  outputTokens: 391,
+  totalTokens: 2225,
+  cachedInputTokens: 0,
+  reasoningTokens: 0
+}
+[openai-usage] {
+  label: 'intake.factSheetPatch',
+  attempt: 1,
+  maxTokens: 900,
+  finishReason: 'completed',
+  model: 'gpt-5.4',
+  api: 'responses',
+  parsed: true,
+  promptCacheKey: 'la:intake:factSheetPatch:2a7b79b0:6ca27df4',
+  cacheHitRate: 0,
+  requestedServiceTier: 'auto',
+  serviceTier: 'default',
+  isPriority: false,
+  responseId: 'resp_00957319c0cd59c8006a5e017c23c08191a092f9663a278ca5',
+  durationMs: 2394,
+  inputTokens: 1332,
+  outputTokens: 78,
+  totalTokens: 1410,
+  cachedInputTokens: 0,
+  reasoningTokens: 0
+}
+[openai-usage] {
+  label: 'intake.assessment',
+  attempt: 1,
+  maxTokens: 600,
+  finishReason: 'completed',
+  model: 'gpt-5.4',
+  api: 'responses',
+  parsed: true,
+  promptCacheKey: 'la:intake:assessment:2a7b79b0:6ca27df4',
+  cacheHitRate: 0,
+  requestedServiceTier: 'auto',
+  serviceTier: 'default',
+  isPriority: false,
+  responseId: 'resp_0e33cc53fdfef9e6006a5e017e7e7081a2a54b75826065c9b0',
+  durationMs: 2493,
+  inputTokens: 2767,
+  outputTokens: 82,
+  totalTokens: 2849,
+  cachedInputTokens: 0,
+  reasoningTokens: 0
+}
+ POST /api/cases/security-deposit-for-the-hall-street-apartment-62de8a/interview 200 in 12736ms
+[openai-usage] {
+  label: 'intake.partyResponse',
+  attempt: 1,
+  maxTokens: 1500,
+  finishReason: 'completed',
+  model: 'gpt-5.4',
+  api: 'responses',
+  parsed: true,
+  promptCacheKey: 'la:intake:partyResponse:2a7b79b0:6ca27df4',
+  cacheHitRate: 0,
+  requestedServiceTier: 'auto',
+  serviceTier: 'default',
+  isPriority: false,
+  responseId: 'resp_0c2da2ca385b0ca6006a5e0196441c81a3b872ce8a280cc07f',
+  durationMs: 2309,
+  inputTokens: 2009,
+  outputTokens: 133,
+  totalTokens: 2142,
+  cachedInputTokens: 0,
+  reasoningTokens: 0
+}
+[openai-usage] {
+  label: 'intake.factSheetPatch',
+  attempt: 1,
+  maxTokens: 900,
+  finishReason: 'completed',
+  model: 'gpt-5.4',
+  api: 'responses',
+  parsed: true,
+  promptCacheKey: 'la:intake:factSheetPatch:2a7b79b0:6ca27df4',
+  cacheHitRate: 0,
+  requestedServiceTier: 'auto',
+  serviceTier: 'default',
+  isPriority: false,
+  responseId: 'resp_010283f13be23ba5006a5e01989e78819fa24aafe259adc8f4',
+  durationMs: 2029,
+  inputTokens: 1357,
+  outputTokens: 60,
+  totalTokens: 1417,
+  cachedInputTokens: 0,
+  reasoningTokens: 0
+}
+[openai-usage] {
+  label: 'intake.assessment',
+  attempt: 1,
+  maxTokens: 600,
+  finishReason: 'completed',
+  model: 'gpt-5.4',
+  api: 'responses',
+  parsed: true,
+  promptCacheKey: 'la:intake:assessment:2a7b79b0:6ca27df4',
+  cacheHitRate: 0.646,
+  requestedServiceTier: 'auto',
+  serviceTier: 'default',
+  isPriority: false,
+  responseId: 'resp_0c4e93d1001b94e3006a5e019c23248192a21eb31eb32812da',
+  durationMs: 13613,
+  inputTokens: 2774,
+  outputTokens: 99,
+  totalTokens: 2873,
+  cachedInputTokens: 1792,
+  reasoningTokens: 0
+}
+ POST /api/cases/security-deposit-for-the-hall-street-apartment-62de8a/interview 200 in 18364ms
+ ○ Compiling /icon.png ...
+ ✓ Compiled /icon.png in 525ms (1592 modules)
+ ✓ Compiled (1621 modules)
+ GET /icon.png 200 in 1152ms
+ POST /api/cases/security-deposit-for-the-hall-street-apartment-62de8a/finalize 200 in 2197ms
+ GET /dashboard/cases/security-deposit-for-the-hall-street-apartment-62de8a?_rsc=x0ko9 200 in 150ms
+ ✓ Compiled /api/cases/[caseId]/courtroom in 350ms (1621 modules)
+[openai-usage] {
+  label: 'courtroom.counselAnalysis',
+  attempt: 1,
+  maxTokens: 900,
+  finishReason: 'completed',
+  model: 'gpt-5.4',
+  api: 'responses',
+  parsed: true,
+  promptCacheKey: 'la:courtroom:counselAnalysis:2a7b79b0:6ca27df4',
+  cacheHitRate: 0,
+  requestedServiceTier: 'auto',
+  serviceTier: 'default',
+  isPriority: false,
+  responseId: 'resp_0045ae57aee159ff006a5e01ee1184819ebcb49d7e8854498d',
+  durationMs: 7697,
+  inputTokens: 5615,
+  outputTokens: 577,
+  totalTokens: 6192,
+  cachedInputTokens: 0,
+  reasoningTokens: 0
+}
+[openai-usage] {
+  label: 'courtroom.round',
+  attempt: 1,
+  maxTokens: 1500,
+  finishReason: 'completed',
+  model: 'gpt-5.4',
+  api: 'responses',
+  parsed: true,
+  promptCacheKey: 'la:courtroom:round:2a7b79b0:6ca27df4',
+  cacheHitRate: 0,
+  requestedServiceTier: 'auto',
+  serviceTier: 'default',
+  isPriority: false,
+  responseId: 'resp_049c41dad11f566f006a5e01f5984c81a2b4bd6465d16de543',
+  durationMs: 7487,
+  inputTokens: 9933,
+  outputTokens: 533,
+  totalTokens: 10466,
+  cachedInputTokens: 0,
+  reasoningTokens: 0
+}
+ POST /api/cases/security-deposit-for-the-hall-street-apartment-62de8a/courtroom 200 in 15977ms
+ GET /dashboard/cases/security-deposit-for-the-hall-street-apartment-62de8a?_rsc=x0ko9 200 in 170ms
+[openai-usage] {
+  label: 'courtroom.counselAnalysis',
+  attempt: 1,
+  maxTokens: 900,
+  finishReason: 'completed',
+  model: 'gpt-5.4',
+  api: 'responses',
+  parsed: true,
+  promptCacheKey: 'la:courtroom:counselAnalysis:2a7b79b0:6ca27df4',
+  cacheHitRate: 0,
+  requestedServiceTier: 'auto',
+  serviceTier: 'default',
+  isPriority: false,
+  responseId: 'resp_0fa019dbae38e7de006a5e022b3804819fb5ab8fa1c5ee6a11',
+  durationMs: 5522,
+  inputTokens: 6332,
+  outputTokens: 431,
+  totalTokens: 6763,
+  cachedInputTokens: 0,
+  reasoningTokens: 0
+}
+[openai-usage] {
+  label: 'courtroom.round',
+  attempt: 1,
+  maxTokens: 1500,
+  finishReason: 'completed',
+  model: 'gpt-5.4',
+  api: 'responses',
+  parsed: true,
+  promptCacheKey: 'la:courtroom:round:2a7b79b0:6ca27df4',
+  cacheHitRate: 0,
+  requestedServiceTier: 'auto',
+  serviceTier: 'default',
+  isPriority: false,
+  responseId: 'resp_022517fc11286064006a5e02309220819db2641972f368568c',
+  durationMs: 8750,
+  inputTokens: 10657,
+  outputTokens: 520,
+  totalTokens: 11177,
+  cachedInputTokens: 0,
+  reasoningTokens: 0
+}
+ POST /api/cases/security-deposit-for-the-hall-street-apartment-62de8a/courtroom 200 in 14559ms
+[openai-usage] {
+  label: 'courtroom.counselAnalysis',
+  attempt: 1,
+  maxTokens: 900,
+  finishReason: 'completed',
+  model: 'gpt-5.4',
+  api: 'responses',
+  parsed: true,
+  promptCacheKey: 'la:courtroom:counselAnalysis:2a7b79b0:6ca27df4',
+  cacheHitRate: 0,
+  requestedServiceTier: 'auto',
+  serviceTier: 'default',
+  isPriority: false,
+  responseId: 'resp_0fad27ec8bab258e006a5e026b591481a0931fa408a5361249',
+  durationMs: 9676,
+  inputTokens: 6727,
+  outputTokens: 530,
+  totalTokens: 7257,
+  cachedInputTokens: 0,
+  reasoningTokens: 0
+}
+[openai-usage] {
+  label: 'courtroom.roundWithVerdict',
+  attempt: 1,
+  maxTokens: 1500,
+  finishReason: 'completed',
+  model: 'gpt-5.4',
+  api: 'responses',
+  parsed: true,
+  promptCacheKey: 'la:courtroom:roundWithVerdict:2a7b79b0:6ca27df4',
+  cacheHitRate: 0,
+  requestedServiceTier: 'auto',
+  serviceTier: 'default',
+  isPriority: false,
+  responseId: 'resp_0185132e0bad1b1d006a5e0274dfe88192acd01dc802439d6c',
+  durationMs: 13023,
+  inputTokens: 11138,
+  outputTokens: 995,
+  totalTokens: 12133,
+  cachedInputTokens: 0,
+  reasoningTokens: 0
+}
+[openai-usage] {
+  label: 'dashboard-encouragement-note',
+  attempt: 1,
+  maxTokens: 120,
+  finishReason: 'completed',
+  model: 'gpt-5.4',
+  api: 'responses',
+  parsed: true,
+  promptCacheKey: '',
+  cacheHitRate: 0,
+  requestedServiceTier: 'auto',
+  serviceTier: 'default',
+  isPriority: false,
+  responseId: 'resp_0e23e0a9397b77b7006a5e028267c4819e8803586c317b7a73',
+  durationMs: 1786,
+  inputTokens: 186,
+  outputTokens: 45,
+  totalTokens: 231,
+  cachedInputTokens: 0,
+  reasoningTokens: 0
+}
+ POST /api/cases/security-deposit-for-the-hall-street-apartment-62de8a/courtroom 200 in 25623ms
+ ○ Compiling /api/case-reports/[sourceType]/[sourceId] ...
+ ✓ Compiled /api/award-evaluations/[sourceType]/[sourceId] in 644ms (1592 modules)
+ ✓ Compiled (1724 modules)
+ GET /api/players/case-report-preferences 200 in 1396ms
+ GET /dashboard/cases/security-deposit-for-the-hall-street-apartment-62de8a?_rsc=x0ko9 200 in 1023ms
+ GET /dashboard/cases/security-deposit-for-the-hall-street-apartment-62de8a?_rsc=4zlr6 200 in 200ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 1916ms
+ GET /api/case-reports/caseSession/6a553cc78ec3d4bc6462de8a 200 in 2510ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 81ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 69ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 66ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 66ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 65ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 66ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 70ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 68ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 78ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 69ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 72ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 78ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 67ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 65ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 72ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 81ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 78ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 69ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 65ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 83ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 84ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 75ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 67ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 80ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 116ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 71ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 62ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 62ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 60ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 64ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 64ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 61ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 62ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 68ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 65ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 73ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 65ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 67ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 66ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 66ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 68ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 65ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 66ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 66ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 64ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 65ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 71ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 76ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 80ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 70ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 76ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 81ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 91ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 73ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 99ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 113ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 81ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 98ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 76ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 73ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 72ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 83ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 94ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 93ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 80ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 80ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 84ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 80ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 66ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 72ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 68ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 75ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 65ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 66ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 63ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 67ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 126ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 68ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 64ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 82ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 60ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 66ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 62ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 60ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 62ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 62ms
+ GET /api/award-evaluations/case/6a553cc78ec3d4bc6462de8a 200 in 62ms
+ ✓ Compiled in 259ms (1561 modules)
+ GET /dashboard/cases/security-deposit-for-the-hall-street-apartment-62de8a?_rsc=4zlr6 200 in 291ms
+ ✓ Compiled in 248ms (1561 modules)
