@@ -12,6 +12,7 @@ await import("./run-interview-voice-tests.mjs");
 await import("./run-case-voice-ui-tests.mjs");
 await import("./run-settlement-mood-reaction-tests.mjs");
 await import("./run-settlement-composer-tests.mjs");
+await import("./run-negotiation-profile-tests.mjs");
 await import("./run-guided-settlement-loop-tests.mjs");
 await import("./run-interview-language-regression-tests.mjs");
 await import("./run-case-assessment-tests.mjs");

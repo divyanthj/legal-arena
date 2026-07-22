@@ -18,6 +18,7 @@ import {
   hasClientSettlementAuthority,
   hasClientSettlementRejection,
 } from "@/libs/game/settlementAuthority";
+import { getNegotiationProfile } from "@/libs/game/negotiationProfile.mjs";
 import {
   getAdjournmentRemaining,
   hasAdjournmentRequestForRound,
@@ -1534,7 +1535,11 @@ export default function CaseWorkspace({
     return () => { active = false; window.clearInterval(interval); };
   }, [analyticsMode, awardEvaluationStatus, caseSession.id, caseSession._id, isSettled, isVerdict]);
   const isIntakeLocked = Boolean(apiConfig.intakeLocked);
-  const canSettleCase = caseSession.primaryCategory !== "criminal";
+  const negotiationProfile = getNegotiationProfile(caseSession);
+  const canSettleCase = negotiationProfile.available;
+  const negotiationActionLabel = negotiationProfile.actionLabel;
+  const negotiationStageLabel = negotiationProfile.stageLabel;
+  const negotiationIntentLabel = negotiationProfile.intentLabel;
   const hasSettlementAuthority = hasClientSettlementAuthority(
     visibleInterviewTranscript
   );
@@ -2193,7 +2198,7 @@ export default function CaseWorkspace({
   };
 
   function getDefaultSettlementIntentMessage() {
-    return `${playerPartyName} consents to exploring settlement. Please ask your client whether they consent so we can move into settlement talks.`;
+    return `${playerPartyName} consents to exploring ${negotiationStageLabel.toLowerCase()}. Please confirm the necessary authority so we can discuss practical terms.`;
   }
 
   const handleSendSettlementIntent = async () => {
@@ -2266,7 +2271,7 @@ export default function CaseWorkspace({
     await submitSettlementMessage({
       initial: true,
       messageOverride:
-        "My client consents to settlement talks. We accept the settlement intent and are ready to discuss practical terms.",
+        `My client consents to ${negotiationStageLabel.toLowerCase()}. We accept the proposal and are ready to discuss practical terms.`,
     });
   };
 
@@ -4159,7 +4164,7 @@ export default function CaseWorkspace({
                   awaitingSettlementResponse
                 }
               >
-                {pendingAction === "settlement-start" ? "Sending Intent..." : "Send Settlement Intent"}
+                {pendingAction === "settlement-start" ? "Sending..." : `Send ${negotiationIntentLabel}`}
                 <HeroIcons.ArrowRightIcon className="h-4 w-4" aria-hidden="true" />
               </button>
             ) : null}
@@ -4200,7 +4205,7 @@ export default function CaseWorkspace({
       pendingSettlementIntentFromViewer ||
       !hasSettlementAuthority;
     const tooltip = !hasSettlementAuthority
-      ? "Ask your client if they are willing to settle this out of court. This unlocks once they agree."
+      ? `Ask your client whether they authorize ${negotiationStageLabel.toLowerCase()}. This unlocks once they agree.`
       : pendingSettlementIntentFromViewer
       ? "Settlement intent has been sent. Opposing counsel needs to ask their client before talks open."
       : settlementAuthorityReady
@@ -4239,12 +4244,12 @@ export default function CaseWorkspace({
             : pendingSettlementIntentFromViewer
             ? "Settlement Intent Sent"
             : pendingSettlementIntentFromOther
-            ? "Respond to Settlement"
+            ? `Respond to ${negotiationStageLabel}`
             : settlementAuthorityReady
-            ? "Send Settlement Intent"
+            ? `Send ${negotiationIntentLabel}`
             : isSettlementCooldownActive
-            ? `Settle in ${settlementCooldownLabel}`
-            : "Settle"}
+            ? `${negotiationActionLabel} in ${settlementCooldownLabel}`
+            : negotiationActionLabel}
         </button>
       </span>
     );
@@ -6870,7 +6875,7 @@ export default function CaseWorkspace({
                       data-intake-tour-target="intake-send-button"
                       >
                       {settlementAuthorityReady
-                        ? "Send Settlement Intent First"
+                        ? `Send ${negotiationIntentLabel} First`
                         : awaitingSettlementResponse
                         ? "Awaiting Response"
                         : pendingAction === "interview"
@@ -7009,7 +7014,7 @@ export default function CaseWorkspace({
                         disabled={factSheetPrimaryActionDisabled}
                       >
                         {settlementAuthorityReady
-                          ? "Send Settlement Intent First"
+                          ? `Send ${negotiationIntentLabel} First`
                           : awaitingSettlementResponse
                           ? "Awaiting Response"
                           : isIntakeLocked
@@ -7342,7 +7347,7 @@ export default function CaseWorkspace({
                         data-intake-tour-target="intake-send-button"
                       >
                         {settlementAuthorityReady
-                          ? "Send Settlement Intent First"
+                        ? `Send ${negotiationIntentLabel} First`
                           : awaitingSettlementResponse
                           ? "Awaiting Response"
                           : pendingAction === "interview"
@@ -8414,7 +8419,7 @@ export default function CaseWorkspace({
                         disabled={factSheetPrimaryActionDisabled}
                       >
                         {settlementAuthorityReady
-                          ? "Send Settlement Intent First"
+                          ? `Send ${negotiationIntentLabel} First`
                           : awaitingSettlementResponse
                           ? "Awaiting Response"
                           : isIntakeLocked
@@ -8566,7 +8571,7 @@ export default function CaseWorkspace({
                         disabled={factSheetPrimaryActionDisabled}
                       >
                         {settlementAuthorityReady
-                          ? "Send Settlement Intent First"
+                          ? `Send ${negotiationIntentLabel} First`
                           : awaitingSettlementResponse
                           ? "Awaiting Response"
                           : isIntakeLocked
@@ -8948,7 +8953,7 @@ export default function CaseWorkspace({
                     disabled={factSheetPrimaryActionDisabled}
                   >
                     {settlementAuthorityReady
-                      ? "Send Settlement Intent First"
+                      ? `Send ${negotiationIntentLabel} First`
                       : awaitingSettlementResponse
                       ? "Awaiting Response"
                       : isIntakeLocked
@@ -9052,9 +9057,11 @@ export default function CaseWorkspace({
                   <HeroIcons.ScaleIcon className="h-6 w-6" aria-hidden="true" />
                 </div>
                 <div className="min-w-0">
-                  <p className="arena-kicker text-emerald-200">Settlement</p>
+                  <p className="arena-kicker text-emerald-200">{negotiationStageLabel}</p>
                   <h2 className="mt-2 text-2xl font-semibold leading-tight text-white sm:text-3xl">
-                    {pendingSettlementIntentFromOther ? "Respond to settlement intent" : "Send settlement intent"}
+                    {pendingSettlementIntentFromOther
+                      ? `Respond to ${negotiationIntentLabel.toLowerCase()}`
+                      : `Send ${negotiationIntentLabel.toLowerCase()}`}
                   </h2>
                   <p className="mt-2 max-w-xl text-sm leading-6 text-white/60">
                     {pendingSettlementIntentFromOther
@@ -9155,7 +9162,7 @@ export default function CaseWorkspace({
                     ? "Sending..."
                     : pendingSettlementIntentFromOther
                     ? "Send Settlement Response"
-                    : "Send Settlement Intent"}
+                    : `Send ${negotiationIntentLabel}`}
                 </button>
               </form>
             )}

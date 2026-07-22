@@ -216,6 +216,7 @@ const challengeToCaseSession = (challenge = {}) => {
     scenarioId: challenge.templateSlug,
     practiceArea: challenge.practiceArea,
     primaryCategory: challenge.primaryCategory,
+    negotiationProfile: challenge.negotiationProfile || null,
     complexity: challenge.complexity,
     caseCountry: challenge.caseCountry || null,
     playerSide: viewer.side,

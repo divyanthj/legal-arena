@@ -11,6 +11,7 @@ import {
   buildCaseCountry,
   getCountryFlavorGuidance,
 } from "./countries";
+import { getNegotiationProfile } from "./negotiationProfile.mjs";
 
 const DYNAMIC_CASE_MODEL =
   process.env.OPENAI_DYNAMIC_CASE_MODEL?.trim() ||
@@ -444,6 +445,7 @@ export const buildDynamicCaseTemplateSnapshot = (dynamicCase = {}) => ({
   starterTheory: dynamicCase.theorySeeds?.plaintiff || "",
   practiceArea: dynamicCase.practiceArea,
   primaryCategory: dynamicCase.primaryCategory,
+  negotiationProfile: getNegotiationProfile(dynamicCase),
   secondaryCategories: [],
   complexity: dynamicCase.complexity,
   caseCountry: dynamicCase.caseCountry || null,

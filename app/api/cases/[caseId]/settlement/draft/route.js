@@ -4,6 +4,7 @@ import { getSoloGameplayAccessForSession } from "@/libs/admin";
 import { getCaseSessionDocumentForUser } from "@/libs/game/store";
 import { generateOpeningSettlementMessage } from "@/libs/game/settlement";
 import { hasClientSettlementAuthority } from "@/libs/game/settlementAuthority";
+import { getNegotiationProfile } from "@/libs/game/negotiationProfile.mjs";
 import { appendUsageEntriesToCaseSession } from "@/libs/game/sessionUsage";
 
 export async function POST(req, { params }) {
@@ -36,9 +37,10 @@ export async function POST(req, { params }) {
       return NextResponse.json({ error: "Case not found" }, { status: 404 });
     }
 
-    if (caseSession.primaryCategory === "criminal") {
+    const negotiationProfile = getNegotiationProfile(caseSession);
+    if (!negotiationProfile.available) {
       return NextResponse.json(
-        { error: "Criminal cases cannot be settled." },
+        { error: negotiationProfile.blockedReason },
         { status: 400 }
       );
     }

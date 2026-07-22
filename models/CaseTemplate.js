@@ -313,6 +313,10 @@ const caseTemplateSchema = mongoose.Schema(
       type: [String],
       default: [],
     },
+    negotiationProfile: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
     complexity: {
       type: Number,
       min: 1,

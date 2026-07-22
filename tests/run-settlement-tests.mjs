@@ -798,12 +798,12 @@ assert.match(
 );
 assert.match(
   caseWorkspaceSource,
-  /caseSession\.primaryCategory !== "criminal"/,
-  "Criminal matters should not show the settlement action."
+  /getNegotiationProfile\(caseSession\)[\s\S]*negotiationProfile\.available/,
+  "The settlement action should use the shared negotiation profile."
 );
 assert.match(
   caseWorkspaceSource,
-  /Settle in \$\{settlementCooldownLabel\}/,
+  /\$\{negotiationActionLabel\} in \$\{settlementCooldownLabel\}/,
   "Settlement action should show a live retry cooldown label."
 );
 assert.doesNotMatch(
@@ -838,8 +838,8 @@ assert.match(
 );
 assert.match(
   soloSettlementStartRouteSource,
-  /caseSession\.primaryCategory === "criminal"/,
-  "Solo settlement start route should reject criminal cases."
+  /getNegotiationProfile\(caseSession\)[\s\S]*!negotiationProfile\.available/,
+  "Solo settlement start should enforce the shared negotiation profile."
 );
 assert.match(
   soloSettlementStartRouteSource,
@@ -858,8 +858,8 @@ assert.match(
 );
 assert.match(
   soloSettlementMessageRouteSource,
-  /caseSession\.primaryCategory === "criminal"/,
-  "Solo settlement message route should reject criminal cases."
+  /getNegotiationProfile\(caseSession\)[\s\S]*!negotiationProfile\.available/,
+  "Solo settlement messages should enforce the shared negotiation profile."
 );
 assert.match(
   soloSettlementMessageRouteSource,
@@ -873,8 +873,8 @@ assert.match(
 );
 assert.match(
   challengeSource,
-  /challenge\.primaryCategory === "criminal"/,
-  "PVP settlement flows should reject criminal cases."
+  /getNegotiationProfile\(challenge\)[\s\S]*!negotiationProfile\.available/,
+  "PVP settlement flows should enforce the shared negotiation profile."
 );
 assert.match(
   challengeSource,
@@ -1173,7 +1173,7 @@ assert.match(
 );
 assert.match(
   caseWorkspaceSource,
-  /settlementAuthorityReady[\s\S]*intakeActionsLocked[\s\S]*Settlement Authority Ready[\s\S]*Send Settlement Intent/,
+  /settlementAuthorityReady[\s\S]*intakeActionsLocked[\s\S]*Settlement Authority Ready[\s\S]*negotiationIntentLabel/,
   "PVP intake should lock ordinary actions once the client gives settlement authority."
 );
 assert.match(
@@ -1183,7 +1183,7 @@ assert.match(
 );
 assert.match(
   caseWorkspaceSource,
-  /onClick=\{handleSendSettlementIntent\}[\s\S]*Send Settlement Intent[\s\S]*settlementAuthorityReady[\s\S]*handleSendSettlementIntent\(\)/,
+  /onClick=\{handleSendSettlementIntent\}[\s\S]*negotiationIntentLabel[\s\S]*settlementAuthorityReady[\s\S]*handleSendSettlementIntent\(\)/,
   "PVP settlement intent CTAs should use the direct send handler."
 );
 assert.match(

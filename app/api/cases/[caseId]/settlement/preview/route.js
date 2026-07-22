@@ -10,6 +10,7 @@ import {
   previewSettlementDraftForClient,
 } from "@/libs/game/settlement";
 import { appendUsageEntriesToCaseSession } from "@/libs/game/sessionUsage";
+import { getNegotiationProfile } from "@/libs/game/negotiationProfile.mjs";
 
 export async function POST(req, { params }) {
   const { session, error: authError } = await getRequestSession(req);
@@ -42,9 +43,10 @@ export async function POST(req, { params }) {
       return NextResponse.json({ error: "Case not found" }, { status: 404 });
     }
 
-    if (caseSession.primaryCategory === "criminal") {
+    const negotiationProfile = getNegotiationProfile(caseSession);
+    if (!negotiationProfile.available) {
       return NextResponse.json(
-        { error: "Criminal cases cannot be settled." },
+        { error: negotiationProfile.blockedReason },
         { status: 400 }
       );
     }

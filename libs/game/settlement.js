@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { requestStructuredCompletion } from "@/libs/gpt";
 import { createUsageCollector } from "./sessionUsage";
 import { buildPublicSettlementDraft } from "./settlementComposer.mjs";
+import { getNegotiationProfile } from "./negotiationProfile.mjs";
 import {
   buildDesiredReliefForSide,
   buildOverviewForSide,
@@ -298,6 +299,7 @@ const buildSettlementPromptContext = ({ caseSession, settlement, message, actorS
       title: caseSession.title,
       caseCountry: caseSession.caseCountry || template.caseCountry || null,
       category: caseSession.primaryCategory,
+      negotiationProfile: getNegotiationProfile(caseSession),
       complexity: caseSession.complexity,
       overview: caseSession.premise?.overview || buildOverviewForSide(template, representedSide),
       requestedRelief:
@@ -585,7 +587,7 @@ export const previewSettlementDraftForClient = async ({
       usageLabel: "settlement.clientPreview",
       onUsage: usageCollector.record,
       systemPrompt:
-        "You simulate the represented client privately during settlement negotiations in a legal strategy game. The player is the lawyer. Evaluate either the latest offer received from opposing counsel or the lawyer's proposed reply, as identified by the supplied context and private instruction. This is always a private client huddle. Output valid JSON only.",
+        "You simulate the represented client privately during negotiated-resolution talks in a legal strategy game. The player is the lawyer. Honor context.matter.negotiationProfile: the mode may be civil settlement, compensation or restitution, plea, diversion, or cooperation. Evaluate either the latest proposal received or the lawyer's proposed reply. This is always a private client huddle. Output valid JSON only.",
       userPrompt: JSON.stringify({
         task: clientInstruction
           ? concreteAuthorityRequested
@@ -882,7 +884,7 @@ export const generateOpeningSettlementMessage = async ({ caseSession, userId }) 
       usageLabel: "settlement.openingDraft",
       onUsage: usageCollector.record,
       systemPrompt:
-        "You draft editable opening settlement messages for a legal strategy game. Write as the player's counsel to opposing counsel. The player already has client authority to explore settlement. Output valid JSON only.",
+        "You draft editable opening negotiated-resolution messages for a legal strategy game. Honor context.matter.negotiationProfile and write terms appropriate to its mode: civil settlement, compensation or restitution, plea, diversion, or cooperation. Write as the player's counsel to the proper opposing or prosecuting authority. Output valid JSON only.",
       userPrompt: JSON.stringify({
         task: "Draft one concise opening settlement message. It should be practical, calm, and specific enough to start negotiation without conceding liability.",
         rules: [
@@ -951,7 +953,7 @@ export const runSettlementExchange = async ({
       usageLabel: "settlement.exchange",
       onUsage: usageCollector.record,
       systemPrompt:
-        "You simulate out-of-court settlement negotiations in a legal strategy game. Human lawyers negotiate, but the simulated parties decide whether terms are acceptable. Use the deterministic moods as negotiation willingness: high mood means cooperative, low mood means defensive, -100 means no room remains. Write natural party/counsel-facing responses and output valid JSON only.",
+        "You simulate negotiated legal resolutions in a legal strategy game. Honor context.matter.negotiationProfile: civil settlement and restitution require party agreement; plea, diversion, and cooperation may also require prosecuting authority. Use deterministic moods as negotiation willingness. Write natural counsel-facing responses and output valid JSON only.",
       userPrompt: JSON.stringify({
         task: initial
           ? "Evaluate the opening settlement message. Decide whether the other side enters negotiation and how both parties react."

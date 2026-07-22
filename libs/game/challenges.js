@@ -44,6 +44,7 @@ import {
   getEligibleComplexityForCategory,
   normalizeProgression,
 } from "./progression";
+import { getNegotiationProfile } from "./negotiationProfile.mjs";
 import { buildInitialFactSheetFromOpening, listScenarioOptions } from "./store";
 import {
   buildDynamicCaseTemplateSnapshot,
@@ -246,6 +247,7 @@ const templateForChallenge = (challenge) =>
     starterTheory: "",
     practiceArea: challenge.practiceArea,
     primaryCategory: challenge.primaryCategory,
+    negotiationProfile: getNegotiationProfile(challenge),
     complexity: challenge.complexity,
     courtName: challenge.premise?.courtName || "",
     clientName: challenge.premise?.clientName || "Client",
@@ -993,6 +995,7 @@ const buildParticipantCaseSession = ({ challenge, participant, otherParticipant 
     scenarioId: challenge.templateSlug,
     practiceArea: challenge.practiceArea,
     primaryCategory: challenge.primaryCategory,
+    negotiationProfile: getNegotiationProfile(challenge),
     complexity: challenge.complexity,
     playerSide: participant.side,
     status:
@@ -1266,6 +1269,7 @@ export const createChallenge = async ({
     templateSlug: template.slug,
     practiceArea: template.practiceArea,
     primaryCategory: template.primaryCategory,
+    negotiationProfile: getNegotiationProfile(template),
     complexity: template.complexity,
     caseCountry: template.caseCountry || null,
     lawbookVersion: LAWBOOK_VERSION,
@@ -1896,8 +1900,9 @@ export const startChallengeSettlement = async ({
   if (!isParticipantInPrivateChallengeIntake({ challenge, participant })) {
     throw new Error("Settlements can only be opened during private intake.");
   }
-  if (challenge.primaryCategory === "criminal") {
-    throw new Error("Criminal cases cannot be settled.");
+  const negotiationProfile = getNegotiationProfile(challenge);
+  if (!negotiationProfile.available) {
+    throw new Error(negotiationProfile.blockedReason);
   }
   const cooldown = getSettlementCooldownState(challenge.settlement || {});
   if (cooldown.active) {
@@ -2124,8 +2129,9 @@ export const draftChallengeSettlementMessage = async ({ userId, challengeId }) =
   if (!isParticipantInPrivateChallengeIntake({ challenge, participant })) {
     throw new Error("Settlement drafts can only be prepared during private intake.");
   }
-  if (challenge.primaryCategory === "criminal") {
-    throw new Error("Criminal cases cannot be settled.");
+  const negotiationProfile = getNegotiationProfile(challenge);
+  if (!negotiationProfile.available) {
+    throw new Error(negotiationProfile.blockedReason);
   }
   if (
     challenge.settlement?.status === "proposed" &&
@@ -2169,8 +2175,9 @@ export const continueChallengeSettlement = async ({
   if (challenge.status !== "settlement") {
     throw new Error("This challenge is not in settlement negotiations.");
   }
-  if (challenge.primaryCategory === "criminal") {
-    throw new Error("Criminal cases cannot be settled.");
+  const negotiationProfile = getNegotiationProfile(challenge);
+  if (!negotiationProfile.available) {
+    throw new Error(negotiationProfile.blockedReason);
   }
 
   const participant = getParticipant(challenge, userId);
@@ -2445,8 +2452,9 @@ export const previewChallengeSettlementDraft = async ({
   if (challenge.status !== "settlement") {
     throw new Error("This challenge is not in settlement negotiations.");
   }
-  if (challenge.primaryCategory === "criminal") {
-    throw new Error("Criminal cases cannot be settled.");
+  const negotiationProfile = getNegotiationProfile(challenge);
+  if (!negotiationProfile.available) {
+    throw new Error(negotiationProfile.blockedReason);
   }
 
   const participant = getParticipant(challenge, userId);

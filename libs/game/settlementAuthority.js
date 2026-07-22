@@ -1,5 +1,5 @@
 const settlementQuestionPattern =
-  /\b(settle|settles|settled|settling|settlement|resolve|resolution|deal|negotiate|offer|out of court|avoid court)\b/i;
+  /\b(settle|settles|settled|settling|settlement|resolve|resolution|deal|negotiate|offer|compensation|restitution|plea|diversion|cooperate|cooperation|out of court|avoid court)\b/i;
 
 const positiveAuthorityPattern =
   /\b(yes|yeah|yep|ok|okay|sure|agree|authorize|authorise|approved|approval|go ahead|open to|willing|prepared to|let's|we can|you can|that's fine|that is fine|i would accept|i'd accept)\b/i;

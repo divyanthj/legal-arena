@@ -32,6 +32,7 @@ import {
   normalizeProgression,
 } from "./progression";
 import { DEFAULT_CATEGORY_SLUG } from "./categories";
+import { getNegotiationProfile } from "./negotiationProfile.mjs";
 import {
   ensureStoredDashboardEncouragementNote,
   ensureStoredLawyerProfileSummary,
@@ -866,6 +867,7 @@ export const buildCasePayload = (caseSession, templateOverride = null) => {
 
   return {
     ...plainCase,
+    negotiationProfile: getNegotiationProfile(plainCase),
     courtroomWitnesses,
     settlement: {
       ...settlement,
@@ -1065,6 +1067,7 @@ export const createCaseSession = async ({
       scenarioId: template.slug,
       practiceArea: dynamicCase.practiceArea,
       primaryCategory: dynamicCase.primaryCategory,
+      negotiationProfile: getNegotiationProfile(dynamicCase),
       complexity: dynamicCase.complexity,
       caseCountry,
       playerSide,
@@ -1194,6 +1197,7 @@ export const createCaseSession = async ({
     scenarioId: template.slug,
     practiceArea: template.practiceArea,
     primaryCategory: template.primaryCategory,
+    negotiationProfile: getNegotiationProfile(template),
     complexity: template.complexity,
     playerSide,
     status: "interview",

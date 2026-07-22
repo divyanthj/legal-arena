@@ -432,6 +432,7 @@ const challengeSchema = mongoose.Schema(
     templateSlug: { type: String, required: true, trim: true },
     practiceArea: { type: String, required: true, trim: true },
     primaryCategory: { type: String, required: true, trim: true },
+    negotiationProfile: { type: mongoose.Schema.Types.Mixed, default: null },
     complexity: { type: Number, default: 1 },
     caseCountry: {
       code: { type: String, trim: true, uppercase: true, default: "" },

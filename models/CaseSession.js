@@ -536,6 +536,10 @@ const caseSessionSchema = mongoose.Schema(
       required: true,
       trim: true,
     },
+    negotiationProfile: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
     complexity: {
       type: Number,
       default: 1,
