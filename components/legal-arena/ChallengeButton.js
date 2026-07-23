@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
@@ -9,6 +9,7 @@ import apiClient from "@/libs/api";
 import { LEGAL_CASE_CATEGORIES, DEFAULT_CATEGORY_SLUG } from "@/libs/game/categories";
 import { trackGoal } from "@/libs/datafast";
 import { useNavigationLoading } from "@/components/NavigationLoadingProvider";
+import { createGuidedInteractionController } from "@/libs/guidedInteractionCore.mjs";
 import CountryFlagPicker, {
   CountryBadge,
   useCaseCountrySelection,
@@ -63,6 +64,16 @@ export default function ChallengeButton({
   const [selectedCategory, setSelectedCategory] = useState(DEFAULT_CATEGORY_SLUG);
   const [selectedDifficulty, setSelectedDifficulty] = useState(1);
   const [creating, setCreating] = useState(false);
+  const modalScrollRef = useRef(null);
+  const guidedInteractionRef = useRef(null);
+  if (!guidedInteractionRef.current) {
+    guidedInteractionRef.current = createGuidedInteractionController({
+      root: () => modalScrollRef.current,
+      container: () => modalScrollRef.current,
+      topPadding: 24,
+      bottomPadding: 72,
+    });
+  }
   const {
     countryCode: selectedCountryCode,
     country: selectedCountry,
@@ -81,8 +92,14 @@ export default function ChallengeButton({
     difficultyOptions.find((option) => option.value === selectedDifficulty) ||
     difficultyOptions[0];
 
+  useEffect(
+    () => () => guidedInteractionRef.current?.cancel(),
+    []
+  );
+
   const startChallenge = () => {
     if (!hasArenaAccess) {
+      guidedInteractionRef.current?.pulse("warning");
       trackGoal("pvp_challenge_access_blocked", {
         source: "challenge_button",
       });
@@ -129,12 +146,14 @@ export default function ChallengeButton({
         country: response.challenge.caseCountry?.code || selectedCountryCode,
       });
       toast.success("Challenge sent.");
+      guidedInteractionRef.current?.pulse("success");
       setOpen(false);
       startNavigationLoading("Opening challenge");
       const challengeHref = `/dashboard/challenges/${challenge.slug || challenge.id}`;
       router.prefetch(challengeHref);
       router.push(challengeHref);
     } catch (error) {
+      guidedInteractionRef.current?.pulse("warning");
       trackGoal("pvp_challenge_create_failed", {
         mode: "dynamic",
         category: selectedCategory,
@@ -153,6 +172,8 @@ export default function ChallengeButton({
       mode: "dynamic",
     });
     setSelectedCategory(categorySlug);
+    guidedInteractionRef.current?.pulse("selection");
+    guidedInteractionRef.current?.advance("pvp-difficulty");
   };
 
   const chooseDifficulty = (difficulty) => {
@@ -161,6 +182,8 @@ export default function ChallengeButton({
       mode: "dynamic",
     });
     setSelectedDifficulty(difficulty);
+    guidedInteractionRef.current?.pulse("selection");
+    guidedInteractionRef.current?.advance("pvp-summary");
   };
 
   const modal =
@@ -207,10 +230,13 @@ export default function ChallengeButton({
                 </div>
               </div>
 
-              <div className="arena-scroll min-h-0 flex-1 overflow-y-auto px-5 pb-5 md:px-7 md:pb-7">
+              <div
+                ref={modalScrollRef}
+                className="arena-scroll min-h-0 flex-1 overflow-y-auto px-5 pb-5 md:px-7 md:pb-7"
+              >
                 <div className="grid gap-5 pt-5 lg:grid-cols-[minmax(0,1fr)_320px]">
                   <section className="min-w-0 space-y-5">
-                    <div>
+                    <div data-guided-step="pvp-country">
                       <CountryFlagPicker
                         id={`pvp-case-country-${targetPlayerId}`}
                         value={selectedCountryCode}
@@ -218,6 +244,8 @@ export default function ChallengeButton({
                         disabled={creating}
                         onChange={(countryCode) => {
                           selectCountry(countryCode);
+                          guidedInteractionRef.current?.pulse("selection");
+                          guidedInteractionRef.current?.advance("pvp-category");
                           trackGoal("pvp_challenge_country_selected", {
                             country: countryCode,
                             source: "challenge_picker",
@@ -229,7 +257,7 @@ export default function ChallengeButton({
                       </p>
                     </div>
 
-                    <div>
+                    <div data-guided-step="pvp-category">
                       <p className="arena-kicker text-white">Case Type</p>
                       <div className="mt-3 grid gap-2 sm:grid-cols-2">
                         {LEGAL_CASE_CATEGORIES.map((category) => {
@@ -248,7 +276,14 @@ export default function ChallengeButton({
                               onClick={() => chooseCategory(category.slug)}
                             >
                               <span className="flex items-center justify-between gap-3">
-                                <span className="text-sm font-semibold">{category.title}</span>
+                                <span className="flex items-center gap-2 text-sm font-semibold">
+                                  {category.title}
+                                  {category.isNew ? (
+                                    <span className="rounded-full border border-amber-200/45 bg-amber-300/15 px-2 py-0.5 text-[0.58rem] font-black uppercase tracking-[0.12em] text-amber-100 shadow-[0_0_18px_rgba(251,191,36,0.12)]">
+                                      New
+                                    </span>
+                                  ) : null}
+                                </span>
                                 {selected ? (
                                   <HeroIcons.CheckCircleIcon
                                     className="h-5 w-5 text-amber-100"
@@ -265,7 +300,7 @@ export default function ChallengeButton({
                       </div>
                     </div>
 
-                    <div>
+                    <div data-guided-step="pvp-difficulty">
                       <p className="arena-kicker text-white">Difficulty</p>
                       <div className="mt-3 grid gap-2 sm:grid-cols-5">
                         {difficultyOptions.map((option) => {
@@ -298,7 +333,10 @@ export default function ChallengeButton({
                     </div>
                   </section>
 
-                  <aside className="flex flex-col justify-between rounded-[1.5rem] border border-white/12 bg-white/[0.045] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
+                  <aside
+                    className="flex scroll-mt-6 flex-col justify-between rounded-[1.5rem] border border-white/12 bg-white/[0.045] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]"
+                    data-guided-step="pvp-summary"
+                  >
                     <div>
                       <p className="arena-kicker">PVP Case Brief</p>
                       <h4 className="mt-3 text-2xl font-semibold leading-tight text-white">

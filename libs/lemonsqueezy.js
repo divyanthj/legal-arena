@@ -14,6 +14,7 @@ export const createLemonSqueezyCheckout = async ({
   discountCode,
   datafastVisitorId,
   datafastSessionId,
+  attribution = {},
 }) => {
   try {
     lemonSqueezySetup({ apiKey: process.env.LEMONSQUEEZY_API_KEY });
@@ -31,6 +32,7 @@ export const createLemonSqueezyCheckout = async ({
         userId,
         datafast_visitor_id: datafastVisitorId,
         datafast_session_id: datafastSessionId,
+        ...attribution,
       }).filter(([, value]) => value)
     );
 

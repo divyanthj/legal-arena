@@ -25,6 +25,14 @@ import {
 import { CollapseChevron } from "./caseWorkspaceUtils";
 import { CountryBadge } from "./CountryFlagPicker";
 import AwardsMatrix from "./AwardsMatrix";
+import MobileSectionNavigator from "./MobileSectionNavigator";
+
+const profileSectionNavigatorItems = [
+  { key: "dossier", label: "Dossier", target: "profile-dossier" },
+  { key: "specialties", label: "Specialties", target: "profile-specialties" },
+  { key: "performance", label: "Performance and awards", target: "profile-performance" },
+  { key: "cases", label: "Cases", target: "profile-cases" },
+];
 
 const getNextRatingMilestone = (rating = 1000) => {
   const milestones = [1200, 1500, 1800, 2100];
@@ -388,6 +396,7 @@ export default function PlayerProfileDossier({
           </div>
         <div
           id="dossier"
+          data-section-nav-target="profile-dossier"
           className="arena-surface arena-scanline arena-column-bg overflow-hidden"
           style={{
             backgroundImage: [
@@ -561,7 +570,7 @@ export default function PlayerProfileDossier({
 
         <div className="grid gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
           <aside className="space-y-6">
-            <div className="arena-surface">
+            <div className="arena-surface" data-section-nav-target="profile-specialties">
               <div className="p-5 md:p-6">
                 <div className="flex items-center justify-between gap-3">
                   <div>
@@ -640,7 +649,7 @@ export default function PlayerProfileDossier({
             </div>
           </aside>
 
-          <section className="space-y-6">
+          <section className="space-y-6" data-section-nav-target="profile-performance">
             <div className="arena-surface overflow-hidden">
               <div className="grid gap-4 p-5 md:grid-cols-[minmax(0,1fr)_280px] md:p-6">
                 <div>
@@ -683,7 +692,7 @@ export default function PlayerProfileDossier({
               owner={canEditAvatar}
             />
 
-            <div id="case-archive" className="arena-surface">
+            <div id="case-archive" className="arena-surface" data-section-nav-target="profile-cases">
               <details ref={archiveDetailsRef} className="group" open>
                 <summary className="list-none cursor-pointer p-5 md:p-6">
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -885,6 +894,8 @@ export default function PlayerProfileDossier({
           })}
         </div>
       </nav>
+      <MobileSectionNavigator sections={profileSectionNavigatorItems} />
+
       {showResetDialog ? (
         <dialog className="arena-modal modal modal-open">
           <div className="modal-box border border-rose-400/30 bg-[#170707] text-white shadow-2xl shadow-black/60">

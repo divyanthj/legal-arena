@@ -1,8 +1,22 @@
 export const LEGAL_CASE_CATEGORIES = [
   {
+    slug: "current-events",
+    title: "Headlines",
+    description:
+      "Fresh disputes inspired by recent reporting in your selected country, rebuilt with fictional parties and evidence.",
+    supportsDynamicCases: true,
+    supportsEvergreenTemplates: false,
+    crossPracticeArea: true,
+    live: true,
+    isNew: true,
+  },
+  {
     slug: "rental-dispute",
     title: "Rental Dispute",
     description: "Landlord-tenant conflicts over deposits, habitability, notice, or eviction.",
+    supportsDynamicCases: true,
+    supportsEvergreenTemplates: true,
+    crossPracticeArea: false,
   },
   {
     slug: "marital-dispute",
@@ -49,16 +63,25 @@ export const LEGAL_CASE_CATEGORIES = [
     title: "Administrative",
     description: "Agency, licensing, and regulatory disputes or appeals.",
   },
-];
+].map((category) => ({
+  supportsDynamicCases: true,
+  supportsEvergreenTemplates: true,
+  crossPracticeArea: false,
+  live: false,
+  isNew: false,
+  ...category,
+}));
 
 export const DEFAULT_CATEGORY_SLUG = "contract-violation";
 
 export const getCategoryBySlug = (slug) =>
   LEGAL_CASE_CATEGORIES.find((category) => category.slug === slug) || null;
 
+export const listEvergreenTemplateCategories = () =>
+  LEGAL_CASE_CATEGORIES.filter((category) => category.supportsEvergreenTemplates !== false);
+
 export const isValidCategorySlug = (slug) =>
   LEGAL_CASE_CATEGORIES.some((category) => category.slug === slug);
 
 export const getCategoryTitle = (slug) =>
   getCategoryBySlug(slug)?.title || "General";
-

@@ -5,6 +5,8 @@ import Image from "next/image";
 import * as HeroIcons from "@heroicons/react/24/outline";
 import {
   CASE_ASSEMBLY_STAGES,
+  CASE_ASSEMBLY_TIP_INTERVAL_MS,
+  getCaseAssemblyTips,
   getCaseAssemblyStageState,
 } from "@/libs/caseAssemblyCore.mjs";
 
@@ -115,11 +117,17 @@ const PortraitStatus = ({ label, name, status = "queued", image = "" }) => {
 
 export default function CaseAssemblyOverlay({ assembly, onRetry, onReturn }) {
   const [now, setNow] = useState(() => Date.now());
+  const [tipIndex, setTipIndex] = useState(0);
   const headingRef = useRef(null);
   const elapsedMs = Math.max(0, now - Number(assembly?.startedAt || now));
   const longWait = elapsedMs >= 120000;
   const preview = assembly?.casePreview || null;
   const portraits = assembly?.portraits || {};
+  const assemblyFailed = assembly?.status === "error";
+  const tips = useMemo(
+    () => getCaseAssemblyTips(assembly?.brief?.categorySlug),
+    [assembly?.brief?.categorySlug]
+  );
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -133,21 +141,18 @@ export default function CaseAssemblyOverlay({ assembly, onRetry, onReturn }) {
     };
   }, []);
 
-  const currentMessage = useMemo(() => {
-    if (assembly.status === "error") {
-      return "The case file could not be completed. Your selections are still here and ready to retry.";
-    }
-    if (assembly.status === "portraits") {
-      return "The playable matter is ready. Legal Arena is creating and saving your client's portrait before opening intake.";
-    }
-    if (assembly.status === "opening") {
-      return "Everything is assembled. Your new client file is opening now.";
-    }
-    if (assembly.brief?.mode === "template") {
-      return "Legal Arena is adapting the selected matter to your progression, assigning your side, and preparing the opening intake.";
-    }
-    return "Legal Arena is writing two competing accounts, useful evidence paths, proof gaps, and a focused opening intake for this matter.";
-  }, [assembly.brief?.mode, assembly.status]);
+  useEffect(() => {
+    setTipIndex(0);
+    if (assemblyFailed || tips.length <= 1) return undefined;
+
+    const intervalId = window.setInterval(() => {
+      setTipIndex((current) => (current + 1) % tips.length);
+    }, CASE_ASSEMBLY_TIP_INTERVAL_MS);
+
+    return () => window.clearInterval(intervalId);
+  }, [assembly?.startedAt, assemblyFailed, tips.length]);
+
+  const activeTip = tips[tipIndex % Math.max(1, tips.length)] || "";
 
   return (
     <div
@@ -179,7 +184,29 @@ export default function CaseAssemblyOverlay({ assembly, onRetry, onReturn }) {
                     ? "The file needs another pass"
                     : preview?.title || (assembly.brief?.mode === "template" ? "Preparing your matter" : "Crafting a new matter")}
                 </h1>
-                <p className="mt-3 max-w-3xl text-sm leading-6 text-white/68 sm:text-base">{currentMessage}</p>
+                {assemblyFailed ? (
+                  <p className="mt-3 max-w-3xl text-sm leading-6 text-white/68 sm:text-base">
+                    The case file could not be completed. Your selections are still here and ready to retry.
+                  </p>
+                ) : (
+                  <div
+                    className="mt-3 flex max-w-3xl items-start gap-2.5 text-white/68"
+                    role="status"
+                    aria-live="polite"
+                    aria-atomic="true"
+                  >
+                    <HeroIcons.LightBulbIcon
+                      className="mt-0.5 h-5 w-5 shrink-0 text-amber-100/80"
+                      aria-hidden="true"
+                    />
+                    <div key={`${assembly?.startedAt || "assembly"}-${tipIndex}`} className="motion-safe:animate-opacity">
+                      <p className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-100/65">
+                        Tip
+                      </p>
+                      <p className="mt-1 text-sm leading-6 sm:text-base">{activeTip}</p>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="shrink-0 rounded-2xl border border-white/10 bg-white/[0.045] px-4 py-3 sm:text-right">
@@ -197,6 +224,16 @@ export default function CaseAssemblyOverlay({ assembly, onRetry, onReturn }) {
               <p className="text-[10px] font-black uppercase tracking-[0.18em] text-white/40">Assembly record</p>
               <ol className="mt-5 space-y-1" aria-label="Case assembly progress" aria-live="polite">
                 {CASE_ASSEMBLY_STAGES.map((stage, index) => {
+                  const displayedStage =
+                    assembly.brief?.categorySlug === "current-events" &&
+                    stage.key === "draft"
+                      ? {
+                          ...stage,
+                          title: "Researching the headline",
+                          description:
+                            "Checking recent sources, replacing real identifiers, and constructing both sides of the dispute.",
+                        }
+                      : stage;
                   const state = getCaseAssemblyStageState(stage.key, assembly.status);
                   return (
                     <li key={stage.key} className="relative flex gap-3 pb-5 last:pb-0">
@@ -205,8 +242,8 @@ export default function CaseAssemblyOverlay({ assembly, onRetry, onReturn }) {
                       ) : null}
                       <StatusMark state={state} />
                       <div className="min-w-0 pt-0.5">
-                        <p className={`text-sm font-bold ${state === "upcoming" ? "text-white/38" : "text-white"}`}>{stage.title}</p>
-                        <p className={`mt-1 text-xs leading-5 ${state === "upcoming" ? "text-white/26" : "text-white/52"}`}>{stage.description}</p>
+                        <p className={`text-sm font-bold ${state === "upcoming" ? "text-white/38" : "text-white"}`}>{displayedStage.title}</p>
+                        <p className={`mt-1 text-xs leading-5 ${state === "upcoming" ? "text-white/26" : "text-white/52"}`}>{displayedStage.description}</p>
                       </div>
                     </li>
                   );

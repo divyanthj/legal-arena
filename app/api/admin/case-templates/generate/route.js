@@ -4,7 +4,7 @@ import { authOptions } from "@/libs/next-auth";
 import connectMongo from "@/libs/mongoose";
 import { hasValidCaseGeneratorApiKey, isAdminEmail } from "@/libs/admin";
 import { createGeneratedCaseTemplate } from "@/libs/game/generation";
-import { DEFAULT_CATEGORY_SLUG } from "@/libs/game/categories";
+import { DEFAULT_CATEGORY_SLUG, getCategoryBySlug } from "@/libs/game/categories";
 
 const isAuthorized = ({ req, session }) =>
   hasValidCaseGeneratorApiKey(req) || isAdminEmail(session?.user?.email);
@@ -22,6 +22,15 @@ export async function POST(req) {
   try {
     await connectMongo();
     const body = await req.json();
+    const selectedCategory = getCategoryBySlug(
+      body?.primaryCategory || DEFAULT_CATEGORY_SLUG
+    );
+    if (!selectedCategory || selectedCategory.supportsEvergreenTemplates === false) {
+      return NextResponse.json(
+        { error: "Headlines cases are generated live with a selected country and cannot be saved as evergreen templates." },
+        { status: 400 }
+      );
+    }
     const wantsStream = Boolean(body?.stream);
     const options = {
       categorySlug: body?.primaryCategory || DEFAULT_CATEGORY_SLUG,

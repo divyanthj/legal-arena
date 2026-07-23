@@ -3,7 +3,7 @@ import "server-only";
 import connectMongo from "@/libs/mongoose";
 import CaseTemplate from "@/models/CaseTemplate";
 import InternalJobLock from "@/models/InternalJobLock";
-import { LEGAL_CASE_CATEGORIES } from "@/libs/game/categories";
+import { listEvergreenTemplateCategories } from "@/libs/game/categories";
 
 export const DEFAULT_CASE_TEMPLATE_TARGET_PER_CATEGORY = 15;
 export const CASE_TEMPLATE_COMPLEXITY_LEVELS = [1, 2, 3, 4, 5];
@@ -112,7 +112,7 @@ const buildCountsLookup = (rows = []) => {
 export const selectNextCaseTemplateGenerationTarget = ({
   targetPerCategory = DEFAULT_CASE_TEMPLATE_TARGET_PER_CATEGORY,
   counts = [],
-  categories = LEGAL_CASE_CATEGORIES,
+  categories = listEvergreenTemplateCategories(),
 } = {}) => {
   const derivedTargets = deriveComplexityTargets(targetPerCategory);
   const countsLookup = buildCountsLookup(counts);

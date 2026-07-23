@@ -2,8 +2,12 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import {
   CASE_ASSEMBLY_STAGES,
+  CASE_ASSEMBLY_TIPS,
+  CASE_ASSEMBLY_TIP_INTERVAL_MS,
+  HEADLINES_CASE_ASSEMBLY_TIP,
   buildCaseAssemblyBrief,
   buildCaseAssemblyPreview,
+  getCaseAssemblyTips,
   getCaseAssemblyStageState,
 } from "../libs/caseAssemblyCore.mjs";
 
@@ -25,6 +29,15 @@ assert.deepEqual(
   ["complete", "complete", "complete", "complete", "active"]
 );
 assert.equal(getCaseAssemblyStageState("draft", "error"), "error");
+
+assert.equal(CASE_ASSEMBLY_TIP_INTERVAL_MS, 6000);
+assert.ok(CASE_ASSEMBLY_TIP_INTERVAL_MS >= 5000);
+assert.ok(CASE_ASSEMBLY_TIPS.length >= 5);
+assert.deepEqual(getCaseAssemblyTips("contract-violation"), CASE_ASSEMBLY_TIPS);
+assert.equal(
+  getCaseAssemblyTips("current-events")[0],
+  HEADLINES_CASE_ASSEMBLY_TIP
+);
 
 assert.deepEqual(
   buildCaseAssemblyBrief({
@@ -164,5 +177,24 @@ assert.match(overlaySource, /elapsedMs >= 120000/);
 assert.match(overlaySource, /aria-live="polite"/);
 assert.match(overlaySource, /Retry case assembly/);
 assert.match(overlaySource, /Portrait unavailable/);
+assert.match(overlaySource, /HeroIcons\.LightBulbIcon/);
+assert.match(overlaySource, /CASE_ASSEMBLY_TIP_INTERVAL_MS/);
+assert.match(overlaySource, /motion-safe:animate-opacity/);
+assert.doesNotMatch(overlaySource, /scanning recent reporting/);
+
+const exitStart = workspaceSource.indexOf("const handleExitCase");
+const exitEnd = workspaceSource.indexOf("const playerPartyName", exitStart);
+const exitSource = workspaceSource.slice(exitStart, exitEnd);
+assert.match(exitSource, /analyticsMode === "solo" && isInterview/);
+assert.match(exitSource, /router\.replace\("\/dashboard"\)/);
+assert.match(exitSource, /apiConfig\.exitStaysInWorkspace/);
+assert.ok(
+  exitSource.indexOf('router.replace("/dashboard")') <
+    exitSource.indexOf("apiConfig.exitStaysInWorkspace"),
+  "successful solo intake exit should take precedence over workspace-stay behavior"
+);
+assert.match(workspaceSource, /mt-4 px-2 text-2xl/);
+assert.match(workspaceSource, /mt-3 flex flex-wrap items-center gap-2 px-2/);
+assert.doesNotMatch(workspaceSource, /mt-3 flex items-center gap-2 overflow-hidden/);
 
 console.log("Case assembly loading tests passed.");

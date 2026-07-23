@@ -28,6 +28,29 @@ const checkoutButtonSource = await readFile(
 );
 assert.match(checkoutButtonSource, /window\.location\.href = response\.url;\s*return;/);
 assert.doesNotMatch(checkoutButtonSource, /finally\s*\{\s*setIsLoading\(false\)/);
+assert.match(checkoutButtonSource, /attribution:\s*getAcquisitionAttribution\(\)/);
+
+const datafastSource = await readFile(
+  new URL("../libs/datafast.js", import.meta.url),
+  "utf8"
+);
+assert.match(datafastSource, /utm_campaign/);
+assert.match(datafastSource, /legalarena_attribution_v1/);
+
+const checkoutRouteSource = await readFile(
+  new URL("../app/api/lemonsqueezy/create-checkout/route.js", import.meta.url),
+  "utf8"
+);
+assert.match(checkoutRouteSource, /const attribution = getAttribution\(body\.attribution\)/);
+
+const layoutSource = await readFile(new URL("../app/layout.js", import.meta.url), "utf8");
+assert.doesNotMatch(layoutSource, /data-disable-payments/);
+
+const clientLayoutSource = await readFile(
+  new URL("../components/LayoutClient.js", import.meta.url),
+  "utf8"
+);
+assert.match(clientLayoutSource, /getAcquisitionAttribution\(\)/);
 
 results.push(
   await runTest("returns null when variant id is missing", async () => {

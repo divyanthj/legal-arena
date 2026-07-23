@@ -12,6 +12,14 @@ import {
   getCountryFlavorGuidance,
 } from "./countries";
 import { getNegotiationProfile } from "./negotiationProfile.mjs";
+import {
+  applyCurrentEventAnonymizationRepair,
+  CURRENT_EVENTS_CATEGORY_SLUG,
+  findCurrentEventLeaks,
+  hasPlayableCurrentEventCaseShape,
+  repairCurrentEventAnonymization,
+  researchCurrentEvent,
+} from "./currentEvents";
 
 const DYNAMIC_CASE_MODEL =
   process.env.OPENAI_DYNAMIC_CASE_MODEL?.trim() ||
@@ -340,14 +348,25 @@ const normalizeDynamicCaseState = ({
   complexity,
   playerLevel,
   countryCode,
+  currentEventBrief = null,
 }) => {
   const caseCountry = buildCaseCountry(countryCode, { fallback: true });
   const fallback = fallbackDynamicCase({ categorySlug, complexity, countryCode: caseCountry.code });
   const source = aiResult && typeof aiResult === "object" ? aiResult : {};
-  const category = getCategoryBySlug(source.primaryCategory) ||
-    getCategoryBySlug(categorySlug) ||
+  const category = getCategoryBySlug(categorySlug) ||
+    getCategoryBySlug(source.primaryCategory) ||
     getCategoryBySlug(DEFAULT_CATEGORY_SLUG);
   const primaryCategory = category?.slug || DEFAULT_CATEGORY_SLUG;
+  const requestedUnderlyingCategory =
+    currentEventBrief?.underlyingCategorySlug ||
+    source.underlyingCategorySlug ||
+    "";
+  const underlyingCategory =
+    primaryCategory === CURRENT_EVENTS_CATEGORY_SLUG &&
+    getCategoryBySlug(requestedUnderlyingCategory) &&
+    requestedUnderlyingCategory !== CURRENT_EVENTS_CATEGORY_SLUG
+      ? requestedUnderlyingCategory
+      : "";
   const normalizedComplexity = clampComplexity(complexity);
   const playabilityProfile = getPlayabilityProfile(normalizedComplexity, playerLevel);
   const plaintiffName =
@@ -384,6 +403,7 @@ const normalizeDynamicCaseState = ({
     courtName: cleanText(source.courtName) || fallback.courtName,
     practiceArea: cleanText(source.practiceArea) || category?.title || fallback.practiceArea,
     primaryCategory,
+    underlyingCategorySlug: underlyingCategory,
     complexity: normalizedComplexity,
     plaintiffName,
     defendantName,
@@ -434,7 +454,9 @@ const normalizeDynamicCaseState = ({
   };
 };
 
-export const buildDynamicCaseTemplateSnapshot = (dynamicCase = {}) => ({
+export const buildDynamicCaseTemplateSnapshot = (dynamicCase = {}) => {
+  const { currentEventProvenance, ...publicDynamicCase } = dynamicCase;
+  return {
   id: "",
   slug: `dynamic-${slugify(dynamicCase.title || "generated-case")}-${Date.now()}`,
   title: dynamicCase.title,
@@ -446,7 +468,9 @@ export const buildDynamicCaseTemplateSnapshot = (dynamicCase = {}) => ({
   practiceArea: dynamicCase.practiceArea,
   primaryCategory: dynamicCase.primaryCategory,
   negotiationProfile: getNegotiationProfile(dynamicCase),
-  secondaryCategories: [],
+  secondaryCategories: dynamicCase.underlyingCategorySlug
+    ? [dynamicCase.underlyingCategorySlug]
+    : [],
   complexity: dynamicCase.complexity,
   caseCountry: dynamicCase.caseCountry || null,
   courtName: dynamicCase.courtName,
@@ -471,7 +495,7 @@ export const buildDynamicCaseTemplateSnapshot = (dynamicCase = {}) => ({
   },
   canonicalFacts: [],
   evidenceItems: [],
-  dynamicCase,
+  dynamicCase: publicDynamicCase,
   canonicalStory: {
     story: [dynamicCase.plaintiffStory, dynamicCase.defendantStory].filter(Boolean).join("\n\n"),
     events: [],
@@ -488,7 +512,8 @@ export const buildDynamicCaseTemplateSnapshot = (dynamicCase = {}) => ({
     ].filter(Boolean),
     authoringBoundaries: dynamicCase.discoveryRules || [],
   },
-});
+  };
+};
 
 export const generateDynamicCaseState = async ({
   categorySlug = DEFAULT_CATEGORY_SLUG,
@@ -507,13 +532,22 @@ export const generateDynamicCaseState = async ({
   );
   const caseCountry = buildCaseCountry(countryCode, { fallback: true });
   const countryGuidance = getCountryFlavorGuidance(caseCountry, category?.slug);
+  const isCurrentEvents = category?.slug === CURRENT_EVENTS_CATEGORY_SLUG;
+  const currentEventBrief = isCurrentEvents
+    ? await researchCurrentEvent({
+        countryCode: caseCountry.code,
+        userId,
+        onUsage,
+      })
+    : null;
 
-  const aiResult = await requestStructuredCompletion({
+  let aiResult = await requestStructuredCompletion({
     userId,
     model: DYNAMIC_CASE_MODEL,
     temperature: 0.85,
     maxTokens: 2600,
     retryAttempts: 1,
+    throwOnError: isCurrentEvents,
     usageLabel: "dynamicCase.generate",
     promptCacheKey: "la:dynamic-case:v2",
     serviceTier: "priority",
@@ -537,6 +571,14 @@ export const generateDynamicCaseState = async ({
         "Give each side discrete subjective courtroomPositions. Each position must express one concise claim, use an evidencePool id when linking proof, and must not reveal objective hidden truth.",
         "Give each side at least one relevant evidence item that is availableAtStart when complexity is 1; do not make missing or hard-to-get material necessary for an intro opponent's core theory.",
         "Treat caseCountry as immutable input. Do not move the matter to another country or return a competing country value.",
+        ...(isCurrentEvents
+          ? [
+              "Closely adapt the supplied currentEventBrief into a fictional case, but never repeat or closely paraphrase a real name, organization, office title, exact location, quotation, date, amount, acronym, or distinctive phrase from it.",
+              "Invent every party and identifying detail. Do not use initials or thin disguises for real people.",
+              "Treat every unresolved allegation in the source event as contested. Neither party story is objective truth.",
+              "Keep primaryCategory exactly current-events and set underlyingCategorySlug to the supplied legal track.",
+            ]
+          : []),
       ],
       outputSchema: {
         title: "string",
@@ -544,6 +586,7 @@ export const generateDynamicCaseState = async ({
         courtName: "string",
         practiceArea: "string",
         primaryCategory: "string",
+        underlyingCategorySlug: "string",
         complexity: "number",
         plaintiffName: "string",
         defendantName: "string",
@@ -628,14 +671,71 @@ export const generateDynamicCaseState = async ({
       playabilityProfile,
       caseCountry,
       countryGuidance,
+      currentEventBrief: currentEventBrief
+        ? {
+            eventSummary: currentEventBrief.eventSummary,
+            eventDate: currentEventBrief.eventDate,
+            legalHooks: currentEventBrief.legalHooks,
+            underlyingCategorySlug: currentEventBrief.underlyingCategorySlug,
+            reportedUncertainties: currentEventBrief.reportedUncertainties,
+            protectedNamedEntities: currentEventBrief.namedEntities,
+            protectedIdentifyingDetails: currentEventBrief.identifyingDetails,
+          }
+        : null,
     }),
   });
 
-  return normalizeDynamicCaseState({
+  if (currentEventBrief) {
+    if (!hasPlayableCurrentEventCaseShape(aiResult)) {
+      const error = new Error(
+        "The live event did not produce a complete playable matter. Please try Headlines again."
+      );
+      error.status = 503;
+      error.code = "current_event_generation_incomplete";
+      throw error;
+    }
+    const initialLeaks = findCurrentEventLeaks(aiResult, currentEventBrief);
+    if (initialLeaks.length) {
+      const repairResult = await repairCurrentEventAnonymization({
+        generatedCase: aiResult,
+        brief: currentEventBrief,
+        leaks: initialLeaks,
+        userId,
+        onUsage,
+      });
+      aiResult = applyCurrentEventAnonymizationRepair(aiResult, repairResult);
+      if (!hasPlayableCurrentEventCaseShape(aiResult)) {
+        const error = new Error(
+          "The anonymized headline matter became incomplete. Please generate another Headlines case."
+        );
+        error.status = 503;
+        error.code = "current_event_anonymization_failed";
+        throw error;
+      }
+    }
+  }
+
+  const normalized = normalizeDynamicCaseState({
     aiResult,
     categorySlug: category?.slug || DEFAULT_CATEGORY_SLUG,
     complexity: normalizedComplexity,
     playerLevel: normalizedPlayerLevel,
     countryCode: caseCountry.code,
+    currentEventBrief,
   });
+
+  if (currentEventBrief) {
+    const remainingLeaks = findCurrentEventLeaks(normalized, currentEventBrief);
+    if (remainingLeaks.length) {
+      const error = new Error(
+        "The live event could not be anonymized safely. Please generate another Headlines case."
+      );
+      error.status = 503;
+      error.code = "current_event_anonymization_failed";
+      throw error;
+    }
+    normalized.currentEventProvenance = currentEventBrief;
+  }
+
+  return normalized;
 };

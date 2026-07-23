@@ -8,6 +8,25 @@ import { cookies } from "next/headers";
 import { getServerSession } from "next-auth/next";
 import { NextResponse } from "next/server";
 
+const ATTRIBUTION_KEYS = [
+  "utm_source",
+  "utm_medium",
+  "utm_campaign",
+  "utm_term",
+  "utm_content",
+  "utm_id",
+  "gclid",
+  "gbraid",
+  "wbraid",
+];
+
+const getAttribution = (value) =>
+  ATTRIBUTION_KEYS.reduce((attribution, key) => {
+    const param = String(value?.[key] || "").trim().slice(0, 255);
+    if (param) attribution[key] = param;
+    return attribution;
+  }, {});
+
 export async function POST(req) {
   const body = await req.json();
 
@@ -35,6 +54,7 @@ export async function POST(req) {
     const cookieStore = cookies();
     const datafastVisitorId = cookieStore.get("datafast_visitor_id")?.value;
     const datafastSessionId = cookieStore.get("datafast_session_id")?.value;
+    const attribution = getAttribution(body.attribution);
     const datafastAttributionReady = Boolean(datafastVisitorId && datafastSessionId);
 
     if (!datafastAttributionReady) {
@@ -49,6 +69,7 @@ export async function POST(req) {
       discountCode: getActiveIndependenceDayDiscountCode() || undefined,
       datafastVisitorId,
       datafastSessionId,
+      attribution,
     });
 
     return NextResponse.json({ url: checkoutURL, datafastAttributionReady });

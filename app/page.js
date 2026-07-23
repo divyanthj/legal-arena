@@ -1,6 +1,6 @@
 ﻿import Link from "next/link";
 import Image from "next/image";
-import { GiftIcon } from "@heroicons/react/24/outline";
+import { NewspaperIcon } from "@heroicons/react/24/outline";
 import connectMongo from "@/libs/mongoose";
 import CaseTemplate from "@/models/CaseTemplate";
 import { getCategoryTitle } from "@/libs/game/categories";
@@ -464,18 +464,19 @@ export default async function Page() {
             <div className="flex flex-col gap-5 px-5 py-5 text-left sm:px-6 md:flex-row md:items-center md:justify-between">
               <div className="flex min-w-0 items-start gap-4">
                 <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-amber-200/25 bg-amber-200/10 text-amber-100" aria-hidden="true">
-                  <GiftIcon className="h-5 w-5" />
+                  <NewspaperIcon className="h-5 w-5" />
                 </span>
                 <div className="min-w-0">
                   <p className="text-xs font-bold uppercase tracking-[0.22em] text-amber-100/76">
-                    One complete case — free
+                    New category — Headlines
                   </p>
                   <h2 className="mt-2 text-xl font-semibold leading-tight text-white sm:text-2xl">
-                    Your first case is now free to play.
+                    Argue the issues shaping your country.
                   </h2>
                   <p className="mt-2 max-w-2xl text-sm leading-6 text-amber-50/72">
-                    Choose the category and country, interview your AI client, negotiate,
-                    argue in court, and receive your verdict. No payment required.
+                    Headlines turns the latest major reporting into fictionalized legal
+                    disputes with country-specific stakes. Inspiration sources unlock
+                    after the matter is resolved.
                   </p>
                 </div>
               </div>
@@ -484,10 +485,10 @@ export default async function Page() {
                   href="/dashboard"
                   className="arena-btn-light inline-flex min-h-12 items-center justify-center px-5 py-3 text-sm"
                   data-landing-event="landing_cta_clicked"
-                  data-landing-source="evergreen_free_case_banner"
+                  data-landing-source="headlines_launch_banner"
                   data-landing-destination="dashboard"
                 >
-                  Play Your Free Case
+                  Play Headlines
                 </Link>
                 <WhatsNewDialog buttonLabel="See what's new" />
               </div>
@@ -635,6 +636,7 @@ export default async function Page() {
           <p className="mx-auto mt-4 max-w-2xl text-center text-lg leading-8 text-white/62">
             Each matter gives you a client, a dispute, an opponent, and a choice: negotiate a settlement or take the fight to court. New legal stories keep opening up as you play.
           </p>
+
           <LandingCategoryCarousel />
 
           <div className="mt-14 grid gap-5 lg:grid-cols-3">

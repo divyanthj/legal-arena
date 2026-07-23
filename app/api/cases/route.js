@@ -21,6 +21,8 @@ import {
   setPlayerCaseCountryPreference,
 } from "@/libs/game/countryPreference";
 
+export const maxDuration = 300;
+
 export async function GET(req) {
   const { session, error: authError } = await getRequestSession(req);
   if (authError) return authError;
@@ -129,6 +131,7 @@ export async function POST(req) {
       complexity: access.requiresTrialClaim ? 1 : body?.complexity,
       countryCode,
       freeGameplayCampaignAccess: access.freeGameplayCampaignAccess,
+      newcomerAssist: Boolean(access.requiresTrialClaim),
     });
 
     return NextResponse.json({
@@ -150,6 +153,9 @@ export async function POST(req) {
       }
     }
     console.error(error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { error: error.message, code: error.code || "" },
+      { status: error.status || 500 }
+    );
   }
 }

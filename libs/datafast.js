@@ -5,6 +5,18 @@ const PARAM_NAME_PATTERN = /^[a-z0-9_-]{1,64}$/;
 const MAX_PARAMS = 10;
 const MAX_VALUE_LENGTH = 255;
 const DATAFAST_COOKIE_NAMES = ["datafast_visitor_id", "datafast_session_id"];
+const ATTRIBUTION_STORAGE_KEY = "legalarena_attribution_v1";
+const ATTRIBUTION_KEYS = [
+  "utm_source",
+  "utm_medium",
+  "utm_campaign",
+  "utm_term",
+  "utm_content",
+  "utm_id",
+  "gclid",
+  "gbraid",
+  "wbraid",
+];
 
 const cleanParamName = (name = "") =>
   String(name || "")
@@ -24,6 +36,39 @@ const cleanParamValue = (value) => {
   }
 
   return String(value).slice(0, MAX_VALUE_LENGTH);
+};
+
+const readAttribution = (searchParams) =>
+  ATTRIBUTION_KEYS.reduce((attribution, key) => {
+    const value = String(searchParams.get(key) || "").trim().slice(0, MAX_VALUE_LENGTH);
+    if (value) attribution[key] = value;
+    return attribution;
+  }, {});
+
+// Keep the original acquisition parameters through sign-in and multi-page gameplay
+// so that checkout metadata represents the first touch, not just the final page.
+export const getAcquisitionAttribution = () => {
+  if (typeof window === "undefined") return {};
+
+  let stored = {};
+  try {
+    stored = JSON.parse(window.sessionStorage.getItem(ATTRIBUTION_STORAGE_KEY) || "{}") || {};
+  } catch {
+    stored = {};
+  }
+
+  const current = readAttribution(new URLSearchParams(window.location.search));
+  const attribution = { ...stored, ...current };
+
+  if (Object.keys(current).length > 0) {
+    try {
+      window.sessionStorage.setItem(ATTRIBUTION_STORAGE_KEY, JSON.stringify(attribution));
+    } catch {
+      // Attribution is optional; blocked storage must not affect checkout.
+    }
+  }
+
+  return attribution;
 };
 
 export const trackGoal = (goalName, params = {}) => {

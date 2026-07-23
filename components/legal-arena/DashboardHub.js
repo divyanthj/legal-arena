@@ -13,9 +13,14 @@ import {
   buildCaseAssemblyBrief,
   buildCaseAssemblyPreview,
 } from "@/libs/caseAssemblyCore.mjs";
+import {
+  createGuidedInteractionController,
+  isGuidedMobileViewport,
+} from "@/libs/guidedInteractionCore.mjs";
 import { DevelopmentAccessModal } from "@/components/legal-arena/DevelopmentAccessGate";
 import EarlyAccessCheckoutButton from "@/components/legal-arena/EarlyAccessCheckoutButton";
 import CaseAssemblyOverlay from "@/components/legal-arena/CaseAssemblyOverlay";
+import MobileSectionNavigator from "@/components/legal-arena/MobileSectionNavigator";
 import config from "@/config";
 import CountryFlagPicker, {
   CountryBadge,
@@ -341,6 +346,7 @@ const PvpDocketSection = ({
     <section
       id="pvp-docket"
       data-onboarding-target="pvp-docket"
+      data-section-nav-target="dashboard-pvp"
       className={`arena-surface min-w-0 overflow-hidden ${
         activeCount
           ? "border-amber-200/35 bg-[radial-gradient(circle_at_92%_10%,rgba(251,191,36,0.14),transparent_30%),rgba(251,191,36,0.025)] shadow-[0_0_0_1px_rgba(251,191,36,0.08),0_24px_80px_rgba(251,191,36,0.08)]"
@@ -670,6 +676,7 @@ const IconTile = ({ icon: Icon, className = "" }) => (
 );
 
 const categoryIconMap = {
+  "current-events": HeroIcons.NewspaperIcon,
   "rental-dispute": HeroIcons.BuildingOffice2Icon,
   "marital-dispute": HeroIcons.HeartIcon,
   "business-dispute": HeroIcons.BriefcaseIcon,
@@ -683,6 +690,7 @@ const categoryIconMap = {
 };
 
 const compactCategoryLabel = {
+  "current-events": "Headlines",
   "rental-dispute": "Rental",
   "marital-dispute": "Marital",
   "business-dispute": "Business",
@@ -868,6 +876,14 @@ const getCaseProgress = (caseSession = null) => {
 
   return { label: "Client interview", percent: 42, nextStep: "Build your fact sheet" };
 };
+
+const dashboardSectionNavigatorItems = [
+  { key: "home", label: "Home", target: "dashboard-home" },
+  { key: "pvp", label: "PVP Docket", target: "dashboard-pvp" },
+  { key: "library", label: "Case Library", target: "dashboard-library" },
+  { key: "cases", label: "My Cases", target: "dashboard-cases" },
+  { key: "rankings", label: "Rankings", target: "dashboard-rankings" },
+];
 
 const getSoloStatusLabel = (caseSession = {}) =>
   caseSession.adjournment?.active
@@ -1434,6 +1450,10 @@ export default function DashboardHub({
   const [lawyerSearchLoading, setLawyerSearchLoading] = useState(false);
   const [isMobileActivationViewport, setIsMobileActivationViewport] = useState(false);
   const dashboardViewedRef = useRef(false);
+  const guidedInteractionRef = useRef(null);
+  if (!guidedInteractionRef.current) {
+    guidedInteractionRef.current = createGuidedInteractionController();
+  }
   const [dashboardTutorialCompleted, setDashboardTutorialCompleted] = useState(
     Boolean(onboarding?.dashboardTutorialCompleted)
   );
@@ -1448,6 +1468,11 @@ export default function DashboardHub({
     });
     setDashboardTutorialCompleted(false);
   }, [challenges.length, hasArenaAccess, initialCases.length, progression?.completedCases]);
+
+  useEffect(
+    () => () => guidedInteractionRef.current?.cancel(),
+    []
+  );
 
   const filteredTemplates = useMemo(
     () =>
@@ -1856,9 +1881,11 @@ export default function DashboardHub({
       });
       // Prefetch only after the portrait endpoint has persisted the image so
       // intake cannot receive a stale, portrait-less case payload.
+      guidedInteractionRef.current?.pulse("success");
       router.prefetch(caseHref);
       router.push(caseHref);
     } catch (error) {
+      guidedInteractionRef.current?.pulse("warning");
       stopNavigationLoading();
       trackGoal("case_create_failed", {
         template_id: caseTemplateId || "",
@@ -1971,8 +1998,10 @@ export default function DashboardHub({
       category: categorySlug || "all",
       playable_only: showPlayableOnly,
     });
+    const preserveScrollPosition =
+      typeof window !== "undefined" && !isGuidedMobileViewport(window);
     const scrollPosition =
-      typeof window !== "undefined"
+      preserveScrollPosition
         ? { left: window.scrollX, top: window.scrollY }
         : null;
     const nextTemplates = templates.filter(
@@ -1984,6 +2013,8 @@ export default function DashboardHub({
 
     setSelectedCategory(categorySlug);
     setActiveTemplateIndex(firstUnlockedIndex >= 0 ? firstUnlockedIndex : 0);
+    guidedInteractionRef.current?.pulse("selection");
+    guidedInteractionRef.current?.advance("solo-difficulty");
 
     if (scrollPosition) {
       window.requestAnimationFrame(() => {
@@ -2187,7 +2218,11 @@ export default function DashboardHub({
               </div>
             </aside>
 
-            <div id="activation-home" className="min-w-0 space-y-4">
+            <div
+              id="activation-home"
+              className="min-w-0 space-y-4"
+              data-section-nav-target="dashboard-home"
+            >
               <section className="relative isolate overflow-hidden rounded-[1.75rem] border border-white/10 bg-black px-4 pb-5 pt-5 shadow-[0_26px_90px_rgba(0,0,0,0.62)] xl:hidden">
                 <img
                   src="/images/court.jpg"
@@ -2736,7 +2771,12 @@ export default function DashboardHub({
               />
 
               <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(320px,0.65fr)]">
-                <section id="case-library" data-onboarding-target="case-library" className="arena-surface min-w-0 overflow-visible">
+                <section
+                  id="case-library"
+                  data-onboarding-target="case-library"
+                  data-section-nav-target="dashboard-library"
+                  className="arena-surface min-w-0 overflow-visible"
+                >
                   <div className="p-4 md:p-6">
                     <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
                       <div className="min-w-0">
@@ -2774,7 +2814,7 @@ export default function DashboardHub({
                       </div>
                     </div>
 
-                    <div className="mt-6">
+                    <div className="mt-6" data-guided-step="solo-country">
                       <CountryFlagPicker
                         id="solo-case-country"
                         value={selectedCountryCode}
@@ -2782,6 +2822,8 @@ export default function DashboardHub({
                         disabled={creating}
                         onChange={(countryCode) => {
                           selectCountry(countryCode);
+                          guidedInteractionRef.current?.pulse("selection");
+                          guidedInteractionRef.current?.advance("solo-category");
                           trackGoal("case_country_selected", {
                             country: countryCode,
                             source: "solo_case_picker",
@@ -2793,7 +2835,7 @@ export default function DashboardHub({
                       </p>
                     </div>
 
-                    <div className="mt-6">
+                    <div className="mt-6" data-guided-step="solo-category">
                       <p className="arena-kicker">Practice Area</p>
                       <h3 className="mt-2 text-xl font-semibold text-white">
                         Pick where the dispute starts
@@ -2816,7 +2858,7 @@ export default function DashboardHub({
                           <button
                             key={category.slug}
                             type="button"
-                            className={`min-h-[6.25rem] rounded-2xl border p-3 text-left transition ${
+                            className={`flex min-h-[10.5rem] flex-col rounded-2xl border p-3 text-left transition ${
                               selected
                                 ? "border-emerald-300/70 bg-emerald-300/10 shadow-[0_0_24px_rgba(52,211,153,0.12)]"
                                 : "border-white/10 bg-white/[0.025] hover:border-white/20"
@@ -2830,14 +2872,24 @@ export default function DashboardHub({
                                 }`}
                                 aria-hidden="true"
                               />
-                              <span className="rounded-full border border-white/10 bg-black/24 px-2 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-white/48">
-                                Skill {categoryCap}
+                              <span className="flex flex-wrap justify-end gap-1.5">
+                                {category.isNew ? (
+                                  <span className="rounded-full border border-amber-200/45 bg-amber-300/15 px-2 py-1 text-[0.6rem] font-black uppercase tracking-[0.1em] text-amber-100 shadow-[0_0_18px_rgba(251,191,36,0.12)]">
+                                    New
+                                  </span>
+                                ) : null}
+                                <span className="rounded-full border border-white/10 bg-black/24 px-2 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-white/48">
+                                  Skill {categoryCap}
+                                </span>
                               </span>
                             </div>
                             <p className="mt-3 text-sm font-semibold leading-5 text-white">
                               {compactCategoryLabel[category.slug] || category.title}
                             </p>
-                            <p className="mt-1 text-xs text-white/45">
+                            <p className="mt-1 line-clamp-3 text-xs leading-4 text-white/48">
+                              {category.description}
+                            </p>
+                            <p className="mt-auto pt-2 text-xs text-white/45">
                               {stat.completedCases || 0} played by you
                             </p>
                           </button>
@@ -2846,7 +2898,7 @@ export default function DashboardHub({
                     </div>
 
                     <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(280px,0.42fr)]">
-                      <div>
+                      <div data-guided-step="solo-difficulty">
                         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                           <div>
                             <p className="arena-kicker">Difficulty</p>
@@ -2884,10 +2936,13 @@ export default function DashboardHub({
                                 }`}
                                 onClick={() => {
                                   if (locked) {
+                                    guidedInteractionRef.current?.pulse("warning");
                                     return;
                                   }
 
                                   setSelectedDifficulty(option.value);
+                                  guidedInteractionRef.current?.pulse("selection");
+                                  guidedInteractionRef.current?.advance("solo-preview");
                                 }}
                               >
                                 <p className="text-xs font-black uppercase tracking-[0.12em] text-white/42">
@@ -2919,7 +2974,10 @@ export default function DashboardHub({
                         </div>
                       </div>
 
-                      <aside className="rounded-2xl border border-white/10 bg-white/[0.025] p-5">
+                      <aside
+                        className="scroll-mt-24 rounded-2xl border border-white/10 bg-white/[0.025] p-5"
+                        data-guided-step="solo-preview"
+                      >
                         <p className="arena-kicker">Preview</p>
                         <h3 className="mt-3 text-2xl font-semibold leading-tight text-white">
                           {selectedCategoryTitle}
@@ -2938,7 +2996,11 @@ export default function DashboardHub({
                             </span>
                           ) : null}
                         </div>
-                        <p className="mt-4 text-sm leading-6 text-white/58">
+                        <p className="mt-4 text-sm leading-6 text-white/62">
+                          {selectedCategoryMeta?.description}
+                        </p>
+                        <p className="mt-2 text-xs italic leading-5 text-white/48">
+                          {selectedDynamicDifficultyMeta.label} -{" "}
                           {selectedDynamicDifficultyMeta.summary}
                         </p>
                         <p className="mt-3 rounded-xl border border-white/8 bg-black/20 px-3 py-2 text-xs leading-5 text-white/48">
@@ -3652,6 +3714,7 @@ export default function DashboardHub({
               <section
                 id="recent-cases"
                 data-onboarding-target="recent-matters"
+                data-section-nav-target="dashboard-cases"
                 className="arena-surface overflow-hidden"
               >
                 <div className="md:hidden">
@@ -3907,7 +3970,12 @@ export default function DashboardHub({
                 </div>
               </section>
 
-              <div id="rankings" data-onboarding-target="leaderboards" className="grid min-w-0 gap-4 xl:grid-cols-2">
+              <div
+                id="rankings"
+                data-onboarding-target="leaderboards"
+                data-section-nav-target="dashboard-rankings"
+                className="grid min-w-0 gap-4 xl:grid-cols-2"
+              >
                 <section className="arena-surface min-w-0">
                   <div className="p-4 md:p-6">
                     <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-end">
@@ -4010,6 +4078,7 @@ export default function DashboardHub({
             </div>
           </div>
         </section>
+        <MobileSectionNavigator sections={dashboardSectionNavigatorItems} />
         <nav
           className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-black/86 px-2 pb-[calc(env(safe-area-inset-bottom)+0.45rem)] pt-2 shadow-[0_-18px_50px_rgba(0,0,0,0.45)] backdrop-blur-xl xl:hidden"
           aria-label="Mobile dashboard navigation"

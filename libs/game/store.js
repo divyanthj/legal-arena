@@ -46,6 +46,7 @@ import {
   createUsageCollector,
 } from "./sessionUsage";
 import { buildPublicWitnessPayload } from "./witnesses";
+import { buildPublicCurrentEventInspiration } from "./currentEvents";
 
 const toPlain = (doc) => (doc?.toJSON ? doc.toJSON() : doc);
 const stripUsageEntries = (usage = {}) => {
@@ -807,8 +808,11 @@ const buildTemplateCard = ({
 };
 
 export const buildCasePayload = (caseSession, templateOverride = null) => {
+  const privateCurrentEventProvenance =
+    caseSession?.currentEventProvenance || null;
   const courtroomWitnesses = buildPublicWitnessPayload(caseSession);
   const plainCase = toPlain(caseSession);
+  delete plainCase.currentEventProvenance;
   const rawTemplateSource =
     templateOverride ||
     plainCase.caseTemplateId ||
@@ -864,6 +868,11 @@ export const buildCasePayload = (caseSession, templateOverride = null) => {
       .reverse()
       .find((entry) => entry?.role === "player" && entry?.terms?.length)
       ?.terms || [];
+
+  const currentEventResolved =
+    ["verdict", "settled"].includes(plainCase.status) ||
+    settlement.status === "settled" ||
+    settlement.resolution === "settled";
 
   return {
     ...plainCase,
@@ -934,6 +943,10 @@ export const buildCasePayload = (caseSession, templateOverride = null) => {
         }
       : null,
     lawbook: getLawbookRules(),
+    currentEventInspiration:
+      currentEventResolved && privateCurrentEventProvenance
+        ? buildPublicCurrentEventInspiration(privateCurrentEventProvenance)
+        : null,
   };
 };
 
@@ -1018,6 +1031,7 @@ export const createCaseSession = async ({
   complexity = 1,
   countryCode = "US",
   freeGameplayCampaignAccess = null,
+  newcomerAssist = false,
   continuationOfCaseId = null,
 }) => {
   await connectMongo();
@@ -1070,10 +1084,12 @@ export const createCaseSession = async ({
       negotiationProfile: getNegotiationProfile(dynamicCase),
       complexity: dynamicCase.complexity,
       caseCountry,
+      currentEventProvenance: dynamicCase.currentEventProvenance || null,
       playerSide,
       status: "interview",
       playerImage: user?.image || "",
       freeGameplayCampaignAccess: freeGameplayCampaignAccess || undefined,
+      newcomerAssist: Boolean(newcomerAssist),
       continuationOfCaseId: continuationOfCaseId || undefined,
       lawbookVersion: LAWBOOK_VERSION,
       maxCourtRounds: Math.max(3, dynamicCase.complexity + 1),
@@ -1203,6 +1219,7 @@ export const createCaseSession = async ({
     status: "interview",
     playerImage: user?.image || "",
     freeGameplayCampaignAccess: freeGameplayCampaignAccess || undefined,
+    newcomerAssist: Boolean(newcomerAssist),
     continuationOfCaseId: continuationOfCaseId || undefined,
     lawbookVersion: LAWBOOK_VERSION,
     maxCourtRounds: Math.max(3, template.complexity + 1),

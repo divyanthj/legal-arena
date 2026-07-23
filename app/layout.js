@@ -100,7 +100,6 @@ export default function RootLayout({ children }) {
             defer
             data-website-id={DATAFAST_WEBSITE_ID}
             data-domain="legalarena.app"
-            data-disable-payments="true"
             src="https://datafa.st/js/script.js"
           />
           <Script

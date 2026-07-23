@@ -12,6 +12,8 @@ import {
   setPlayerCaseCountryPreference,
 } from "@/libs/game/countryPreference";
 
+export const maxDuration = 300;
+
 export async function GET(req) {
   const { session, error: authError } = await getRequestSession(req);
   if (authError) return authError;
@@ -25,7 +27,10 @@ export async function GET(req) {
     return NextResponse.json({ challenges });
   } catch (error) {
     console.error(error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { error: error.message, code: error.code || "" },
+      { status: error.status || 500 }
+    );
   }
 }
 
@@ -71,6 +76,9 @@ export async function POST(req) {
     return NextResponse.json({ challenge });
   } catch (error) {
     console.error(error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { error: error.message, code: error.code || "" },
+      { status: error.status || 500 }
+    );
   }
 }

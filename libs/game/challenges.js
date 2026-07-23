@@ -80,6 +80,7 @@ import {
   extractSettlementTermsFromMessage,
 } from "./settlement";
 import { hasClientSettlementAuthority } from "./settlementAuthority";
+import { buildPublicCurrentEventInspiration } from "./currentEvents";
 
 const MONGO_ID_PATTERN = /^[a-f0-9]{24}$/i;
 const CHALLENGE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
@@ -1181,6 +1182,7 @@ export const createChallenge = async ({
   let template = null;
   let templateSnapshot = null;
   let canonicalStory = null;
+  let currentEventProvenance = null;
 
   if (caseTemplateId) {
     const availableTemplates = await listScenarioOptions(initiatorId, initiatorProfile);
@@ -1220,6 +1222,7 @@ export const createChallenge = async ({
       userId: initiatorId,
       countryCode: caseCountry.code,
     });
+    currentEventProvenance = dynamicCase.currentEventProvenance || null;
 
     template = buildDynamicCaseTemplateSnapshot(dynamicCase);
     template.dynamicDifficulty = dynamicDifficulty;
@@ -1272,6 +1275,7 @@ export const createChallenge = async ({
     negotiationProfile: getNegotiationProfile(template),
     complexity: template.complexity,
     caseCountry: template.caseCountry || null,
+    currentEventProvenance,
     lawbookVersion: LAWBOOK_VERSION,
     maxCourtRounds: Math.max(3, template.complexity + 1),
     templateSnapshot,
@@ -3394,7 +3398,10 @@ export const requestChallengeAdjournment = async ({
 };
 
 export const buildChallengePayload = async ({ challenge, viewerUserId }) => {
+  const privateCurrentEventProvenance =
+    challenge?.currentEventProvenance || null;
   const plainChallenge = toPlain(challenge);
+  delete plainChallenge.currentEventProvenance;
   const publicChallenge = {
     ...plainChallenge,
     participants: (plainChallenge.participants || []).map((participant) => {
@@ -3548,6 +3555,7 @@ export const buildChallengePayload = async ({ challenge, viewerUserId }) => {
       : settlementFailedShouldReturnToIntake
       ? "active"
       : publicChallenge.status;
+  const currentEventResolved = ["verdict", "settled"].includes(payloadStatus);
   const endedByUserId = toObjectIdString(settlement.endedByUserId);
   const latestNegotiationMessageUserId = toObjectIdString(
     settlementTerminal
@@ -3584,6 +3592,10 @@ export const buildChallengePayload = async ({ challenge, viewerUserId }) => {
   return {
     ...publicChallenge,
     status: payloadStatus,
+    currentEventInspiration:
+      currentEventResolved && privateCurrentEventProvenance
+        ? buildPublicCurrentEventInspiration(privateCurrentEventProvenance)
+        : null,
     id: plainChallenge.id || toObjectIdString(plainChallenge._id),
     slug,
     viewer: participant

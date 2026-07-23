@@ -459,7 +459,11 @@ export const legalArenaLawbook = [
 export const getLawbookRules = () => legalArenaLawbook;
 
 export const getLawbookRulesForCategory = (categorySlug = LAWBOOK_ALL_CATEGORIES) => {
-  if (!categorySlug || categorySlug === LAWBOOK_ALL_CATEGORIES) {
+  if (
+    !categorySlug ||
+    categorySlug === LAWBOOK_ALL_CATEGORIES ||
+    categorySlug === "current-events"
+  ) {
     return legalArenaLawbook;
   }
 

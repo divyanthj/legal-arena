@@ -557,3 +557,186 @@ export const requestStructuredCompletion = async ({
 
   return null;
 };
+
+const collectWebSources = (response = {}) => {
+  const sources = [];
+  const addSource = (source = {}) => {
+    const url = String(source?.url || source?.uri || "").trim();
+    if (!/^https?:\/\//i.test(url)) return;
+    sources.push({
+      url,
+      title: String(source?.title || source?.name || "").trim(),
+      publisher: String(source?.publisher || source?.site_name || "").trim(),
+      publishedAt: String(
+        source?.published_at || source?.publishedAt || source?.date || ""
+      ).trim(),
+    });
+  };
+
+  for (const item of Array.isArray(response?.output) ? response.output : []) {
+    for (const source of Array.isArray(item?.action?.sources)
+      ? item.action.sources
+      : []) {
+      addSource(source);
+    }
+    for (const part of Array.isArray(item?.content) ? item.content : []) {
+      for (const annotation of Array.isArray(part?.annotations)
+        ? part.annotations
+        : []) {
+        addSource(annotation?.url_citation || annotation);
+      }
+    }
+  }
+
+  return [
+    ...new Map(sources.map((source) => [source.url, source])).values(),
+  ].slice(0, 12);
+};
+
+export const requestWebGroundedStructuredCompletion = async ({
+  systemPrompt,
+  userPrompt,
+  userId,
+  model = DEFAULT_MODEL,
+  maxTokens = 1800,
+  usageLabel = "web-grounded",
+  onUsage,
+  serviceTier = "",
+  retryAttempts = 1,
+}) => {
+  if (!process.env.OPENAI_API_KEY) {
+    const error = new Error("OPENAI_API_KEY is not configured.");
+    error.status = 503;
+    error.code = "current_event_search_unavailable";
+    throw error;
+  }
+
+  const requestedServiceTier =
+    String(serviceTier || "").trim().toLowerCase() || "auto";
+  const maxAttempts = Math.max(1, Math.min(3, Number(retryAttempts) + 1 || 1));
+  let lastError = null;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const attemptMaxTokens = Math.max(
+      1,
+      Math.round((Number(maxTokens) || 1800) * (attempt === 0 ? 1 : 1.5))
+    );
+    const requestStartedAt = Date.now();
+    const requestBody = {
+      model,
+      max_output_tokens: attemptMaxTokens,
+      instructions: ensureJsonInstruction(systemPrompt),
+      input: ensureJsonInstruction(
+        attempt === 0
+          ? userPrompt
+          : `${userPrompt}\n\nRetry requirement: keep descriptions concise and ensure the complete JSON object closes within the output budget.`
+      ),
+      tools: [{ type: "web_search" }],
+      include: ["web_search_call.action.sources"],
+      user: userId,
+      ...(serviceTier ? { service_tier: requestedServiceTier } : {}),
+    };
+
+    let response;
+    try {
+      response = await fetch(OPENAI_RESPONSES_URL, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
+        signal: AbortSignal.timeout(60_000),
+      });
+    } catch (cause) {
+      const error = new Error("Live current-event search could not be reached.");
+      error.status = 503;
+      error.code = "current_event_search_unavailable";
+      error.cause = cause;
+      lastError = error;
+      if (attempt + 1 < maxAttempts) continue;
+      throw error;
+    }
+
+    if (!response.ok) {
+      const body = await response.text();
+      const error = new Error(
+        `Live current-event search failed (${response.status}).`
+      );
+      error.status = 503;
+      error.code = "current_event_search_unavailable";
+      error.providerStatus = response.status;
+      lastError = error;
+      console.error("OpenAI web search error:", response.status, body.slice(0, 1000));
+      if (
+        attempt + 1 < maxAttempts &&
+        (response.status === 408 ||
+          response.status === 409 ||
+          response.status === 429 ||
+          response.status >= 500)
+      ) {
+        continue;
+      }
+      throw error;
+    }
+
+    const data = await response.json();
+    const content = extractResponsesText(data);
+    const parsed = extractJsonObject(content);
+    const usage = extractUsage(data, true);
+    const usagePayload = {
+      label: usageLabel,
+      attempt: attempt + 1,
+      maxTokens: attemptMaxTokens,
+      finishReason:
+        data?.status === "incomplete"
+          ? String(data?.incomplete_details?.reason || "incomplete")
+          : String(data?.status || ""),
+      model,
+      api: "responses",
+      parsed: Boolean(parsed),
+      promptCacheKey: "",
+      cacheHitRate: getPromptCacheHitRate(usage),
+      requestedServiceTier,
+      serviceTier: String(data?.service_tier || requestedServiceTier || "unknown"),
+      isPriority:
+        String(data?.service_tier || requestedServiceTier).toLowerCase() ===
+        "priority",
+      responseId: String(data?.id || ""),
+      durationMs: Date.now() - requestStartedAt,
+      ...usage,
+    };
+
+    if (typeof onUsage === "function") onUsage(usagePayload);
+    try {
+      await recordAIUsageEvent({ userId, ...usagePayload });
+    } catch (usageError) {
+      console.error("Persistent web-search usage tracking failed:", usageError);
+    }
+
+    if (parsed) {
+      return {
+        payload: parsed,
+        sources: collectWebSources(data),
+        usage: usagePayload,
+      };
+    }
+
+    const error = new Error(
+      "Live current-event search returned an unusable result."
+    );
+    error.status = 503;
+    error.code = "current_event_search_unavailable";
+    lastError = error;
+    console.warn("OpenAI web search returned malformed or incomplete JSON.", {
+      attempt: attempt + 1,
+      maxAttempts,
+      finishReason: usagePayload.finishReason,
+      maxTokens: attemptMaxTokens,
+      preview: String(content || "").trim().slice(0, 500),
+    });
+    if (attempt + 1 >= maxAttempts) throw error;
+  }
+
+  throw lastError;
+};

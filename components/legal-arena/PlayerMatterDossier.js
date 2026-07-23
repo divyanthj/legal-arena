@@ -31,6 +31,14 @@ import {
   statusTone,
   summarizeCount,
 } from "./playerDossierShared";
+import MobileSectionNavigator from "./MobileSectionNavigator";
+
+const matterSectionNavigatorItems = [
+  { key: "overview", label: "Overview", target: "matter-overview" },
+  { key: "ruling", label: "Ruling", target: "matter-ruling" },
+  { key: "snapshot", label: "Snapshot", target: "matter-snapshot" },
+  { key: "details", label: "Matter details", target: "matter-details" },
+];
 
 export default function PlayerMatterDossier({ player, caseSession, canManageCaseReport = false }) {
   const matter = normalizeMatter(caseSession);
@@ -153,7 +161,10 @@ export default function PlayerMatterDossier({ player, caseSession, canManageCase
   ) : null;
 
   const renderVerdictPanel = () => (
-    <div className={`arena-surface border ${verdictStyle.card}`}>
+    <div
+      className={`arena-surface border ${verdictStyle.card}`}
+      data-section-nav-target="matter-ruling"
+    >
       <div className="p-5 md:p-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex flex-wrap items-center gap-3">
@@ -182,7 +193,10 @@ export default function PlayerMatterDossier({ player, caseSession, canManageCase
   return (
     <main className="arena-app-shell min-h-screen overflow-x-hidden px-4 py-6 md:px-8 md:py-10">
       <section className="mx-auto max-w-7xl space-y-6 arena-reveal">
-        <div className="arena-surface arena-scanline arena-column-bg">
+        <div
+          className="arena-surface arena-scanline arena-column-bg"
+          data-section-nav-target="matter-overview"
+        >
           <div className="p-6 md:p-8">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
               <div className="max-w-4xl">
@@ -233,7 +247,7 @@ export default function PlayerMatterDossier({ player, caseSession, canManageCase
 
         <div className="grid gap-6 xl:grid-cols-[0.72fr_1.28fr]">
           <aside className="space-y-6">
-            <div className="arena-surface">
+            <div className="arena-surface" data-section-nav-target="matter-snapshot">
               <div className="p-5 md:p-6">
                 <p className="arena-kicker">Matter Snapshot</p>
                 <h2 className="arena-headline mt-2 text-2xl">Case posture</h2>
@@ -273,7 +287,7 @@ export default function PlayerMatterDossier({ player, caseSession, canManageCase
           </aside>
 
           <section className="space-y-6">
-            <div className="arena-surface">
+            <div className="arena-surface" data-section-nav-target="matter-details">
               <div className="p-5 md:p-6">
                 <div className="flex flex-wrap gap-2" role="tablist" aria-label="Matter detail">
                   {matterTabs.map((tab) => (
@@ -433,6 +447,7 @@ export default function PlayerMatterDossier({ player, caseSession, canManageCase
           </section>
         </div>
       </section>
+      <MobileSectionNavigator sections={matterSectionNavigatorItems} />
     </main>
   );
 }

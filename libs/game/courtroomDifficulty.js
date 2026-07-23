@@ -1,6 +1,9 @@
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
-export const getCourtroomDifficultyProfile = (complexity = 3) => {
+export const getCourtroomDifficultyProfile = (
+  complexity = 3,
+  { newcomerAssist = false } = {}
+) => {
   const normalizedComplexity = clamp(Math.round(Number(complexity) || 3), 1, 5);
   const profiles = {
     1: {
@@ -145,7 +148,30 @@ export const getCourtroomDifficultyProfile = (complexity = 3) => {
     },
   };
 
-  return profiles[normalizedComplexity];
+  const profile = profiles[normalizedComplexity];
+
+  if (!newcomerAssist || normalizedComplexity !== 1) {
+    return {
+      ...profile,
+      newcomerAssist: false,
+      verdictGuidance: [],
+    };
+  }
+
+  return {
+    ...profile,
+    newcomerAssist: true,
+    opponentMaxDelta: 16,
+    partialCreditBonus: 2,
+    promptGuidance: [
+      ...profile.promptGuidance,
+      "This is a newcomer's first case. Use the opponent's clearest supported response, but leave secondary or highly technical attacks unused.",
+    ],
+    verdictGuidance: [
+      "This is an assisted first case. When the visible record and governing rules make the legal result genuinely close, resolve that close call in the represented player's favor.",
+      "Do not manufacture proof, excuse a missing required legal element, or reverse a clearly losing record. Prefer a supportable partial or reduced remedy over an all-or-nothing loss when the rules and visible proof permit it.",
+    ],
+  };
 };
 
 const splitSentences = (text = "") =>

@@ -5,6 +5,13 @@ import { useMemo, useState } from "react";
 import * as HeroIcons from "@heroicons/react/24/outline";
 import { toast } from "react-hot-toast";
 import apiClient from "@/libs/api";
+import MobileSectionNavigator from "./MobileSectionNavigator";
+
+const barAssociationSectionNavigatorItems = [
+  { key: "overview", label: "Overview", target: "bar-overview" },
+  { key: "activity", label: "Profile activity", target: "bar-activity" },
+  { key: "directory", label: "Lawyer directory", target: "bar-directory" },
+];
 
 const normalizeSearchText = (value = "") =>
   String(value || "")
@@ -316,6 +323,7 @@ export default function BarAssociationDirectory({
       <section className="mx-auto w-full max-w-[1600px] min-w-0 space-y-4 arena-reveal">
         <div
           className="arena-surface arena-scanline arena-column-bg overflow-hidden"
+          data-section-nav-target="bar-overview"
           style={{
             backgroundImage: [
               "linear-gradient(90deg, rgba(4,4,4,0.96) 0%, rgba(4,4,4,0.9) 42%, rgba(4,4,4,0.62) 72%, rgba(4,4,4,0.92) 100%)",
@@ -378,7 +386,7 @@ export default function BarAssociationDirectory({
           </div>
         </div>
 
-        <section className="arena-surface">
+        <section className="arena-surface" data-section-nav-target="bar-activity">
           <div className="p-5 md:p-6">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div>
@@ -429,7 +437,7 @@ export default function BarAssociationDirectory({
           </div>
         </section>
 
-        <section className="arena-surface">
+        <section className="arena-surface" data-section-nav-target="bar-directory">
           <div className="p-5 md:p-6">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
               <div>
@@ -540,6 +548,8 @@ export default function BarAssociationDirectory({
           </div>
         </section>
       </section>
+
+      <MobileSectionNavigator sections={barAssociationSectionNavigatorItems} />
 
       {nudgeOpen ? (
         <dialog

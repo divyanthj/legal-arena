@@ -438,6 +438,11 @@ const challengeSchema = mongoose.Schema(
       code: { type: String, trim: true, uppercase: true, default: "" },
       name: { type: String, trim: true, default: "" },
     },
+    currentEventProvenance: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+      private: true,
+    },
     lawbookVersion: { type: String, required: true, trim: true },
     maxCourtRounds: { type: Number, default: 3 },
     templateSnapshot: { type: mongoose.Schema.Types.Mixed, default: null },

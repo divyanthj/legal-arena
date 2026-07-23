@@ -6,6 +6,12 @@ import { trackGoal } from "@/libs/datafast";
 
 const updates = [
   {
+    title: "Headlines: argue today's biggest legal issues",
+    body: "Choose a country and take on a fictionalized dispute inspired by its latest major reporting. Real identities and identifying details stay private, and the inspiration sources unlock after resolution.",
+    icon: HeroIcons.NewspaperIcon,
+    badge: "New",
+  },
+  {
     title: "A smoother settlement rhythm",
     body: "Consult your client, review a recommended response, and keep negotiations moving without writing every message from scratch. You can still edit any proposal when the stakes call for a personal touch.",
     icon: HeroIcons.ArrowsRightLeftIcon,
@@ -120,9 +126,9 @@ export default function WhatsNewDialog({ buttonLabel = dialogTitle }) {
                   {dialogTitle}
                 </h2>
                 <p id={descriptionId} className="mt-3 max-w-xl text-sm leading-6 text-white/60">
-                  Settle matters with less friction, follow every case as it takes
-                  shape, and move smoothly from client conference to courtroom—plus
-                  discover the latest career and case-building improvements.
+                  Turn the latest major issues into playable legal disputes, settle
+                  matters with less friction, and discover the newest courtroom,
+                  career, and case-building improvements.
                 </p>
               </div>
               <button
@@ -149,7 +155,14 @@ export default function WhatsNewDialog({ buttonLabel = dialogTitle }) {
                         <Icon className="h-4 w-4" aria-hidden="true" />
                       </span>
                       <div>
-                        <h3 className="text-base font-semibold text-white">{update.title}</h3>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="text-base font-semibold text-white">{update.title}</h3>
+                          {update.badge ? (
+                            <span className="rounded-full border border-amber-200/30 bg-amber-200/12 px-2 py-0.5 text-[10px] font-black uppercase tracking-[0.14em] text-amber-100">
+                              {update.badge}
+                            </span>
+                          ) : null}
+                        </div>
                         <p className="mt-2 text-sm leading-6 text-white/62">{update.body}</p>
                       </div>
                     </div>

@@ -9,7 +9,7 @@ import NextTopLoader from "nextjs-toploader";
 import { Toaster } from "react-hot-toast";
 import { Tooltip } from "react-tooltip";
 import config from "@/config";
-import { identifyDatafastUser } from "@/libs/datafast";
+import { getAcquisitionAttribution, identifyDatafastUser } from "@/libs/datafast";
 import { NavigationLoadingProvider } from "@/components/NavigationLoadingProvider";
 
 // Crisp customer chat support:
@@ -100,6 +100,14 @@ const DatafastIdentity = () => {
   return null;
 };
 
+const AcquisitionAttribution = () => {
+  useEffect(() => {
+    getAcquisitionAttribution();
+  }, []);
+
+  return null;
+};
+
 // All the client wrappers are here (they can't be in server components)
 // 1. SessionProvider: Allow the useSession from next-auth (find out if user is auth or not)
 // 2. NextTopLoader: Show a progress bar at the top when navigating between pages
@@ -131,6 +139,7 @@ const ClientLayout = ({ children }) => {
           />
 
           <SessionGuard />
+          <AcquisitionAttribution />
           <DatafastIdentity />
 
           {/* Set Crisp customer chat support */}

@@ -677,6 +677,13 @@ export const generateCaseTemplatePayload = async ({
   onProgress,
 }) => {
   const category = getCategoryBySlug(categorySlug) || getCategoryBySlug(DEFAULT_CATEGORY_SLUG);
+  if (category.supportsEvergreenTemplates === false) {
+    const error = new Error(
+      `${category.title} cases require live country-specific research and cannot be generated as evergreen templates.`
+    );
+    error.status = 400;
+    throw error;
+  }
   const normalizedComplexity = Math.max(1, Math.min(5, Number(complexity) || 1));
   const complexityProfile = getStoryComplexityProfile(normalizedComplexity);
   const tokenBudget = getStoryTokenBudget(normalizedComplexity, generationProfile);

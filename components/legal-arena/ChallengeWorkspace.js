@@ -219,6 +219,7 @@ const challengeToCaseSession = (challenge = {}) => {
     negotiationProfile: challenge.negotiationProfile || null,
     complexity: challenge.complexity,
     caseCountry: challenge.caseCountry || null,
+    currentEventInspiration: challenge.currentEventInspiration || null,
     playerSide: viewer.side,
     playerUserId: viewer.userId || "",
     opponentUserId: opponent.userId || "",

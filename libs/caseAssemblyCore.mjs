@@ -26,6 +26,25 @@ export const CASE_ASSEMBLY_STAGES = [
   },
 ];
 
+export const CASE_ASSEMBLY_TIP_INTERVAL_MS = 6000;
+
+export const CASE_ASSEMBLY_TIPS = [
+  "Ask one focused question at a time. Specific questions uncover stronger facts than broad invitations.",
+  "Separate what your client believes from what the available evidence can actually prove.",
+  "A contradiction is most useful when you can connect it to a document, message, or timeline entry.",
+  "Before arguing, identify the strongest point for the other side and answer it directly.",
+  "Strong courtroom arguments link a legal issue, a proven fact, and a concrete piece of evidence.",
+  "Settlement leverage comes from risks the other side understands, not just demands your client prefers.",
+];
+
+export const HEADLINES_CASE_ASSEMBLY_TIP =
+  "Headlines matters fictionalize every identity and identifying detail. Inspiration sources are revealed only after the case is resolved.";
+
+export const getCaseAssemblyTips = (categorySlug = "") =>
+  categorySlug === "current-events"
+    ? [HEADLINES_CASE_ASSEMBLY_TIP, ...CASE_ASSEMBLY_TIPS]
+    : CASE_ASSEMBLY_TIPS;
+
 export const getCaseAssemblyStageState = (stageKey, status) => {
   if (stageKey === "brief") return "complete";
   if (stageKey === "draft") {

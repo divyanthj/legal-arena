@@ -781,7 +781,9 @@ export const generatePlaintiffCourtOpeningStatement = async ({
   const rules = getLawbookRules();
   const playerSide = getPlayerSide(caseSession);
   const plaintiffSide = getOpposingSide(playerSide);
-  const difficultyProfile = getCourtroomDifficultyProfile(caseSession.complexity);
+  const difficultyProfile = getCourtroomDifficultyProfile(caseSession.complexity, {
+    newcomerAssist: caseSession.newcomerAssist === true,
+  });
   const aiResult = await requestStructuredCompletion({
     userId,
     model: GAMEPLAY_MODEL,
@@ -844,7 +846,9 @@ export const runCourtroomRound = async ({ caseSession, argument, userId }) => {
   const rules = getLawbookRules();
   const shouldReturnVerdict =
     caseSession.score.roundsCompleted + 1 >= caseSession.maxCourtRounds;
-  const difficultyProfile = getCourtroomDifficultyProfile(caseSession.complexity);
+  const difficultyProfile = getCourtroomDifficultyProfile(caseSession.complexity, {
+    newcomerAssist: caseSession.newcomerAssist === true,
+  });
 
   const counselAnalysisResult = await requestStructuredCompletion({
     userId,
@@ -928,6 +932,7 @@ export const runCourtroomRound = async ({ caseSession, argument, userId }) => {
         "If returning a verdict in a security-deposit dispute, address burden allocation: the tenant must show withholding and the challenged deduction theory; the landlord must justify deductions with itemization, actual costs, or specific condition evidence.",
         "If returning a verdict, treat visible approximate party-side amounts as claims or testimony. Approximation may limit the size or precision of relief, but it should not by itself erase the claim.",
         "If returning a verdict, prefer partial relief or a reduced award when the record supports an improper deduction category but not the full requested amount.",
+        ...difficultyProfile.verdictGuidance,
         "If returning a verdict, highlights must list only points that helped the represented player's side.",
         "If returning a verdict, concerns must list only points that weakened the represented player's side.",
         "Do not put adverse findings against the represented player in highlights, even if they were important to the court's ruling.",

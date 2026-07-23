@@ -30,6 +30,25 @@ assert.deepEqual(lowestProfile.preparation, {
   secondaryWeaknessBudget: 0,
 });
 
+const newcomerProfile = getCourtroomDifficultyProfile(1, {
+  newcomerAssist: true,
+});
+assert.equal(newcomerProfile.newcomerAssist, true);
+assert.equal(newcomerProfile.opponentMaxDelta, 16);
+assert.equal(newcomerProfile.partialCreditBonus, 2);
+assert.equal(newcomerProfile.verdictGuidance.length, 2);
+
+const paidBeginnerProfile = getCourtroomDifficultyProfile(1, {
+  newcomerAssist: false,
+});
+assert.equal(paidBeginnerProfile.opponentMaxDelta, 20);
+assert.equal(paidBeginnerProfile.partialCreditBonus, 0);
+
+const misplacedNewcomerProfile = getCourtroomDifficultyProfile(2, {
+  newcomerAssist: true,
+});
+assert.equal(misplacedNewcomerProfile.newcomerAssist, false);
+
 const defaultProfile = getCourtroomDifficultyProfile("nope");
 assert.equal(defaultProfile.complexity, 3);
 
@@ -75,6 +94,19 @@ assert.deepEqual(
   {
     playerDelta: 8,
     opponentDelta: 19,
+  }
+);
+
+assert.deepEqual(
+  normalizeCourtroomDeltasForDifficulty({
+    playerDelta: 8,
+    opponentDelta: 19,
+    difficultyProfile: newcomerProfile,
+    hasPartialCredit: true,
+  }),
+  {
+    playerDelta: 10,
+    opponentDelta: 16,
   }
 );
 

@@ -79,7 +79,11 @@ export default async function AdminPage() {
 
   return (
     <AdminCaseLab
-      categories={toClientJSON(listCategoryOptions())}
+      categories={toClientJSON(
+        listCategoryOptions().filter(
+          (category) => category.supportsEvergreenTemplates !== false
+        )
+      )}
       initialTemplates={toClientJSON(templatesWithStats)}
       adminEmails={toClientJSON(getAdminEmails())}
       adminStats={toClientJSON({

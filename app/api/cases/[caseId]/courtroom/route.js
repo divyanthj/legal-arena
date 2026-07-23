@@ -59,6 +59,13 @@ export async function POST(req, { params }) {
       return NextResponse.json({ error: "Case not found" }, { status: 404 });
     }
 
+    if (
+      !access.hasArenaAccess &&
+      String(access.soloTrial?.caseSessionId || "") === String(caseSession._id)
+    ) {
+      caseSession.newcomerAssist = true;
+    }
+
     if (caseSession.status === "interview") {
       return NextResponse.json(
         { error: "Finalize the fact sheet before entering court." },

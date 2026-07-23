@@ -3,7 +3,11 @@
 import { useState } from "react";
 import * as HeroIcons from "@heroicons/react/24/outline";
 import apiClient from "@/libs/api";
-import { trackGoal, waitForDatafastAttribution } from "@/libs/datafast";
+import {
+  getAcquisitionAttribution,
+  trackGoal,
+  waitForDatafastAttribution,
+} from "@/libs/datafast";
 
 export default function EarlyAccessCheckoutButton({
   variantId,
@@ -35,6 +39,7 @@ export default function EarlyAccessCheckoutButton({
       const response = await apiClient.post("/lemonsqueezy/create-checkout", {
         variantId,
         redirectUrl: purchaseSuccessUrl.toString(),
+        attribution: getAcquisitionAttribution(),
       });
 
       if (response?.url) {

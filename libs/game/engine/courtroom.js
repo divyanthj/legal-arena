@@ -626,7 +626,9 @@ export const buildCourtroomAgentContext = ({
   const playerSide = getPlayerSide(caseSession);
   const opponentSide = getOpposingSide(playerSide);
   const proofStrategy = buildProofStrategyContext({ caseSession });
-  const difficultyProfile = getCourtroomDifficultyProfile(caseSession.complexity);
+  const difficultyProfile = getCourtroomDifficultyProfile(caseSession.complexity, {
+    newcomerAssist: caseSession.newcomerAssist === true,
+  });
   const ruleApplicationGuidance = buildCourtroomRuleApplicationGuidance({
     caseSession,
     template: safeTemplate,
@@ -708,7 +710,9 @@ export const normalizeCourtResult = ({
     caseSession,
     rules,
   });
-  const difficultyProfile = getCourtroomDifficultyProfile(caseSession.complexity);
+  const difficultyProfile = getCourtroomDifficultyProfile(caseSession.complexity, {
+    newcomerAssist: caseSession.newcomerAssist === true,
+  });
   const validFactText = new Set(
     [
       ...(caseSession.factSheet.supportingFacts || []),

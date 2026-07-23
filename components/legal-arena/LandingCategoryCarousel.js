@@ -6,6 +6,7 @@ import { LEGAL_CASE_CATEGORIES } from "@/libs/game/categories";
 import { trackGoal } from "@/libs/datafast";
 
 const categoryIconMap = {
+  "current-events": HeroIcons.NewspaperIcon,
   "rental-dispute": HeroIcons.BuildingOffice2Icon,
   "marital-dispute": HeroIcons.HeartIcon,
   "business-dispute": HeroIcons.BriefcaseIcon,
@@ -19,6 +20,7 @@ const categoryIconMap = {
 };
 
 const categoryMatterLabel = {
+  "current-events": "Live headline matters",
   "rental-dispute": "Rental matters",
   "marital-dispute": "Family matters",
   "business-dispute": "Business matters",

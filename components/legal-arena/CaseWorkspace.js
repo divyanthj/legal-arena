@@ -11,6 +11,10 @@ import ButtonAccount from "@/components/ButtonAccount";
 import { useNavigationLoading } from "@/components/NavigationLoadingProvider";
 import apiClient from "@/libs/api";
 import { trackGoal } from "@/libs/datafast";
+import {
+  createGuidedInteractionController,
+  pulseHaptic,
+} from "@/libs/guidedInteractionCore.mjs";
 import { calculateSettlementXp } from "@/libs/game/settlementQuality";
 import { annotateSettlementMoodReactions } from "@/libs/game/settlementMoodReactions.mjs";
 import { buildPublicSettlementDraft } from "@/libs/game/settlementComposer.mjs";
@@ -34,6 +38,8 @@ import { getCaseReportProgressLabel } from "./caseReportUi";
 import { CountryBadge } from "./CountryFlagPicker";
 import AwardUnlockPanel from "./AwardUnlockPanel";
 import PostResolutionNextCaseCard from "./PostResolutionNextCaseCard";
+import CurrentEventInspirationCard from "./CurrentEventInspirationCard";
+import MobileSectionNavigator from "./MobileSectionNavigator";
 
 const WITNESS_RESPONSE_TIMEOUT_MS = 45_000;
 
@@ -201,12 +207,6 @@ const formatSettlementCooldown = (milliseconds = 0) => {
   }
 
   return `${minutes}:${String(seconds).padStart(2, "0")}`;
-};
-
-const triggerSettlementHaptic = () => {
-  if (typeof window !== "undefined" && typeof window.navigator?.vibrate === "function") {
-    window.navigator.vibrate(8);
-  }
 };
 
 const CourtPortraitAvatar = ({
@@ -1080,7 +1080,9 @@ export default function CaseWorkspace({
   const [finalizeFeedback, setFinalizeFeedback] = useState(null);
   const [optimisticTranscriptEntry, setOptimisticTranscriptEntry] = useState(null);
   const [selectedLawbookCategory, setSelectedLawbookCategory] = useState(
-    initialCase.primaryCategory || LAWBOOK_ALL_CATEGORIES
+    initialCase.primaryCategory === "current-events"
+      ? initialCase.template?.secondaryCategories?.[0] || LAWBOOK_ALL_CATEGORIES
+      : initialCase.primaryCategory || LAWBOOK_ALL_CATEGORIES
   );
   const [lawbookSearch, setLawbookSearch] = useState("");
   const [showFullMobileBrief, setShowFullMobileBrief] = useState(false);
@@ -1107,11 +1109,19 @@ export default function CaseWorkspace({
   const settlementTopRef = useRef(null);
   const settlementMessageComposerRef = useRef(null);
   const settlementMessageTextareaRef = useRef(null);
+  const guidedInteractionRef = useRef(null);
+  if (!guidedInteractionRef.current) {
+    guidedInteractionRef.current = createGuidedInteractionController();
+  }
   const settlementResolvedRef = useRef(
     initialCase.status === "settled" ||
       initialCase.settlement?.status === "settled" ||
       initialCase.settlement?.accepted === true ||
       initialCase.settlement?.resolution === "settled"
+  );
+  useEffect(
+    () => () => guidedInteractionRef.current?.cancel(),
+    []
   );
   const requestedOpponentPortraitRef = useRef(new Set());
   const workingRef = useRef(false);
@@ -1177,6 +1187,7 @@ export default function CaseWorkspace({
   const setSettlementMessageAndFocus = useCallback(
     (messageOrUpdater) => {
       setSettlementMessage(messageOrUpdater);
+      pulseHaptic("selection");
       focusSettlementMessageComposer();
     },
     [focusSettlementMessageComposer]
@@ -1487,6 +1498,7 @@ export default function CaseWorkspace({
       caseSession.settlement?.status !== "failed"
   );
   const settlementFailureRedirectKeyRef = useRef("");
+  const courtroomEntryGuidanceKeyRef = useRef("");
   const previousWorkspaceStageRef = useRef(
     initialCase.status === "interview"
       ? "intake"
@@ -1833,13 +1845,16 @@ export default function CaseWorkspace({
 
   const applySuggestedIntakeQuestion = (nextQuestion, { closeFactSheetDialog = false } = {}) => {
     if (intakeActionsLocked) {
+      guidedInteractionRef.current?.pulse("warning");
       return;
     }
 
     setQuestion(nextQuestion);
+    guidedInteractionRef.current?.pulse("selection");
     if (closeFactSheetDialog) {
       setShowMobileFactSheetDialog(false);
     }
+    guidedInteractionRef.current?.advance("intake-composer");
   };
 
   const handleInterviewSubmit = async (event) => {
@@ -1885,8 +1900,10 @@ export default function CaseWorkspace({
       trackGoal("intake_question_answered", caseAnalyticsParams({
         question_chars: submittedQuestion.length,
       }));
+      guidedInteractionRef.current?.pulse("success");
     } catch (error) {
       setQuestion(submittedQuestion);
+      guidedInteractionRef.current?.pulse("warning");
       trackGoal("intake_question_failed", caseAnalyticsParams({
         question_chars: submittedQuestion.length,
       }));
@@ -1935,6 +1952,7 @@ export default function CaseWorkspace({
         next_status: nextCase?.status,
         sections_complete: completedFactSheetItems,
       }));
+      guidedInteractionRef.current?.pulse("success");
       const successMessage =
         apiConfig.finalizeSuccessMessage ||
         (nextCase?.status === "courtroom"
@@ -1943,6 +1961,7 @@ export default function CaseWorkspace({
       setFinalizeFeedback({ tone: "success", text: successMessage });
       toast.success(successMessage);
     } catch (error) {
+      guidedInteractionRef.current?.pulse("warning");
       trackGoal("fact_sheet_finalize_failed", caseAnalyticsParams({
         sections_complete: completedFactSheetItems,
       }));
@@ -2180,7 +2199,20 @@ export default function CaseWorkspace({
           nextCase?.settlement?.receivedNegotiationMessage
         ),
       }));
+      if (response?.rejected || nextCase?.settlement?.status === "rejected") {
+        guidedInteractionRef.current?.pulse("warning");
+      } else {
+        guidedInteractionRef.current?.pulse("success");
+        if (
+          nextCase?.status === "settlement" &&
+          !shouldOptimisticallyWaitForPvpResponse &&
+          !["settled", "failed"].includes(nextCase?.settlement?.status)
+        ) {
+          guidedInteractionRef.current?.advance("settlement-decision");
+        }
+      }
     } catch (error) {
+      guidedInteractionRef.current?.pulse("warning");
       toast.error(error?.message || "Could not send settlement message.");
       trackGoal("settlement_message_submit_failed", caseAnalyticsParams({
         initial,
@@ -2315,8 +2347,10 @@ export default function CaseWorkspace({
         `${getApiBasePath(caseSession)}/settlement/exit`
       );
       updateCaseFromResponse(response);
+      guidedInteractionRef.current?.pulse("success");
       toast.success(analyticsMode === "pvp" ? "Settlement negotiations ended." : "Returned to intake.");
     } catch (error) {
+      guidedInteractionRef.current?.pulse("warning");
       toast.error(error?.message || "Could not end settlement negotiations.");
       console.error(error);
     } finally {
@@ -2366,8 +2400,10 @@ export default function CaseWorkspace({
         argument_chars: submittedArgument.length,
         round: caseSession.score.roundsCompleted + 1,
       }));
+      guidedInteractionRef.current?.pulse("success");
     } catch (error) {
       setArgument(submittedArgument);
+      guidedInteractionRef.current?.pulse("warning");
       trackGoal("courtroom_argument_failed", caseAnalyticsParams({
         argument_chars: submittedArgument.length,
         round: caseSession.score.roundsCompleted + 1,
@@ -2411,7 +2447,10 @@ export default function CaseWorkspace({
         `${getApiBasePath(caseSession)}/${apiConfig.exitPath || "exit"}`
       );
 
-      if (apiConfig.exitStaysInWorkspace || response?.caseSession?.status === "verdict") {
+      if (analyticsMode === "solo" && isInterview) {
+        startNavigationLoading(apiConfig.exitLoadingLabel || "Returning to the dashboard");
+        router.replace("/dashboard");
+      } else if (apiConfig.exitStaysInWorkspace || response?.caseSession?.status === "verdict") {
         updateCaseFromResponse(response);
       } else {
         startNavigationLoading(apiConfig.exitLoadingLabel || "Returning to the docket");
@@ -2776,6 +2815,8 @@ export default function CaseWorkspace({
       const trimmedCurrent = String(current || "").trim();
       return trimmedCurrent ? `${trimmedCurrent}\n\n${text}` : text;
     });
+    guidedInteractionRef.current?.pulse("selection");
+    guidedInteractionRef.current?.advance("courtroom-composer");
   };
 
   const openingStatementSnippet = () => {
@@ -3102,6 +3143,38 @@ export default function CaseWorkspace({
   useEffect(() => {
     setShowFullMobileOpponentArgument(false);
   }, [lastOpponentCourtEntryKey]);
+  useEffect(() => {
+    if (!isCourtroom || Number(caseSession.score?.roundsCompleted || 0) > 0) {
+      return;
+    }
+
+    const targetStep = isDefendantSide
+      ? lastOpponentCourtEntry
+        ? "courtroom-opponent-opening"
+        : ""
+      : !showCourtroomWaitingCard && !activeWitness
+      ? "courtroom-entry-composer"
+      : "";
+    if (!targetStep) return;
+
+    const guidanceKey = `${getCaseRouteRef(caseSession)}:${targetStep}`;
+    if (courtroomEntryGuidanceKeyRef.current === guidanceKey) return;
+
+    const scheduled = guidedInteractionRef.current?.advance(targetStep, {
+      topPadding: 88,
+      bottomPadding: 96,
+    });
+    if (scheduled) {
+      courtroomEntryGuidanceKeyRef.current = guidanceKey;
+    }
+  }, [
+    activeWitness,
+    caseSession,
+    isCourtroom,
+    isDefendantSide,
+    lastOpponentCourtEntry,
+    showCourtroomWaitingCard,
+  ]);
 
   const settlement = caseSession.settlement || {};
   const settlementCooldownUntilTime = settlement.cooldownUntil
@@ -4007,7 +4080,9 @@ export default function CaseWorkspace({
       setSettlementClientPreview(preview);
 
       setSettlementClientInstruction("");
+      guidedInteractionRef.current?.pulse("success");
     } catch (error) {
+      guidedInteractionRef.current?.pulse("warning");
       setSettlementClientPreviewError(error?.message || "Could not talk to the client.");
     } finally {
       setSettlementClientInstructionWorking(false);
@@ -4528,8 +4603,10 @@ export default function CaseWorkspace({
         } else {
           setSettlementAcceptAuthority({ offerSignature: "", authority: "unclear", reason: "" });
         }
+        guidedInteractionRef.current?.pulse("success");
 
       } catch (error) {
+        guidedInteractionRef.current?.pulse("warning");
         setSettlementClientPreviewError(error?.message || "Could not talk to the client.");
       } finally {
         setSettlementClientInstructionWorking(false);
@@ -4601,7 +4678,11 @@ export default function CaseWorkspace({
         body: "Privately tell your client settlement may be wasting time.",
         icon: HeroIcons.UserIcon,
         tone: "amber",
-        onClick: () => setSettlementClientCounselNote(settlementClientWarningText),
+        onClick: () => {
+          setSettlementClientCounselNote(settlementClientWarningText);
+          guidedInteractionRef.current?.pulse("selection");
+          guidedInteractionRef.current?.advance("settlement-client-composer");
+        },
       },
       {
         title: "Walk away",
@@ -4665,6 +4746,7 @@ export default function CaseWorkspace({
                   className="arena-scroll min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain p-4 sm:p-5"
                   onSubmit={handleSettlementMessageSubmit}
                   data-settlement-tour-target="settlement-message"
+                  data-guided-step="settlement-composer"
                 >
                   {settlementMessageInTransit ? (
                     <div
@@ -4806,7 +4888,6 @@ export default function CaseWorkspace({
                     <button
                       type="button"
                       className="arena-btn-light inline-flex items-center justify-center gap-2 px-5 py-3 text-sm font-black disabled:cursor-not-allowed disabled:opacity-60"
-                      onPointerDown={triggerSettlementHaptic}
                       onClick={() =>
                         submitSettlementMessage({
                           messageOverride: settlementMessage.trim(),
@@ -4865,7 +4946,10 @@ export default function CaseWorkspace({
     if (hasReachedSettlement) {
       return (
         <div id="settlement" className="mx-auto w-full max-w-[1600px] space-y-4">
-          <section className="arena-surface overflow-hidden border-emerald-200/18 bg-emerald-300/[0.035]">
+          <section
+            className="arena-surface overflow-hidden border-emerald-200/18 bg-emerald-300/[0.035]"
+            data-section-nav-target="settlement-outcome"
+          >
             <div className="mx-auto w-full max-w-5xl p-5 sm:p-7 lg:p-9">
               <div className="flex min-w-0 gap-4">
                 <span className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl border border-emerald-200/35 bg-emerald-300/12 text-emerald-100 shadow-[0_0_40px_rgba(110,231,183,0.12)]">
@@ -4938,16 +5022,25 @@ export default function CaseWorkspace({
                 </p>
               </div>
 
-              {analyticsMode === "solo" ? (
-                <PostResolutionNextCaseCard
-                  caseSession={caseSession}
-                  hasArenaAccess={Boolean(apiConfig.hasArenaAccess)}
+              <div data-section-nav-target="resolution-inspiration">
+                <CurrentEventInspirationCard
+                  inspiration={caseSession.currentEventInspiration}
                 />
-              ) : null}
+
+                {analyticsMode === "solo" ? (
+                  <PostResolutionNextCaseCard
+                    caseSession={caseSession}
+                    hasArenaAccess={Boolean(apiConfig.hasArenaAccess)}
+                  />
+                ) : null}
+              </div>
             </div>
           </section>
 
-          <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_24rem]">
+          <section
+            className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_24rem]"
+            data-section-nav-target="settlement-agreement"
+          >
             <div className="arena-surface overflow-hidden">
               <div className="border-b border-white/10 p-4 sm:p-5">
                 <p className="arena-kicker text-emerald-200">Final Agreement</p>
@@ -5040,7 +5133,10 @@ export default function CaseWorkspace({
             </aside>
           </section>
 
-          <section className="arena-surface p-4 sm:p-5">
+          <section
+            className="arena-surface p-4 sm:p-5"
+            data-section-nav-target="settlement-performance"
+          >
             <p className="arena-kicker text-emerald-200">Outcome</p>
             <p className="mt-3 text-sm font-semibold leading-7 text-white/72">
               {finalAgreementSummary}
@@ -5107,7 +5203,6 @@ export default function CaseWorkspace({
                   setIsSettlementInfoModalOpen(false);
                   requestSettlementTour();
                 }}
-                onPointerDown={triggerSettlementHaptic}
                 aria-label="Take the settlement tour"
                 title="Settlement tour"
               >
@@ -5118,7 +5213,6 @@ export default function CaseWorkspace({
                 type="button"
                 className="arena-btn-dark inline-flex min-h-0 items-center gap-2 px-4 py-2 text-sm"
                 onClick={handleSettlementExit}
-                onPointerDown={triggerSettlementHaptic}
                 disabled={working || settlementIsTerminal}
               >
                 Return to Intake
@@ -5131,10 +5225,12 @@ export default function CaseWorkspace({
         <section
           className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_240px_minmax(0,1fr)]"
           data-settlement-tour-target="settlement-status"
+          data-section-nav-target="settlement-status"
         >
           <div
             className="rounded-2xl border border-emerald-300/[0.08] bg-emerald-300/[0.045] p-4 sm:p-5"
             data-settlement-tour-target="settlement-offer"
+            data-section-nav-target="settlement-offer"
           >
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="flex min-w-0 items-center gap-3">
@@ -5173,6 +5269,7 @@ export default function CaseWorkspace({
             <div
               className={`mt-4 rounded-xl border p-4 ${clientReactionTone.card}`}
               data-settlement-tour-target="settlement-client-reaction"
+              data-section-nav-target="settlement-client"
             >
               <div className="flex items-start gap-3">
                 <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full border ${clientReactionTone.icon}`}>
@@ -5255,14 +5352,21 @@ export default function CaseWorkspace({
                     key={prompt}
                     type="button"
                     className="rounded-full border border-emerald-300/[0.08] bg-emerald-300/[0.045] px-3 py-1.5 text-xs font-semibold text-emerald-50 transition hover:border-emerald-200/20 hover:bg-emerald-300/[0.08]"
-                    onClick={() => setSettlementClientInstruction(prompt)}
+                    onClick={() => {
+                      setSettlementClientInstruction(prompt);
+                      guidedInteractionRef.current?.pulse("selection");
+                      guidedInteractionRef.current?.advance("settlement-client-composer");
+                    }}
                     disabled={clientWalkoutActive || settlementClientInstructionWorking}
                   >
                     {prompt}
                   </button>
                 ))}
               </div>
-              <div className="mt-3 overflow-hidden rounded-lg border border-white/[0.04] bg-black/22">
+              <div
+                className="mt-3 overflow-hidden rounded-lg border border-white/[0.04] bg-black/22"
+                data-guided-step="settlement-client-composer"
+              >
                 <textarea
                   value={settlementClientInstruction}
                   onChange={(event) => setSettlementClientInstruction(event.target.value)}
@@ -5329,6 +5433,7 @@ export default function CaseWorkspace({
           <div
             className="rounded-2xl border border-amber-200/[0.08] bg-amber-200/[0.05] p-4 text-center"
             data-settlement-tour-target="settlement-viability"
+            data-guided-step="settlement-decision"
           >
             <p className="arena-kicker text-amber-200">Do This Next</p>
             {settlement.tacticShiftRequired ? (
@@ -5350,7 +5455,6 @@ export default function CaseWorkspace({
                     : "border-emerald-200/30 bg-emerald-300 text-black shadow-[0_12px_28px_rgba(16,185,129,0.16)] hover:bg-emerald-200"
                 }`}
                 onClick={handleAcceptSettlementTerms}
-                onPointerDown={triggerSettlementHaptic}
                 disabled={settlementActionsLocked}
               >
                 {pendingAction === "settlement-accept" ? "Accepting terms..." : "Accept terms"}
@@ -5361,7 +5465,6 @@ export default function CaseWorkspace({
                 type="button"
                 className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-300 px-4 py-3 text-sm font-black text-black shadow-[0_12px_28px_rgba(16,185,129,0.16)] transition hover:bg-emerald-200 disabled:cursor-not-allowed disabled:opacity-60"
                 onClick={handleAskClientAboutLatestOffer}
-                onPointerDown={triggerSettlementHaptic}
                 disabled={settlementActionsLocked || settlementClientInstructionWorking}
               >
                 {settlementClientInstructionWorking
@@ -5399,7 +5502,6 @@ export default function CaseWorkspace({
                   : "border-white/10 bg-white/[0.035] text-white/62 hover:border-amber-200/25 hover:text-amber-100"
               }`}
               onClick={() => setSettlementMessageAndFocus(responseAwareSettlementMessage)}
-              onPointerDown={triggerSettlementHaptic}
               disabled={settlementActionsLocked}
             >
               {awaitingNegotiationResponse ? "Waiting for response" : "Message opposing counsel"}
@@ -5414,7 +5516,6 @@ export default function CaseWorkspace({
                 type="button"
                 className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-red-300/[0.12] bg-red-300/[0.055] px-4 py-2.5 text-sm font-black text-red-100 transition hover:border-red-300/[0.22] hover:bg-red-300/[0.09] disabled:cursor-not-allowed disabled:opacity-60"
                 onClick={handleSettlementExit}
-                onPointerDown={triggerSettlementHaptic}
                 disabled={working || pendingAction === "settlement-exit" || settlementIsTerminal}
               >
                 {pendingAction === "settlement-exit" ? "Exiting settlement..." : "Exit settlement"}
@@ -5426,7 +5527,6 @@ export default function CaseWorkspace({
                 type="button"
                 className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-red-300/[0.055] px-4 py-2.5 text-sm font-black text-red-100 transition hover:bg-red-300/[0.09] disabled:cursor-not-allowed disabled:opacity-60"
                 onClick={handleSettlementExit}
-                onPointerDown={triggerSettlementHaptic}
                 disabled={working || pendingAction === "settlement-exit"}
               >
                 {pendingAction === "settlement-exit" ? "Ending negotiations..." : "End negotiations"}
@@ -5519,7 +5619,12 @@ export default function CaseWorkspace({
         </section>
 
         {!settlementIsTerminal ? (
-          <section className="arena-surface overflow-hidden" data-settlement-tour-target="settlement-next-move">
+          <section
+            className="arena-surface overflow-hidden"
+            data-settlement-tour-target="settlement-next-move"
+            data-section-nav-target="settlement-next-move"
+            data-guided-step="settlement-decision"
+          >
             <div className="border-b border-amber-200/10 p-4 sm:p-5">
               {settlementClientCounselNote ? (
                 <div className="rounded-2xl border border-amber-200/[0.07] bg-amber-200/[0.055] p-4">
@@ -5534,7 +5639,6 @@ export default function CaseWorkspace({
                       type="button"
                       className="arena-btn-dark shrink-0 px-4 py-2 text-sm"
                       onClick={handleSettlementExit}
-                      onPointerDown={triggerSettlementHaptic}
                       disabled={working}
                     >
                       Walk away now
@@ -5620,7 +5724,6 @@ export default function CaseWorkspace({
                     setIsSettlementInfoModalOpen(false);
                     requestSettlementTour();
                   }}
-                  onPointerDown={triggerSettlementHaptic}
                   aria-label="Take the settlement tour"
                   title="Settlement tour"
                 >
@@ -5631,7 +5734,6 @@ export default function CaseWorkspace({
                   type="button"
                   className="arena-btn-dark settlement-interactive inline-flex min-h-0 items-center gap-2 px-4 py-2 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-200/45"
                   onClick={handleSettlementExit}
-                  onPointerDown={triggerSettlementHaptic}
                   disabled={working || settlementIsTerminal}
                 >
                   Return to Intake
@@ -5640,7 +5742,7 @@ export default function CaseWorkspace({
               </div>
             </div>
 
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4" data-settlement-tour-target="settlement-status">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4" data-settlement-tour-target="settlement-status" data-section-nav-target="settlement-status">
               {statusCards.map((card) => {
                 const Icon = card.icon;
                 const tone = toneClasses[card.tone];
@@ -5667,7 +5769,7 @@ export default function CaseWorkspace({
 
             <div className="h-px bg-amber-200/[0.055]" />
 
-            <section data-settlement-tour-target="settlement-offer">
+            <section data-settlement-tour-target="settlement-offer" data-section-nav-target="settlement-offer">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="flex items-start gap-3">
                   <HeroIcons.CurrencyDollarIcon className="mt-0.5 h-6 w-6 text-amber-200" aria-hidden="true" />
@@ -5679,7 +5781,6 @@ export default function CaseWorkspace({
                 <button
                   type="button"
                   className="arena-btn-dark settlement-interactive inline-flex min-h-0 items-center justify-center gap-2 px-4 py-2 text-sm text-amber-100 disabled:cursor-not-allowed disabled:opacity-55 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-200/45"
-                  onPointerDown={triggerSettlementHaptic}
                   onClick={() => setSettlementMessageAndFocus((current) =>
                     current.trim() || settlementDraftMessage
                   )}
@@ -5739,7 +5840,12 @@ export default function CaseWorkspace({
               </div>
             </section>
 
-            <div className="rounded-xl border border-amber-200/12 bg-amber-200/[0.06] p-4" data-settlement-tour-target="settlement-next-move">
+            <div
+              className="rounded-xl border border-amber-200/12 bg-amber-200/[0.06] p-4"
+              data-settlement-tour-target="settlement-next-move"
+              data-section-nav-target="settlement-next-move"
+              data-guided-step="settlement-decision"
+            >
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex min-w-0 gap-3">
                   <HeroIcons.LightBulbIcon className="mt-0.5 h-6 w-6 shrink-0 text-amber-200" aria-hidden="true" />
@@ -5752,7 +5858,6 @@ export default function CaseWorkspace({
                   <button
                     type="button"
                     className="arena-btn-light settlement-interactive min-h-0 px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-55 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-200/45"
-                    onPointerDown={triggerSettlementHaptic}
                     onClick={() => setSettlementMessageAndFocus((current) => current.trim() || actionableNextMove)}
                     disabled={settlementActionsLocked}
                   >
@@ -5761,7 +5866,6 @@ export default function CaseWorkspace({
                   <button
                     type="button"
                     className="arena-btn-dark settlement-interactive min-h-0 px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-55 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-200/45"
-                    onPointerDown={triggerSettlementHaptic}
                     onClick={() => setSettlementMessageAndFocus((current) =>
                       current.trim() || settlementDraftMessage
                     )}
@@ -5773,7 +5877,7 @@ export default function CaseWorkspace({
               </div>
             </div>
 
-            <section data-settlement-tour-target="settlement-recent">
+            <section data-settlement-tour-target="settlement-recent" data-section-nav-target="settlement-exchanges">
               <div className="mb-3 flex items-center gap-2">
                 <HeroIcons.ChatBubbleLeftRightIcon className="h-5 w-5 text-amber-200" aria-hidden="true" />
                 <h3 className="text-lg font-black text-white">Recent exchanges</h3>
@@ -5826,7 +5930,7 @@ export default function CaseWorkspace({
               </div>
             </section>
 
-            <section data-settlement-tour-target="settlement-support">
+            <section data-settlement-tour-target="settlement-support" data-section-nav-target="settlement-support">
               <div className="mb-3 flex items-center gap-2">
                 <HeroIcons.FolderIcon className="h-5 w-5 text-amber-200" aria-hidden="true" />
                 <h3 className="text-lg font-black text-white">Supporting info</h3>
@@ -5840,7 +5944,6 @@ export default function CaseWorkspace({
                       key={item.label}
                       type="button"
                       className="btn btn-ghost settlement-interactive h-auto min-h-16 w-full justify-between rounded-xl border border-amber-200/10 bg-white/[0.018] px-4 py-3 text-left normal-case text-white hover:border-amber-200/20 hover:bg-white/[0.035] focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-200/45"
-                      onPointerDown={triggerSettlementHaptic}
                       onClick={() => openSettlementInfo(item.key)}
                     >
                       <span className="flex min-w-0 items-center gap-3">
@@ -6032,6 +6135,7 @@ export default function CaseWorkspace({
   const renderLawbookPanel = (className = "", panelId = "lawbook-details") => (
     <div
       id={panelId}
+      data-section-nav-target="workspace-lawbook"
       className={`arena-surface min-w-0 max-w-full overflow-hidden ${className}`}
     >
       <details className="group min-w-0 max-w-full" open>
@@ -6286,7 +6390,7 @@ export default function CaseWorkspace({
       <button
         key={`mobile-${section.key}`}
         type="button"
-        className={`relative min-h-[4.05rem] rounded-xl border p-2 text-center transition ${
+        className={`relative min-h-[4.25rem] rounded-xl border p-2.5 text-center transition ${
           isSelected
             ? "border-amber-200/45 bg-amber-300/12 text-amber-100"
             : isComplete
@@ -6298,15 +6402,15 @@ export default function CaseWorkspace({
       >
         {renderFactSheetProgressBadge(section.key)}
         <Icon
-          className={`mx-auto h-4 w-4 ${
+          className={`mx-auto h-[1.125rem] w-[1.125rem] ${
             isSelected ? "text-amber-100" : isComplete ? "text-emerald-200" : "text-amber-200"
           }`}
           aria-hidden="true"
         />
-        <span className="mt-1 block line-clamp-1 text-[0.56rem] font-semibold text-white/74">
+        <span className="mt-1.5 block line-clamp-1 text-[0.65rem] font-semibold leading-tight text-white/78">
           {factSheetSectionCompactLabel[section.key] || section.title}
         </span>
-        <span className="mt-0.5 block text-[0.6rem] text-white/42">
+        <span className="mt-1 block text-[0.62rem] text-white/42">
           {sectionCount}/{Math.max(sectionCount, 1)}
         </span>
       </button>
@@ -6331,12 +6435,53 @@ export default function CaseWorkspace({
     </button>
   );
 
+  const workspaceSectionNavigatorSections = isSettled
+    ? [
+        { key: "outcome", label: "Outcome", target: "settlement-outcome" },
+        { key: "inspiration", label: "Inspiration and next case", target: "resolution-inspiration" },
+        { key: "agreement", label: "Case report", target: "settlement-agreement" },
+        { key: "performance", label: "Performance", target: "settlement-performance" },
+      ]
+    : isSettlement
+    ? [
+        { key: "status", label: "Status", target: "settlement-status" },
+        { key: "client", label: "Client", target: "settlement-client" },
+        { key: "offer", label: "Offer", target: "settlement-offer" },
+        { key: "next", label: "Next move", target: "settlement-next-move" },
+        { key: "exchanges", label: "Exchanges", target: "settlement-exchanges" },
+        { key: "support", label: "Supporting information", target: "settlement-support" },
+      ]
+    : isVerdict
+    ? [
+        { key: "ruling", label: "Ruling", target: "verdict-ruling" },
+        { key: "inspiration", label: "Inspiration and next case", target: "resolution-inspiration" },
+        { key: "report", label: "Case report", target: "verdict-report" },
+        { key: "performance", label: "Performance", target: "verdict-performance" },
+      ]
+    : isCourtroom
+    ? [
+        { key: "hearing", label: "Hearing", target: "court-hearing" },
+        { key: "transcript", label: "Transcript", target: "court-transcript" },
+        { key: "move", label: "Your move", target: "court-move" },
+        { key: "file", label: "Case file", target: "workspace-case-file" },
+        { key: "lawbook", label: "Lawbook", target: "workspace-lawbook" },
+      ]
+    : [
+        { key: "overview", label: "Overview", target: "workspace-overview" },
+        { key: "interview", label: "Client interview", target: "intake-interview" },
+        { key: "file", label: "Fact sheet", target: "workspace-case-file" },
+        { key: "lawbook", label: "Lawbook", target: "workspace-lawbook" },
+      ];
+
   return (
     <main
       ref={settlementTopRef}
       className="arena-app-shell min-h-screen overflow-x-hidden px-3 pb-24 pt-4 sm:px-4 sm:py-6 md:px-8 md:py-10"
     >
-      <section className="mx-auto max-w-[1600px] space-y-6 arena-reveal">
+      <section
+        className="mx-auto max-w-[1600px] space-y-6 arena-reveal"
+        data-section-nav-target="workspace-overview"
+      >
         <div className="sm:hidden">
           <div className="flex items-center justify-between gap-3">
             <Link
@@ -6367,18 +6512,18 @@ export default function CaseWorkspace({
               <ButtonAccount />
             </div>
           </div>
-          <h1 className="mt-4 text-2xl font-semibold leading-tight text-white">
+          <h1 className="mt-4 px-2 text-2xl font-semibold leading-tight text-white">
             {caseSession.title}
           </h1>
-          <p className="mt-2 text-sm font-semibold leading-6 text-white/68">
+          <p className="mt-2 px-2 text-sm font-semibold leading-6 text-white/68">
             {isSettlement || isSettled
               ? settlementCaseContextLine
               : `${playerRepresentationLabel} ${interviewContextLabel}`}
           </p>
-          <div className="mt-3 flex items-center gap-2 overflow-hidden">
+          <div className="mt-3 flex flex-wrap items-center gap-2 px-2">
             <CountryBadge caseCountry={caseSession.caseCountry} className="shrink-0" />
             <span
-              className={`min-w-0 max-w-[58vw] truncate rounded-lg border px-2.5 py-1 text-xs font-semibold ${
+              className={`min-w-0 max-w-full truncate rounded-lg border px-2.5 py-1 text-xs font-semibold ${
                 caseSession.playerSide === "opponent"
                   ? "border-sky-300/25 bg-sky-300/10 text-sky-100"
                   : "border-emerald-300/25 bg-emerald-300/10 text-emerald-100"
@@ -6682,6 +6827,7 @@ export default function CaseWorkspace({
                     <div
                       className="mt-3 rounded-2xl border border-white/10 bg-black/20 p-3"
                       data-intake-tour-target="intake-latest-exchange"
+                      data-section-nav-target="intake-interview"
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div>
@@ -6815,6 +6961,7 @@ export default function CaseWorkspace({
                     <div
                       className="relative mt-3 rounded-2xl border border-amber-200/20 bg-amber-200/[0.035] p-2"
                       data-intake-tour-target="intake-question-box"
+                      data-guided-step="intake-composer"
                     >
                       <div className="mb-2 px-1">
                         <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-amber-200">
@@ -6894,7 +7041,7 @@ export default function CaseWorkspace({
                             key={item}
                             type="button"
                             className="shrink-0 rounded-full border border-white/10 bg-black/24 px-3 py-2 text-xs font-semibold text-white/74"
-                            onClick={() => setQuestion(item)}
+                            onClick={() => applySuggestedIntakeQuestion(item)}
                             disabled={awaitingSettlementResponse || settlementAuthorityReady}
                           >
                             + {item}
@@ -7118,6 +7265,7 @@ export default function CaseWorkspace({
                     <div
                       className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4"
                       data-intake-tour-target="intake-latest-exchange"
+                      data-section-nav-target="intake-interview"
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div>
@@ -7275,6 +7423,7 @@ export default function CaseWorkspace({
                     <div
                       className="relative mt-4 rounded-2xl border border-amber-200/20 bg-amber-200/[0.035] p-2"
                       data-intake-tour-target="intake-question-box"
+                      data-guided-step="intake-composer"
                     >
                       <div className="mb-2 px-1">
                         <label className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-amber-200">
@@ -7365,7 +7514,7 @@ export default function CaseWorkspace({
                               key={item}
                               type="button"
                               className="shrink-0 rounded-full border border-white/10 bg-black/24 px-3 py-2 text-xs font-semibold text-white/74"
-                              onClick={() => setQuestion(item)}
+                              onClick={() => applySuggestedIntakeQuestion(item)}
                               disabled={awaitingSettlementResponse || settlementAuthorityReady}
                             >
                               + {item}
@@ -7410,7 +7559,10 @@ export default function CaseWorkspace({
                       ) : (
               <>
               <div id="courtroom" className="space-y-4 pb-24 sm:hidden">
-                <section className="arena-surface overflow-hidden border-white/10 bg-white/[0.025]">
+                <section
+                  className="arena-surface overflow-hidden border-white/10 bg-white/[0.025]"
+                  data-section-nav-target="court-hearing"
+                >
                   <div className="p-4">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -7442,7 +7594,10 @@ export default function CaseWorkspace({
                   </div>
                 </section>
 
-                <section className="arena-surface border-white/10 bg-white/[0.025]">
+                <section
+                  className="arena-surface border-white/10 bg-white/[0.025]"
+                  data-section-nav-target="court-transcript"
+                >
                   <div className="space-y-4 p-4">
                     <div className="flex items-center gap-3">
                       <CourtPortraitAvatar
@@ -7539,7 +7694,10 @@ export default function CaseWorkspace({
                 {renderWitnessStand("mobile")}
 
                 {lastOpponentCourtEntry ? (
-                  <section className="rounded-2xl border border-rose-400/35 bg-rose-950/18 p-4">
+                  <section
+                    className="rounded-2xl border border-rose-400/35 bg-rose-950/18 p-4"
+                    data-guided-step="courtroom-opponent-opening"
+                  >
                     <div className="flex items-start gap-3">
                       <CourtPortraitAvatar
                         src={opponentCourtPortrait}
@@ -7627,7 +7785,12 @@ export default function CaseWorkspace({
 
                 {!isVerdict && !showCourtroomWaitingCard && !activeWitness ? (
                   <section className="rounded-2xl border border-sky-300/30 bg-sky-500/[0.055] p-4">
-                    <form className="min-w-0 space-y-4" onSubmit={handleCourtroomSubmit}>
+                    <form
+                      className="min-w-0 space-y-4"
+                      onSubmit={handleCourtroomSubmit}
+                      data-guided-step="courtroom-composer"
+                      data-section-nav-target="court-move"
+                    >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <div className="flex items-center gap-3">
@@ -7653,7 +7816,10 @@ export default function CaseWorkspace({
                           Fact Sheet
                         </button>
                       </div>
-                      <div className="relative">
+                      <div
+                        className="relative"
+                        data-guided-step="courtroom-entry-composer"
+                      >
                         <textarea
                           className="textarea textarea-bordered arena-textarea arena-field h-32 min-w-0 w-full text-slate-100"
                           placeholder="Your argument to the judge..."
@@ -7714,7 +7880,10 @@ export default function CaseWorkspace({
               </div>
 
               <div className="hidden space-y-4 sm:block">
-                <section className="arena-surface overflow-hidden border-white/10 bg-white/[0.025]">
+                <section
+                  className="arena-surface overflow-hidden border-white/10 bg-white/[0.025]"
+                  data-section-nav-target="court-hearing"
+                >
                   <div className="grid gap-0 lg:grid-cols-2">
                     <div className="space-y-4 p-4 sm:p-6">
                       <div className="flex items-center gap-3">
@@ -7825,7 +7994,11 @@ export default function CaseWorkspace({
                 {renderWitnessStand("desktop")}
 
                 {lastOpponentCourtEntry ? (
-                  <section className="rounded-2xl border border-rose-400/35 bg-rose-950/18 p-4 sm:p-5">
+                  <section
+                    className="rounded-2xl border border-rose-400/35 bg-rose-950/18 p-4 sm:p-5"
+                    data-guided-step="courtroom-opponent-opening"
+                    data-section-nav-target="court-transcript"
+                  >
                     <div className="flex items-start gap-3">
                       <CourtPortraitAvatar
                         src={opponentCourtPortrait}
@@ -7913,7 +8086,12 @@ export default function CaseWorkspace({
 
                 {!isVerdict && !showCourtroomWaitingCard && !activeWitness ? (
                   <section className="rounded-2xl border border-sky-300/30 bg-sky-500/[0.055] p-4 sm:p-5">
-                    <form className="min-w-0 space-y-4" onSubmit={handleCourtroomSubmit}>
+                    <form
+                      className="min-w-0 space-y-4"
+                      onSubmit={handleCourtroomSubmit}
+                      data-guided-step="courtroom-composer"
+                      data-section-nav-target="court-move"
+                    >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <div className="flex items-center gap-3">
@@ -7939,7 +8117,10 @@ export default function CaseWorkspace({
                           Fact Sheet
                         </a>
                       </div>
-                      <div className="relative">
+                      <div
+                        className="relative"
+                        data-guided-step="courtroom-entry-composer"
+                      >
                         <textarea
                           className="textarea textarea-bordered arena-textarea arena-field h-36 min-w-0 w-full text-slate-100"
                           placeholder="Your argument to the judge..."
@@ -8061,6 +8242,7 @@ export default function CaseWorkspace({
             {isVerdict && (
               <div
                 className={`arena-surface overflow-hidden border ${verdictStyle.card}`}
+                data-section-nav-target="verdict-ruling"
               >
                 <div
                   className={`relative bg-gradient-to-b ${verdictGlowClass} to-transparent p-4 sm:p-7`}
@@ -8112,14 +8294,23 @@ export default function CaseWorkspace({
                     </div>
                   </div>
 
-                  {analyticsMode === "solo" ? (
-                    <PostResolutionNextCaseCard
-                      caseSession={caseSession}
-                      hasArenaAccess={Boolean(apiConfig.hasArenaAccess)}
+                  <div data-section-nav-target="resolution-inspiration">
+                    <CurrentEventInspirationCard
+                      inspiration={caseSession.currentEventInspiration}
                     />
-                  ) : null}
 
-                  <section className="mt-5 rounded-2xl border border-amber-200/20 bg-black/22 p-4 sm:p-5">
+                    {analyticsMode === "solo" ? (
+                      <PostResolutionNextCaseCard
+                        caseSession={caseSession}
+                        hasArenaAccess={Boolean(apiConfig.hasArenaAccess)}
+                      />
+                    ) : null}
+                  </div>
+
+                  <section
+                    className="mt-5 rounded-2xl border border-amber-200/20 bg-black/22 p-4 sm:p-5"
+                    data-section-nav-target="verdict-report"
+                  >
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                       <div>
                         <div className="flex items-center gap-2">
@@ -8159,7 +8350,10 @@ export default function CaseWorkspace({
                     {caseReport.status === "failed" ? <p className="mt-3 text-sm text-rose-200">Generation did not finish. Nothing was published; you can safely retry.</p> : null}
                   </section>
 
-                  <div className="mt-5 grid gap-4 md:grid-cols-2">
+                  <div
+                    className="mt-5 grid gap-4 md:grid-cols-2"
+                    data-section-nav-target="verdict-performance"
+                  >
                     <div className="rounded-2xl border border-emerald-300/25 bg-emerald-300/[0.055] p-4">
                       <div className="flex items-center gap-3">
                         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-emerald-300/30 bg-emerald-300/12 text-emerald-100">
@@ -8321,7 +8515,7 @@ export default function CaseWorkspace({
                   </div>
                 </section>
 
-                <section id="fact-sheet-details" className="arena-surface">
+                <section id="fact-sheet-details" className="arena-surface" data-section-nav-target="workspace-case-file">
                   <div className="p-4 sm:p-6">
                     <p className="arena-kicker">Case File Progress</p>
                     <p className="mt-3 text-sm font-semibold text-white">
@@ -8456,7 +8650,7 @@ export default function CaseWorkspace({
             ) : isSettlement || isSettled ? null : (
               <>
             {workspaceNotice}
-            <div id="fact-sheet-details" className="arena-surface">
+            <div id="fact-sheet-details" className="arena-surface" data-section-nav-target="workspace-case-file">
               <div className="p-4 sm:p-6">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                   <div>
@@ -8851,39 +9045,50 @@ export default function CaseWorkspace({
         aria-hidden={!showMobileFactSheetDialog}
         aria-label={`${activeMobileFactSheetSection?.title || "Case file"} reference`}
       >
-        <div className="modal-box flex max-h-[92vh] overflow-hidden rounded-t-2xl border border-white/[0.07] bg-[#070908] p-0 text-white shadow-2xl sm:h-[min(54rem,calc(100vh-2rem))] sm:w-[min(46rem,calc(100vw-3rem))] sm:max-w-none sm:flex-col sm:rounded-2xl">
+        <div className="modal-box flex max-h-[90dvh] w-full flex-col overflow-hidden rounded-t-3xl border border-white/[0.07] bg-[#070908] p-0 text-white shadow-2xl sm:h-[min(54rem,calc(100vh-2rem))] sm:w-[min(46rem,calc(100vw-3rem))] sm:max-w-none sm:rounded-2xl">
           {activeMobileFactSheetSection ? (
             <>
-              <div className="border-b border-white/[0.06] p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-amber-200">
-                    Case file reference
-                  </p>
-                  <h2 className="mt-1 text-xl font-semibold leading-tight text-white">
-                    {activeMobileFactSheetSection.title}
-                  </h2>
+              <div className="shrink-0 border-b border-white/[0.06] px-4 pb-4 pt-2 sm:p-5">
+                <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-white/18 sm:hidden" />
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-amber-200">
+                      Case file reference
+                    </p>
+                    <div className="mt-1 flex min-w-0 items-center gap-2">
+                      <h2 className="truncate text-xl font-semibold leading-tight text-white">
+                        {activeMobileFactSheetSection.title}
+                      </h2>
+                      <span className="shrink-0 rounded-full border border-white/10 bg-white/[0.035] px-2 py-1 text-[0.65rem] font-semibold text-white/48">
+                        {activeMobileFactSheetItems.length}{" "}
+                        {activeMobileFactSheetItems.length === 1 ? "point" : "points"}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-circle btn-ghost btn-sm shrink-0 border border-white/[0.06] text-white/65 hover:border-white/12 hover:bg-white/[0.04] hover:text-white"
+                    onClick={() => setShowMobileFactSheetDialog(false)}
+                    aria-label="Close case file reference"
+                  >
+                    <HeroIcons.XMarkIcon className="h-5 w-5" aria-hidden="true" />
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  className="btn btn-circle btn-ghost btn-sm shrink-0 border border-white/[0.06] text-white/65 hover:border-white/12 hover:bg-white/[0.04] hover:text-white"
-                  onClick={() => setShowMobileFactSheetDialog(false)}
-                  aria-label="Close case file reference"
-                >
-                  <HeroIcons.XMarkIcon className="h-5 w-5" aria-hidden="true" />
-                </button>
+                <div className="mt-4 grid grid-cols-4 gap-2">
+                  {factSheetSections.map((section) =>
+                    renderMobileFactSheetButton(section, "min-w-0")
+                  )}
+                </div>
               </div>
-              <div className="mt-4 grid grid-cols-4 gap-1.5 sm:gap-2">
-                {factSheetSections.map((section) => renderMobileFactSheetButton(section))}
-              </div>
-            </div>
 
-            <div className="flex max-h-[48vh] flex-col p-4 sm:min-h-0 sm:flex-1 sm:max-h-none sm:p-5">
-              <p className="text-sm italic leading-6 text-white/52">
-                {activeMobileFactSheetSection.description}
-              </p>
+            <div className="arena-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-4 sm:p-5">
+              <div className="rounded-xl border border-white/[0.07] bg-white/[0.025] px-3.5 py-3">
+                <p className="text-sm italic leading-6 text-white/56">
+                  {activeMobileFactSheetSection.description}
+                </p>
+              </div>
               {activeMobileFactSheetItems.length > 0 ? (
-                <div className="arena-scroll mt-4 min-h-[21.25rem] space-y-3 overflow-y-auto pr-1 sm:h-[24rem] sm:min-h-0 sm:flex-none">
+                <div className="mt-4 space-y-3">
                   {activeMobileFactSheetItems.map((item, itemIndex) => {
                     const bulletTone = getFactSheetItemTone(
                       activeMobileFactSheetSection.key,
@@ -8892,7 +9097,7 @@ export default function CaseWorkspace({
                     return (
                       <div
                         key={`${activeMobileFactSheetSection.key}-dialog-${itemIndex}`}
-                        className="flex min-h-[3.85rem] gap-3 rounded-xl border border-white/10 bg-white/[0.025] p-3"
+                        className="flex gap-3 rounded-xl border border-white/10 bg-white/[0.025] p-4"
                       >
                         <span
                           className={`mt-2 h-1.5 w-1.5 shrink-0 rounded-full ${
@@ -9294,6 +9499,10 @@ export default function CaseWorkspace({
         isOpen={showSettlementTour && isSettlement}
         onComplete={() => setShowSettlementTour(false)}
         analyticsContext={tourAnalyticsContext}
+      />
+      <MobileSectionNavigator
+        sections={workspaceSectionNavigatorSections}
+        suspended={showIntakeTour || showSettlementTour}
       />
       {!isSettlement && !isSettled && Number.isFinite(Number(displayedSuccessChance)) ? (
         <Tooltip

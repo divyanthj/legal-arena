@@ -544,9 +544,19 @@ const caseSessionSchema = mongoose.Schema(
       type: Number,
       default: 1,
     },
+    newcomerAssist: {
+      type: Boolean,
+      default: false,
+      private: true,
+    },
     caseCountry: {
       code: { type: String, trim: true, uppercase: true, default: "" },
       name: { type: String, trim: true, default: "" },
+    },
+    currentEventProvenance: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+      private: true,
     },
     playerSide: {
       type: String,

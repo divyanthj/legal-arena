@@ -14,6 +14,7 @@ const [
   caseWorkspace,
   purchaseSuccess,
   adminAccess,
+  courtroomRoute,
 ] = await Promise.all([
   read("../models/User.js"),
   read("../models/CaseSession.js"),
@@ -25,15 +26,21 @@ const [
   read("../components/legal-arena/CaseWorkspace.js"),
   read("../app/purchase-success/PurchaseSuccessRedirect.js"),
   read("../libs/admin.js"),
+  read("../app/api/cases/[caseId]/courtroom/route.js"),
 ]);
 
 assert.match(userModel, /soloTrial:\s*\{/);
 assert.match(userModel, /enum: \["available", "active", "resolved"\]/);
 assert.match(caseModel, /continuationOfCaseId/);
+assert.match(caseModel, /newcomerAssist:\s*\{/);
 assert.match(caseModel, /partialFilterExpression/);
 assert.match(casesRoute, /claimEvergreenSoloTrial/);
 assert.match(casesRoute, /access\.requiresTrialClaim \? 1/);
+assert.match(casesRoute, /newcomerAssist: Boolean\(access\.requiresTrialClaim\)/);
 assert.match(casesRoute, /CaseSession\.exists/);
+assert.match(courtroomRoute, /!access\.hasArenaAccess/);
+assert.match(courtroomRoute, /access\.soloTrial\?\.caseSessionId/);
+assert.match(courtroomRoute, /caseSession\.newcomerAssist = true/);
 
 assert.match(nextRoute, /getFullArenaAccessForSession/);
 assert.match(nextRoute, /\["verdict", "settled"\]/);
@@ -49,11 +56,12 @@ assert.match(dashboard, /free_trial_confirmation_purchase_clicked/);
 assert.match(dashboard, /Unlock Unlimited —/);
 assert.match(dashboard, /freeTrialConfirmed: true/);
 assert.match(dashboard, /Once it is successfully created, your free-case allowance is used/);
-assert.match(landingPage, /Your first case is now free to play\./);
-assert.match(landingPage, /Play Your Free Case/);
 assert.match(landingPage, /Play 1 Case Free/);
-assert.match(landingPage, /evergreen_free_case_banner/);
-assert.match(landingPage, /<GiftIcon className="h-5 w-5"/);
+assert.match(landingPage, /New category — Headlines/);
+assert.match(landingPage, /data-landing-source="headlines_launch_banner"/);
+assert.match(landingPage, /<NewspaperIcon className="h-5 w-5"/);
+assert.doesNotMatch(landingPage, /Your first case is now free to play\./);
+assert.doesNotMatch(landingPage, /evergreen_free_case_banner/);
 assert.match(nextCard, /Fight the Next Case/);
 assert.match(nextCard, /Unlock Unlimited/);
 assert.match(nextCard, /post-resolution-card__layout/);
