@@ -152,7 +152,7 @@ assert.deepEqual(
     },
     brief
   ),
-  ["Elon Musk", "ACME Corp.", "$14.7 million"]
+  ["Elon Musk", "ACME Corp."]
 );
 assert.deepEqual(
   findCurrentEventLeaks(

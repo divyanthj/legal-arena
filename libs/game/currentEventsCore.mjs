@@ -1,5 +1,5 @@
 export const CURRENT_EVENT_DISCLAIMER =
-  "Inspired by recent reporting. Every party name and identifying case detail was fictionalized; this simulation does not determine or imply the truth of allegations involving real people.";
+  "Inspired by recent reporting. Every real-world party and organization name was fictionalized; this simulation does not determine or imply the truth of allegations involving real people.";
 
 export const cleanCurrentEventText = (value = "", limit = 2000) =>
   String(value || "").replace(/\s+/g, " ").trim().slice(0, limit);
@@ -130,7 +130,7 @@ export const rankCurrentEventCandidates = (
     .sort((left, right) => right.score - left.score);
 
 export const collectCurrentEventProtectedTerms = (brief = {}) =>
-  [...(brief.namedEntities || []), ...(brief.identifyingDetails || [])]
+  [...(brief.namedEntities || [])]
     .map((item) => cleanCurrentEventText(item, 300))
     .filter((item) => {
       const normalized = normalizeForComparison(item);

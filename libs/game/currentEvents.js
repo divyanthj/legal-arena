@@ -202,7 +202,7 @@ const buildDetailedEventBrief = async ({
         "Require two independent credible reports, or an authoritative primary source plus reliable reporting.",
         "The event must support a balanced two-sided legal dispute involving an individual, company, official, politician, agency, or government.",
         "Do not decide whether reported allegations are true.",
-        "Extract every real person, organization, office title, exact place, quotation, date, amount, acronym, and distinctive phrase that must not appear in the fictional case.",
+        "Put only real person, party, and organization names in namedEntities. Put office titles, places, quotations, dates, amounts, acronyms, and distinctive phrases in identifyingDetails; these details may remain in the fictional case.",
       ],
       outputSchema: {
         eventDate: "string",
@@ -324,7 +324,7 @@ export const repairCurrentEventAnonymization = async ({
       "You anonymize a fictional legal-strategy case. Return the complete corrected case as the top-level JSON object only: do not wrap it in correctedCase, repairedCase, generatedCase, case, result, or data. Preserve every existing key, array entry, legal controversy, balance, complexity, and evidence link.",
     userPrompt: JSON.stringify({
       task:
-        "Replace every protected real-world identifier with invented country-plausible details. Do not mention, mask, initial, paraphrase closely, or hint at the protected terms.",
+        "Replace every protected real-world person, party, and organization name with an invented country-plausible name. Preserve dates, amounts, locations, quotations, and other case details unless changing one is necessary for readability.",
       protectedTerms: collectCurrentEventProtectedTerms(brief),
       detectedLeaks: leaks,
       generatedCase,

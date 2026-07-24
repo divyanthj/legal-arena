@@ -38,7 +38,7 @@ export const CASE_ASSEMBLY_TIPS = [
 ];
 
 export const HEADLINES_CASE_ASSEMBLY_TIP =
-  "Headlines matters fictionalize every identity and identifying detail. Inspiration sources are revealed only after the case is resolved.";
+  "Headlines matters fictionalize real-world party and organization names. Inspiration sources are revealed only after the case is resolved.";
 
 export const getCaseAssemblyTips = (categorySlug = "") =>
   categorySlug === "current-events"

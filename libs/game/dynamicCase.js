@@ -573,8 +573,8 @@ export const generateDynamicCaseState = async ({
         "Treat caseCountry as immutable input. Do not move the matter to another country or return a competing country value.",
         ...(isCurrentEvents
           ? [
-              "Closely adapt the supplied currentEventBrief into a fictional case, but never repeat or closely paraphrase a real name, organization, office title, exact location, quotation, date, amount, acronym, or distinctive phrase from it.",
-              "Invent every party and identifying detail. Do not use initials or thin disguises for real people.",
+              "Closely adapt the supplied currentEventBrief into a fictional case, but replace every real person, party, and organization name with an invented country-plausible name.",
+              "Do not use initials or thin disguises for real people. Dates, amounts, locations, quotations, and other case details may be preserved.",
               "Treat every unresolved allegation in the source event as contested. Neither party story is objective truth.",
               "Keep primaryCategory exactly current-events and set underlyingCategorySlug to the supplied legal track.",
             ]
@@ -679,7 +679,6 @@ export const generateDynamicCaseState = async ({
             underlyingCategorySlug: currentEventBrief.underlyingCategorySlug,
             reportedUncertainties: currentEventBrief.reportedUncertainties,
             protectedNamedEntities: currentEventBrief.namedEntities,
-            protectedIdentifyingDetails: currentEventBrief.identifyingDetails,
           }
         : null,
     }),
@@ -728,7 +727,7 @@ export const generateDynamicCaseState = async ({
     const remainingLeaks = findCurrentEventLeaks(normalized, currentEventBrief);
     if (remainingLeaks.length) {
       const error = new Error(
-        "The live event could not be anonymized safely. Please generate another Headlines case."
+        "Some real-world names could not be replaced. Please generate another Headlines case."
       );
       error.status = 503;
       error.code = "current_event_anonymization_failed";
