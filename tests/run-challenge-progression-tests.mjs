@@ -279,6 +279,11 @@ assert.match(gameStoreSource, /winner: "opponent"/);
 assert.match(gameStoreSource, /You quit during court, so the court enters judgment for the other side\./);
 assert.match(
   gameStoreSource,
+  /const playerIsDefendant = getPlayerSide\(caseSession\) === "opponent";[\s\S]*outcomeMetrics:\s*\{[\s\S]*disposition: playerIsDefendant \? "full_relief" : "all_claims_denied"[\s\S]*amountClaimed: null[\s\S]*amountAwarded: null[\s\S]*expectedLiabilityBefore: null[\s\S]*actualLiability: null[\s\S]*currency: ""/,
+  "Solo courtroom forfeits should persist a complete, side-aware verdict outcome."
+);
+assert.match(
+  gameStoreSource,
   /const \{ evaluateCompletedCase \} = await import\("@\/libs\/game\/awards\/service"\);[\s\S]*await evaluateCompletedCase\(\{ caseSession \}\)/
 );
 assert.match(gameStoreSource, /This case already has a final verdict\./);

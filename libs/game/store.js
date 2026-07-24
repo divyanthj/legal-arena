@@ -1474,6 +1474,8 @@ export const exitCaseSessionForUser = async ({ userId, caseId }) => {
   }
 
   if (caseSession.status === "courtroom") {
+    const playerIsDefendant = getPlayerSide(caseSession) === "opponent";
+
     caseSession.status = "verdict";
     caseSession.completedAt = caseSession.completedAt || new Date();
     caseSession.verdict = {
@@ -1483,6 +1485,14 @@ export const exitCaseSessionForUser = async ({ userId, caseId }) => {
         "You quit during court, so the court enters judgment for the other side.",
       highlights: [],
       concerns: ["You ended the courtroom phase before the case was complete."],
+      outcomeMetrics: {
+        disposition: playerIsDefendant ? "full_relief" : "all_claims_denied",
+        amountClaimed: null,
+        amountAwarded: null,
+        expectedLiabilityBefore: null,
+        actualLiability: null,
+        currency: "",
+      },
       finalScore: {
         player: caseSession.score?.player || 0,
         opponent: caseSession.score?.opponent || 0,
