@@ -45,7 +45,8 @@ assert.match(courtroomRoute, /caseSession\.newcomerAssist = true/);
 assert.match(nextRoute, /getFullArenaAccessForSession/);
 assert.match(nextRoute, /\["verdict", "settled"\]/);
 assert.match(nextRoute, /continuationOfCaseId: sourceCase\._id/);
-assert.match(nextRoute, /categorySlug: sourceCase\.primaryCategory/);
+assert.match(nextRoute, /categorySlug: recommendation\.categorySlug/);
+assert.match(nextRoute, /complexity: recommendation\.complexity/);
 assert.match(nextRoute, /countryCode: sourceCase\.caseCountry\?\.code/);
 
 assert.match(dashboard, /Start Your Free Case/);
@@ -62,7 +63,7 @@ assert.match(landingPage, /data-landing-source="headlines_launch_banner"/);
 assert.match(landingPage, /<NewspaperIcon className="h-5 w-5"/);
 assert.doesNotMatch(landingPage, /Your first case is now free to play\./);
 assert.doesNotMatch(landingPage, /evergreen_free_case_banner/);
-assert.match(nextCard, /Fight the Next Case/);
+assert.match(nextCard, /Take Recommended Case/);
 assert.match(nextCard, /Unlock Unlimited/);
 assert.match(nextCard, /post-resolution-card__layout/);
 assert.match(nextCard, /continuationCaseId=\{sourceCaseId\}/);

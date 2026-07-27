@@ -42,6 +42,7 @@ export default function MobileSectionNavigator({
   sections = [],
   minimumSections = 3,
   suspended = false,
+  onNavigate,
 }) {
   const [state, setState] = useState({
     activeKey: "",
@@ -156,6 +157,7 @@ export default function MobileSectionNavigator({
     const target = findVisibleSectionTarget(section.target, window);
     if (!target) return;
 
+    onNavigate?.(section);
     pulseHaptic("selection", window);
     scrollGuidedTarget(target, {
       windowObject: window,

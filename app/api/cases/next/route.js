@@ -6,9 +6,73 @@ import {
   createCaseSession,
   getCaseSessionDocumentForUser,
 } from "@/libs/game/store";
+import { getNextCaseRecommendationForUser } from "@/libs/game/nextCaseRecommendationService";
 
 const isResolvedCase = (caseSession) =>
   ["verdict", "settled"].includes(caseSession?.status);
+
+const getResolvedSourceCase = async ({ userId, sourceCaseId }) => {
+  if (!sourceCaseId) {
+    return {
+      error: NextResponse.json(
+        { error: "Source case is required." },
+        { status: 400 }
+      ),
+    };
+  }
+
+  const sourceCase = await getCaseSessionDocumentForUser({
+    userId,
+    caseId: sourceCaseId,
+  });
+  if (!sourceCase) {
+    return {
+      error: NextResponse.json({ error: "Case not found." }, { status: 404 }),
+    };
+  }
+  if (!isResolvedCase(sourceCase)) {
+    return {
+      error: NextResponse.json(
+        { error: "Finish this case before choosing the next challenge." },
+        { status: 409 }
+      ),
+    };
+  }
+
+  return { sourceCase };
+};
+
+export async function GET(req) {
+  const { session, error: authError } = await getRequestSession(req);
+  if (authError) return authError;
+  if (!session?.user?.id) {
+    return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+  }
+
+  try {
+    const sourceCaseId = String(
+      req.nextUrl.searchParams.get("sourceCaseId") || ""
+    ).trim();
+    const sourceResult = await getResolvedSourceCase({
+      userId: session.user.id,
+      sourceCaseId,
+    });
+    if (sourceResult.error) return sourceResult.error;
+
+    const recommendation = await getNextCaseRecommendationForUser({
+      userId: session.user.id,
+      userProfile: session.user,
+    });
+
+    return NextResponse.json({ recommendation });
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json(
+      { error: error?.message || "Could not prepare the next challenge." },
+      { status: 500 }
+    );
+  }
+}
 
 export async function POST(req) {
   const { session, error: authError } = await getRequestSession(req);
@@ -30,23 +94,12 @@ export async function POST(req) {
   try {
     const body = await req.json();
     const sourceCaseId = String(body?.sourceCaseId || "").trim();
-    if (!sourceCaseId) {
-      return NextResponse.json({ error: "Source case is required." }, { status: 400 });
-    }
-
-    const sourceCase = await getCaseSessionDocumentForUser({
+    const sourceResult = await getResolvedSourceCase({
       userId: session.user.id,
-      caseId: sourceCaseId,
+      sourceCaseId,
     });
-    if (!sourceCase) {
-      return NextResponse.json({ error: "Case not found." }, { status: 404 });
-    }
-    if (!isResolvedCase(sourceCase)) {
-      return NextResponse.json(
-        { error: "Finish this case before starting a similar matter." },
-        { status: 409 }
-      );
-    }
+    if (sourceResult.error) return sourceResult.error;
+    const sourceCase = sourceResult.sourceCase;
 
     const existing = await CaseSession.findOne({
       userId: session.user.id,
@@ -59,16 +112,25 @@ export async function POST(req) {
       });
     }
 
+    const recommendation = await getNextCaseRecommendationForUser({
+      userId: session.user.id,
+      userProfile: session.user,
+    });
+
     try {
       const caseSession = await createCaseSession({
         userId: session.user.id,
         userProfile: session.user,
-        categorySlug: sourceCase.primaryCategory,
-        complexity: Math.min(5, (Number(sourceCase.complexity) || 1) + 1),
+        categorySlug: recommendation.categorySlug,
+        complexity: recommendation.complexity,
         countryCode: sourceCase.caseCountry?.code || "US",
         continuationOfCaseId: sourceCase._id,
       });
-      return NextResponse.json({ caseSession, reused: false });
+      return NextResponse.json({
+        caseSession,
+        recommendation,
+        reused: false,
+      });
     } catch (error) {
       if (Number(error?.code) === 11000) {
         const continuedCase = await CaseSession.findOne({
