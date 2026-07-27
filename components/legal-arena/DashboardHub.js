@@ -2206,15 +2206,6 @@ export default function DashboardHub({
                     <HeroIcons.WrenchScrewdriverIcon className="h-6 w-6" aria-hidden="true" />
                   </Link>
                 ) : null}
-                <button
-                  type="button"
-                  className="flex h-12 w-12 items-center justify-center rounded-2xl text-white/54 transition hover:bg-white/[0.04] hover:text-white"
-                  onClick={() => requestDashboardTour("desktop_sidebar")}
-                  aria-label="Take the quick tour"
-                  title="Quick tour"
-                >
-                  <HeroIcons.Cog6ToothIcon className="h-6 w-6" aria-hidden="true" />
-                </button>
               </div>
             </aside>
 
@@ -2579,6 +2570,16 @@ export default function DashboardHub({
                               <HeroIcons.ChevronRightIcon className="h-6 w-6" aria-hidden="true" />
                             </button>
                           )}
+                          <button
+                            type="button"
+                            className="inline-flex min-h-[3.5rem] w-full max-w-md items-center justify-center gap-3 rounded-xl border border-white/14 bg-white/[0.045] px-5 text-base font-semibold text-white transition hover:border-amber-200/35 hover:bg-amber-200/[0.08] hover:text-amber-100"
+                            onClick={() => requestDashboardTour("desktop_hero")}
+                          >
+                            <HeroIcons.BoltIcon className="h-5 w-5 text-amber-200" aria-hidden="true" />
+                            <span>
+                              New here? <span className="text-white/62">Take the quick tour</span>
+                            </span>
+                          </button>
                           <a
                             href="#case-library"
                             className="inline-flex items-center gap-3 text-sm font-semibold text-white/68 transition hover:text-white"
