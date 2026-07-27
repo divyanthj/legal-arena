@@ -83,6 +83,7 @@ export default async function Dashboard() {
       categories={toClientJSON(dashboardData.categories)}
       onboarding={toClientJSON(dashboardData.onboarding)}
       progression={toClientJSON(dashboardData.progression)}
+      nextCaseRecommendation={toClientJSON(dashboardData.nextCaseRecommendation)}
       dashboardEncouragementNote={dashboardData.dashboardEncouragementNote}
       challenges={toClientJSON(challenges)}
       challengesLoadTimedOut={challengesLoadTimedOut}

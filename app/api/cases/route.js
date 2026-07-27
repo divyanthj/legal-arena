@@ -58,6 +58,7 @@ export async function GET(req) {
       categories: dashboardData.categories,
       onboarding: dashboardData.onboarding,
       progression: dashboardData.progression,
+      nextCaseRecommendation: dashboardData.nextCaseRecommendation,
     });
   } catch (error) {
     console.error(error);

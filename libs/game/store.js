@@ -32,6 +32,10 @@ import {
   normalizeProgression,
 } from "./progression";
 import { DEFAULT_CATEGORY_SLUG } from "./categories";
+import {
+  buildNextCaseRecommendation,
+  getDynamicDifficultyLimits,
+} from "./nextCaseRecommendation.mjs";
 import { getNegotiationProfile } from "./negotiationProfile.mjs";
 import {
   ensureStoredDashboardEncouragementNote,
@@ -68,42 +72,21 @@ const stripUsageEntries = (usage = {}) => {
   }, {});
 };
 
-const getPlayerLevelFromProgression = (progression = {}) =>
-  Math.max(1, Math.floor((Number(progression.overallXp) || 0) / 250) + 1);
-
-const getDynamicComplexityCapForPlayerLevel = (playerLevel = 1) => {
-  const level = Math.max(1, Number(playerLevel) || 1);
-
-  if (level <= 2) return 1;
-  if (level <= 5) return 2;
-  if (level <= 8) return 3;
-  if (level <= 12) return 4;
-  return 5;
-};
-
 const getEffectiveDynamicComplexity = ({
   progression,
   categorySlug = DEFAULT_CATEGORY_SLUG,
   requestedComplexity = 1,
 } = {}) => {
   const normalizedProgression = normalizeProgression(progression);
-  const eligibleComplexity = getEligibleComplexityForCategory(
-    normalizedProgression,
+  const limits = getDynamicDifficultyLimits({
+    progression: normalizedProgression,
     categorySlug
-  );
-  const playerLevel = getPlayerLevelFromProgression(normalizedProgression);
-  const playerLevelCap = getDynamicComplexityCapForPlayerLevel(playerLevel);
+  });
   const requested = Math.max(1, Math.min(5, Number(requestedComplexity) || 1));
-  const capableComplexity = Math.min(eligibleComplexity, playerLevelCap);
-  const challengeComplexityCap = Math.min(5, capableComplexity + 1);
 
   return {
-    complexity: Math.min(requested, challengeComplexityCap),
-    eligibleComplexity,
-    playerLevel,
-    playerLevelCap,
-    capableComplexity,
-    challengeComplexityCap,
+    complexity: Math.min(requested, limits.challengeComplexityCap),
+    ...limits,
   };
 };
 const factSheetHasVisibleContent = (factSheet = {}) =>
@@ -1548,14 +1531,24 @@ export const listDashboardDataForUser = async (userId, userProfile = null) => {
         }
       : null,
   });
+  const categories = listCategoryOptions();
+  const progression = normalizeProgression(user?.progression);
+  const nextCaseRecommendation = buildNextCaseRecommendation({
+    cases,
+    progression,
+    categories,
+    playerId: String(userId || ""),
+    defaultCategorySlug: DEFAULT_CATEGORY_SLUG,
+  });
 
   return {
     cases,
     templates,
-    categories: listCategoryOptions(),
+    categories,
     onboarding: normalizeOnboarding(user?.onboarding),
-    progression: normalizeProgression(user?.progression),
+    progression,
     dashboardEncouragementNote,
+    nextCaseRecommendation,
   };
 };
 

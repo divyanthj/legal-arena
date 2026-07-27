@@ -17,6 +17,10 @@ import {
   createGuidedInteractionController,
   isGuidedMobileViewport,
 } from "@/libs/guidedInteractionCore.mjs";
+import {
+  clampCaseLibraryDifficulty,
+  getCaseLibraryChallengeCap,
+} from "@/libs/game/caseLibraryFocus.mjs";
 import { DevelopmentAccessModal } from "@/components/legal-arena/DevelopmentAccessGate";
 import EarlyAccessCheckoutButton from "@/components/legal-arena/EarlyAccessCheckoutButton";
 import CaseAssemblyOverlay from "@/components/legal-arena/CaseAssemblyOverlay";
@@ -1407,6 +1411,7 @@ export default function DashboardHub({
   categories,
   onboarding = {},
   progression,
+  nextCaseRecommendation = null,
   dashboardEncouragementNote = "",
   challenges = [],
   challengesLoadTimedOut = false,
@@ -1433,7 +1438,9 @@ export default function DashboardHub({
     selectionSource: countrySelectionSource,
     selectCountry,
   } = useCaseCountrySelection(detectedCountryCode, detectedCountrySource);
-  const [selectedCategory, setSelectedCategory] = useState(categories[0]?.slug || "");
+  const [selectedCategory, setSelectedCategory] = useState(
+    nextCaseRecommendation?.categorySlug || categories[0]?.slug || ""
+  );
   const [activeTemplateIndex, setActiveTemplateIndex] = useState(0);
   const [showPlayableOnly, setShowPlayableOnly] = useState(true);
   const [showPaywallModal, setShowPaywallModal] = useState(false);
@@ -1441,16 +1448,24 @@ export default function DashboardHub({
   const [creating, setCreating] = useState(false);
   const [caseAssembly, setCaseAssembly] = useState(null);
   const [caseLibrarySearch, setCaseLibrarySearch] = useState("");
-  const [selectedDifficulty, setSelectedDifficulty] = useState(1);
+  const [selectedDifficulty, setSelectedDifficulty] = useState(
+    Math.max(1, Number(nextCaseRecommendation?.complexity) || 1)
+  );
   const [caseArchiveTab, setCaseArchiveTab] = useState("ongoing");
   const [pvpDocketTab, setPvpDocketTab] = useState("needs-response");
   const [showAllCaseCategories, setShowAllCaseCategories] = useState(false);
+  const [showCaseCategoryChooser, setShowCaseCategoryChooser] = useState(false);
+  const [caseLibraryFocusEpoch, setCaseLibraryFocusEpoch] = useState(0);
   const [lawyerSearch, setLawyerSearch] = useState("");
   const [searchedLawyers, setSearchedLawyers] = useState(null);
   const [lawyerSearchLoading, setLawyerSearchLoading] = useState(false);
   const [isMobileActivationViewport, setIsMobileActivationViewport] = useState(false);
   const dashboardViewedRef = useRef(false);
+  const recommendationViewedRef = useRef(false);
   const guidedInteractionRef = useRef(null);
+  const caseLibraryFocusRef = useRef(null);
+  const caseLibraryHeadingRef = useRef(null);
+  const directCaseLibraryHashHandledRef = useRef(false);
   if (!guidedInteractionRef.current) {
     guidedInteractionRef.current = createGuidedInteractionController();
   }
@@ -1539,6 +1554,10 @@ export default function DashboardHub({
   const selectedCategoryMeta =
     categories.find((category) => category.slug === selectedCategory) || null;
   const selectedCategoryTitle = selectedCategoryMeta?.title || "All cases";
+  const SelectedCategoryIcon =
+    categoryIconMap[selectedCategory] || HeroIcons.Squares2X2Icon;
+  const selectedCategoryIsRecommended =
+    selectedCategory === nextCaseRecommendation?.categorySlug;
   const mobileFeaturedCategories = useMemo(
     () =>
       [...categories]
@@ -1595,10 +1614,30 @@ export default function DashboardHub({
   const selectedCategoryProgress = categoryProgress || { unlockedComplexity: 1, completedCases: 0 };
   const selectedCategoryCap = Math.max(1, selectedCategoryProgress.unlockedComplexity || 1);
   const selectedCapableComplexity = Math.min(playerComplexityCap, selectedCategoryCap);
-  const selectedChallengeComplexityCap = Math.min(5, selectedCapableComplexity + 1);
+  const selectedChallengeComplexityCap = getCaseLibraryChallengeCap({
+    playerComplexityCap,
+    unlockedComplexity: selectedCategoryCap,
+  });
   const selectedDynamicDifficulty = Math.max(1, Math.min(5, Number(selectedDifficulty) || 1));
   const selectedDynamicDifficultyMeta = getDynamicDifficultyMeta(selectedDynamicDifficulty);
   const selectedDifficultyAvailable = selectedDynamicDifficulty <= selectedChallengeComplexityCap;
+  const recommendationCategoryTitle =
+    nextCaseRecommendation?.categoryTitle ||
+    categories.find(
+      (category) => category.slug === nextCaseRecommendation?.categorySlug
+    )?.title ||
+    "";
+  const recommendationShortHint =
+    nextCaseRecommendation?.kind === "level_up"
+      ? "A tougher version of a practice area you already know."
+      : nextCaseRecommendation?.kind === "broaden"
+      ? "A new practice area to widen your arena record."
+      : "A strong place to begin your arena record.";
+  const repeatedPairSelected = Boolean(
+    (nextCaseRecommendation?.recentRepeatCount || 0) >= 2 &&
+      selectedCategory === nextCaseRecommendation?.habitCategorySlug &&
+      selectedDynamicDifficulty === Number(nextCaseRecommendation?.habitComplexity)
+  );
   const playerRankLabel = currentLeaderboardEntry ? `#${currentLeaderboardEntry.rank}` : "Unranked";
   const playerRecordLabel = `${progression.wins || 0}-${progression.losses || 0}-${
     progression.draws || 0
@@ -1606,6 +1645,26 @@ export default function DashboardHub({
   const playerEncouragementNote =
     dashboardEncouragementNote ||
     `${userName}, every case you complete makes your advocacy sharper.`;
+
+  useEffect(() => {
+    if (
+      recommendationViewedRef.current ||
+      !nextCaseRecommendation?.categorySlug
+    ) {
+      return;
+    }
+
+    recommendationViewedRef.current = true;
+    trackGoal("next_case_recommendation_viewed", {
+      surface: "dashboard",
+      recommendation_kind: nextCaseRecommendation.kind,
+      reason_code: nextCaseRecommendation.reasonCode,
+      category: nextCaseRecommendation.categorySlug,
+      complexity: nextCaseRecommendation.complexity,
+      recent_repeat_count: nextCaseRecommendation.recentRepeatCount || 0,
+      has_active_case: Boolean(canResumeLastCase),
+    });
+  }, [canResumeLastCase, nextCaseRecommendation]);
 
   useEffect(() => {
     const detectedTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -1725,6 +1784,28 @@ export default function DashboardHub({
       });
       setShowPaywallModal(true);
       return;
+    }
+
+    if (dynamicStart && nextCaseRecommendation?.categorySlug) {
+      const followsRecommendation =
+        dynamicCategory === nextCaseRecommendation.categorySlug &&
+        Number(dynamicComplexity) === Number(nextCaseRecommendation.complexity);
+
+      trackGoal(
+        followsRecommendation
+          ? "next_case_recommendation_accepted"
+          : "next_case_recommendation_overridden",
+        {
+          surface: options.source || "case_library",
+          recommendation_kind: nextCaseRecommendation.kind,
+          reason_code: nextCaseRecommendation.reasonCode,
+          recommended_category: nextCaseRecommendation.categorySlug,
+          recommended_complexity: nextCaseRecommendation.complexity,
+          selected_category: dynamicCategory,
+          selected_complexity: dynamicComplexity,
+          recent_repeat_count: nextCaseRecommendation.recentRepeatCount || 0,
+        }
+      );
     }
 
     trackGoal("case_start_clicked", {
@@ -1993,13 +2074,39 @@ export default function DashboardHub({
     );
   };
 
-  const selectCaseCategory = (categorySlug = "") => {
+  const getClampedDifficultyForCategory = (
+    categorySlug,
+    difficulty = selectedDynamicDifficulty
+  ) => {
+    if (!categorySlug) return Math.max(1, Math.min(5, Number(difficulty) || 1));
+    const categoryStat =
+      progression.categoryStats.find((item) => item.categorySlug === categorySlug) ||
+      { unlockedComplexity: 1 };
+
+    return clampCaseLibraryDifficulty({
+      difficulty,
+      playerComplexityCap,
+      unlockedComplexity: categoryStat.unlockedComplexity,
+    });
+  };
+
+  const selectCaseCategory = (
+    categorySlug = "",
+    { preserveScroll = true } = {}
+  ) => {
+    const nextDifficulty = getClampedDifficultyForCategory(categorySlug);
     trackGoal("case_category_selected", {
       category: categorySlug || "all",
+      complexity: nextDifficulty,
       playable_only: showPlayableOnly,
+      matches_recommendation:
+        categorySlug === nextCaseRecommendation?.categorySlug &&
+        Number(nextDifficulty) === Number(nextCaseRecommendation?.complexity),
     });
     const preserveScrollPosition =
-      typeof window !== "undefined" && !isGuidedMobileViewport(window);
+      preserveScroll &&
+      typeof window !== "undefined" &&
+      !isGuidedMobileViewport(window);
     const scrollPosition =
       preserveScrollPosition
         ? { left: window.scrollX, top: window.scrollY }
@@ -2012,6 +2119,7 @@ export default function DashboardHub({
     const firstUnlockedIndex = nextTemplates.findIndex((template) => template.unlocked);
 
     setSelectedCategory(categorySlug);
+    setSelectedDifficulty(nextDifficulty);
     setActiveTemplateIndex(firstUnlockedIndex >= 0 ? firstUnlockedIndex : 0);
     guidedInteractionRef.current?.pulse("selection");
     guidedInteractionRef.current?.advance("solo-difficulty");
@@ -2024,6 +2132,134 @@ export default function DashboardHub({
         });
       });
     }
+
+    return nextDifficulty;
+  };
+
+  const focusCaseLibraryCategory = useCallback(
+    (
+      source = "case_library",
+      {
+        categorySlug = selectedCategory,
+        complexity = selectedDynamicDifficulty,
+        scroll = true,
+        pulse = true,
+      } = {}
+    ) => {
+      setShowCaseCategoryChooser(false);
+      setCaseLibraryFocusEpoch((current) => current + 1);
+
+      if (pulse) {
+        guidedInteractionRef.current?.pulse("selection");
+      }
+
+      if (typeof window !== "undefined") {
+        window.requestAnimationFrame(() => {
+          window.requestAnimationFrame(() => {
+            const target = caseLibraryFocusRef.current;
+            const heading = caseLibraryHeadingRef.current;
+            const reduceMotion = window.matchMedia?.(
+              "(prefers-reduced-motion: reduce)"
+            )?.matches;
+
+            if (scroll && target) {
+              target.scrollIntoView({
+                behavior: reduceMotion ? "auto" : "smooth",
+                block: "center",
+                inline: "nearest",
+              });
+            }
+            heading?.focus({ preventScroll: true });
+          });
+        });
+      }
+
+      trackGoal("case_library_category_focused", {
+        source,
+        category: categorySlug || "all",
+        complexity,
+        matches_recommendation:
+          categorySlug === nextCaseRecommendation?.categorySlug &&
+          Number(complexity) === Number(nextCaseRecommendation?.complexity),
+        recommendation_kind: nextCaseRecommendation?.kind || "none",
+      });
+    },
+    [
+      nextCaseRecommendation,
+      selectedCategory,
+      selectedDynamicDifficulty,
+    ]
+  );
+
+  const handleCaseLibraryLink = (event, source) => {
+    event?.preventDefault?.();
+    focusCaseLibraryCategory(source);
+  };
+
+  const handleCaseCategoryChooserToggle = () => {
+    if (showCaseCategoryChooser) {
+      trackGoal("case_library_category_chooser_closed", {
+        source: "change_area",
+        category: selectedCategory || "all",
+        complexity: selectedDynamicDifficulty,
+      });
+      focusCaseLibraryCategory("category_chooser_close");
+      return;
+    }
+
+    setShowCaseCategoryChooser(true);
+    guidedInteractionRef.current?.pulse("selection");
+    trackGoal("case_library_category_chooser_opened", {
+      source: "change_area",
+      category: selectedCategory || "all",
+      complexity: selectedDynamicDifficulty,
+    });
+  };
+
+  const chooseFocusedCaseCategory = (categorySlug) => {
+    const nextDifficulty = getClampedDifficultyForCategory(categorySlug);
+    selectCaseCategory(categorySlug, { preserveScroll: false });
+    trackGoal("case_library_category_chooser_closed", {
+      source: "category_selection",
+      category: categorySlug,
+      complexity: nextDifficulty,
+    });
+    focusCaseLibraryCategory("category_selection", {
+      categorySlug,
+      complexity: nextDifficulty,
+      pulse: false,
+    });
+  };
+
+  useEffect(() => {
+    if (
+      directCaseLibraryHashHandledRef.current ||
+      typeof window === "undefined" ||
+      window.location.hash !== "#case-library"
+    ) {
+      return;
+    }
+
+    directCaseLibraryHashHandledRef.current = true;
+    focusCaseLibraryCategory("direct_hash");
+  }, [focusCaseLibraryCategory]);
+
+  const applyNextCaseRecommendation = (surface = "case_library_prompt") => {
+    if (!nextCaseRecommendation?.categorySlug) return;
+
+    setSelectedCategory(nextCaseRecommendation.categorySlug);
+    setSelectedDifficulty(
+      Math.max(1, Number(nextCaseRecommendation.complexity) || 1)
+    );
+    guidedInteractionRef.current?.pulse("selection");
+    trackGoal("next_case_recommendation_applied", {
+      surface,
+      recommendation_kind: nextCaseRecommendation.kind,
+      reason_code: nextCaseRecommendation.reasonCode,
+      category: nextCaseRecommendation.categorySlug,
+      complexity: nextCaseRecommendation.complexity,
+      recent_repeat_count: nextCaseRecommendation.recentRepeatCount || 0,
+    });
   };
 
   const handleGenerateCategoryCase = (category) => {
@@ -2080,6 +2316,8 @@ export default function DashboardHub({
     ? "Start Your Free Case"
     : canResumeLastCase
     ? "Continue Case"
+    : nextCaseRecommendation?.categorySlug
+    ? "Take Recommended Case"
     : "Start New Case";
   const categoryGenerateLabel = selectedCategoryMeta
     ? `Start ${compactCategoryLabel[selectedCategoryMeta.slug] || selectedCategoryMeta.title} Case`
@@ -2089,6 +2327,8 @@ export default function DashboardHub({
     ? desktopHeroCase.title
     : shouldSellLifetimeAccess
     ? "Unlock Legal Arena"
+    : nextCaseRecommendation?.categorySlug
+    ? `${recommendationCategoryTitle} · Level ${nextCaseRecommendation.complexity}`
     : desktopFeaturedTemplate?.title || "Start a new case";
   const desktopFeatureKicker = canContinueDesktopHeroCase
     ? trialActive
@@ -2098,6 +2338,8 @@ export default function DashboardHub({
     ? "Unlock Your Arena"
     : trialAvailable
     ? "Your First Case Is Free"
+    : nextCaseRecommendation?.categorySlug
+    ? "Recommended Next"
     : isNewUser
     ? "Start Your First Case"
     : "Start New Case";
@@ -2122,16 +2364,22 @@ export default function DashboardHub({
     ? "Get permanent access to infinite legal matters, player challenges, and future updates."
     : trialAvailable
     ? "Choose a category and country, then play one complete level-1 matter through verdict or settlement."
+    : nextCaseRecommendation?.categorySlug
+    ? recommendationShortHint
     : desktopFeaturedTemplate?.overview ||
       "Choose a dispute, interview your client, and prepare for court.";
   const desktopPlaintiffName =
     (canContinueDesktopHeroCase
       ? desktopHeroCase?.plaintiffName || desktopHeroCase?.premise?.clientName
+      : nextCaseRecommendation?.categorySlug
+      ? "New Client"
       : desktopFeaturedTemplate?.plaintiffName || desktopFeaturedTemplate?.clientName) ||
     "Plaintiff";
   const desktopDefendantName =
     (canContinueDesktopHeroCase
       ? desktopHeroCase?.defendantName || desktopHeroCase?.premise?.opponentName
+      : nextCaseRecommendation?.categorySlug
+      ? "Opposing Party"
       : desktopFeaturedTemplate?.defendantName || desktopFeaturedTemplate?.opponentName) ||
     "Defendant";
   const desktopHasAssignedSide = canContinueDesktopHeroCase && Boolean(desktopHeroCase?.playerSide);
@@ -2165,7 +2413,12 @@ export default function DashboardHub({
               <nav className="relative z-50 flex flex-col items-center gap-4 overflow-visible" aria-label="Dashboard shortcuts">
                 {[
                   { href: "#activation-home", label: "Home", icon: HeroIcons.HomeIcon, active: true },
-                  { href: "#case-library", label: "Case Library", icon: HeroIcons.BriefcaseIcon },
+                  {
+                    href: "#case-library",
+                    label: "Case Library",
+                    icon: HeroIcons.BriefcaseIcon,
+                    caseLibrarySource: "desktop_rail",
+                  },
                   { href: "#pvp-docket", label: "PVP Docket", icon: HeroIcons.UserGroupIcon },
                   { href: "#rankings", label: "Rankings", icon: HeroIcons.ChartBarIcon },
                   { href: "#recent-cases", label: "Saved Transcripts", icon: HeroIcons.ClipboardDocumentListIcon },
@@ -2185,6 +2438,15 @@ export default function DashboardHub({
                       }`}
                       aria-label={item.label}
                       title={item.label}
+                      onClick={
+                        item.caseLibrarySource
+                          ? (event) =>
+                              handleCaseLibraryLink(
+                                event,
+                                item.caseLibrarySource
+                              )
+                          : undefined
+                      }
                     >
                       <Icon className="h-6 w-6" aria-hidden="true" />
                       <span className="pointer-events-none absolute left-[4.25rem] z-[100] hidden whitespace-nowrap rounded-lg border border-white/10 bg-black/95 px-3 py-2 text-xs font-semibold text-white/82 shadow-2xl group-hover:block">
@@ -2300,7 +2562,16 @@ export default function DashboardHub({
                               return;
                             }
 
-                            handleCreateCase(null, { dynamic: true, source: "quick_start_mobile" });
+                            handleCreateCase(null, {
+                              dynamic: true,
+                              source: "quick_start_mobile",
+                              categorySlug:
+                                nextCaseRecommendation?.categorySlug ||
+                                selectedCategory,
+                              complexity:
+                                nextCaseRecommendation?.complexity ||
+                                selectedDynamicDifficulty,
+                            });
                           }}
                           disabled={creating}
                         >
@@ -2318,6 +2589,8 @@ export default function DashboardHub({
                             <span className="mt-1 block text-sm leading-5 text-white/72">
                               {shouldSellLifetimeAccess
                                 ? "Get lifetime access to every case."
+                                : nextCaseRecommendation?.categorySlug
+                                ? `${recommendationCategoryTitle} · Level ${nextCaseRecommendation.complexity}`
                                 : "Open a new case against AI counsel."}
                             </span>
                           </span>
@@ -2358,6 +2631,12 @@ export default function DashboardHub({
                       </Link>
                       <Link
                         href="#case-library"
+                        onClick={(event) =>
+                          handleCaseLibraryLink(
+                            event,
+                            "mobile_dashboard_card"
+                          )
+                        }
                         className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-left text-white transition hover:border-white/20"
                       >
                         <HeroIcons.BriefcaseIcon className="h-6 w-6 shrink-0 text-white/68" aria-hidden="true" />
@@ -2534,6 +2813,7 @@ export default function DashboardHub({
                           <span className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.035] px-4 py-2 text-sm text-white/74">
                             <HeroIcons.BriefcaseIcon className="h-5 w-5 text-white/52" aria-hidden="true" />
                             {desktopHeroCase?.primaryCategory ||
+                              recommendationCategoryTitle ||
                               desktopFeaturedTemplate?.primaryCategory ||
                               "Case Library"}
                           </span>
@@ -2568,7 +2848,16 @@ export default function DashboardHub({
                                   return;
                                 }
 
-                                handleCreateCase(null, { dynamic: true, source: "quick_start_desktop" });
+                                handleCreateCase(null, {
+                                  dynamic: true,
+                                  source: "quick_start_desktop",
+                                  categorySlug:
+                                    nextCaseRecommendation?.categorySlug ||
+                                    selectedCategory,
+                                  complexity:
+                                    nextCaseRecommendation?.complexity ||
+                                    selectedDynamicDifficulty,
+                                });
                               }}
                               disabled={creating}
                             >
@@ -2581,6 +2870,9 @@ export default function DashboardHub({
                           )}
                           <a
                             href="#case-library"
+                            onClick={(event) =>
+                              handleCaseLibraryLink(event, "desktop_hero")
+                            }
                             className="inline-flex items-center gap-3 text-sm font-semibold text-white/68 transition hover:text-white"
                           >
                             Browse Case Library
@@ -2714,6 +3006,7 @@ export default function DashboardHub({
                       body: "Choose a case type and begin your next battle.",
                       icon: HeroIcons.DocumentPlusIcon,
                       tone: "amber",
+                      caseLibrarySource: "desktop_shortcut",
                     },
                     {
                       href: "#rankings",
@@ -2736,6 +3029,15 @@ export default function DashboardHub({
                       <a
                         key={item.href}
                         href={item.href}
+                        onClick={
+                          item.caseLibrarySource
+                            ? (event) =>
+                                handleCaseLibraryLink(
+                                  event,
+                                  item.caseLibrarySource
+                                )
+                            : undefined
+                        }
                         className="arena-surface-soft flex min-h-[10rem] items-center gap-5 p-6 text-white transition hover:border-white/20"
                       >
                         <span
@@ -2774,7 +3076,6 @@ export default function DashboardHub({
                 <section
                   id="case-library"
                   data-onboarding-target="case-library"
-                  data-section-nav-target="dashboard-library"
                   className="arena-surface min-w-0 overflow-visible"
                 >
                   <div className="p-4 md:p-6">
@@ -2835,66 +3136,176 @@ export default function DashboardHub({
                       </p>
                     </div>
 
-                    <div className="mt-6" data-guided-step="solo-category">
+                    <div
+                      className="mt-6 scroll-mt-24"
+                      data-guided-step="solo-category"
+                      data-section-nav-target="dashboard-library"
+                    >
                       <p className="arena-kicker">Practice Area</p>
                       <h3 className="mt-2 text-xl font-semibold text-white">
-                        Pick where the dispute starts
+                        {showCaseCategoryChooser
+                          ? "Pick where the dispute starts"
+                          : "Your selected practice area"}
                       </h3>
-                    </div>
 
-                    <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                      {categories.map((category) => {
-                        const Icon = categoryIconMap[category.slug] || HeroIcons.Squares2X2Icon;
-                        const selected = selectedCategory === category.slug;
-                        const stat =
-                          progression.categoryStats.find((item) => item.categorySlug === category.slug) ||
-                          { unlockedComplexity: 1, completedCases: 0 };
-                        const categoryCap = Math.min(
-                          getPlayerComplexityCap(playerLevel),
-                          stat.unlockedComplexity || 1
-                        );
+                      {showCaseCategoryChooser || !selectedCategoryMeta ? (
+                        <div
+                          id="case-library-category-chooser"
+                          className="mt-4 rounded-2xl border border-white/10 bg-black/18 p-3 sm:p-4"
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="text-sm font-semibold text-white/72">
+                              Choose another area
+                            </p>
+                            {selectedCategoryMeta ? (
+                              <button
+                                type="button"
+                                className="inline-flex items-center gap-2 rounded-xl border border-white/12 px-3 py-2 text-xs font-semibold text-white/68 transition hover:border-white/24 hover:text-white"
+                                onClick={handleCaseCategoryChooserToggle}
+                                aria-label="Close practice area chooser"
+                                aria-controls="case-library-category-chooser"
+                                aria-expanded={true}
+                              >
+                                <HeroIcons.XMarkIcon className="h-4 w-4" aria-hidden="true" />
+                                Close
+                              </button>
+                            ) : null}
+                          </div>
+                          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                            {categories.map((category) => {
+                              const Icon =
+                                categoryIconMap[category.slug] ||
+                                HeroIcons.Squares2X2Icon;
+                              const selected = selectedCategory === category.slug;
+                              const recommended =
+                                category.slug === nextCaseRecommendation?.categorySlug;
+                              const stat =
+                                progression.categoryStats.find(
+                                  (item) => item.categorySlug === category.slug
+                                ) || {
+                                  unlockedComplexity: 1,
+                                  completedCases: 0,
+                                };
+                              const categoryCap = Math.min(
+                                getPlayerComplexityCap(playerLevel),
+                                stat.unlockedComplexity || 1
+                              );
 
-                        return (
-                          <button
-                            key={category.slug}
-                            type="button"
-                            className={`flex min-h-[10.5rem] flex-col rounded-2xl border p-3 text-left transition ${
-                              selected
-                                ? "border-emerald-300/70 bg-emerald-300/10 shadow-[0_0_24px_rgba(52,211,153,0.12)]"
-                                : "border-white/10 bg-white/[0.025] hover:border-white/20"
+                              return (
+                                <button
+                                  key={category.slug}
+                                  type="button"
+                                  className={`flex min-h-[10.5rem] flex-col rounded-2xl border p-3 text-left transition ${
+                                    selected
+                                      ? "border-emerald-300/70 bg-emerald-300/10 shadow-[0_0_24px_rgba(52,211,153,0.12)]"
+                                      : recommended
+                                      ? "border-amber-200/30 bg-amber-200/[0.045] hover:border-amber-200/50"
+                                      : "border-white/10 bg-white/[0.025] hover:border-white/20"
+                                  } ${
+                                    recommended
+                                      ? "arena-recommended-category"
+                                      : ""
+                                  }`}
+                                  onClick={() =>
+                                    chooseFocusedCaseCategory(category.slug)
+                                  }
+                                >
+                                  <div className="flex items-start justify-between gap-3">
+                                    <Icon
+                                      className={`h-6 w-6 shrink-0 ${
+                                        selected
+                                          ? "text-emerald-200"
+                                          : "text-white/62"
+                                      }`}
+                                      aria-hidden="true"
+                                    />
+                                    <span className="flex flex-wrap justify-end gap-1.5">
+                                      {category.isNew ? (
+                                        <span className="rounded-full border border-amber-200/45 bg-amber-300/15 px-2 py-1 text-[0.6rem] font-black uppercase tracking-[0.1em] text-amber-100 shadow-[0_0_18px_rgba(251,191,36,0.12)]">
+                                          New
+                                        </span>
+                                      ) : null}
+                                      <span className="rounded-full border border-white/10 bg-black/24 px-2 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-white/48">
+                                        Skill {categoryCap}
+                                      </span>
+                                    </span>
+                                  </div>
+                                  <p className="mt-3 text-sm font-semibold leading-5 text-white">
+                                    {compactCategoryLabel[category.slug] ||
+                                      category.title}
+                                  </p>
+                                  <p className="mt-1 line-clamp-3 text-xs leading-4 text-white/48">
+                                    {category.description}
+                                  </p>
+                                  <p className="mt-auto pt-2 text-xs text-white/45">
+                                    {stat.completedCases || 0} played by you
+                                  </p>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ) : (
+                        <div
+                          key={`${selectedCategory}-${caseLibraryFocusEpoch}`}
+                          ref={caseLibraryFocusRef}
+                          className={`mx-auto mt-4 max-w-xl rounded-2xl focus:outline-none ${
+                            caseLibraryFocusEpoch > 0
+                              ? "arena-case-library-zoom"
+                              : ""
+                          }`}
+                        >
+                          <article
+                            className={`flex flex-col gap-4 rounded-2xl border p-4 sm:flex-row sm:items-center sm:p-5 ${
+                              selectedCategoryIsRecommended
+                                ? "arena-recommended-category border-amber-200/32 bg-amber-200/[0.045]"
+                                : "border-emerald-300/55 bg-emerald-300/[0.075] shadow-[0_0_24px_rgba(52,211,153,0.1)]"
                             }`}
-                            onClick={() => selectCaseCategory(category.slug)}
+                            aria-labelledby="selected-case-category-title"
                           >
-                            <div className="flex items-start justify-between gap-3">
-                              <Icon
-                                className={`h-6 w-6 shrink-0 ${
-                                  selected ? "text-emerald-200" : "text-white/62"
-                                }`}
+                            <div className="flex min-w-0 flex-1 items-center gap-4">
+                              <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-black/24 text-emerald-100">
+                                <SelectedCategoryIcon
+                                  className="h-7 w-7"
+                                  aria-hidden="true"
+                                />
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <h4
+                                  id="selected-case-category-title"
+                                  ref={caseLibraryHeadingRef}
+                                  tabIndex={-1}
+                                  className="truncate text-lg font-semibold text-white outline-none sm:text-xl"
+                                >
+                                  {compactCategoryLabel[selectedCategory] ||
+                                    selectedCategoryTitle}
+                                </h4>
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                  <span className="rounded-full border border-white/10 bg-black/24 px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.08em] text-white/55">
+                                    Skill {selectedCapableComplexity}
+                                  </span>
+                                  <span className="rounded-full border border-white/10 bg-black/24 px-2.5 py-1 text-[0.65rem] font-semibold text-white/48">
+                                    {selectedCategoryProgress.completedCases || 0} played
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              className="inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-xl border border-white/14 bg-white/[0.035] px-3 py-2.5 text-xs font-semibold text-white/72 transition hover:border-white/26 hover:text-white sm:w-auto"
+                              onClick={handleCaseCategoryChooserToggle}
+                              aria-controls="case-library-category-chooser"
+                              aria-expanded={false}
+                            >
+                              Change area
+                              <HeroIcons.ChevronDownIcon
+                                className="h-4 w-4"
                                 aria-hidden="true"
                               />
-                              <span className="flex flex-wrap justify-end gap-1.5">
-                                {category.isNew ? (
-                                  <span className="rounded-full border border-amber-200/45 bg-amber-300/15 px-2 py-1 text-[0.6rem] font-black uppercase tracking-[0.1em] text-amber-100 shadow-[0_0_18px_rgba(251,191,36,0.12)]">
-                                    New
-                                  </span>
-                                ) : null}
-                                <span className="rounded-full border border-white/10 bg-black/24 px-2 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.08em] text-white/48">
-                                  Skill {categoryCap}
-                                </span>
-                              </span>
-                            </div>
-                            <p className="mt-3 text-sm font-semibold leading-5 text-white">
-                              {compactCategoryLabel[category.slug] || category.title}
-                            </p>
-                            <p className="mt-1 line-clamp-3 text-xs leading-4 text-white/48">
-                              {category.description}
-                            </p>
-                            <p className="mt-auto pt-2 text-xs text-white/45">
-                              {stat.completedCases || 0} played by you
-                            </p>
-                          </button>
-                        );
-                      })}
+                            </button>
+                          </article>
+                        </div>
+                      )}
                     </div>
 
                     <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(280px,0.42fr)]">
@@ -2905,9 +3316,6 @@ export default function DashboardHub({
                             <h3 className="mt-2 text-xl font-semibold text-white">
                               Pick pressure level
                             </h3>
-                            <p className="mt-2 max-w-xl text-sm leading-6 text-white/56">
-                              Recommended: pick your comfort level, or go one level higher for a challenge.
-                            </p>
                           </div>
                         </div>
                         <div className="mt-4 grid gap-3 md:grid-cols-5">
@@ -2917,7 +3325,18 @@ export default function DashboardHub({
                             const stretch =
                               option.value === selectedCapableComplexity + 1 &&
                               option.value <= selectedChallengeComplexityCap;
-                            const status = locked ? "Locked" : stretch ? "Stretch" : "Ready";
+                            const recommended =
+                              selectedCategory === nextCaseRecommendation?.categorySlug &&
+                              option.value === Number(nextCaseRecommendation?.complexity);
+                            const status = locked
+                              ? "Locked"
+                              : recommended
+                              ? stretch
+                                ? "Recommended stretch"
+                                : "Recommended"
+                              : stretch
+                              ? "Stretch"
+                              : "Ready";
                             const tooltipContent = `${option.label} - ${option.name}\n${option.summary}\nPractice: ${option.skills.join(", ")}\nEstimated time: ${option.time}`;
 
                             return (
@@ -2952,9 +3371,26 @@ export default function DashboardHub({
                                   {option.name}
                                 </p>
                                 <span
+                                  data-tooltip-id={
+                                    recommended
+                                      ? "dashboard-recommendation-tooltip"
+                                      : undefined
+                                  }
+                                  data-tooltip-content={
+                                    recommended
+                                      ? nextCaseRecommendation?.reason
+                                      : undefined
+                                  }
+                                  aria-label={
+                                    recommended
+                                      ? `${status}: ${nextCaseRecommendation?.reason}`
+                                      : undefined
+                                  }
                                   className={`mt-2 inline-flex w-fit rounded-full border px-2 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.08em] ${
                                     locked
-                                      ? "border-white/10 text-white/42"
+                                    ? "border-white/10 text-white/42"
+                                      : recommended
+                                      ? "border-amber-200/45 bg-amber-200/12 text-amber-100"
                                       : stretch
                                       ? "border-amber-200/35 bg-amber-200/10 text-amber-100"
                                       : "border-emerald-300/30 bg-emerald-300/10 text-emerald-200"
@@ -3006,6 +3442,25 @@ export default function DashboardHub({
                         <p className="mt-3 rounded-xl border border-white/8 bg-black/20 px-3 py-2 text-xs leading-5 text-white/48">
                           You may represent either side. Facts and proof will vary.
                         </p>
+                        {repeatedPairSelected ? (
+                          <div className="mt-3 flex items-center gap-2 rounded-xl border border-amber-200/18 bg-amber-200/[0.045] p-2.5">
+                            <p className="min-w-0 flex-1 truncate text-xs text-white/58">
+                              Familiar pick. Try {recommendationCategoryTitle} Level{" "}
+                              {nextCaseRecommendation.complexity}.
+                            </p>
+                            <button
+                              type="button"
+                              className="shrink-0 rounded-lg border border-amber-200/28 px-3 py-2 text-xs font-bold text-amber-100 transition hover:bg-amber-200/10"
+                              onClick={() =>
+                                applyNextCaseRecommendation(
+                                  "case_library_comfort_zone"
+                                )
+                              }
+                            >
+                              Switch
+                            </button>
+                          </div>
+                        ) : null}
                         <div className="mt-5 space-y-2">
                           {selectedDynamicDifficultyMeta.skills.map((skill) => (
                             <div
@@ -4078,7 +4533,17 @@ export default function DashboardHub({
             </div>
           </div>
         </section>
-        <MobileSectionNavigator sections={dashboardSectionNavigatorItems} />
+        <MobileSectionNavigator
+          sections={dashboardSectionNavigatorItems}
+          onNavigate={(section) => {
+            if (section.key === "library") {
+              focusCaseLibraryCategory("mobile_section_navigator", {
+                scroll: false,
+                pulse: false,
+              });
+            }
+          }}
+        />
         <nav
           className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-black/86 px-2 pb-[calc(env(safe-area-inset-bottom)+0.45rem)] pt-2 shadow-[0_-18px_50px_rgba(0,0,0,0.45)] backdrop-blur-xl xl:hidden"
           aria-label="Mobile dashboard navigation"
@@ -4903,6 +5368,11 @@ export default function DashboardHub({
         id="dashboard-difficulty-tooltip"
         place="top"
         className="z-[80] max-w-xs whitespace-pre-line rounded-xl border border-white/10 bg-[#111] px-3 py-2 text-xs leading-5 text-white shadow-2xl shadow-black/45"
+      />
+      <Tooltip
+        id="dashboard-recommendation-tooltip"
+        place="top"
+        className="z-[80] max-w-sm rounded-xl border border-amber-200/20 bg-[#111] px-3 py-2 text-xs leading-5 text-white shadow-2xl shadow-black/45"
       />
     </main>
   );

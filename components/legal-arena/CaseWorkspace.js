@@ -40,6 +40,7 @@ import AwardUnlockPanel from "./AwardUnlockPanel";
 import PostResolutionNextCaseCard from "./PostResolutionNextCaseCard";
 import CurrentEventInspirationCard from "./CurrentEventInspirationCard";
 import MobileSectionNavigator from "./MobileSectionNavigator";
+import ShareResultButton from "./ShareResultButton";
 
 const WITNESS_RESPONSE_TIMEOUT_MS = 45_000;
 
@@ -5008,13 +5009,30 @@ export default function CaseWorkspace({
                       Base {settlementXp.baseXp} XP plus a bonus for how satisfied both parties
                       were.
                     </p>
-                    <Link
-                      href="/dashboard"
-                      className="arena-btn-light mt-3 flex w-full items-center justify-center gap-2 px-4 py-3 text-sm"
-                    >
-                      Back to Dashboard
-                      <HeroIcons.ArrowRightIcon className="h-4 w-4" aria-hidden="true" />
-                    </Link>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      <ShareResultButton
+                        sourceType={caseReportSourceType}
+                        sourceId={caseReportSourceId}
+                        mode={analyticsMode}
+                        resolutionType="settlement"
+                        outcome="settled"
+                        settlementQualityScore={settlementQuality.score}
+                        category={caseSession.primaryCategory}
+                        categoryTitle={
+                          categoryTitleBySlug.get(caseSession.primaryCategory) ||
+                          caseSession.primaryCategory
+                        }
+                        complexity={caseSession.complexity}
+                        className="w-full"
+                      />
+                      <Link
+                        href="/dashboard"
+                        className="arena-btn-light flex w-full items-center justify-center gap-2 px-4 py-3 text-sm"
+                      >
+                        Back to Dashboard
+                        <HeroIcons.ArrowRightIcon className="h-4 w-4" aria-hidden="true" />
+                      </Link>
+                    </div>
                   </div>
                 </div>
                 <p className="border-t border-white/10 px-4 py-3 text-center text-xs font-semibold leading-5 text-white/46 sm:px-5">
@@ -8262,13 +8280,40 @@ export default function CaseWorkspace({
                         {winnerSignal[caseSession.verdict.winner] || winnerSignal.draw}
                       </div>
                     </div>
-                    <Link
-                      href="/dashboard"
-                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-200/35 bg-amber-200 px-5 py-3 text-sm font-bold text-black transition hover:bg-amber-100"
-                    >
-                      Back to Cases
-                      <HeroIcons.ArrowRightIcon className="h-4 w-4" aria-hidden="true" />
-                    </Link>
+                    <div className="flex flex-wrap gap-2">
+                      <ShareResultButton
+                        sourceType={caseReportSourceType}
+                        sourceId={caseReportSourceId}
+                        mode={analyticsMode}
+                        resolutionType="verdict"
+                        outcome={
+                          caseSession.verdict.winner === "player"
+                            ? "won"
+                            : caseSession.verdict.winner === "opponent"
+                            ? "lost"
+                            : "draw"
+                        }
+                        playerScore={
+                          caseSession.verdict.finalScore?.player ?? caseSession.score.player
+                        }
+                        opponentScore={
+                          caseSession.verdict.finalScore?.opponent ?? caseSession.score.opponent
+                        }
+                        category={caseSession.primaryCategory}
+                        categoryTitle={
+                          categoryTitleBySlug.get(caseSession.primaryCategory) ||
+                          caseSession.primaryCategory
+                        }
+                        complexity={caseSession.complexity}
+                      />
+                      <Link
+                        href="/dashboard"
+                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-200/35 bg-amber-200 px-5 py-3 text-sm font-bold text-black transition hover:bg-amber-100"
+                      >
+                        Back to Cases
+                        <HeroIcons.ArrowRightIcon className="h-4 w-4" aria-hidden="true" />
+                      </Link>
+                    </div>
                   </div>
 
                   <div className="mt-5 max-w-4xl text-center sm:mx-auto">
