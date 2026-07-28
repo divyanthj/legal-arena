@@ -17,6 +17,9 @@ export default function EarlyAccessCheckoutButton({
   onIntent = null,
   showArrow = false,
   continuationCaseId = "",
+  ariaLabel,
+  title,
+  contentClassName,
 }) {
   const [isLoading, setIsLoading] = useState(false);
 
@@ -77,12 +80,14 @@ export default function EarlyAccessCheckoutButton({
       className={className}
       onClick={handleCheckout}
       disabled={isLoading}
+      aria-label={ariaLabel}
+      title={title}
     >
       {isLoading ? (
         <span className="loading loading-spinner loading-sm" />
       ) : (
         <>
-          <span>{label}</span>
+          <span className={contentClassName}>{label}</span>
           {showArrow ? (
             <HeroIcons.ChevronRightIcon className="h-5 w-5" aria-hidden="true" />
           ) : null}

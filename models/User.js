@@ -115,6 +115,14 @@ const onboardingSchema = mongoose.Schema(
       type: Date,
       default: null,
     },
+    dashboardWelcomeDismissed: {
+      type: Boolean,
+      default: false,
+    },
+    dashboardWelcomeDismissedAt: {
+      type: Date,
+      default: null,
+    },
   },
   { _id: false }
 );

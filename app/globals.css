@@ -872,6 +872,142 @@ progress::-webkit-progress-value {
   }
 }
 
+.arena-welcome-dialog {
+  color-scheme: dark;
+}
+
+.arena-welcome-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.92);
+  backdrop-filter: blur(12px);
+}
+
+.arena-welcome-shell {
+  animation: arena-welcome-enter 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.arena-welcome-shell-leaving {
+  pointer-events: none;
+  animation: arena-welcome-leave 260ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+.arena-welcome-grid {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.022) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.022) 1px, transparent 1px);
+  background-size: 54px 54px;
+  mask-image: linear-gradient(to bottom, transparent, black 16%, black 78%, transparent);
+}
+
+.arena-welcome-visual::after {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  border-radius: inherit;
+  background: linear-gradient(
+    112deg,
+    transparent 16%,
+    rgba(255, 255, 255, 0.055) 34%,
+    transparent 49%
+  );
+  content: "";
+  pointer-events: none;
+  transform: translateX(-120%);
+  animation: arena-welcome-sheen 5.8s ease-in-out 900ms infinite;
+}
+
+.arena-welcome-slide-forward {
+  animation: arena-welcome-slide-forward 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.arena-welcome-slide-backward {
+  animation: arena-welcome-slide-backward 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.arena-welcome-copy-forward {
+  animation: arena-welcome-copy-forward 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.arena-welcome-copy-backward {
+  animation: arena-welcome-copy-backward 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes arena-welcome-enter {
+  from {
+    opacity: 0;
+    transform: scale(1.018);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes arena-welcome-leave {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+}
+
+@keyframes arena-welcome-slide-forward {
+  from {
+    opacity: 0;
+    transform: translate3d(28px, 0, 0) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes arena-welcome-slide-backward {
+  from {
+    opacity: 0;
+    transform: translate3d(-28px, 0, 0) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes arena-welcome-copy-forward {
+  from {
+    opacity: 0;
+    transform: translate3d(18px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes arena-welcome-copy-backward {
+  from {
+    opacity: 0;
+    transform: translate3d(-18px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes arena-welcome-sheen {
+  0%,
+  58% {
+    transform: translateX(-120%);
+  }
+  82%,
+  100% {
+    transform: translateX(120%);
+  }
+}
+
 .arena-recommended-category {
   animation: arena-recommended-category-glow 2.8s ease-in-out infinite;
 }
@@ -914,6 +1050,13 @@ progress::-webkit-progress-value {
   .arena-reveal,
   .arena-modal.modal-open,
   .arena-modal.modal-open > .modal-box,
+  .arena-welcome-shell,
+  .arena-welcome-shell-leaving,
+  .arena-welcome-slide-forward,
+  .arena-welcome-slide-backward,
+  .arena-welcome-copy-forward,
+  .arena-welcome-copy-backward,
+  .arena-welcome-visual::after,
   .arena-modal-card-enter,
   .arena-pulse,
   .arena-round-transition,

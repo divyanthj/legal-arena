@@ -248,9 +248,9 @@ assert.match(dashboardSource, /advance\("solo-difficulty"\)/);
 assert.match(dashboardSource, /advance\("solo-preview"\)/);
 assert.match(
   dashboardSource,
-  /requestDashboardTour\("desktop_hero"\)[\s\S]*New here\?[\s\S]*Take the quick tour/
+  /requestDashboardOnboarding\("desktop_hero"\)[\s\S]*New here\?[\s\S]*Take the quick tour/
 );
-assert.doesNotMatch(dashboardSource, /requestDashboardTour\("desktop_sidebar"\)/);
+assert.doesNotMatch(dashboardSource, /requestDashboardOnboarding\("desktop_sidebar"\)/);
 assert.match(
   dashboardSource,
   /preserveScrollPosition[\s\S]*!isGuidedMobileViewport\(window\)/

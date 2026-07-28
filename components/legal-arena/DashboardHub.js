@@ -24,6 +24,7 @@ import {
 import { DevelopmentAccessModal } from "@/components/legal-arena/DevelopmentAccessGate";
 import EarlyAccessCheckoutButton from "@/components/legal-arena/EarlyAccessCheckoutButton";
 import CaseAssemblyOverlay from "@/components/legal-arena/CaseAssemblyOverlay";
+import DashboardWelcomeModal from "@/components/legal-arena/DashboardWelcomeModal";
 import MobileSectionNavigator from "@/components/legal-arena/MobileSectionNavigator";
 import config from "@/config";
 import CountryFlagPicker, {
@@ -992,10 +993,15 @@ const getOnboardingTarget = (target) =>
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
-const DashboardOnboardingOverlay = ({ isOpen, onComplete }) => {
+const DashboardOnboardingOverlay = ({
+  isOpen,
+  onComplete,
+  source = "dashboard_welcome",
+}) => {
   const [stepIndex, setStepIndex] = useState(0);
   const [targetRect, setTargetRect] = useState(null);
   const [completing, setCompleting] = useState(false);
+  const [completionError, setCompletionError] = useState("");
   const viewedStepsRef = useRef(new Set());
   const step = onboardingSteps[stepIndex] || onboardingSteps[0];
 
@@ -1007,23 +1013,26 @@ const DashboardOnboardingOverlay = ({ isOpen, onComplete }) => {
         step_count: onboardingSteps.length,
         step_target: step?.target || "",
         step_title: step?.title || "",
+        source,
         ...extra,
       });
     },
-    [step, stepIndex]
+    [source, step, stepIndex]
   );
 
   useEffect(() => {
     if (isOpen) {
       setStepIndex(0);
       setTargetRect(null);
+      setCompletionError("");
       viewedStepsRef.current = new Set();
       trackGoal("tour_started", {
         tour: "dashboard_onboarding",
         step_count: onboardingSteps.length,
+        source,
       });
     }
-  }, [isOpen]);
+  }, [isOpen, source]);
 
   useEffect(() => {
     if (!isOpen || !step) {
@@ -1042,15 +1051,25 @@ const DashboardOnboardingOverlay = ({ isOpen, onComplete }) => {
 
   const completeTutorial = useCallback(async (reason = "completed") => {
     setCompleting(true);
+    setCompletionError("");
     trackDashboardTourGoal(reason === "skipped" ? "tour_skipped" : "tour_completed", {
       completion_reason: reason,
     });
 
     try {
-      await apiClient.post("/onboarding/dashboard-tutorial");
-      onComplete();
+      await onComplete(reason);
+      trackDashboardTourGoal("tour_completion_saved", {
+        completion_reason: reason,
+      });
     } catch (error) {
       console.error(error);
+      trackDashboardTourGoal("tour_completion_failed", {
+        completion_reason: reason,
+        error_message: error?.message || "unknown",
+      });
+      setCompletionError(
+        error?.message || "We could not save your tour progress. Please try again."
+      );
     } finally {
       setCompleting(false);
     }
@@ -1244,6 +1263,11 @@ const DashboardOnboardingOverlay = ({ isOpen, onComplete }) => {
           {step.title}
         </h2>
         <p className="mt-3 text-sm leading-6 text-white/68">{step.body}</p>
+        {completionError ? (
+          <p className="mt-3 text-sm font-semibold text-rose-200" role="alert">
+            {completionError}
+          </p>
+        ) : null}
         <div className="mt-5 flex items-center justify-between gap-3">
           <p className="text-xs uppercase tracking-[0.16em] text-white/42">
             {stepIndex + 1} / {onboardingSteps.length}
@@ -1459,9 +1483,10 @@ export default function DashboardHub({
   const [lawyerSearch, setLawyerSearch] = useState("");
   const [searchedLawyers, setSearchedLawyers] = useState(null);
   const [lawyerSearchLoading, setLawyerSearchLoading] = useState(false);
-  const [isMobileActivationViewport, setIsMobileActivationViewport] = useState(false);
+  const [isMobileActivationViewport, setIsMobileActivationViewport] = useState(null);
   const dashboardViewedRef = useRef(false);
   const recommendationViewedRef = useRef(false);
+  const upgradeCtaViewedRef = useRef(new Set());
   const guidedInteractionRef = useRef(null);
   const caseLibraryFocusRef = useRef(null);
   const caseLibraryHeadingRef = useRef(null);
@@ -1469,10 +1494,16 @@ export default function DashboardHub({
   if (!guidedInteractionRef.current) {
     guidedInteractionRef.current = createGuidedInteractionController();
   }
-  const [dashboardTutorialCompleted, setDashboardTutorialCompleted] = useState(
-    Boolean(onboarding?.dashboardTutorialCompleted)
+  const [dashboardWelcomeDismissed, setDashboardWelcomeDismissed] = useState(
+    Boolean(onboarding?.dashboardWelcomeDismissed)
   );
-  const requestDashboardTour = useCallback((source = "manual") => {
+  const [dashboardOnboardingStage, setDashboardOnboardingStage] = useState(
+    onboarding?.dashboardWelcomeDismissed ? "closed" : "welcome"
+  );
+  const [dashboardOnboardingSource, setDashboardOnboardingSource] = useState(
+    onboarding?.dashboardWelcomeDismissed ? "manual" : "automatic_dashboard"
+  );
+  const requestDashboardOnboarding = useCallback((source = "manual") => {
     trackGoal("tour_requested", {
       tour: "dashboard_onboarding",
       source,
@@ -1481,8 +1512,40 @@ export default function DashboardHub({
       pvp_challenges: challenges.length,
       has_arena_access: Boolean(hasArenaAccess),
     });
-    setDashboardTutorialCompleted(false);
+    setDashboardOnboardingSource(source);
+    setDashboardOnboardingStage("welcome");
   }, [challenges.length, hasArenaAccess, initialCases.length, progression?.completedCases]);
+  const completeDashboardOnboarding = useCallback(async () => {
+    await apiClient.post("/onboarding/dashboard-tutorial");
+    setDashboardOnboardingStage("closed");
+  }, []);
+  const saveDashboardWelcomePreference = useCallback(
+    async ({ doNotShowAgain = false } = {}) => {
+      await apiClient.post("/onboarding/dashboard-welcome", {
+        doNotShowAgain,
+      });
+      setDashboardWelcomeDismissed(Boolean(doNotShowAgain));
+      trackGoal("dashboard_welcome_preference_saved", {
+        do_not_show_again: Boolean(doNotShowAgain),
+        source: dashboardOnboardingSource,
+      });
+    },
+    [dashboardOnboardingSource]
+  );
+  const startDashboardTourFromWelcome = useCallback(
+    async (preference) => {
+      await saveDashboardWelcomePreference(preference);
+      setDashboardOnboardingStage("tour");
+    },
+    [saveDashboardWelcomePreference]
+  );
+  const dismissDashboardWelcome = useCallback(
+    async (preference) => {
+      await saveDashboardWelcomePreference(preference);
+      setDashboardOnboardingStage("closed");
+    },
+    [saveDashboardWelcomePreference]
+  );
 
   useEffect(
     () => () => guidedInteractionRef.current?.cancel(),
@@ -1682,6 +1745,34 @@ export default function DashboardHub({
       mediaQuery.removeEventListener("change", updateViewport);
     };
   }, []);
+
+  useEffect(() => {
+    if (hasArenaAccess || isMobileActivationViewport === null) {
+      return;
+    }
+
+    const surface = isMobileActivationViewport
+      ? "mobile_bottom_nav"
+      : "desktop_rail";
+    if (upgradeCtaViewedRef.current.has(surface)) {
+      return;
+    }
+
+    upgradeCtaViewedRef.current.add(surface);
+    trackGoal("dashboard_upgrade_viewed", {
+      surface,
+      trial_state: trialState,
+      completed_cases: progression?.completedCases || 0,
+      active_cases: ongoingCases.length,
+      price: config.lemonsqueezy.plans[0].price,
+    });
+  }, [
+    hasArenaAccess,
+    isMobileActivationViewport,
+    ongoingCases.length,
+    progression?.completedCases,
+    trialState,
+  ]);
 
   useEffect(() => {
     const query = lawyerSearch.trim();
@@ -2455,6 +2546,35 @@ export default function DashboardHub({
                     </RailLink>
                   );
                 })}
+                {!hasArenaAccess ? (
+                  <div className="group relative">
+                    <EarlyAccessCheckoutButton
+                      variantId={config.lemonsqueezy.plans[0].variantId}
+                      label={
+                        <HeroIcons.ShoppingBagIcon
+                          className="h-6 w-6"
+                          aria-hidden="true"
+                        />
+                      }
+                      source="dashboard_desktop_rail"
+                      ariaLabel="Purchase Legal Arena"
+                      title="Purchase Legal Arena"
+                      onIntent={() =>
+                        trackGoal("dashboard_upgrade_clicked", {
+                          surface: "desktop_rail",
+                          trial_state: trialState,
+                          completed_cases: progression?.completedCases || 0,
+                          active_cases: ongoingCases.length,
+                          price: config.lemonsqueezy.plans[0].price,
+                        })
+                      }
+                      className="arena-purchase-rail flex h-14 w-14 items-center justify-center rounded-2xl border-0 bg-[linear-gradient(145deg,rgba(255,255,255,0.15),rgba(255,255,255,0.035)_48%,rgba(255,255,255,0.1))] text-amber-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_8px_20px_rgba(0,0,0,0.24)] transition hover:bg-[linear-gradient(145deg,rgba(255,255,255,0.19),rgba(255,255,255,0.055)_48%,rgba(255,255,255,0.13))] hover:text-amber-100 disabled:opacity-60"
+                    />
+                    <span className="pointer-events-none absolute left-[4.25rem] top-1/2 z-[100] hidden -translate-y-1/2 whitespace-nowrap rounded-lg border border-amber-200/20 bg-black/95 px-3 py-2 text-xs font-semibold text-amber-100 shadow-2xl group-hover:block">
+                      Purchase Legal Arena · ${config.lemonsqueezy.plans[0].price.toFixed(2)}
+                    </span>
+                  </div>
+                ) : null}
               </nav>
 
               <div className="flex flex-col items-center gap-3">
@@ -2694,7 +2814,7 @@ export default function DashboardHub({
                   <button
                     type="button"
                     className="mt-4 flex w-full items-center gap-4 rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-4 text-left text-white transition hover:border-white/20"
-                    onClick={() => requestDashboardTour("mobile_activation_card")}
+                    onClick={() => requestDashboardOnboarding("mobile_activation_card")}
                   >
                     <HeroIcons.BoltIcon className="h-8 w-8 shrink-0 text-amber-200" aria-hidden="true" />
                     <span className="min-w-0 flex-1">
@@ -2862,7 +2982,7 @@ export default function DashboardHub({
                           <button
                             type="button"
                             className="inline-flex min-h-[3.5rem] w-full max-w-md items-center justify-center gap-3 rounded-xl border border-white/14 bg-white/[0.045] px-5 text-base font-semibold text-white transition hover:border-amber-200/35 hover:bg-amber-200/[0.08] hover:text-amber-100"
-                            onClick={() => requestDashboardTour("desktop_hero")}
+                            onClick={() => requestDashboardOnboarding("desktop_hero")}
                           >
                             <HeroIcons.BoltIcon className="h-5 w-5 text-amber-200" aria-hidden="true" />
                             <span>
@@ -4328,7 +4448,7 @@ export default function DashboardHub({
                     <button
                       type="button"
                       className="mt-4 flex w-full items-center gap-3 rounded-xl border border-white/10 bg-white/[0.025] p-3 text-left text-white transition hover:border-white/20"
-                      onClick={() => requestDashboardTour("dashboard_sidebar_card")}
+                      onClick={() => requestDashboardOnboarding("dashboard_sidebar_card")}
                     >
                       <HeroIcons.BoltIcon className="h-6 w-6 shrink-0 text-amber-200" aria-hidden="true" />
                       <span className="min-w-0 flex-1">
@@ -4549,7 +4669,11 @@ export default function DashboardHub({
           className="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-black/86 px-2 pb-[calc(env(safe-area-inset-bottom)+0.45rem)] pt-2 shadow-[0_-18px_50px_rgba(0,0,0,0.45)] backdrop-blur-xl xl:hidden"
           aria-label="Mobile dashboard navigation"
         >
-          <div className={`mx-auto grid max-w-md gap-1 ${isAdmin ? "grid-cols-5" : "grid-cols-4"}`}>
+          <div
+            className={`mx-auto grid max-w-md gap-1 ${
+              !hasArenaAccess || isAdmin ? "grid-cols-5" : "grid-cols-4"
+            }`}
+          >
             {[
               { href: "#activation-home", label: "Home", icon: HeroIcons.HomeIcon, active: true },
               {
@@ -4558,6 +4682,15 @@ export default function DashboardHub({
                 icon: HeroIcons.BriefcaseIcon,
                 active: false,
               },
+              ...(!hasArenaAccess
+                ? [
+                    {
+                      label: "Upgrade",
+                      icon: HeroIcons.ShoppingBagIcon,
+                      purchase: true,
+                    },
+                  ]
+                : []),
               {
                 href: "#rankings",
                 label: "Ranks",
@@ -4570,7 +4703,7 @@ export default function DashboardHub({
                 icon: HeroIcons.UserIcon,
                 active: false,
               },
-              ...(isAdmin
+              ...(isAdmin && hasArenaAccess
                 ? [
                     {
                       href: "/dashboard/admin",
@@ -4582,6 +4715,39 @@ export default function DashboardHub({
                 : []),
             ].map((item) => {
               const Icon = item.icon;
+
+              if (item.purchase) {
+                return (
+                  <EarlyAccessCheckoutButton
+                    key="mobile-purchase"
+                    variantId={config.lemonsqueezy.plans[0].variantId}
+                    label={
+                      <>
+                        <Icon
+                          className="h-5 w-5 text-amber-200"
+                          aria-hidden="true"
+                        />
+                        <span className="max-w-full truncate">{item.label}</span>
+                      </>
+                    }
+                    source="dashboard_mobile_nav"
+                    ariaLabel="Upgrade Legal Arena"
+                    title="Upgrade Legal Arena"
+                    contentClassName="flex flex-col items-center justify-center gap-1"
+                    onIntent={() =>
+                      trackGoal("dashboard_upgrade_clicked", {
+                        surface: "mobile_bottom_nav",
+                        trial_state: trialState,
+                        completed_cases: progression?.completedCases || 0,
+                        active_cases: ongoingCases.length,
+                        price: config.lemonsqueezy.plans[0].price,
+                      })
+                    }
+                    className="flex min-h-[3.6rem] flex-col items-center justify-center gap-1 rounded-xl border-0 bg-transparent px-1 text-[0.64rem] font-semibold uppercase tracking-[0.08em] text-amber-200/80 transition hover:bg-amber-200/[0.05] hover:text-amber-100 disabled:opacity-60"
+                  />
+                );
+              }
+
               const NavLink = item.href.startsWith("/") ? Link : "a";
 
               return (
@@ -4590,7 +4756,7 @@ export default function DashboardHub({
                   href={item.href}
                   className={`flex min-h-[3.6rem] flex-col items-center justify-center gap-1 rounded-xl px-1 text-[0.64rem] font-semibold uppercase tracking-[0.08em] transition ${
                     item.active
-                      ? "text-amber-200"
+                      ? "text-white/62 hover:bg-white/[0.04] hover:text-white"
                       : "text-white/62 hover:bg-white/[0.04] hover:text-white"
                   }`}
                 >
@@ -4601,9 +4767,17 @@ export default function DashboardHub({
             })}
           </div>
         </nav>
+        <DashboardWelcomeModal
+          isOpen={dashboardOnboardingStage === "welcome"}
+          source={dashboardOnboardingSource}
+          doNotShowAgainInitially={dashboardWelcomeDismissed}
+          onStartTour={startDashboardTourFromWelcome}
+          onSkip={dismissDashboardWelcome}
+        />
         <DashboardOnboardingOverlay
-          isOpen={!dashboardTutorialCompleted}
-          onComplete={() => setDashboardTutorialCompleted(true)}
+          isOpen={dashboardOnboardingStage === "tour"}
+          onComplete={completeDashboardOnboarding}
+          source={dashboardOnboardingSource}
         />
         {showPaywallModal ? (
           <DevelopmentAccessModal
@@ -5333,9 +5507,16 @@ export default function DashboardHub({
           </aside>
         </div>
       </section>
+      <DashboardWelcomeModal
+        isOpen={dashboardOnboardingStage === "welcome"}
+        source={dashboardOnboardingSource}
+        doNotShowAgainInitially={dashboardWelcomeDismissed}
+        onStartTour={startDashboardTourFromWelcome}
+        onSkip={dismissDashboardWelcome}
+      />
       <DashboardOnboardingOverlay
-        isOpen={!dashboardTutorialCompleted}
-        onComplete={() => setDashboardTutorialCompleted(true)}
+        isOpen={dashboardOnboardingStage === "tour"}
+        onComplete={completeDashboardOnboarding}
       />
       {showPaywallModal ? (
         <DevelopmentAccessModal

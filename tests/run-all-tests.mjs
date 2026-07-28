@@ -2,6 +2,7 @@ await import("./run-email-nudges-tests.mjs");
 await import("./run-admin-nudges-tests.mjs");
 await import("./run-case-assembly-loading-tests.mjs");
 await import("./run-guided-interaction-tests.mjs");
+await import("./run-dashboard-welcome-tests.mjs");
 await import("./run-section-navigator-tests.mjs");
 await import("./run-stage-transition-loading-tests.mjs");
 await import("./run-case-template-rebalancer-tests.mjs");

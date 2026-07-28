@@ -6,6 +6,8 @@ import User from "@/models/User";
 export const getDefaultOnboarding = () => ({
   dashboardTutorialCompleted: false,
   dashboardTutorialCompletedAt: null,
+  dashboardWelcomeDismissed: false,
+  dashboardWelcomeDismissedAt: null,
 });
 
 export const normalizeOnboarding = (rawOnboarding) => {
@@ -16,6 +18,8 @@ export const normalizeOnboarding = (rawOnboarding) => {
     ...source,
     dashboardTutorialCompleted: Boolean(source.dashboardTutorialCompleted),
     dashboardTutorialCompletedAt: source.dashboardTutorialCompletedAt || null,
+    dashboardWelcomeDismissed: Boolean(source.dashboardWelcomeDismissed),
+    dashboardWelcomeDismissedAt: source.dashboardWelcomeDismissedAt || null,
   };
 };
 
@@ -64,6 +68,8 @@ export const resetDashboardTutorialForEmail = async (email) => {
       $set: {
         "onboarding.dashboardTutorialCompleted": false,
         "onboarding.dashboardTutorialCompletedAt": null,
+        "onboarding.dashboardWelcomeDismissed": false,
+        "onboarding.dashboardWelcomeDismissedAt": null,
       },
     },
     { new: true }
@@ -74,4 +80,34 @@ export const resetDashboardTutorialForEmail = async (email) => {
   }
 
   return normalizeOnboarding(user.onboarding);
+};
+
+export const setDashboardWelcomePreferenceForUser = async ({
+  userId,
+  email = "",
+  doNotShowAgain = false,
+}) => {
+  await connectMongo();
+
+  const dismissed = Boolean(doNotShowAgain);
+  const update = {
+    $set: {
+      "onboarding.dashboardWelcomeDismissed": dismissed,
+      "onboarding.dashboardWelcomeDismissedAt": dismissed ? new Date() : null,
+    },
+  };
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  let user = userId
+    ? await User.findByIdAndUpdate(userId, update, { new: true })
+    : null;
+
+  if (!user && normalizedEmail) {
+    user = await User.findOneAndUpdate(
+      { email: normalizedEmail },
+      update,
+      { new: true }
+    );
+  }
+
+  return user ? normalizeOnboarding(user.onboarding) : null;
 };
