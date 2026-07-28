@@ -4,6 +4,7 @@
 import { useState } from "react";
 import { Popover, Transition } from "@headlessui/react";
 import { useSession, signOut } from "next-auth/react";
+import { toast } from "react-hot-toast";
 import apiClient from "@/libs/api";
 import config from "@/config";
 
@@ -39,6 +40,23 @@ const ButtonAccount = () => {
     }
 
     setIsLoading(false);
+  };
+  const handleRestoreAccess = async () => {
+    setIsLoading(true);
+
+    try {
+      const result = await apiClient.post("/account/restore-access");
+      if (result?.hasArenaAccess) {
+        toast.success("Your Legal Arena access is active.");
+        window.location.reload();
+      } else {
+        toast("No active lifetime access was found for this account.");
+      }
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   // Don't show anything if not authenticated (we don't have any info about the user)
@@ -115,6 +133,38 @@ const ButtonAccount = () => {
                     </svg>
                     Billing
                   </button>
+                  <button
+                    className="flex w-full items-center gap-2 rounded-xl px-4 py-2.5 font-medium duration-200 hover:bg-white/8"
+                    onClick={handleRestoreAccess}
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                      className="h-5 w-5"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M15.312 11.424a5.5 5.5 0 01-9.201 2.42.75.75 0 00-1.06 1.061 7 7 0 0011.78-3.097h1.42a.75.75 0 000-1.5h-2.25a.75.75 0 00-.75.75v2.25a.75.75 0 001.5 0v-.484a7 7 0 10-12.56-5.66.75.75 0 001.377.593 5.5 5.5 0 019.744 3.667z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                    Restore access
+                  </button>
+                  <a
+                    href="/account"
+                    className="flex w-full items-center gap-2 rounded-xl px-4 py-2.5 font-medium duration-200 hover:bg-white/8"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                      className="h-5 w-5"
+                    >
+                      <path d="M10 8a3 3 0 100-6 3 3 0 000 6zM3.465 14.493A7.001 7.001 0 0110 10a7.001 7.001 0 016.535 4.493A2.5 2.5 0 0114.2 18H5.8a2.5 2.5 0 01-2.335-3.507z" />
+                    </svg>
+                    Account settings
+                  </a>
                   <button
                     className="flex w-full items-center gap-2 rounded-xl px-4 py-2.5 font-medium duration-200 hover:bg-white/8"
                     onClick={handleSwitchAccount}

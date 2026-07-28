@@ -18,7 +18,19 @@
 # misc
 .DS_Store
 *.pem
+*.keystore
+*.jks
 *.codex-artifact*
+/secrets/
+/artifacts/
+/android-twa/.gradle/
+/android-twa/app/
+/android-twa/build/
+/android-twa/gradle/
+/android-twa/gradlew
+/android-twa/gradlew.bat
+/android-twa/*.apk
+/android-twa/*.aab
 
 # debug
 npm-debug.log*

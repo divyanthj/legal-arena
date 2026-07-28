@@ -43,6 +43,7 @@ export async function POST(req) {
     const name = cleanText(body.name, 120);
     const email = cleanText(body.email, 180).toLowerCase();
     const message = String(body.message || "").trim().slice(0, 4000);
+    const source = cleanText(body.source, 80);
 
     if (!name) {
       return NextResponse.json({ error: "Name is required." }, { status: 400 });
@@ -68,6 +69,9 @@ export async function POST(req) {
       name,
       email,
       message,
+      source: ["contact_page", "account_deletion_request"].includes(source)
+        ? source
+        : "contact_page",
       userAgent: cleanText(req.headers.get("user-agent"), 500),
       referrer: cleanText(req.headers.get("referer"), 500),
     });

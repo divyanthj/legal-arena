@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/libs/next-auth";
 import ChallengeWorkspace from "@/components/legal-arena/ChallengeWorkspace";
@@ -9,6 +9,7 @@ import {
 } from "@/libs/game/challenges";
 import { userCanAccessArena } from "@/libs/admin";
 import { toClientJSON } from "@/libs/serialize";
+import { getCommunityTermsStatus } from "@/libs/communitySafety";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,15 @@ export default async function ChallengePage({ params }) {
 
   if (!session?.user?.id) {
     return <DevelopmentAccessGate email={session?.user?.email || ""} />;
+  }
+
+  const communityTerms = await getCommunityTermsStatus(session.user.id);
+  if (!communityTerms.accepted) {
+    redirect(
+      `/community-guidelines?next=${encodeURIComponent(
+        `/dashboard/challenges/${params.challengeId}`
+      )}`
+    );
   }
 
   const hasArenaAccess = await userCanAccessArena(session);

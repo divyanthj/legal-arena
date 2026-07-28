@@ -11,6 +11,10 @@ import {
   getPlayerCaseCountryPreference,
   setPlayerCaseCountryPreference,
 } from "@/libs/game/countryPreference";
+import {
+  arePlayersBlocked,
+  ensureCommunityTermsAccepted,
+} from "@/libs/communitySafety";
 
 export const maxDuration = 300;
 
@@ -50,6 +54,13 @@ export async function POST(req) {
 
   try {
     const body = await req.json();
+    await ensureCommunityTermsAccepted(session.user.id);
+    if (await arePlayersBlocked(session.user.id, body?.challengedId)) {
+      return NextResponse.json(
+        { error: "A player block prevents this challenge.", code: "PLAYER_BLOCKED" },
+        { status: 403 }
+      );
+    }
     if (body?.countryCode && !isValidCountryCode(body.countryCode)) {
       return NextResponse.json({ error: "Choose a supported country." }, { status: 400 });
     }

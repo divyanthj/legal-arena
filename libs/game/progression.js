@@ -594,7 +594,7 @@ export const listOverallLeaderboard = async ({
 } = {}) => {
   await connectMongo();
 
-  const refreshedUsers = await User.find({}).sort({
+  const refreshedUsers = await User.find({ deletedAt: null }).sort({
     "progression.overallRating": -1,
     "progression.completedCases": -1,
     updatedAt: -1,
@@ -614,7 +614,10 @@ export const listPlayerDirectory = async ({ search = "", limit = null } = {}) =>
 export const listCategoryLeaderboard = async (categorySlug) => {
   await connectMongo();
 
-  return rankCategoryLeaderboardEntries(await User.find({}), categorySlug);
+  return rankCategoryLeaderboardEntries(
+    await User.find({ deletedAt: null }),
+    categorySlug
+  );
 };
 
 export const listDashboardLeaderboards = async ({
@@ -624,7 +627,7 @@ export const listDashboardLeaderboards = async ({
 } = {}) => {
   await connectMongo();
 
-  const users = await User.find({});
+  const users = await User.find({ deletedAt: null });
   const overallLeaderboard = applyLeaderboardLimit({
     rankedEntries: rankOverallLeaderboardEntries(users),
     limit: overallLimit,

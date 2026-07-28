@@ -4,6 +4,7 @@ import PlausibleProvider from "next-plausible";
 import { getSEOTags } from "@/libs/seo";
 import ClientLayout from "@/components/LayoutClient";
 import Footer from "@/components/Footer";
+import AppInstallManager from "@/components/AppInstallManager";
 import config from "@/config";
 import "flag-icons/css/flag-icons.min.css";
 import "./globals.css";
@@ -29,6 +30,7 @@ export const viewport = {
   themeColor: config.colors.main,
   width: "device-width",
   initialScale: 1,
+  viewportFit: "cover",
 };
 
 // This adds default SEO tags to all pages in our app.
@@ -122,6 +124,7 @@ export default function RootLayout({ children }) {
         </head>
       )}
       <body className="min-h-screen">
+        <AppInstallManager />
         {/* ClientLayout contains all the client wrappers (Crisp chat support, toast messages, tooltips, etc.) */}
         <div className="flex min-h-screen flex-col">
           <div className="flex-1">

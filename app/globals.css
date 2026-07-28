@@ -2,6 +2,40 @@
 @tailwind components;
 @tailwind utilities;
 
+html {
+  min-height: 100%;
+  background: #020202;
+}
+
+body {
+  min-height: 100%;
+  padding-top: env(safe-area-inset-top);
+  padding-right: env(safe-area-inset-right);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  overscroll-behavior-y: none;
+}
+
+button,
+a,
+input,
+textarea,
+select {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html[data-app-display-mode="standalone"] body {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+html[data-app-display-mode="standalone"] input,
+html[data-app-display-mode="standalone"] textarea,
+html[data-app-display-mode="standalone"] [contenteditable="true"] {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
 :root {
   --arena-bg: #050505;
   --arena-bg-soft: #0a0a0a;

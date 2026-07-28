@@ -1474,9 +1474,14 @@ export default function AdminCaseLab({
                   Allowed admins: {adminEmails.length ? adminEmails.join(", ") : "none configured"}
                 </p>
               </div>
-              <Link href="/dashboard" className="arena-btn-dark inline-flex px-4 py-2 text-sm">
-                Back to Dashboard
-              </Link>
+              <div className="flex flex-wrap gap-2">
+                <Link href="/dashboard/admin/reports" className="arena-btn-dark inline-flex px-4 py-2 text-sm">
+                  Moderation Queue
+                </Link>
+                <Link href="/dashboard" className="arena-btn-dark inline-flex px-4 py-2 text-sm">
+                  Back to Dashboard
+                </Link>
+              </div>
             </div>
 
             <div className="mt-6 grid gap-3 md:grid-cols-2">

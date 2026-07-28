@@ -106,7 +106,10 @@ export const getRequestSession = async (req) => {
     };
   }
 
-  const user = await User.findById(credential.userId).select("_id email name image");
+  const user = await User.findOne({
+    _id: credential.userId,
+    deletedAt: null,
+  }).select("_id email name image");
   if (!user) return { error: unauthorized() };
 
   return {

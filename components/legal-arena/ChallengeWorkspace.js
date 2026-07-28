@@ -633,6 +633,8 @@ export default function ChallengeWorkspace({ initialChallenge }) {
       apiConfig={{
         analyticsMode: "pvp",
         playerId: viewer.userId,
+        opponentPlayerId: challenge.opponent?.userId || "",
+        opponentPlayerName: challenge.opponent?.name || "the other player",
         basePath: `/challenges/${challengeRef}`,
         workspaceHref: `/dashboard/challenges/${challengeRef}`,
         settlementHref: `/dashboard/challenges/${challengeRef}/settlement`,

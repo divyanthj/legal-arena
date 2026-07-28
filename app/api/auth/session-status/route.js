@@ -26,7 +26,7 @@ export async function GET() {
     }
 
     const user = selectors.length
-      ? await User.findOne({ $or: selectors }).select("_id")
+      ? await User.findOne({ $or: selectors, deletedAt: null }).select("_id")
       : null;
 
     return NextResponse.json({

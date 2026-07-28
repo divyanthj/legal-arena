@@ -51,6 +51,12 @@ const Footer = () => {
                 <Link href="/help" className="text-white/72 transition hover:text-white">
                   Tutorials
                 </Link>
+                <Link
+                  href="/download/android"
+                  className="text-white/72 transition hover:text-white"
+                >
+                  Android app
+                </Link>
                 <Link href="/tos" className="text-white/72 transition hover:text-white">
                   Terms and Conditions
                 </Link>
@@ -59,6 +65,12 @@ const Footer = () => {
                   className="text-white/72 transition hover:text-white"
                 >
                   Privacy Policy
+                </Link>
+                <Link
+                  href="/account-deletion"
+                  className="text-white/72 transition hover:text-white"
+                >
+                  Delete account
                 </Link>
                 <Link
                   href="/contact"

@@ -24,7 +24,7 @@ const findUserForSessionToken = async (token = {}) => {
     return null;
   }
 
-  return User.findOne({ $or: selectors }).select("_id");
+  return User.findOne({ $or: selectors, deletedAt: null }).select("_id");
 };
 
 export const authOptions = {

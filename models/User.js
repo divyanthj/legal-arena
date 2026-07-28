@@ -147,6 +147,26 @@ const userSchema = mongoose.Schema(
     image: {
       type: String,
     },
+    deletedAt: {
+      type: Date,
+      default: null,
+      private: true,
+    },
+    deletionReference: {
+      type: String,
+      default: "",
+      private: true,
+    },
+    communityTermsVersion: {
+      type: String,
+      default: "",
+      private: true,
+    },
+    communityTermsAcceptedAt: {
+      type: Date,
+      default: null,
+      private: true,
+    },
     selectedLawyerTitleId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "LawyerTitle",

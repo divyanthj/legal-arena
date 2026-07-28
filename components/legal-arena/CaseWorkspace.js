@@ -8,6 +8,7 @@ import { Tooltip } from "react-tooltip";
 import { toast } from "react-hot-toast";
 import * as HeroIcons from "@heroicons/react/24/outline";
 import ButtonAccount from "@/components/ButtonAccount";
+import SafetyActionsButton from "./SafetyActionsButton";
 import { useNavigationLoading } from "@/components/NavigationLoadingProvider";
 import apiClient from "@/libs/api";
 import { trackGoal } from "@/libs/datafast";
@@ -6491,6 +6492,24 @@ export default function CaseWorkspace({
         { key: "lawbook", label: "Lawbook", target: "workspace-lawbook" },
       ];
 
+  const latestReportableContent =
+    [...(caseSession.courtroomTranscript || [])].reverse().find((entry) => entry?.text)
+      ?.text ||
+    [...(caseSession.interviewTranscript || [])].reverse().find((entry) => entry?.text)
+      ?.text ||
+    caseSession.premise?.overview ||
+    "";
+  const safetyActions = (
+    <SafetyActionsButton
+      sourceType={analyticsMode === "pvp" ? "challenge" : "case"}
+      sourceId={caseSession.id || caseSession._id}
+      contextLabel={`${caseSession.title || "Legal Arena matter"} · ${courtroomStageLabel}`}
+      contentExcerpt={latestReportableContent}
+      reportedPlayerId={apiConfig.opponentPlayerId || ""}
+      reportedPlayerName={apiConfig.opponentPlayerName || "the other player"}
+    />
+  );
+
   return (
     <main
       ref={settlementTopRef}
@@ -6527,6 +6546,7 @@ export default function CaseWorkspace({
                     : apiConfig.exitLabel || "Exit Case"}
                 </button>
               ) : null}
+              {safetyActions}
               <ButtonAccount />
             </div>
           </div>
@@ -6699,6 +6719,7 @@ export default function CaseWorkspace({
                       : apiConfig.exitLabel || "Exit Case"}
                   </button>
                 ) : null}
+                {safetyActions}
                 <ButtonAccount />
               </div>
             </div>

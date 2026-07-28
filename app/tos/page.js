@@ -36,12 +36,27 @@ const sections = [
       "Legal Arena is a game and training simulator. It is not a lawyer, law firm, legal advice service, or substitute for hiring a licensed attorney for a real dispute.",
   },
   {
-    title: "6. Governing Law",
+    title: "6. Adults and Community Conduct",
+    body:
+      "Legal Arena is intended for adults aged 18 and over. PVP players must accept and follow the Community Rules. Harassment, hateful or sexual exploitation content, child-safety violations, threats, privacy abuse, impersonation, spam, ranking manipulation, and attempts to evade another player's block are prohibited. We may review reports and restrict accounts or content to protect the service.",
+  },
+  {
+    title: "7. AI and Simulation Limits",
+    body:
+      "AI-generated clients, cases, images, negotiations, and rulings can be incomplete, inaccurate, or inappropriate. Use the in-app reporting control when content appears unsafe. Legal Arena outcomes are fictional game results and must not be presented as real court decisions or professional qualifications.",
+  },
+  {
+    title: "8. Account Deletion and Shared Records",
+    body:
+      "You may delete your account through Account settings or request deletion through the public deletion page. Private account data is removed. Shared PVP history may be retained in anonymized form for the other participant, and related public case reports are unpublished.",
+  },
+  {
+    title: "9. Governing Law",
     body:
       "These Terms are governed by the laws of France, unless another jurisdiction is required by applicable consumer protection law.",
   },
   {
-    title: "7. Updates to the Terms",
+    title: "10. Updates to the Terms",
     body:
       "We may update these Terms from time to time. When changes are material, we may notify users by email or through the product.",
   },
@@ -62,7 +77,7 @@ export default function TermsPage() {
             Terms and Conditions
           </h1>
           <p className="mt-6 max-w-3xl text-lg leading-8 text-white/66">
-            Last updated: March 15, 2026. These terms govern your use of Legal Arena.
+            Last updated: July 28, 2026. These terms govern your use of Legal Arena.
           </p>
 
           <article className="arena-surface mt-10 p-5 md:p-8">

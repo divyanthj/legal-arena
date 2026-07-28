@@ -1,0 +1,54 @@
+{
+  "packageId": "app.legalarena",
+  "host": "legalarena.app",
+  "name": "Legal Arena",
+  "launcherName": "Legal Arena",
+  "display": "standalone",
+  "orientation": "any",
+  "themeColor": "#020202",
+  "themeColorDark": "#020202",
+  "navigationColor": "#020202",
+  "navigationColorDark": "#020202",
+  "navigationDividerColor": "#020202",
+  "navigationDividerColorDark": "#020202",
+  "backgroundColor": "#020202",
+  "enableNotifications": false,
+  "enableMicrophone": true,
+  "enableSiteSettingsShortcut": true,
+  "startUrl": "/dashboard?source=android&shell_version=0.1.0-beta.1",
+  "iconUrl": "https://legalarena.app/pwa/icon-512.png",
+  "maskableIconUrl": "https://legalarena.app/pwa/icon-maskable-512.png",
+  "splashScreenFadeOutDuration": 250,
+  "signingKey": {
+    "path": "../secrets/legal-arena-release.keystore",
+    "alias": "legal-arena"
+  },
+  "appVersionName": "0.1.0-beta.1",
+  "appVersionCode": 1,
+  "minSdkVersion": 28,
+  "shortcuts": [
+    {
+      "name": "Open dashboard",
+      "shortName": "Dashboard",
+      "url": "/dashboard?source=android&shell_version=0.1.0-beta.1",
+      "chosenIconUrl": "https://legalarena.app/pwa/icon-192.png"
+    }
+  ],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://legalarena.app/manifest.webmanifest",
+  "fallbackType": "customtabs",
+  "features": {
+    "playBilling": {
+      "enabled": false
+    }
+  },
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fingerprints": [],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": [],
+  "appVersion": "0.1.0-beta.1"
+}

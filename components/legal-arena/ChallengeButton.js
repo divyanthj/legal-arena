@@ -97,7 +97,7 @@ export default function ChallengeButton({
     []
   );
 
-  const startChallenge = () => {
+  const startChallenge = async () => {
     if (!hasArenaAccess) {
       guidedInteractionRef.current?.pulse("warning");
       trackGoal("pvp_challenge_access_blocked", {
@@ -108,6 +108,18 @@ export default function ChallengeButton({
       } else {
         toast.error("Purchase access to sponsor a challenge.");
       }
+      return;
+    }
+
+    try {
+      const terms = await apiClient.get("/community-terms");
+      if (!terms?.accepted) {
+        const next = `${window.location.pathname}${window.location.search}`;
+        router.push(`/community-guidelines?next=${encodeURIComponent(next)}`);
+        return;
+      }
+    } catch (error) {
+      toast.error("Could not verify the Community Rules.");
       return;
     }
 

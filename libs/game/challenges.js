@@ -1171,7 +1171,7 @@ export const createChallenge = async ({
 
   const [initiator, challenged] = await Promise.all([
     ensureUserProfile(initiatorId, initiatorProfile),
-    User.findById(challengedId),
+    User.findOne({ _id: challengedId, deletedAt: null }),
   ]);
 
   if (!challenged) {

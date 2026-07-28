@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getRequestSession } from "@/libs/api-auth";
 import { acceptChallengeForUser } from "@/libs/game/challenges";
+import { ensureCommunityTermsAccepted } from "@/libs/communitySafety";
 
 export async function POST(req, { params }) {
   const { session, error: authError } = await getRequestSession(req);
@@ -11,6 +12,7 @@ export async function POST(req, { params }) {
   }
 
   try {
+    await ensureCommunityTermsAccepted(session.user.id);
     const challenge = await acceptChallengeForUser({
       userId: session.user.id,
       challengeId: params.challengeId,
@@ -29,6 +31,9 @@ export async function POST(req, { params }) {
     return NextResponse.json({ challenge });
   } catch (error) {
     console.error(error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(
+      { error: error.message, code: error.code || "" },
+      { status: error.status || 500 }
+    );
   }
 }

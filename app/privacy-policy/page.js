@@ -13,37 +13,47 @@ const sections = [
   {
     title: "1. Information We Collect",
     body:
-      "We may collect information you provide directly, including name, email, contact messages, account information, and payment-related information needed to provide access. Payment details are processed by trusted third-party payment providers.",
+      "We collect information you provide directly, including your name, email, profile image, contact and deletion requests, account preferences, PVP submissions, reports, and gameplay activity. Payment card details are processed by Lemon Squeezy; Legal Arena receives transaction and entitlement metadata rather than complete card details.",
   },
   {
-    title: "2. Product and Usage Data",
+    title: "2. Voice, AI, and Generated Content",
     body:
-      "We may collect browser type, device information, gameplay interactions, page views, analytics events, cookies, AI feature usage and token counts, and similar signals. When you sign in, analytics activity may be associated with your account identifier across sessions and devices so we can understand journeys, attribution, product performance, and pricing needs.",
+      "When you choose microphone input, the recording is sent through Legal Arena to OpenAI for transcription and is not intentionally stored by Legal Arena after the request completes. Questions, arguments, fictional case context, and related gameplay data are processed by AI providers to generate clients, negotiations, images, and rulings. Generated content and safety-report excerpts may be stored with the relevant matter.",
   },
   {
-    title: "3. How We Use Information",
+    title: "3. Device, Analytics, and Advertising Data",
     body:
-      "We use information to operate Legal Arena, process access and payments, respond to support requests, improve game systems, detect abuse, send important updates, and maintain account security.",
+      "We collect browser and device information, IP-derived country signals, page views, gameplay events, referral and advertising attribution, cookies, AI feature usage, model names, token counts, latency, and reliability signals. DataFast, Plausible, and Google advertising services may process analytics or attribution data. Signed-in analytics may be associated with your account identifier across sessions and devices.",
   },
   {
-    title: "4. Data Sharing",
+    title: "4. How We Use Information",
     body:
-      "We do not sell your personal information. We may share limited data with service providers that help us run the product, such as authentication, payment, analytics, hosting, database, and email infrastructure providers.",
+      "We use information to authenticate accounts, provide solo and PVP gameplay, personalize progression, process lifetime access, restore purchases, generate and moderate content, respond to support and deletion requests, prevent fraud and abuse, send operational or opted-in messages, analyze product performance, and secure the service.",
   },
   {
-    title: "5. Children's Privacy",
+    title: "5. Service Providers and Sharing",
     body:
-      "Legal Arena is not intended for children under the age of 13. We do not knowingly collect personal information from children under 13.",
+      "We do not sell personal information. Limited data is processed by providers supporting authentication, AI and transcription, Lemon Squeezy payments, hosting, MongoDB database services, private file storage, analytics and advertising attribution, and transactional email. PVP submissions are visible to the other participant, and a case report is published only through the product's consent controls.",
   },
   {
-    title: "6. Updates to This Policy",
+    title: "6. Retention and Account Deletion",
     body:
-      "We may update this Privacy Policy as the product changes. Significant updates may be posted on this page or sent by email.",
+      "Gameplay and account information is kept while the account is active and as needed to operate, secure, and improve Legal Arena. You can permanently delete a signed-in account from Account settings or use the public account-deletion page. Private account data is removed; shared PVP records are anonymized for the other participant; related public case reports are unpublished. Providers may retain payment or security records where legally required.",
   },
   {
-    title: "7. Contact and Requests",
+    title: "7. Security and Your Choices",
     body:
-      "For privacy questions, correction requests, deletion requests, or account concerns, send a message through the contact page.",
+      "Legal Arena uses HTTPS and limits private gameplay APIs to authenticated users. You can type instead of granting microphone access, manage browser cookies and permissions, unsubscribe from marketing email, report unsafe AI or player content, block PVP players, correct profile preferences, and request access or deletion through the available account and contact controls.",
+  },
+  {
+    title: "8. Adults Only",
+    body:
+      "Legal Arena is intended for adults aged 18 and over. It includes open-ended fictional disputes and AI- and player-generated text that may address mature legal themes. We do not knowingly provide accounts to children.",
+  },
+  {
+    title: "9. Updates and Contact",
+    body:
+      "We may update this policy as the product or providers change and will revise the date above. For privacy questions, correction, access, or deletion, use the contact page or the dedicated account-deletion page.",
   },
 ];
 
@@ -62,7 +72,7 @@ export default function PrivacyPolicyPage() {
             Privacy Policy
           </h1>
           <p className="mt-6 max-w-3xl text-lg leading-8 text-white/66">
-            Last updated: July 14, 2026. This page explains how Legal Arena collects,
+            Last updated: July 28, 2026. This page explains how Legal Arena collects,
             uses, and protects information.
           </p>
 
@@ -85,6 +95,10 @@ export default function PrivacyPolicyPage() {
               Need help with a privacy request? Use the{" "}
               <Link href="/contact" className="font-semibold text-emerald-100 underline underline-offset-4">
                 contact page
+              </Link>
+              {" "}or{" "}
+              <Link href="/account-deletion" className="font-semibold text-emerald-100 underline underline-offset-4">
+                account-deletion page
               </Link>
               .
             </div>
