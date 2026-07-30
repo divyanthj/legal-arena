@@ -55,14 +55,21 @@ const config = {
         variantId: process.env.LEMONSQUEEZY_VARIANT_ID || "",
         name: "Early Access",
         description:
-          "One-time purchase for immediate access while Legal Arena is still in early access.",
+          "One-time purchase for the complete game available today and gameplay updates released during early access.",
         price: 15.99,
         priceAnchor: null,
         features: [
-          { name: "Immediate access to the full Legal Arena build" },
-          { name: "Challenge other players to PVP cases with an AI judge" },
-          { name: "All future early-access updates included" },
-          { name: "One-time payment, no subscription" },
+          {
+            name: "Unlimited AI-generated solo cases across multiple areas of law",
+          },
+          {
+            name: "Client interviews, case preparation, and courtroom arguments",
+          },
+          { name: "PVP cases judged by AI" },
+          { name: "Rankings, XP, awards, and progression" },
+          {
+            name: "Future gameplay updates released during early access",
+          },
         ],
       },
     ],

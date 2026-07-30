@@ -41,6 +41,10 @@ const paywallSource = await readFile(
   new URL("../components/legal-arena/DevelopmentAccessGate.js", import.meta.url),
   "utf8"
 );
+const configSource = await readFile(
+  new URL("../config.js", import.meta.url),
+  "utf8"
+);
 const promoBannerSource = await readFile(
   new URL("../components/legal-arena/IndependenceDayPromoBanner.js", import.meta.url),
   "utf8"
@@ -64,10 +68,43 @@ assert.match(
   checkoutRouteSource,
   /discountCode: getActiveIndependenceDayDiscountCode\(\) \|\| undefined/
 );
-assert.match(paywallSource, /Claim 30% Off Lifetime Access/);
+assert.match(paywallSource, /Build your legal career/);
+assert.match(paywallSource, /Unlock the full Legal Arena\./);
 assert.match(
   paywallSource,
-  /Independence Day offer: get 30% off lifetime access\. No code needed -\s+your discount is ready at checkout\./
+  /Take on unlimited AI-generated disputes[\s\S]*challenge other players in PVP\./
+);
+assert.match(paywallSource, /One-time purchase\. No subscription\./);
+assert.match(
+  paywallSource,
+  /Unlock the Full Game — \$\{[\s\S]*promoActive \? promoPrice : currentPrice/
+);
+assert.match(
+  paywallSource,
+  /One-time payment · Secure checkout through Lemon Squeezy/
+);
+assert.match(paywallSource, /<HeroIcons\.CheckIcon/);
+assert.match(
+  paywallSource,
+  /Independence Day offer: get 30% off the full game\. No code needed -\s+your discount is ready at checkout\./
+);
+assert.doesNotMatch(paywallSource, /early-access build/i);
+assert.doesNotMatch(paywallSource, /lifetime access/i);
+assert.doesNotMatch(paywallSource, /every future update/i);
+assert.match(
+  paywallSource,
+  /Legal Arena is still growing\. Your purchase includes the complete game[\s\S]*gameplay updates released during early access\./
+);
+assert.match(paywallSource, /const PAYWALL_COPY_VERSION = "experience_v2"/);
+assert.match(paywallSource, /early_access_paywall_page_viewed/);
+assert.match(paywallSource, /paywall_copy_version: PAYWALL_COPY_VERSION/);
+assert.match(
+  configSource,
+  /Unlimited AI-generated solo cases across multiple areas of law[\s\S]*Client interviews, case preparation, and courtroom arguments[\s\S]*PVP cases judged by AI[\s\S]*Rankings, XP, awards, and progression[\s\S]*Future gameplay updates released during early access/
+);
+assert.doesNotMatch(
+  configSource,
+  /Immediate access to the full Legal Arena build|All future early-access updates included/
 );
 assert.doesNotMatch(paywallSource, /23:59 UTC/);
 assert.doesNotMatch(paywallSource, /auto-applies/);

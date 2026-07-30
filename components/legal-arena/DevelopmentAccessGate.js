@@ -16,6 +16,7 @@ const loginHref = `${config.auth.loginUrl}?callbackUrl=${encodeURIComponent(
   config.auth.callbackUrl
 )}`;
 const MODAL_TRANSITION_MS = 320;
+const PAYWALL_COPY_VERSION = "experience_v2";
 
 export function DevelopmentAccessPanel({
   email = "",
@@ -25,6 +26,7 @@ export function DevelopmentAccessPanel({
 }) {
   const plan = config.lemonsqueezy.plans[0];
   const isModal = variant === "modal";
+  const paywallViewedRef = useRef(false);
   const [promoActive, setPromoActive] = useState(() =>
     isIndependenceDayPromoActive()
   );
@@ -57,15 +59,21 @@ export function DevelopmentAccessPanel({
   }, [promoActive]);
 
   useEffect(() => {
-    if (!isModal) {
-      return;
-    }
+    if (paywallViewedRef.current) return;
+    paywallViewedRef.current = true;
 
-    trackGoal("early_access_paywall_modal_viewed", {
-      price: plan.price,
-      provider: "lemonsqueezy",
-      variant_id: plan.variantId,
-    });
+    trackGoal(
+      isModal
+        ? "early_access_paywall_modal_viewed"
+        : "early_access_paywall_page_viewed",
+      {
+        surface: isModal ? "modal" : "page",
+        paywall_copy_version: PAYWALL_COPY_VERSION,
+        price: plan.price,
+        provider: "lemonsqueezy",
+        variant_id: plan.variantId,
+      }
+    );
   }, [isModal, plan.price, plan.variantId]);
 
   const trackModalInteraction = (action) => {
@@ -75,6 +83,7 @@ export function DevelopmentAccessPanel({
 
     trackGoal("early_access_paywall_modal_interaction", {
       action,
+      paywall_copy_version: PAYWALL_COPY_VERSION,
       price: plan.price,
       provider: "lemonsqueezy",
       variant_id: plan.variantId,
@@ -87,15 +96,15 @@ export function DevelopmentAccessPanel({
   };
 
   const handleCheckoutIntent = () => {
-    if (!isModal) {
-      return;
-    }
-
     trackGoal("early_access_paywall_cta_clicked", {
+      surface: isModal ? "modal" : "page",
+      paywall_copy_version: PAYWALL_COPY_VERSION,
       price: plan.price,
       provider: "lemonsqueezy",
       variant_id: plan.variantId,
-      source: "paywall_modal_primary_cta",
+      source: isModal
+        ? "paywall_modal_primary_cta"
+        : "early_access_gate_primary_cta",
     });
   };
 
@@ -114,15 +123,15 @@ export function DevelopmentAccessPanel({
 
       <div>
         <p className="text-sm font-semibold uppercase tracking-[0.35em] text-white/45">
-          Early Access
+          Build your legal career
         </p>
         <h1 className="arena-headline mt-4 text-4xl uppercase leading-[0.92] text-white md:text-5xl">
-          Unlock lifetime access to Legal Arena.
+          Unlock the full Legal Arena.
         </h1>
         <p className="mt-4 max-w-xl text-base leading-8 text-white/66">
-          Play the full early-access build: AI client interviews, case prep,
-          courtroom arguments, PVP challenges, verdicts, XP, and infinite legal
-          matters.
+          Take on unlimited AI-generated disputes, interview clients, prepare
+          your case, and argue before an AI judge. Build your ranking in solo
+          play or challenge other players in PVP.
         </p>
       </div>
 
@@ -139,29 +148,22 @@ export function DevelopmentAccessPanel({
           USD
         </div>
       </div>
+      <p className="mt-3 text-sm font-bold text-white/78">
+        One-time purchase. No subscription.
+      </p>
 
       {promoActive ? (
         <div className="arena-surface-soft mt-6 rounded-2xl border border-sky-200/20 bg-sky-200/10 p-4 text-sm font-semibold leading-7 text-sky-50">
-          Independence Day offer: get 30% off lifetime access. No code needed -
+          Independence Day offer: get 30% off the full game. No code needed -
           your discount is ready at checkout.
         </div>
       ) : null}
 
-      <div className="arena-surface-soft mt-6 rounded-2xl border border-emerald-300/20 bg-emerald-300/10 p-4 text-sm font-semibold leading-7 text-emerald-50">
-        Pay once. Keep permanent access to all future Legal Arena updates.
-      </div>
-
-      <p className="mt-4 text-sm leading-7 text-white/62">
-        Early-access lifetime access is {currentPrice}. Pay once and keep every
-        future Legal Arena update as the game expands with new features, polish,
-        and progression.
-      </p>
-
       <ul className="mt-8 space-y-3 text-sm leading-7 text-white/72">
         {plan.features.map((feature) => (
           <li key={feature.name} className="flex gap-3">
-            <span className="mt-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-white/10 bg-white/6 font-semibold text-white">
-              +
+            <span className="mt-1 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-emerald-200/20 bg-emerald-200/[0.08] text-emerald-100">
+              <HeroIcons.CheckIcon className="h-3.5 w-3.5" aria-hidden="true" />
             </span>
             <span>{feature.name}</span>
           </li>
@@ -169,8 +171,8 @@ export function DevelopmentAccessPanel({
       </ul>
 
       <div className="arena-surface-soft mt-6 rounded-2xl p-4 text-sm leading-7 text-white/62">
-        Your purchase includes the current experience plus every future update
-        while we keep expanding gameplay, polish, and progression.
+        Legal Arena is still growing. Your purchase includes the complete game
+        available today and gameplay updates released during early access.
       </div>
 
       {showAccountActions && email ? (
@@ -205,13 +207,9 @@ export function DevelopmentAccessPanel({
       <div className={isModal ? "modal-action mt-8 block" : "mt-8"}>
         <EarlyAccessCheckoutButton
           variantId={plan.variantId}
-          label={
-            isModal
-              ? promoActive
-                ? "Claim 30% Off Lifetime Access"
-                : "Unlock Lifetime Access"
-              : `Unlock Lifetime Access for ${promoActive ? promoPrice : currentPrice}`
-          }
+          label={`Unlock the Full Game — ${
+            promoActive ? promoPrice : currentPrice
+          }`}
           source={isModal ? "paywall_modal_primary_cta" : "early_access_gate_primary_cta"}
           onIntent={handleCheckoutIntent}
           showArrow={isModal}
@@ -219,7 +217,7 @@ export function DevelopmentAccessPanel({
       </div>
 
       <p className="mt-4 text-center text-xs leading-5 text-white/42">
-        One-time payment. Secure checkout via Lemon Squeezy.
+        One-time payment · Secure checkout through Lemon Squeezy
         {promoActive ? " Your limited-time discount is included." : ""}
       </p>
     </>
