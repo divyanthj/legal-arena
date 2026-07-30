@@ -12,9 +12,6 @@ import {
 } from "@/libs/independenceDayPromo";
 import EarlyAccessCheckoutButton from "./EarlyAccessCheckoutButton";
 
-const loginHref = `${config.auth.loginUrl}?callbackUrl=${encodeURIComponent(
-  config.auth.callbackUrl
-)}`;
 const MODAL_TRANSITION_MS = 320;
 const PAYWALL_COPY_VERSION = "experience_v2";
 
@@ -33,12 +30,6 @@ export function DevelopmentAccessPanel({
 
   const handleLogout = () => {
     signOut({ callbackUrl: "/" });
-  };
-
-  const handleSwitchAccount = () => {
-    signOut({
-      callbackUrl: loginHref,
-    });
   };
 
   const currentPrice = `$${plan.price.toFixed(2)}`;
@@ -180,16 +171,6 @@ export function DevelopmentAccessPanel({
           <p className="text-sm font-semibold text-white">Signed in as</p>
           <p className="mt-1 text-sm text-white/72">{email}</p>
           <div className="mt-4 flex flex-wrap gap-3">
-            <button
-              type="button"
-              className="arena-btn-dark px-4 py-2 text-sm"
-              onClick={() => {
-                trackModalInteraction("switch_account_clicked");
-                handleSwitchAccount();
-              }}
-            >
-              Switch account
-            </button>
             <button
               type="button"
               className="arena-btn-dark px-4 py-2 text-sm"

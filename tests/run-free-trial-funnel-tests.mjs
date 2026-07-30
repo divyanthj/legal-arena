@@ -15,6 +15,8 @@ const [
   purchaseSuccess,
   adminAccess,
   courtroomRoute,
+  paywall,
+  accountMenu,
 ] = await Promise.all([
   read("../models/User.js"),
   read("../models/CaseSession.js"),
@@ -27,6 +29,8 @@ const [
   read("../app/purchase-success/PurchaseSuccessRedirect.js"),
   read("../libs/admin.js"),
   read("../app/api/cases/[caseId]/courtroom/route.js"),
+  read("../components/legal-arena/DevelopmentAccessGate.js"),
+  read("../components/ButtonAccount.js"),
 ]);
 const globalsCss = await read("../app/globals.css");
 
@@ -108,5 +112,11 @@ assert.match(purchaseSuccess, /searchParams\.get\("nextFrom"\)/);
 assert.match(purchaseSuccess, /apiClient\.get\("\/arena\/access"/);
 assert.match(purchaseSuccess, /apiClient\.post\([\s\S]*"\/cases\/next"/);
 assert.match(adminAccess, /const getSoloTrialResolution = \(caseSession = \{\}\) => \{[\s\S]*if \(!caseSession\) return "";/);
+assert.doesNotMatch(paywall, /Switch account/);
+assert.doesNotMatch(paywall, /switch_account_clicked/);
+assert.match(paywall, />\s*Log out\s*</);
+assert.match(paywall, /early_access_paywall_cta_clicked/);
+assert.match(accountMenu, /Switch account/);
+assert.match(accountMenu, /handleSwitchAccount/);
 
 console.log("Free trial funnel tests passed.");
