@@ -711,6 +711,29 @@ progress::-webkit-progress-value {
   }
 }
 
+/*
+ * Keep dense light-on-dark Arena typography crisp. Grayscale smoothing avoids
+ * the heavier subpixel fringe, while real/interpolated weights prevent browsers
+ * from synthesizing an extra outline around already-bold text.
+ */
+.arena-app-shell {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-synthesis: none;
+}
+
+.arena-app-shell .font-semibold {
+  font-weight: 550;
+}
+
+.arena-app-shell .font-bold {
+  font-weight: 650;
+}
+
+.arena-app-shell .font-black {
+  font-weight: 800;
+}
+
 @keyframes arena-modal-backdrop-enter {
   from {
     background-color: rgba(0, 0, 0, 0);
@@ -725,6 +748,51 @@ progress::-webkit-progress-value {
 
 .post-resolution-card {
   container-type: inline-size;
+}
+
+.arena-resolution-screen {
+  text-shadow: 0 0 7px rgba(255, 255, 255, 0.075);
+}
+
+.arena-resolution-screen .text-black {
+  text-shadow: none;
+}
+
+.post-resolution-unlock-cta {
+  background-image: linear-gradient(
+    105deg,
+    #f8d568 0%,
+    #ffec9a 46%,
+    #f8d568 100%
+  );
+  background-size: 180% 100%;
+  animation: post-resolution-unlock-cta-breathe 4.8s ease-in-out infinite;
+}
+
+.post-resolution-unlock-cta > span {
+  font-weight: 800;
+}
+
+.post-resolution-unlock-cta:disabled {
+  animation: none;
+}
+
+@keyframes post-resolution-unlock-cta-breathe {
+  0%,
+  100% {
+    background-position: 0% 50%;
+    box-shadow: 0 16px 38px rgba(245, 158, 11, 0.2);
+  }
+  50% {
+    background-position: 100% 50%;
+    box-shadow: 0 18px 44px rgba(245, 158, 11, 0.29);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .post-resolution-unlock-cta {
+    animation: none;
+  }
 }
 
 @container (min-width: 48rem) {

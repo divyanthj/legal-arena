@@ -11,6 +11,7 @@ import ButtonAccount from "@/components/ButtonAccount";
 import { useNavigationLoading } from "@/components/NavigationLoadingProvider";
 import apiClient from "@/libs/api";
 import { trackGoal } from "@/libs/datafast";
+import { mergeAwardChanges } from "@/libs/game/awardChanges.mjs";
 import {
   createGuidedInteractionController,
   pulseHaptic,
@@ -1026,6 +1027,45 @@ const SettlementPartyPortrait = ({ image, name, tone = "emerald", fallbackIcon: 
   );
 };
 
+const ClientPortraitPlaceholder = ({
+  status = "queued",
+  error = "",
+  onRetry,
+}) => (
+  <div
+    className="flex h-full w-full flex-col items-center justify-center gap-1.5 px-2 text-center text-white/42"
+    aria-live="polite"
+  >
+    {status === "generating" ? (
+      <>
+        <span className="loading loading-ring loading-md text-amber-200" aria-hidden="true" />
+        <span className="text-[0.58rem] font-semibold uppercase tracking-[0.08em]">
+          Preparing portrait
+        </span>
+      </>
+    ) : status === "error" ? (
+      <>
+        <HeroIcons.ExclamationCircleIcon className="h-8 w-8 text-rose-200" aria-hidden="true" />
+        <span className="sr-only">{error || "Portrait generation failed."}</span>
+        <button
+          type="button"
+          className="rounded-lg border border-white/12 bg-black/25 px-2 py-1 text-[0.62rem] font-bold text-white/72 transition hover:border-white/25 hover:text-white"
+          onClick={onRetry}
+        >
+          Retry portrait
+        </button>
+      </>
+    ) : (
+      <>
+        <HeroIcons.UserCircleIcon className="h-10 w-10" aria-hidden="true" />
+        <span className="text-[0.58rem] font-semibold uppercase tracking-[0.08em]">
+          Portrait queued
+        </span>
+      </>
+    )}
+  </div>
+);
+
 export default function CaseWorkspace({
   initialCase,
   apiConfig = {},
@@ -1038,6 +1078,10 @@ export default function CaseWorkspace({
     ...initialCase,
     factSheet: initialFactSheet,
   }));
+  const [clientPortraitStatus, setClientPortraitStatus] = useState(
+    initialCase.clientPortrait?.image ? "complete" : "queued"
+  );
+  const [clientPortraitError, setClientPortraitError] = useState("");
   const [awardChanges, setAwardChanges] = useState([]);
   const [awardEvaluationStatus, setAwardEvaluationStatus] = useState("not_started");
   const [question, setQuestion] = useState("");
@@ -1124,6 +1168,7 @@ export default function CaseWorkspace({
     () => () => guidedInteractionRef.current?.cancel(),
     []
   );
+  const requestedClientPortraitRef = useRef(new Set());
   const requestedOpponentPortraitRef = useRef(new Set());
   const workingRef = useRef(false);
   const updateCaseFromResponseRef = useRef(null);
@@ -1355,15 +1400,16 @@ export default function CaseWorkspace({
       setAwardEvaluationStatus(response.awardEvaluation.status);
     }
     if (changes.length) {
-      setAwardChanges((current) => {
-        const seen = new Set(current.map((item) => `${item.code}:${item.type}:${item.tier || ""}`));
-        return [...current, ...changes.filter((item) => !seen.has(`${item.code}:${item.type}:${item.tier || ""}`))];
-      });
+      setAwardChanges((current) => mergeAwardChanges(current, changes));
     }
     const nextCase = getResponseCase(response);
 
     if (!nextCase) {
       return null;
+    }
+    if (nextCase.clientPortrait?.image) {
+      setClientPortraitStatus("complete");
+      setClientPortraitError("");
     }
 
     setCaseSession((current) => ({
@@ -1512,6 +1558,81 @@ export default function CaseWorkspace({
   const isSettled = isSettlementAccepted;
   const isVerdict = caseSession.status === "verdict";
   const isExited = caseSession.status === "exited";
+  const clientPortraitCaseRef = getCaseRouteRef(caseSession);
+  const requestClientPortrait = useCallback(async () => {
+    if (
+      analyticsMode !== "solo" ||
+      !clientPortraitCaseRef ||
+      caseSession.clientPortrait?.image
+    ) {
+      return;
+    }
+
+    const requestKey = `${clientPortraitCaseRef}:client`;
+    if (requestedClientPortraitRef.current.has(requestKey)) return;
+
+    requestedClientPortraitRef.current.add(requestKey);
+    setClientPortraitStatus("generating");
+    setClientPortraitError("");
+    const startedAt = Date.now();
+    trackGoal("portrait_background_started", {
+      case_id: clientPortraitCaseRef,
+      target: "client",
+      status: caseSession.status,
+      category: caseSession.primaryCategory,
+      complexity: caseSession.complexity,
+    });
+
+    try {
+      const response = await apiClient.post(
+        `/cases/${clientPortraitCaseRef}/client-portrait`,
+        undefined,
+        { suppressToast: true }
+      );
+      updateCaseFromResponseRef.current?.(response);
+      setClientPortraitStatus("complete");
+      trackGoal("portrait_background_completed", {
+        case_id: clientPortraitCaseRef,
+        target: "client",
+        duration_ms: Date.now() - startedAt,
+        reused: Boolean(response?.reused),
+        generation_ms: response?.timings?.generationMs || 0,
+      });
+    } catch (error) {
+      requestedClientPortraitRef.current.delete(requestKey);
+      setClientPortraitStatus("error");
+      setClientPortraitError(
+        error?.message || "The client portrait could not be generated."
+      );
+      trackGoal("portrait_background_failed", {
+        case_id: clientPortraitCaseRef,
+        target: "client",
+        duration_ms: Date.now() - startedAt,
+      });
+    }
+  }, [
+    analyticsMode,
+    caseSession.clientPortrait?.image,
+    caseSession.complexity,
+    caseSession.primaryCategory,
+    caseSession.status,
+    clientPortraitCaseRef,
+  ]);
+
+  useEffect(() => {
+    if (
+      isInterview &&
+      !caseSession.clientPortrait?.image &&
+      clientPortraitStatus === "queued"
+    ) {
+      requestClientPortrait();
+    }
+  }, [
+    caseSession.clientPortrait?.image,
+    clientPortraitStatus,
+    isInterview,
+    requestClientPortrait,
+  ]);
   const adjournmentHistory = Array.isArray(caseSession.adjournment?.history)
     ? caseSession.adjournment.history
     : [];
@@ -1534,10 +1655,9 @@ export default function CaseWorkspace({
         if (!active) return;
         setAwardEvaluationStatus(result.status || "not_started");
         if (result.changes?.length) {
-          setAwardChanges((current) => {
-            const seen = new Set(current.map((item) => `${item.code}:${item.type}:${item.tier || ""}`));
-            return [...current, ...result.changes.filter((item) => !seen.has(`${item.code}:${item.type}:${item.tier || ""}`))];
-          });
+          setAwardChanges((current) =>
+            mergeAwardChanges(current, result.changes)
+          );
         }
       } catch (error) {
         // Award processing is intentionally non-blocking and the next poll may recover.
@@ -2393,13 +2513,24 @@ export default function CaseWorkspace({
 
       const nextCase = updateCaseFromResponse(response);
       router.replace(getWorkspaceHref(nextCase || caseSession));
+      const courtroomEvent = response?.courtroomEvent || {};
       if (response?.adjournmentRuling) {
         setAdjournmentRuling(response.adjournmentRuling);
         setShowAdjournmentDialog(true);
       }
+      trackGoal("courtroom_state_transition", caseAnalyticsParams({
+        round:
+          courtroomEvent.round ||
+          caseSession.score.roundsCompleted + 1,
+        previous_status: courtroomEvent.previousStatus || caseSession.status,
+        next_status: courtroomEvent.nextStatus || nextCase?.status,
+        adjournment_granted: Boolean(courtroomEvent.adjournmentGranted),
+      }));
       trackGoal("courtroom_argument_scored", caseAnalyticsParams({
         argument_chars: submittedArgument.length,
-        round: caseSession.score.roundsCompleted + 1,
+        round:
+          courtroomEvent.round ||
+          caseSession.score.roundsCompleted + 1,
       }));
       guidedInteractionRef.current?.pulse("success");
     } catch (error) {
@@ -4946,7 +5077,10 @@ export default function CaseWorkspace({
 
     if (hasReachedSettlement) {
       return (
-        <div id="settlement" className="mx-auto w-full max-w-[1600px] space-y-4">
+        <div
+          id="settlement"
+          className="arena-resolution-screen mx-auto w-full max-w-[1600px] space-y-4"
+        >
           <section
             className="arena-surface overflow-hidden border-emerald-200/18 bg-emerald-300/[0.035]"
             data-section-nav-target="settlement-outcome"
@@ -5050,6 +5184,15 @@ export default function CaseWorkspace({
                     caseSession={caseSession}
                     hasArenaAccess={Boolean(apiConfig.hasArenaAccess)}
                   />
+                ) : null}
+
+                {awardChanges.length ? (
+                  <div className="mt-6">
+                    <AwardUnlockPanel
+                      changes={awardChanges}
+                      playerId={apiConfig.playerId || caseSession.playerUserId || ""}
+                    />
+                  </div>
                 ) : null}
               </div>
             </div>
@@ -5514,11 +5657,7 @@ export default function CaseWorkspace({
             ) : null}
             <button
               type="button"
-              className={`mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-60 ${
-                clientConsultedLatestOffer
-                  ? "border-amber-100/70 bg-amber-200 text-black shadow-[0_12px_30px_rgba(251,191,36,0.16)] hover:bg-amber-100"
-                  : "border-white/10 bg-white/[0.035] text-white/62 hover:border-amber-200/25 hover:text-amber-100"
-              }`}
+              className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-amber-100/70 bg-amber-200 px-4 py-3 text-sm font-black text-black shadow-[0_12px_30px_rgba(251,191,36,0.16)] transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
               onClick={() => setSettlementMessageAndFocus(responseAwareSettlementMessage)}
               disabled={settlementActionsLocked}
             >
@@ -7083,12 +7222,11 @@ export default function CaseWorkspace({
                           className="h-full w-full rounded-[inherit] object-cover object-top"
                         />
                       ) : (
-                        <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-white/42">
-                          <HeroIcons.UserCircleIcon className="h-10 w-10" aria-hidden="true" />
-                          <span className="text-[0.58rem] font-semibold uppercase tracking-[0.08em]">
-                            Portrait
-                          </span>
-                        </div>
+                        <ClientPortraitPlaceholder
+                          status={clientPortraitStatus}
+                          error={clientPortraitError}
+                          onRetry={requestClientPortrait}
+                        />
                       )}
                     </div>
                     <div className="relative z-10">
@@ -8250,16 +8388,9 @@ export default function CaseWorkspace({
             {(isInterview || isCourtroom) &&
               renderLawbookPanel("hidden xl:block", "desktop-lawbook-details")}
 
-            {awardChanges.length ? (
-              <AwardUnlockPanel
-                changes={awardChanges}
-                playerId={apiConfig.playerId || caseSession.playerUserId || ""}
-              />
-            ) : null}
-
             {isVerdict && (
               <div
-                className={`arena-surface overflow-hidden border ${verdictStyle.card}`}
+                className={`arena-resolution-screen arena-surface overflow-hidden border ${verdictStyle.card}`}
                 data-section-nav-target="verdict-ruling"
               >
                 <div
@@ -8349,6 +8480,15 @@ export default function CaseWorkspace({
                         caseSession={caseSession}
                         hasArenaAccess={Boolean(apiConfig.hasArenaAccess)}
                       />
+                    ) : null}
+
+                    {awardChanges.length ? (
+                      <div className="mt-6">
+                        <AwardUnlockPanel
+                          changes={awardChanges}
+                          playerId={apiConfig.playerId || caseSession.playerUserId || ""}
+                        />
+                      </div>
                     ) : null}
                   </div>
 
@@ -8508,12 +8648,11 @@ export default function CaseWorkspace({
                           className="h-full w-full rounded-[inherit] object-cover object-top"
                         />
                       ) : (
-                        <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-white/42">
-                          <HeroIcons.UserCircleIcon className="h-10 w-10" aria-hidden="true" />
-                          <span className="text-[0.58rem] font-semibold uppercase tracking-[0.08em]">
-                            Portrait
-                          </span>
-                        </div>
+                        <ClientPortraitPlaceholder
+                          status={clientPortraitStatus}
+                          error={clientPortraitError}
+                          onRetry={requestClientPortrait}
+                        />
                       )}
                     </div>
                     <div className="relative z-10 max-w-[13.5rem]">

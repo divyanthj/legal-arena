@@ -75,6 +75,10 @@ const workspaceSource = await readFile(
   new URL("../components/legal-arena/CaseWorkspace.js", import.meta.url),
   "utf8"
 );
+const courtroomRouteSource = await readFile(
+  new URL("../app/api/cases/[caseId]/courtroom/route.js", import.meta.url),
+  "utf8"
+);
 
 assert.match(challengeSource, /pauseChallengeForAdjournment/);
 assert.match(challengeSource, /challenge\.courtroomDeadlineAt = null/);
@@ -84,5 +88,10 @@ assert.match(soloRouteSource, /caseSession\.status = "interview"/);
 assert.match(soloRouteSource, /caseSession\.maxCourtRounds \+= 1/);
 assert.match(workspaceSource, /Ask for adjournment/);
 assert.match(workspaceSource, /Adjourned — intake reopened/);
+assert.match(workspaceSource, /courtroom_state_transition/);
+assert.match(workspaceSource, /courtroomEvent\.round/);
+assert.match(courtroomRouteSource, /previousStatus/);
+assert.match(courtroomRouteSource, /nextStatus: caseSession\.status/);
+assert.match(courtroomRouteSource, /adjournmentGranted: Boolean\(automaticAdjournment\?\.granted\)/);
 
 console.log("Adjournment tests passed");

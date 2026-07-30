@@ -24,6 +24,7 @@ export default function PostResolutionNextCaseCard({
   const [working, setWorking] = useState(false);
   const [error, setError] = useState("");
   const [recommendation, setRecommendation] = useState(null);
+  const [teaser, setTeaser] = useState(null);
   const [recommendationLoading, setRecommendationLoading] = useState(false);
   const plan = config.lemonsqueezy.plans[0];
   const sourceCaseId =
@@ -44,6 +45,12 @@ export default function PostResolutionNextCaseCard({
   const recommendedComplexity =
     Number(recommendation?.complexity) ||
     Math.min(5, (Number(caseSession?.complexity) || 1) + 1);
+  const teaserHeadline =
+    teaser?.headline ||
+    `A fresh ${recommendedCategory.toLowerCase()} matter`;
+  const teaserChallenge =
+    teaser?.challenge ||
+    `Take on new parties, facts, and evidence in ${country}.`;
 
   useEffect(() => {
     if (viewedRef.current || !sourceCaseId) return;
@@ -67,7 +74,7 @@ export default function PostResolutionNextCaseCard({
   }, [caseSession, hasArenaAccess, resolution, sourceCaseId]);
 
   useEffect(() => {
-    if (!hasArenaAccess || !sourceCaseId) return;
+    if (!sourceCaseId) return;
 
     let cancelled = false;
     setRecommendationLoading(true);
@@ -77,11 +84,13 @@ export default function PostResolutionNextCaseCard({
       .then((response) => {
         if (!cancelled) {
           setRecommendation(response?.recommendation || null);
+          setTeaser(response?.teaser || null);
         }
       })
       .catch(() => {
         if (!cancelled) {
           setRecommendation(null);
+          setTeaser(null);
         }
       })
       .finally(() => {
@@ -93,7 +102,7 @@ export default function PostResolutionNextCaseCard({
     return () => {
       cancelled = true;
     };
-  }, [hasArenaAccess, sourceCaseId]);
+  }, [sourceCaseId]);
 
   useEffect(() => {
     if (
@@ -112,8 +121,9 @@ export default function PostResolutionNextCaseCard({
       complexity: recommendation.complexity,
       recent_repeat_count: recommendation.recentRepeatCount || 0,
       source_case_id: sourceCaseId,
+      teaser_key: teaser?.key || "",
     });
-  }, [recommendation, sourceCaseId]);
+  }, [recommendation, sourceCaseId, teaser?.key]);
 
   const handleNextCase = async () => {
     if (working || !sourceCaseId) return;
@@ -125,6 +135,7 @@ export default function PostResolutionNextCaseCard({
       category: caseSession?.primaryCategory,
       recommended_category: recommendation?.categorySlug || "",
       recommended_complexity: recommendation?.complexity || "",
+      teaser_key: teaser?.key || "",
     });
     if (recommendation?.categorySlug) {
       trackGoal("next_case_recommendation_accepted", {
@@ -135,6 +146,7 @@ export default function PostResolutionNextCaseCard({
         recommended_complexity: recommendation.complexity,
         recent_repeat_count: recommendation.recentRepeatCount || 0,
         source_case_id: sourceCaseId,
+        teaser_key: teaser?.key || "",
       });
     }
 
@@ -170,20 +182,22 @@ export default function PostResolutionNextCaseCard({
                   : recommendation?.kind === "level_up"
                     ? "Level up your practice"
                     : "Next on your docket"
-                : "Your first case is complete"}
+                : "Your next matter is ready"}
             </p>
             <h3 className="mt-2 text-xl font-black leading-tight text-white sm:text-2xl">
               {hasArenaAccess
                 ? recommendationLoading
                   ? "Preparing your next challenge..."
                   : `Next: ${recommendedCategory} · Level ${recommendedComplexity}`
-                : `Turn one ${resolution} into an unlimited career.`}
+                : recommendationLoading
+                  ? "Preparing your next challenge..."
+                  : `Next: ${teaserHeadline}`}
             </h3>
             <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-white/58">
               {hasArenaAccess
                 ? recommendation?.reason ||
                   `Take a fresh ${recommendedCategory.toLowerCase()} matter in ${country}, with new parties, facts, and evidence.`
-                : `Unlock a fresh ${category.toLowerCase()} case in ${country}, with new parties, facts, and evidence.`}
+                : `${teaserChallenge} ${recommendedCategory} · Level ${recommendedComplexity} · ${country}.`}
             </p>
           </div>
         </div>
@@ -210,10 +224,11 @@ export default function PostResolutionNextCaseCard({
           ) : (
             <EarlyAccessCheckoutButton
               variantId={plan.variantId}
-              label={`Unlock Unlimited · $${plan.price.toFixed(2)}`}
+              label={`Unlock This Case · $${plan.price.toFixed(2)}`}
               source="post_resolution_next_case"
               continuationCaseId={sourceCaseId}
-              className="flex min-h-14 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl border-0 bg-[#fee88a] px-4 text-sm font-black normal-case tracking-normal text-black shadow-[0_14px_34px_rgba(245,158,11,0.18)] transition hover:-translate-y-0.5 hover:bg-[#fff0a6] hover:shadow-[0_18px_42px_rgba(245,158,11,0.24)] disabled:translate-y-0 disabled:cursor-wait disabled:bg-[#fee88a]/75"
+              className="post-resolution-unlock-cta flex min-h-14 w-full items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-amber-100/55 bg-[#fee88a] px-4 text-base font-black normal-case tracking-normal text-black shadow-[0_16px_38px_rgba(245,158,11,0.22)] transition hover:-translate-y-0.5 hover:shadow-[0_20px_46px_rgba(245,158,11,0.3)] disabled:translate-y-0 disabled:cursor-wait disabled:bg-[#fee88a]/75"
+              contentClassName="font-black tracking-[0.01em]"
               showArrow
               onIntent={() =>
                 trackGoal("upgrade_clicked_post_resolution", {
@@ -221,6 +236,7 @@ export default function PostResolutionNextCaseCard({
                   resolution,
                   category: caseSession?.primaryCategory,
                   price: plan.price,
+                  teaser_key: teaser?.key || "",
                 })
               }
             />
@@ -234,7 +250,7 @@ export default function PostResolutionNextCaseCard({
               ? recommendation?.kind === "broaden"
                 ? "New practice area · Same jurisdiction"
                 : `Level ${recommendedComplexity} · Same jurisdiction`
-              : "One-time payment · Lifetime access"}
+              : `${recommendedCategory} · Level ${recommendedComplexity} · One-time lifetime access`}
           </p>
           {hasArenaAccess ? (
             <Link

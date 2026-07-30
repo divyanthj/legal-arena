@@ -77,6 +77,7 @@ export default function EarlyAccessCheckoutButton({
 
   return (
     <button
+      type="button"
       className={className}
       onClick={handleCheckout}
       disabled={isLoading}

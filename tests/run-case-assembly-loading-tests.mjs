@@ -92,6 +92,10 @@ const workspaceSource = await readFile(
   new URL("../components/legal-arena/CaseWorkspace.js", import.meta.url),
   "utf8"
 );
+const globalsSource = await readFile(
+  new URL("../app/globals.css", import.meta.url),
+  "utf8"
+);
 const portraitRouteSource = await readFile(
   new URL("../app/api/cases/[caseId]/client-portrait/route.js", import.meta.url),
   "utf8"
@@ -104,29 +108,47 @@ const createStart = dashboardSource.indexOf("const handleCreateCase");
 const createEnd = dashboardSource.indexOf("const retryCaseAssembly", createStart);
 const createSource = dashboardSource.slice(createStart, createEnd);
 assert.match(createSource, /status: "generating"/);
-assert.match(createSource, /status: "portraits"/);
 assert.match(createSource, /status: "opening"/);
-assert.match(createSource, /`\/cases\/\$\{caseRef\}\/client-portrait`/);
-assert.match(createSource, /client: \{ status: "generating", image: "" \}/);
-assert.match(createSource, /client: \{ status: "complete", image: clientPortraitImage \}/);
-assert.match(createSource, /portraits_background: false/);
+assert.doesNotMatch(createSource, /`\/cases\/\$\{caseRef\}\/client-portrait`/);
+assert.match(createSource, /client: \{ status: "queued", image: "" \}/);
+assert.match(createSource, /portraits_background: true/);
+assert.match(createSource, /case_intake_ready/);
 assert.doesNotMatch(createSource, /await Promise\.all\(\[\s*generatePortrait/);
 assert.ok(
   createSource.indexOf("router.push(caseHref)") >
     createSource.indexOf('trackGoal("case_creation_wait_completed"'),
-  "case creation should navigate only after recording the portrait generation wait"
+  "case creation should record readiness before navigating to intake"
 );
 assert.ok(
   createSource.indexOf("router.prefetch(caseHref)") >
-    createSource.indexOf("portraitCompletedAt"),
-  "intake must not be prefetched before the saved portrait is available"
+    createSource.indexOf('trackGoal("case_intake_ready"'),
+  "intake readiness must be recorded before prefetch and navigation"
 );
 assert.doesNotMatch(createSource, /startNavigationLoading\(/);
 
 assert.match(workspaceSource, /const keepNewestPortrait = \(currentPortrait = \{\}, incomingPortrait = \{\}\) =>/);
 assert.match(workspaceSource, /clientPortrait: keepNewestPortrait\(current\.clientPortrait, nextCase\.clientPortrait\)/);
-assert.doesNotMatch(workspaceSource, /requestCasePortraitOnce/);
-assert.doesNotMatch(workspaceSource, /portrait_background_completed/);
+assert.match(workspaceSource, /requestClientPortrait/);
+assert.match(workspaceSource, /portrait_background_started/);
+assert.match(workspaceSource, /portrait_background_completed/);
+assert.match(workspaceSource, /portrait_background_failed/);
+assert.match(workspaceSource, /Retry portrait/);
+assert.match(
+  globalsSource,
+  /\.arena-app-shell \{[\s\S]*-webkit-font-smoothing: antialiased;[\s\S]*font-synthesis: none;/
+);
+assert.match(
+  globalsSource,
+  /\.arena-app-shell \.font-semibold \{[\s\S]*font-weight: 550;/
+);
+assert.match(
+  globalsSource,
+  /\.arena-app-shell \.font-bold \{[\s\S]*font-weight: 650;/
+);
+assert.match(
+  globalsSource,
+  /\.arena-app-shell \.font-black \{[\s\S]*font-weight: 800;/
+);
 
 assert.match(portraitRouteSource, /OPENAI_PORTRAIT_IMAGE_MODEL/);
 assert.match(portraitRouteSource, /OPENAI_PORTRAIT_IMAGE_QUALITY/);

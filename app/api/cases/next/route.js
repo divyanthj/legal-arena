@@ -7,6 +7,10 @@ import {
   getCaseSessionDocumentForUser,
 } from "@/libs/game/store";
 import { getNextCaseRecommendationForUser } from "@/libs/game/nextCaseRecommendationService";
+import {
+  buildNextCaseTeaser,
+  buildTeaserScenarioHint,
+} from "@/libs/game/nextCaseTeaser.mjs";
 
 const isResolvedCase = (caseSession) =>
   ["verdict", "settled"].includes(caseSession?.status);
@@ -63,8 +67,14 @@ export async function GET(req) {
       userId: session.user.id,
       userProfile: session.user,
     });
+    const teaser = buildNextCaseTeaser({
+      recommendation,
+      sourceCaseId: sourceResult.sourceCase._id,
+      playerId: session.user.id,
+      countryCode: sourceResult.sourceCase.caseCountry?.code || "US",
+    });
 
-    return NextResponse.json({ recommendation });
+    return NextResponse.json({ recommendation, teaser });
   } catch (error) {
     console.error(error);
     return NextResponse.json(
@@ -116,6 +126,12 @@ export async function POST(req) {
       userId: session.user.id,
       userProfile: session.user,
     });
+    const teaser = buildNextCaseTeaser({
+      recommendation,
+      sourceCaseId: sourceCase._id,
+      playerId: session.user.id,
+      countryCode: sourceCase.caseCountry?.code || "US",
+    });
 
     try {
       const caseSession = await createCaseSession({
@@ -125,10 +141,13 @@ export async function POST(req) {
         complexity: recommendation.complexity,
         countryCode: sourceCase.caseCountry?.code || "US",
         continuationOfCaseId: sourceCase._id,
+        continuationTeaserKey: teaser.key,
+        scenarioHint: buildTeaserScenarioHint(teaser),
       });
       return NextResponse.json({
         caseSession,
         recommendation,
+        teaser,
         reused: false,
       });
     } catch (error) {

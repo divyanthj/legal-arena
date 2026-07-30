@@ -87,6 +87,7 @@ export async function POST(req, { params }) {
       );
     }
 
+    const previousStatus = caseSession.status;
     const openingResult = await ensurePlaintiffCourtOpening({
       caseSession,
       userId: session.user.id,
@@ -224,6 +225,12 @@ export async function POST(req, { params }) {
       awardEvaluation: awardEvaluation
         ? { status: awardEvaluation.status, changes: awardEvaluation.immediateChanges || [] }
         : null,
+      courtroomEvent: {
+        round,
+        previousStatus,
+        nextStatus: caseSession.status,
+        adjournmentGranted: Boolean(automaticAdjournment?.granted),
+      },
     });
   } catch (error) {
     console.error(error);

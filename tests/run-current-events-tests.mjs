@@ -57,6 +57,11 @@ assert.match(challengeButtonSource, /category\.isNew/);
 assert.doesNotMatch(challengeButtonSource, /category\.live/);
 assert.doesNotMatch(landingPageSource, /headlines-announcement-title/);
 assert.doesNotMatch(landingPageSource, /data-landing-source="headlines_announcement"/);
+assert.match(landingPageSource, /const SHOW_HEADLINES_LAUNCH_BANNER = false;/);
+assert.match(
+  landingPageSource,
+  /\{SHOW_HEADLINES_LAUNCH_BANNER \? \([\s\S]*data-landing-source="headlines_launch_banner"/
+);
 assert.match(landingPageSource, /New category — Headlines/);
 assert.match(landingPageSource, /data-landing-source="headlines_launch_banner"/);
 assert.match(landingPageSource, /NewspaperIcon/);

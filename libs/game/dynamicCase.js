@@ -522,6 +522,7 @@ export const generateDynamicCaseState = async ({
   userId = "system",
   onUsage,
   countryCode = "US",
+  scenarioHint = "",
 } = {}) => {
   const category = getCategoryBySlug(categorySlug) || getCategoryBySlug(DEFAULT_CATEGORY_SLUG);
   const normalizedComplexity = clampComplexity(complexity);
@@ -571,6 +572,11 @@ export const generateDynamicCaseState = async ({
         "Give each side discrete subjective courtroomPositions. Each position must express one concise claim, use an evidencePool id when linking proof, and must not reveal objective hidden truth.",
         "Give each side at least one relevant evidence item that is availableAtStart when complexity is 1; do not make missing or hard-to-get material necessary for an intro opponent's core theory.",
         "Treat caseCountry as immutable input. Do not move the matter to another country or return a competing country value.",
+        ...(scenarioHint
+          ? [
+              "Treat scenarioHint as a binding promise made to the player. Build the dispute around that premise and challenge without copying its wording mechanically.",
+            ]
+          : []),
         ...(isCurrentEvents
           ? [
               "Closely adapt the supplied currentEventBrief into a fictional case, but replace every real person, party, and organization name with an invented country-plausible name.",
@@ -671,6 +677,7 @@ export const generateDynamicCaseState = async ({
       playabilityProfile,
       caseCountry,
       countryGuidance,
+      scenarioHint: String(scenarioHint || "").trim(),
       currentEventBrief: currentEventBrief
         ? {
             eventSummary: currentEventBrief.eventSummary,

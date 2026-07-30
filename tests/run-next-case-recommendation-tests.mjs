@@ -4,6 +4,10 @@ import {
   buildNextCaseRecommendation,
   getDynamicDifficultyLimits,
 } from "../libs/game/nextCaseRecommendation.mjs";
+import {
+  buildNextCaseTeaser,
+  buildTeaserScenarioHint,
+} from "../libs/game/nextCaseTeaser.mjs";
 
 const categories = [
   { slug: "rental-dispute", title: "Rental Dispute" },
@@ -38,6 +42,27 @@ const resolvedCase = ({
   completedAt,
   status,
 });
+
+const employmentTeaserInput = {
+  recommendation: {
+    categorySlug: "employment",
+    categoryTitle: "Employment",
+    complexity: 2,
+  },
+  sourceCaseId: "case-1",
+  playerId: "player-a",
+  countryCode: "US",
+};
+const employmentTeaser = buildNextCaseTeaser(employmentTeaserInput);
+assert.deepEqual(
+  buildNextCaseTeaser(employmentTeaserInput),
+  employmentTeaser,
+  "the same resolved case must always produce the same teaser"
+);
+assert.equal(employmentTeaser.categoryTitle, "Employment");
+assert.equal(employmentTeaser.complexity, 2);
+assert.match(employmentTeaser.headline, /dismissal|workplace pay/);
+assert.match(buildTeaserScenarioHint(employmentTeaser), /Employment|dismissal|workplace|performance|policy/i);
 
 const recommend = ({ cases = [], playerProgression, playerId = "player-a" }) =>
   buildNextCaseRecommendation({
@@ -281,6 +306,14 @@ const storeSource = await readFile(
   new URL("../libs/game/store.js", import.meta.url),
   "utf8"
 );
+const caseSessionModelSource = await readFile(
+  new URL("../models/CaseSession.js", import.meta.url),
+  "utf8"
+);
+const globalsSource = await readFile(
+  new URL("../app/globals.css", import.meta.url),
+  "utf8"
+);
 
 assert.match(
   dashboardSource,
@@ -317,6 +350,25 @@ assert.match(
   /\.get\("\/cases\/next", \{ params: \{ sourceCaseId \} \}\)/,
   "The post-resolution card should preview the server recommendation."
 );
+assert.doesNotMatch(
+  postResolutionSource,
+  /if \(!hasArenaAccess \|\| !sourceCaseId\) return;/,
+  "Trial users should receive the same recommendation preview."
+);
+assert.match(postResolutionSource, /setTeaser\(response\?\.teaser/);
+assert.match(postResolutionSource, /Unlock This Case/);
+assert.match(
+  postResolutionSource,
+  /post-resolution-unlock-cta[\s\S]*text-base font-black[\s\S]*contentClassName="font-black/
+);
+assert.match(
+  globalsSource,
+  /\.post-resolution-unlock-cta \{[\s\S]*animation: post-resolution-unlock-cta-breathe 4\.8s/
+);
+assert.match(
+  globalsSource,
+  /@media \(prefers-reduced-motion: reduce\) \{[\s\S]*\.post-resolution-unlock-cta \{[\s\S]*animation: none;/
+);
 assert.match(
   nextRouteSource,
   /export async function GET\(req\)/,
@@ -326,6 +378,22 @@ assert.match(
   nextRouteSource,
   /categorySlug: recommendation\.categorySlug[\s\S]*complexity: recommendation\.complexity/,
   "Next-case creation should use the personalized recommendation."
+);
+assert.match(nextRouteSource, /buildNextCaseTeaser/);
+assert.match(nextRouteSource, /continuationTeaserKey: teaser\.key/);
+assert.match(nextRouteSource, /scenarioHint: buildTeaserScenarioHint\(teaser\)/);
+const topLevelCaseSchemaSource =
+  caseSessionModelSource.split("const caseSessionSchema = mongoose.Schema(")[1] ||
+  "";
+assert.match(
+  topLevelCaseSchemaSource,
+  /continuationOfCaseId:[\s\S]*continuationTeaserKey:/,
+  "Continuation traceability fields must be persisted on the case itself."
+);
+assert.doesNotMatch(
+  caseSessionModelSource.split("const usageEntrySchema = mongoose.Schema(")[0],
+  /continuationTeaserKey:/,
+  "The continuation teaser key must not be nested in settlement state."
 );
 assert.match(
   casesRouteSource,

@@ -337,11 +337,6 @@ const settlementSchema = mongoose.Schema(
       type: Date,
       default: null,
     },
-    continuationOfCaseId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "CaseSession",
-      default: null,
-    },
   },
   { _id: false }
 );
@@ -499,6 +494,17 @@ const caseSessionSchema = mongoose.Schema(
       ref: "User",
       required: true,
       private: true,
+    },
+    continuationOfCaseId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "CaseSession",
+      default: null,
+    },
+    continuationTeaserKey: {
+      type: String,
+      trim: true,
+      maxlength: 160,
+      default: "",
     },
     title: {
       type: String,

@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { AWARD_DEFINITIONS, COUNTRY_AWARD_DEFINITIONS } from "../libs/game/awards/catalogue.mjs";
 import { LAWYER_TITLES } from "../libs/game/awards/titles.mjs";
 import {
+  buildAwardChange,
   determineTier,
   evaluateTitleRequirements,
   getNextTierProgress,
@@ -10,6 +11,10 @@ import {
   validateAiAwardEvaluation,
 } from "../libs/game/awards/core.mjs";
 import { buildObjectiveAwardMatches, objectivePrerequisiteSatisfied } from "../libs/game/awards/rules.mjs";
+import {
+  getAwardEventKey,
+  mergeAwardChanges,
+} from "../libs/game/awardChanges.mjs";
 
 assert.equal(AWARD_DEFINITIONS.length - COUNTRY_AWARD_DEFINITIONS.length, 87, "The original catalogue must retain all 87 award families.");
 assert.equal(COUNTRY_AWARD_DEFINITIONS.length, 249, "Every supported country must have an award.");
@@ -28,6 +33,32 @@ assert.equal(rarityBandForPercentage(15), "Uncommon");
 assert.equal(rarityBandForPercentage(5), "Rare");
 assert.equal(rarityBandForPercentage(1), "Epic");
 assert.equal(rarityBandForPercentage(0.99), "Legendary");
+
+const awardChange = buildAwardChange({
+  definition: {
+    code: "first_victory",
+    name: "First Victory",
+    emoji: "🏁",
+    description: "Win once.",
+    category: "career",
+  },
+  current: { highestTier: null },
+  occurrence: {
+    occurrenceKey: "player:case:case-1:first_victory:v1",
+    evidenceText: "Won the first matter.",
+  },
+});
+assert.equal(
+  getAwardEventKey(awardChange),
+  "player:case:case-1:first_victory:v1"
+);
+const firstAwardState = mergeAwardChanges([], [awardChange, awardChange]);
+assert.equal(firstAwardState.length, 1, "duplicate changes in one poll must collapse");
+assert.strictEqual(
+  mergeAwardChanges(firstAwardState, [awardChange]),
+  firstAwardState,
+  "a poll with no new awards must preserve state identity"
+);
 
 const validated = validateAiAwardEvaluation({ version: "test", awards: [
   { awardCode: "zen_advocate", earned: true, confidence: 0.91, evidence: "Calm and economical." },
@@ -66,6 +97,8 @@ assert.match(panelSource, /award_tier_upgraded/);
 assert.match(panelSource, /prefers-reduced-motion|motion-safe/);
 assert.match(serviceSource, /occurrenceKey/);
 assert.match(serviceSource, /evaluationKey/);
+assert.match(panelSource, /trackedEventKeysRef/);
+assert.match(panelSource, /event_key: eventKey/);
 assert.match(serviceSource, /Unknown or ineligible|validateAiAwardEvaluation/);
 
 console.log("Awards tests passed");

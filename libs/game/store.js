@@ -1016,6 +1016,8 @@ export const createCaseSession = async ({
   freeGameplayCampaignAccess = null,
   newcomerAssist = false,
   continuationOfCaseId = null,
+  continuationTeaserKey = "",
+  scenarioHint = "",
 }) => {
   await connectMongo();
 
@@ -1037,6 +1039,7 @@ export const createCaseSession = async ({
       userId,
       onUsage: usageCollector.record,
       countryCode: caseCountry.code,
+      scenarioHint,
     });
     const template = buildDynamicCaseTemplateSnapshot(dynamicCase);
     template.dynamicDifficulty = dynamicDifficulty;
@@ -1074,6 +1077,7 @@ export const createCaseSession = async ({
       freeGameplayCampaignAccess: freeGameplayCampaignAccess || undefined,
       newcomerAssist: Boolean(newcomerAssist),
       continuationOfCaseId: continuationOfCaseId || undefined,
+      continuationTeaserKey: continuationTeaserKey || undefined,
       lawbookVersion: LAWBOOK_VERSION,
       maxCourtRounds: Math.max(3, dynamicCase.complexity + 1),
       templateSnapshot: template,
@@ -1204,6 +1208,7 @@ export const createCaseSession = async ({
     freeGameplayCampaignAccess: freeGameplayCampaignAccess || undefined,
     newcomerAssist: Boolean(newcomerAssist),
     continuationOfCaseId: continuationOfCaseId || undefined,
+    continuationTeaserKey: continuationTeaserKey || undefined,
     lawbookVersion: LAWBOOK_VERSION,
     maxCourtRounds: Math.max(3, template.complexity + 1),
     templateSnapshot,

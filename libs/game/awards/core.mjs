@@ -114,17 +114,24 @@ export const buildAwardChange = ({ definition, previous = null, current, occurre
   const wasUnlocked = Boolean(previous?.firstUnlockedAt);
   const upgraded = previous?.highestTier && current?.highestTier &&
     compareTiers(current.highestTier, previous.highestTier) > 0;
+  const type = !wasUnlocked
+    ? "unlocked"
+    : upgraded
+      ? "tier_upgraded"
+      : "occurrence";
   return {
+    eventKey:
+      occurrence?.occurrenceKey ||
+      [definition.code, type, current?.highestTier || "none"].join(":"),
     code: definition.code,
     name: definition.name,
     emoji: definition.emoji,
     description: definition.description,
     category: definition.category,
     tier: current?.highestTier || null,
-    type: !wasUnlocked ? "unlocked" : upgraded ? "tier_upgraded" : "occurrence",
+    type,
     explanation: occurrence?.evidenceText || definition.description,
   };
 };
 
 export const getAwardDefinition = (code) => AWARD_DEFINITION_BY_CODE.get(code) || null;
-

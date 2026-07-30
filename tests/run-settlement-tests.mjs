@@ -443,6 +443,11 @@ assert.match(
 );
 assert.match(
   caseWorkspaceSource,
+  /border-amber-100\/70 bg-amber-200[\s\S]*font-black text-black[\s\S]*Message opposing counsel/,
+  "The opposing-counsel message action should remain a gold, high-contrast primary button."
+);
+assert.match(
+  caseWorkspaceSource,
   /analyticsMode !== "pvp"[\s\S]*Exit settlement[\s\S]*pendingAction === "settlement-exit"/,
   "Solo settlement action rail should expose an explicit exit settlement button."
 );

@@ -1362,12 +1362,12 @@ const FreeTrialConfirmationModal = ({
               <HeroIcons.GiftIcon className="h-4 w-4" aria-hidden="true" />
               One complete case — free
             </span>
-            <p className="arena-kicker mt-5 text-amber-200">Are you sure?</p>
+            <p className="arena-kicker mt-5 text-amber-200">Your free case</p>
             <h2 id="free-case-confirmation-title" className="arena-headline mt-2 text-4xl uppercase leading-[0.95] text-white sm:text-5xl">
-              Use your one free case?
+              Your free case is ready.
             </h2>
             <p className="mt-4 text-sm font-semibold leading-6 text-white/62 sm:text-base sm:leading-7">
-              Legal Arena will generate a full level-1 {categoryTitle.toLowerCase()} matter in {countryName}. Once it is successfully created, your free-case allowance is used—but the case stays yours to resume and finish anytime.
+              Start a complete level-1 {categoryTitle.toLowerCase()} matter in {countryName}. Once it is created, it stays on your docket so you can resume and finish it anytime.
             </p>
           </div>
         </header>
@@ -1390,27 +1390,31 @@ const FreeTrialConfirmationModal = ({
             })}
           </div>
 
-          <div className="mt-5 flex items-start gap-3 rounded-2xl border border-rose-200/16 bg-rose-300/[0.055] p-4 text-left text-sm leading-6 text-rose-50/78">
-            <HeroIcons.LockClosedIcon className="mt-0.5 h-5 w-5 shrink-0 text-rose-200" aria-hidden="true" />
+          <div className="mt-5 flex items-start gap-3 rounded-2xl border border-amber-200/14 bg-amber-200/[0.045] p-4 text-left text-sm leading-6 text-white/66">
+            <HeroIcons.InformationCircleIcon className="mt-0.5 h-5 w-5 shrink-0 text-amber-200" aria-hidden="true" />
             <p>
-              After this matter is resolved, starting more solo cases and accessing unlimited matters and PVP requires the one-time <strong className="text-white">$15.99 lifetime unlock</strong>.
+              This includes the full interview, case file, negotiation, courtroom, verdict, XP, and awards. Afterward, more solo cases and PVP require the one-time <strong className="text-white">$15.99 lifetime unlock</strong>.
             </p>
           </div>
 
-          <div className="mt-6 grid gap-3 sm:grid-cols-[auto_minmax(0,0.9fr)_minmax(0,1.25fr)] sm:items-stretch">
-            <button type="button" className="arena-btn-dark order-3 min-h-14 px-6 py-3 text-sm sm:order-1" onClick={onCancel}>
-              Not Yet
-            </button>
-            <button type="button" className="arena-btn-dark order-2 flex min-h-14 w-full items-center justify-center gap-2 px-5 py-3 text-sm" onClick={onConfirm}>
-              <HeroIcons.GiftIcon className="h-4 w-4 text-amber-100" aria-hidden="true" />
+          <div className="mt-6 grid gap-3 sm:grid-cols-[minmax(0,1.35fr)_minmax(0,0.65fr)] sm:items-stretch">
+            <button type="button" className="arena-btn-light flex min-h-14 w-full items-center justify-center gap-2 px-6 py-3 text-sm font-black shadow-[0_16px_38px_rgba(245,158,11,0.18)] transition hover:shadow-[0_18px_44px_rgba(245,158,11,0.25)]" onClick={onConfirm}>
+              <HeroIcons.GiftIcon className="h-5 w-5" aria-hidden="true" />
               Start My Free Case
             </button>
+            <button type="button" className="arena-btn-dark min-h-14 px-6 py-3 text-sm" onClick={onCancel}>
+              Not Yet
+            </button>
+          </div>
+
+          <div className="mt-4 flex flex-col items-center justify-center gap-1 text-center sm:flex-row sm:gap-2">
+            <span className="text-xs font-semibold text-white/46">Prefer unlimited access?</span>
             <EarlyAccessCheckoutButton
               variantId={lifetimePlan.variantId}
-              label={`Unlock Unlimited — $${lifetimePlan.price.toFixed(2)}`}
+              label={`Buy lifetime access for $${lifetimePlan.price.toFixed(2)}`}
               source="free_trial_confirmation"
               showArrow
-              className="arena-btn-light order-1 flex min-h-14 w-full items-center justify-center gap-2 px-6 py-3 text-sm font-black shadow-[0_16px_38px_rgba(245,158,11,0.18)] transition hover:shadow-[0_18px_44px_rgba(245,158,11,0.25)] disabled:opacity-60 sm:order-3"
+              className="inline-flex min-h-11 items-center justify-center gap-1 rounded-xl px-3 py-2 text-sm font-bold text-amber-100 underline decoration-amber-200/35 underline-offset-4 transition hover:bg-amber-200/[0.06] hover:text-amber-50 disabled:opacity-60"
               onIntent={() =>
                 trackGoal("free_trial_confirmation_purchase_clicked", {
                   price: lifetimePlan.price,
@@ -1998,61 +2002,41 @@ export default function DashboardHub({
       );
       setCaseAssembly((current) => ({
         ...current,
-        status: "portraits",
+        status: "opening",
         brief: {
           ...current?.brief,
           countryName: caseSession.caseCountry?.name || current?.brief?.countryName,
         },
         casePreview,
         portraits: {
-          client: { status: "generating", image: "" },
+          client: { status: "queued", image: "" },
           opponent: { status: "queued", image: "" },
         },
         timings: {
           ...current?.timings,
           generationMs: generationCompletedAt - startedAt,
+          totalMs: generationCompletedAt - startedAt,
         },
       }));
 
-      const portraitStartedAt = Date.now();
-      const portraitResponse = await apiClient.post(
-        `/cases/${caseRef}/client-portrait`,
-        undefined,
-        { suppressToast: true }
-      );
-      const clientPortraitImage =
-        portraitResponse?.portrait?.image || portraitResponse?.image || "";
-      if (!clientPortraitImage) {
-        throw new Error("The client portrait could not be saved.");
-      }
-      const portraitCompletedAt = Date.now();
-
-      setCaseAssembly((current) => ({
-        ...current,
-        status: "opening",
-        portraits: {
-          ...current?.portraits,
-          client: { status: "complete", image: clientPortraitImage },
-        },
-        timings: {
-          ...current?.timings,
-          portraitMs: portraitCompletedAt - portraitStartedAt,
-          totalMs: portraitCompletedAt - startedAt,
-        },
-      }));
       trackGoal("case_creation_wait_completed", {
         generation_mode: dynamicStart ? "dynamic" : "template",
         category: caseSession.primaryCategory || dynamicCategory,
         complexity: caseSession.complexity || dynamicComplexity,
         country: caseSession.caseCountry?.code || (dynamicStart ? selectedCountryCode : ""),
         generation_ms: generationCompletedAt - startedAt,
-        portrait_ms: portraitCompletedAt - portraitStartedAt,
-        portrait_reused: Boolean(portraitResponse?.reused),
-        portraits_background: false,
-        total_ms: portraitCompletedAt - startedAt,
+        portrait_ms: 0,
+        portraits_background: true,
+        total_ms: generationCompletedAt - startedAt,
       });
-      // Prefetch only after the portrait endpoint has persisted the image so
-      // intake cannot receive a stale, portrait-less case payload.
+      trackGoal("case_intake_ready", {
+        case_id: caseRef,
+        generation_mode: dynamicStart ? "dynamic" : "template",
+        category: caseSession.primaryCategory || dynamicCategory,
+        complexity: caseSession.complexity || dynamicComplexity,
+        ready_ms: generationCompletedAt - startedAt,
+        portrait_state: "queued",
+      });
       guidedInteractionRef.current?.pulse("success");
       router.prefetch(caseHref);
       router.push(caseHref);
