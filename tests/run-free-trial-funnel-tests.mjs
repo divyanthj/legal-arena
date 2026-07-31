@@ -75,10 +75,10 @@ assert.ok(
   "The free-case action must precede the paid alternative in DOM and keyboard order."
 );
 assert.match(landingPage, /Play 1 Case Free/);
-assert.match(landingPage, /const SHOW_HEADLINES_LAUNCH_BANNER = false;/);
-assert.match(landingPage, /New category — Headlines/);
-assert.match(landingPage, /data-landing-source="headlines_launch_banner"/);
-assert.match(landingPage, /<NewspaperIcon className="h-5 w-5"/);
+assert.match(landingPage, /const SHOW_LATEST_UPDATES_BANNER = true;/);
+assert.match(landingPage, /New — Actual laws/);
+assert.match(landingPage, /data-landing-source="actual_laws_launch_banner"/);
+assert.match(landingPage, /<ScaleIcon className="h-5 w-5"/);
 assert.doesNotMatch(landingPage, /Your first case is now free to play\./);
 assert.doesNotMatch(landingPage, /evergreen_free_case_banner/);
 assert.match(nextCard, /Take Recommended Case/);

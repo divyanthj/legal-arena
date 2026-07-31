@@ -561,22 +561,106 @@ export const getInterviewBlueprintForSide = (template = {}, side = "plaintiff") 
   );
 };
 
+const buildSideAnchoredQuestions = (
+  template,
+  side,
+  { excludedFactIds = [], excludedEvidenceIds = [] } = {}
+) => {
+  const normalizedSide = normalizeTemplateParty(side);
+  const blueprint = getInterviewBlueprintForSide(template, normalizedSide);
+  const priorityOrder = new Map(
+    (blueprint?.priorityFactIds || []).map((factId, index) => [
+      String(factId),
+      index,
+    ])
+  );
+  const availableFacts = (template.canonicalFacts || [])
+    .filter((fact) => fact.discoverability?.phase !== "courtroom")
+    .filter((fact) => !excludedFactIds.includes(fact.factId))
+    .filter(
+      (fact) =>
+        !(fact.claims || []).length ||
+        (fact.claims || []).some((claim) => claim.party === normalizedSide)
+    )
+    .slice()
+    .sort((left, right) => {
+      const leftOrder = priorityOrder.get(String(left.factId));
+      const rightOrder = priorityOrder.get(String(right.factId));
+
+      if (leftOrder !== undefined || rightOrder !== undefined) {
+        return (leftOrder ?? Number.MAX_SAFE_INTEGER) -
+          (rightOrder ?? Number.MAX_SAFE_INTEGER);
+      }
+
+      return (
+        (right.discoverability?.priority || 0) -
+        (left.discoverability?.priority || 0)
+      );
+    });
+  const factQuestions = availableFacts.map((fact, index) => {
+    const topic = lowerFirst(String(fact.label || "this issue").replace(/[.?!]+$/, ""));
+
+    if (index % 3 === 0) {
+      return normalizedSide === "defendant"
+        ? `How do you respond to the other side's account of ${topic}?`
+        : `What happened from your perspective regarding ${topic}?`;
+    }
+
+    if (index % 3 === 1) {
+      return `What records, messages, photographs, or witnesses support your account of ${topic}?`;
+    }
+
+    return `Which parts of the other side's account of ${topic} do you dispute, and why?`;
+  });
+  const evidenceQuestions = (template.evidenceItems || [])
+    .filter((item) => !excludedEvidenceIds.includes(item.id))
+    .filter((item) =>
+      [normalizedSide, "shared", "third-party", "unknown"].includes(item.holderSide)
+    )
+    .map((item) => {
+      const label = lowerFirst(
+        String(item.label || item.detail || "that evidence").replace(/[.?!]+$/, "")
+      );
+      return `What can you tell me about ${label}, and can it be obtained for your case?`;
+    });
+  const fallbackQuestions =
+    normalizedSide === "defendant"
+      ? [
+          "Please walk me through your response to the claimant's allegations and the key dates.",
+          "What documents or witnesses support your defense?",
+          "Which allegations do you admit, deny, or need to investigate further?",
+        ]
+      : [
+          "Please walk me through what happened and the key dates.",
+          "What documents or witnesses support your claim?",
+          "Which parts of the other side's account do you dispute, and why?",
+        ];
+
+  return dedupeSuggestedQuestions([
+    ...factQuestions,
+    ...evidenceQuestions,
+    ...fallbackQuestions,
+  ]);
+};
+
 export const buildSuggestedQuestionsForSide = (
   template = {},
   side = "plaintiff",
-  { excludedFactIds = [], excludedEvidenceIds = [], limit = 3 } = {}
+  {
+    excludedFactIds = [],
+    excludedEvidenceIds = [],
+    excludedQuestions = [],
+    limit = 3,
+  } = {}
 ) => {
   const safeTemplate = enrichTemplateForGameplay(template);
   const normalizedSide = normalizeTemplateParty(side);
   const blueprint = getInterviewBlueprintForSide(safeTemplate, normalizedSide);
-  const useBlueprintDirectly =
-    excludedFactIds.length === 0 &&
-    excludedEvidenceIds.length === 0 &&
-    blueprint?.suggestedQuestions?.length;
-
-  if (useBlueprintDirectly) {
-    return dedupeSuggestedQuestions(blueprint.suggestedQuestions, { limit });
-  }
+  const sideAnchoredQuestions = buildSideAnchoredQuestions(
+    safeTemplate,
+    normalizedSide,
+    { excludedFactIds, excludedEvidenceIds }
+  );
 
   const facts = (safeTemplate.canonicalFacts || [])
     .filter((fact) => fact.discoverability?.phase !== "courtroom")
@@ -598,10 +682,11 @@ export const buildSuggestedQuestionsForSide = (
     });
 
   return dedupeSuggestedQuestions([
+    ...sideAnchoredQuestions,
     ...(blueprint?.suggestedQuestions || []),
     ...facts.flatMap((fact) => fact.followUpQuestions || []),
     ...evidenceItems.flatMap((item) => item.followUpQuestions || []),
-  ], { limit });
+  ], { excludedQuestions, limit });
 };
 
 const describeEvidenceHolder = (holderSide, side) => {

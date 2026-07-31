@@ -37,6 +37,7 @@ import {
   getOpponentStrategyPromptRules,
 } from "./courtroomDifficulty";
 import { createUsageCollector } from "./sessionUsage";
+import { refreshApplicableLaws } from "./applicableLaws";
 import { generateClientMemoryExcerpt } from "./clientMemory";
 import {
   buildMemoryClaimFactSheetPatch,
@@ -54,6 +55,22 @@ const GAMEPLAY_MODEL =
   process.env.OPENAI_GAMEPLAY_MODEL?.trim() || "gpt-5.4-mini";
 const CLIENT_MEMORY_MODEL =
   process.env.OPENAI_CLIENT_MEMORY_MODEL?.trim() || GAMEPLAY_MODEL;
+
+const getRulesForCaseSession = (caseSession = {}) => {
+  if (caseSession.lawSource !== "real") return getLawbookRules();
+  const laws =
+    caseSession.lockedApplicableLaws?.length
+      ? caseSession.lockedApplicableLaws
+      : caseSession.applicableLaws || [];
+  return laws.map((law) => ({
+    ...law,
+    id: law.id,
+    title: law.title || `${law.provisionLabel} — ${law.instrumentTitle}`,
+    principle: law.relevanceSummary || law.displayText || "",
+    guidance: law.englishTranslation || law.originalText || "",
+    tags: [law.citation, law.provisionLabel, law.instrumentTitle].filter(Boolean),
+  }));
+};
 
 const shortHash = (value = "") =>
   createHash("sha256")
@@ -434,6 +451,12 @@ export const continueInterview = async ({ caseSession, question, userId }) => {
         desiredRelief: buildDesiredReliefForSide(template, playerSide),
         actorContext: interviewContext,
       },
+      suggestedQuestionRules: [
+        `Every openQuestions item must be a question for ${playerPartyName}, the represented ${playerSide} side.`,
+        `Never suggest a question meant for ${opposingPartyName} or written from ${opposingPartyName}'s perspective.`,
+        "For a defendant, investigate the defense, records, denials, admissions, and response to the claim.",
+        "For a plaintiff, investigate the claim, supporting proof, disputed defenses, and requested relief.",
+      ],
       outputSchema: {
         partyResponse: "string",
         newMemoryClaims: [
@@ -504,16 +527,34 @@ export const continueInterview = async ({ caseSession, question, userId }) => {
   const nextFactSheet = mergeFactSheet(currentConversationFactSheet, combinedPatch, template, {
     playerSide,
   });
-  const nextAssessment = await assessCaseSuccessChance({
-    userId,
-    caseSession,
-    factSheet: nextFactSheet,
-    latestQuestion: question,
-    latestAnswer: interviewResult.partyResponse,
-    previousAssessment: caseSession.caseAssessment,
-    usageLabel: "intake.assessment",
-    onUsage: usageCollector.record,
-  });
+  const visibleTranscript = [
+    ...(caseSession.interviewTranscript || []),
+    { role: "player", speaker: "You", text: question },
+    {
+      role: "party",
+      speaker: playerPartyName,
+      text: interviewResult.partyResponse,
+    },
+  ];
+  const [nextAssessment, lawResult] = await Promise.all([
+    assessCaseSuccessChance({
+      userId,
+      caseSession,
+      factSheet: nextFactSheet,
+      latestQuestion: question,
+      latestAnswer: interviewResult.partyResponse,
+      previousAssessment: caseSession.caseAssessment,
+      usageLabel: "intake.assessment",
+      onUsage: usageCollector.record,
+    }),
+    refreshApplicableLaws({
+      caseSession,
+      factSheet: nextFactSheet,
+      transcript: visibleTranscript,
+      userId,
+      onUsage: usageCollector.record,
+    }),
+  ]);
 
   return {
     ...interviewResult,
@@ -525,6 +566,9 @@ export const continueInterview = async ({ caseSession, question, userId }) => {
     patch: combinedPatch,
     nextFactSheet,
     caseAssessment: nextAssessment,
+    applicableLaws: lawResult.laws,
+    lawResearchStatus: lawResult.status,
+    lawResearchWarning: lawResult.warning,
     usageEntries: usageCollector.entries,
     clientMemoryExcerpt,
   };
@@ -573,7 +617,7 @@ export const assessCaseSuccessChance = async ({
 }) => {
   const template = ensureTemplate(getTemplate(caseSession));
   const playerSide = getPlayerSide(caseSession);
-  const rules = getLawbookRules().map((rule) => ({
+  const rules = getRulesForCaseSession(caseSession).map((rule) => ({
     id: rule.id,
     title: rule.title,
     principle: rule.principle,
@@ -612,13 +656,13 @@ export const assessCaseSuccessChance = async ({
       }),
       onUsage,
       systemPrompt:
-        "You estimate the player's chance of winning a legal simulation if they go to court with only the visible case file. Use only the supplied transcript, fact sheet, side, and public lawbook labels. Do not infer from hidden truth, canonical story, template facts, or evidence that is not visible. Output valid JSON only.",
+        "You estimate the player's chance of winning a legal simulation if they go to court with only the visible case file. Use only the supplied transcript, fact sheet, side, and supplied legal rules. Do not infer from hidden truth, canonical story, template facts, or evidence that is not visible. Output valid JSON only.",
       userPrompt: JSON.stringify({
         task: "Estimate the player's success chance from the visible intake record.",
         representedSide: playerSide,
         representedPartyName: getPartyName(template, playerSide),
         opposingPartyName: getPartyName(template, getOpposingSide(playerSide)),
-        lawbookRules: rules,
+        legalRules: rules,
         scoringGuidance: [
           "Higher chance for corroborated facts, specific timeline, clear requested relief, and addressed disputes.",
           "Lower chance for missing evidence, vague memory, unresolved risks, unsupported key points, and thin legal fit.",
@@ -699,6 +743,8 @@ const buildConversationFactSheetPatch = async ({
           "If the client confirms a photo, record, invoice, receipt, document, witness, or other proof exists, was shown, was produced, or is in hand, put a short artifact label in corroboratedFacts.",
           "If the client says proof your side needs does not exist, was not shown, cannot be provided, or still needs to be found, put that note in missingEvidence.",
           "If the client says the opposing side controls or failed to provide proof for its own position, do not put that in missingEvidence. Put it in supportingFacts or disputedFacts as an opponent proof problem.",
+          `Every openQuestions item must be addressed to ${playerPartyName}, the represented ${playerSide} side, and answerable from that client's perspective.`,
+          `Never suggest a question meant for ${opposingPartyName} or phrased as though ${playerPartyName} performed the opposing party's acts.`,
           "Do not mention canonical truth, hidden facts, templates, schemas, or source of truth.",
           "Except for the complete timeline, return only new or revised notes supported by the visible conversation.",
         ],
@@ -778,7 +824,7 @@ export const generatePlaintiffCourtOpeningStatement = async ({
   onUsage,
 }) => {
   const template = ensureTemplate(getTemplate(caseSession));
-  const rules = getLawbookRules();
+  const rules = getRulesForCaseSession(caseSession);
   const playerSide = getPlayerSide(caseSession);
   const plaintiffSide = getOpposingSide(playerSide);
   const difficultyProfile = getCourtroomDifficultyProfile(caseSession.complexity, {
@@ -843,7 +889,7 @@ export const generatePlaintiffCourtOpeningStatement = async ({
 export const runCourtroomRound = async ({ caseSession, argument, userId }) => {
   const usageCollector = createUsageCollector("courtroom");
   const template = ensureTemplate(getTemplate(caseSession));
-  const rules = getLawbookRules();
+  const rules = getRulesForCaseSession(caseSession);
   const shouldReturnVerdict =
     caseSession.score.roundsCompleted + 1 >= caseSession.maxCourtRounds;
   const difficultyProfile = getCourtroomDifficultyProfile(caseSession.complexity, {
@@ -1082,7 +1128,10 @@ export const runPvpCourtroomTimeoutVerdict = async ({
   challengeContext,
   userId = "courtroom-timeout-cron",
 } = {}) => {
-  const rules = getLawbookRules();
+  const rules = getRulesForCaseSession({
+    lawSource: challengeContext?.lawSource,
+    lockedApplicableLaws: challengeContext?.applicableLaws,
+  });
   const aiResult = await requestStructuredCompletion({
     userId,
     model: GAMEPLAY_MODEL,

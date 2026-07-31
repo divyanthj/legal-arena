@@ -57,19 +57,19 @@ assert.match(challengeButtonSource, /category\.isNew/);
 assert.doesNotMatch(challengeButtonSource, /category\.live/);
 assert.doesNotMatch(landingPageSource, /headlines-announcement-title/);
 assert.doesNotMatch(landingPageSource, /data-landing-source="headlines_announcement"/);
-assert.match(landingPageSource, /const SHOW_HEADLINES_LAUNCH_BANNER = false;/);
+assert.match(landingPageSource, /const SHOW_LATEST_UPDATES_BANNER = true;/);
 assert.match(
   landingPageSource,
-  /\{SHOW_HEADLINES_LAUNCH_BANNER \? \([\s\S]*data-landing-source="headlines_launch_banner"/
+  /\{SHOW_LATEST_UPDATES_BANNER \? \([\s\S]*data-landing-source="actual_laws_launch_banner"/
 );
-assert.match(landingPageSource, /New category — Headlines/);
-assert.match(landingPageSource, /data-landing-source="headlines_launch_banner"/);
-assert.match(landingPageSource, /NewspaperIcon/);
-assert.match(whatsNewSource, /Headlines: argue today's biggest legal issues/);
+assert.match(landingPageSource, /New — Actual laws/);
+assert.match(landingPageSource, /data-landing-source="actual_laws_launch_banner"/);
+assert.match(landingPageSource, /ScaleIcon/);
+assert.match(whatsNewSource, /You can use actual laws now/);
 assert.ok(
-  whatsNewSource.indexOf("Headlines: argue today's biggest legal issues") <
-    whatsNewSource.indexOf("A smoother settlement rhythm"),
-  "Headlines must be the first item in What's new"
+  whatsNewSource.indexOf("You can use actual laws now") <
+    whatsNewSource.indexOf("Applicable laws for every case"),
+  "Actual laws must be the first item in What's new"
 );
 assert.match(whatsNewSource, /badge: "New"/);
 

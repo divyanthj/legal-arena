@@ -6,70 +6,40 @@ import { trackGoal } from "@/libs/datafast";
 
 const updates = [
   {
-    title: "Headlines: argue today's biggest legal issues",
-    body: "Choose a country and take on a fictionalized dispute inspired by its latest major reporting. Real identities and identifying details stay private, and the inspiration sources unlock after resolution.",
-    icon: HeroIcons.NewspaperIcon,
+    title: "You can use actual laws now",
+    body: "Choose Actual laws beside the jurisdiction when you start a case. Legal Arena finds relevant binding provisions, shows the official wording and source, and carries the verified shortlist into court.",
+    icon: HeroIcons.ScaleIcon,
     badge: "New",
   },
   {
-    title: "A smoother settlement rhythm",
-    body: "Consult your client, review a recommended response, and keep negotiations moving without writing every message from scratch. You can still edit any proposal when the stakes call for a personal touch.",
-    icon: HeroIcons.ArrowsRightLeftIcon,
+    title: "Applicable laws for every case",
+    body: "Actual-law and Game rulebook cases both build an automatic shortlist as you interview your client. Expand any linked fact-sheet point to see the laws that apply without hunting through the full lawbook.",
+    icon: HeroIcons.BookOpenIcon,
   },
   {
-    title: "Clearer paths to agreement",
-    body: "Settlement talks now focus on the adjustments that still matter, show how each side reacts, and surface a direct Accept Terms action when an offer is ready to close.",
-    icon: HeroIcons.HandRaisedIcon,
+    title: "See what the law does for your argument",
+    body: "Simple visual markers show whether a law supports a fact-sheet point, undermines it, or provides context, so you can spot useful authorities and risks at a glance.",
+    icon: HeroIcons.ShieldCheckIcon,
   },
   {
-    title: "Watch your next case take shape",
-    body: "A new live case-assembly experience shows the matter, parties, dossier, and portraits coming together before client intake opens.",
-    icon: HeroIcons.DocumentMagnifyingGlassIcon,
-  },
-  {
-    title: "Seamless moves from conference to court",
-    body: "Polished transitions now connect intake, settlement, and the courtroom, while each side's opening position is established before arguments begin.",
-    icon: HeroIcons.ScaleIcon,
-  },
-  {
-    title: "Awards, distinctions, and lawyer titles",
-    body: "Every completed matter can now unlock career honours, repeatable tiered distinctions, rare feats, and selectable lawyer titles. Your dossier shows only what you have earned.",
-    icon: HeroIcons.TrophyIcon,
-  },
-  {
-    title: "Country counsel awards",
-    body: "Win in any supported country to earn its own Counsel distinction. Return to the same jurisdiction to advance from Bronze through Diamond.",
-    icon: HeroIcons.GlobeAltIcon,
-  },
-  {
-    title: "Cases shaped by country",
-    body: "Choose from 249 countries before a solo matter or PVP challenge. New cases reflect the selected country's names, setting, currency, institutions, and social context.",
-    icon: HeroIcons.MapPinIcon,
-  },
-  {
-    title: "A clearer career dossier",
-    body: "The collapsible Awards section highlights recent wins at a glance, with category filters, tier progress, rarity, occurrence counts, and detailed award records when expanded.",
-    icon: HeroIcons.IdentificationIcon,
-  },
-  {
-    title: "Better settlement judgment",
-    body: "Clients now respond more intelligently to the latest offer, helping you test authority, acceptable ranges, and conditions before accepting or countering.",
+    title: "Law-aware courtroom suggestions",
+    body: "Courtroom drafting now follows the source selected for the case: verified provisions for Actual laws, and valid rules for the Game rulebook. Your applicable shortlist stays close at hand while you argue.",
     icon: HeroIcons.ChatBubbleLeftRightIcon,
   },
   {
-    title: "Fairer difficulty and richer clients",
-    body: "Case pressure now aligns more consistently with the selected difficulty, while client portraits and personalities have greater variety across matters.",
-    icon: HeroIcons.AdjustmentsHorizontalIcon,
+    title: "Questions that understand your side",
+    body: "Suggested intake questions now account for whether you represent the claimant or defendant, helping you uncover facts that advance your own theory instead of the other side's case.",
+    icon: HeroIcons.UserGroupIcon,
   },
   {
-    title: "Publish completed case reports",
-    body: "Turn eligible verdicts into public, search-friendly reports featuring the matter, your advocacy, category, result, and lawyer profile.",
-    icon: HeroIcons.NewspaperIcon,
+    title: "Every case advances your career story",
+    body: "Cases now carry a career chapter, professional role, personal stakes, and a developing reputation. Results connect naturally to the next matter so your practice feels like one continuing story.",
+    icon: HeroIcons.BriefcaseIcon,
   },
   {
-    title: "Awards after the result",
-    body: "Verdict and settlement screens now announce first unlocks, repeat distinctions, and tier upgrades immediately, with semantic awards arriving after evaluation.",
-    icon: HeroIcons.SparklesIcon,
+    title: "Cases now use real places",
+    body: "Stories use real cities, regions, districts, streets, and landmarks from the selected country for a more grounded sense of place, while the people and disputes remain fictional.",
+    icon: HeroIcons.MapPinIcon,
   },
 ];
 
@@ -126,9 +96,8 @@ export default function WhatsNewDialog({ buttonLabel = dialogTitle }) {
                   {dialogTitle}
                 </h2>
                 <p id={descriptionId} className="mt-3 max-w-xl text-sm leading-6 text-white/60">
-                  Turn the latest major issues into playable legal disputes, settle
-                  matters with less friction, and discover the newest courtroom,
-                  career, and case-building improvements.
+                  Research actual law, connect it to the facts, and carry a more
+                  grounded case—and an evolving legal career—from intake into court.
                 </p>
               </div>
               <button

@@ -9,6 +9,8 @@ import {
 import { appendUsageEntriesToCaseSession } from "@/libs/game/sessionUsage";
 import { getSoloGameplayAccessForSession } from "@/libs/admin";
 
+export const maxDuration = 300;
+
 export async function POST(req, { params }) {
   const { session, error: authError } = await getRequestSession(req);
   if (authError) return authError;
@@ -93,6 +95,9 @@ export async function POST(req, { params }) {
       relatedFactIds: result.relatedFactIds || [],
     });
     caseSession.factSheet = result.nextFactSheet;
+    caseSession.applicableLaws = result.applicableLaws || caseSession.applicableLaws || [];
+    caseSession.lawResearchStatus = result.lawResearchStatus || "ready";
+    caseSession.lawResearchWarning = result.lawResearchWarning || "";
     if (result.caseAssessment) {
       caseSession.caseAssessment = result.caseAssessment;
     }

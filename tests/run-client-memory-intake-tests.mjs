@@ -140,7 +140,7 @@ assert.match(challengeSource, /speaker:\s*[\s\S]*result\.interviewSubjectName/);
 assert.match(challengeSource, /interviewSubjectName:/);
 assert.match(
   challengeSource,
-  /const \{ clientMemory, settlementAssistant, \.\.\.publicParticipant \} = participant;/
+  /const \{[\s\S]*?clientMemory,[\s\S]*?settlementAssistant,[\s\S]*?\.\.\.publicParticipant[\s\S]*?\} = participant;/
 );
 
 assert.match(templateInterviewSource, /export const buildInterviewSubjectForSide =/);

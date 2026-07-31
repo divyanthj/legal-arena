@@ -47,6 +47,8 @@ assert.match(indiaGuidance, /varied regions and communities/i);
 assert.match(usGuidance, /firearm possession, storage, transport/i);
 assert.match(japanGuidance, /do not merely rename an otherwise American case/i);
 assert.match(japanGuidance, /Avoid caricature/i);
+assert.match(japanGuidance, /only real, existing geographic place names/i);
+assert.match(japanGuidance, /Never invent or lightly disguise a geographic name/i);
 
 const [
   casesRoute,
@@ -67,6 +69,9 @@ const [
   userModel,
   countryPreference,
   countryPreferenceRoute,
+  applicableLaws,
+  caseWorkspace,
+  challengeWorkspace,
 ] = await Promise.all([
   read("../app/api/cases/route.js"),
   read("../app/api/challenges/route.js"),
@@ -86,6 +91,9 @@ const [
   read("../models/User.js"),
   read("../libs/game/countryPreference.js"),
   read("../app/api/players/case-country/route.js"),
+  read("../libs/game/applicableLaws.js"),
+  read("../components/legal-arena/CaseWorkspace.js"),
+  read("../components/legal-arena/ChallengeWorkspace.js"),
 ]);
 
 for (const route of [casesRoute, challengesRoute]) {
@@ -99,7 +107,13 @@ for (const model of [caseModel, challengeModel]) {
 }
 assert.match(dynamicCase, /caseCountry,\s*\n\s*countryGuidance/);
 assert.match(dynamicCase, /Treat caseCountry as immutable input/);
+assert.match(dynamicCase, /la:dynamic-case:v3/);
+assert.match(dynamicCase, /Never invent a geographic place name/);
+assert.match(dynamicCase, /REAL_PLACE_FALLBACKS/);
 assert.match(dynamicCase, /caseCountry: dynamicCase\.caseCountry \|\| null/);
+assert.match(applicableLaws, /Never invent or disguise a geographic place name/);
+assert.match(caseWorkspace, /caseSession\.legalJurisdiction\?\.locality/);
+assert.match(challengeWorkspace, /challenge\.legalJurisdiction\?\.locality/);
 assert.match(store, /countryCode: caseCountry\.code/);
 assert.match(store, /caseCountry,/);
 assert.match(
@@ -108,7 +122,7 @@ assert.match(
   "lawyer profiles should preserve stored countries and fall back legacy cases"
 );
 assert.match(store, /\{ fallback: true \}/);
-assert.match(challenges, /caseCountry: template\.caseCountry \|\| null/);
+assert.match(challenges, /caseCountry: challengeCountry/);
 assert.match(picker, /fi-\$\{normalizedCode\.toLowerCase\(\)\}/);
 assert.match(picker, /aria-label={`Select \$\{country\.name\}`}/);
 assert.match(picker, /document\.addEventListener\("keydown"/);

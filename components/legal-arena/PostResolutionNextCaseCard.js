@@ -7,6 +7,10 @@ import * as HeroIcons from "@heroicons/react/24/outline";
 import config from "@/config";
 import apiClient from "@/libs/api";
 import { trackGoal } from "@/libs/datafast";
+import {
+  buildNextCaseCareerBridge,
+  buildResolutionAftermath,
+} from "@/libs/game/careerNarrative.mjs";
 import EarlyAccessCheckoutButton from "./EarlyAccessCheckoutButton";
 
 const titleCase = (value = "") =>
@@ -51,6 +55,14 @@ export default function PostResolutionNextCaseCard({
   const teaserChallenge =
     teaser?.challenge ||
     `Take on new parties, facts, and evidence in ${country}.`;
+  const aftermath =
+    caseSession?.resolutionAftermath || buildResolutionAftermath({ caseSession });
+  const careerBridge = buildNextCaseCareerBridge({
+    caseSession,
+    aftermath,
+    teaser,
+    recommendation,
+  });
 
   useEffect(() => {
     if (viewedRef.current || !sourceCaseId) return;
@@ -199,6 +211,14 @@ export default function PostResolutionNextCaseCard({
                   `Take a fresh ${recommendedCategory.toLowerCase()} matter in ${country}, with new parties, facts, and evidence.`
                 : `${teaserChallenge} ${recommendedCategory} · Level ${recommendedComplexity} · ${country}.`}
             </p>
+            <div className="mt-4 rounded-xl border border-emerald-300/12 bg-emerald-300/[0.045] p-3">
+              <p className="text-[0.65rem] font-black uppercase tracking-[0.14em] text-emerald-200">
+                Career consequence
+              </p>
+              <p className="mt-1.5 text-xs font-semibold leading-5 text-white/62">
+                {careerBridge}
+              </p>
+            </div>
           </div>
         </div>
 

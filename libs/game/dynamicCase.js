@@ -27,6 +27,69 @@ const DYNAMIC_CASE_MODEL =
   process.env.OPENAI_MODEL?.trim() ||
   "gpt-5.4-mini";
 
+const REAL_PLACE_FALLBACKS = Object.freeze({
+  AE: { subdivisionName: "Dubai", locality: "Dubai", courtName: "Dubai Courts" },
+  AU: {
+    subdivisionName: "Victoria",
+    locality: "Melbourne",
+    courtName: "Magistrates' Court of Victoria",
+  },
+  BR: {
+    subdivisionName: "Sao Paulo",
+    locality: "Sao Paulo",
+    courtName: "Tribunal de Justica de Sao Paulo",
+  },
+  CA: {
+    subdivisionName: "Ontario",
+    locality: "Ottawa",
+    courtName: "Ontario Superior Court of Justice",
+  },
+  DE: { subdivisionName: "Berlin", locality: "Berlin", courtName: "Amtsgericht Mitte" },
+  FR: {
+    subdivisionName: "Ile-de-France",
+    locality: "Paris",
+    courtName: "Tribunal judiciaire de Paris",
+  },
+  GB: {
+    subdivisionName: "England",
+    locality: "Manchester",
+    courtName: "County Court at Manchester",
+  },
+  IE: {
+    subdivisionName: "Leinster",
+    locality: "Dublin",
+    courtName: "Dublin District Court",
+  },
+  IN: {
+    subdivisionName: "Maharashtra",
+    locality: "Pune",
+    courtName: "District Court, Pune",
+  },
+  JP: { subdivisionName: "Tokyo", locality: "Tokyo", courtName: "Tokyo District Court" },
+  NG: {
+    subdivisionName: "Lagos State",
+    locality: "Lagos",
+    courtName: "High Court of Lagos State",
+  },
+  NZ: {
+    subdivisionName: "Auckland",
+    locality: "Auckland",
+    courtName: "Auckland District Court",
+  },
+  SG: { subdivisionName: "Singapore", locality: "Singapore", courtName: "State Courts" },
+  US: {
+    subdivisionCode: "AZ",
+    subdivisionName: "Arizona",
+    locality: "Phoenix",
+    courtName: "Maricopa County Justice Courts",
+  },
+  ZA: {
+    subdivisionName: "Gauteng",
+    locality: "Johannesburg",
+    courtName: "Johannesburg Magistrate's Court",
+  },
+});
+
 const clampComplexity = (value = 1) =>
   Math.max(1, Math.min(5, Number(value) || 1));
 
@@ -167,6 +230,8 @@ const fallbackDynamicCase = ({ categorySlug, complexity, countryCode }) => {
   const isRental = category?.slug === "rental-dispute";
   const isIndia = caseCountry.code === "IN";
   const isUnitedStates = caseCountry.code === "US";
+  const realPlace = REAL_PLACE_FALLBACKS[caseCountry.code] || null;
+  const settingPrefix = realPlace?.locality ? `In ${realPlace.locality}, ` : "";
   const plaintiffName = isIndia ? "Ananya Rao" : isUnitedStates ? "Avery Morgan" : "Leila Noor";
   const defendantName = isIndia
     ? isRental
@@ -179,19 +244,19 @@ const fallbackDynamicCase = ({ categorySlug, complexity, countryCode }) => {
     : isRental
     ? `${caseCountry.name} Residential Services`
     : `${caseCountry.name} Trade Services`;
-  const courtName = isIndia
+  const courtName = realPlace?.courtName || (isIndia
     ? "District Civil Court"
     : isUnitedStates
     ? isRental
       ? "Municipal Housing Court"
       : "County Civil Court"
-    : `${caseCountry.name} Civil Tribunal`;
+    : `${caseCountry.name} Civil Tribunal`);
 
   return {
     title: isRental ? "Deposit Deadline Dispute" : `${categoryTitle} Pressure Case`,
     shortDescription: isRental
-      ? "A tenant says a landlord kept most of a deposit after a rushed move-out."
-      : "Two sides disagree over performance, payment, records, and who created the loss.",
+      ? `${settingPrefix}a tenant says a landlord kept most of a deposit after a rushed move-out.`
+      : `${settingPrefix}two sides disagree over performance, payment, records, and who created the loss.`,
     courtName,
     practiceArea: categoryTitle,
     primaryCategory: category?.slug || DEFAULT_CATEGORY_SLUG,
@@ -339,6 +404,13 @@ const fallbackDynamicCase = ({ categorySlug, complexity, countryCode }) => {
     },
     generatedBy: "fallback",
     caseCountry,
+    legalJurisdiction: {
+      countryCode: caseCountry.code,
+      countryName: caseCountry.name,
+      subdivisionCode: realPlace?.subdivisionCode || "",
+      subdivisionName: realPlace?.subdivisionName || "",
+      locality: realPlace?.locality || "",
+    },
   };
 };
 
@@ -397,6 +469,13 @@ const normalizeDynamicCaseState = ({
     generatedAt: new Date().toISOString(),
     generatedBy: source.generatedBy || (aiResult ? "ai" : "fallback"),
     caseCountry,
+    legalJurisdiction: {
+      countryCode: caseCountry.code,
+      countryName: caseCountry.name,
+      subdivisionCode: cleanText(source.legalJurisdiction?.subdivisionCode),
+      subdivisionName: cleanText(source.legalJurisdiction?.subdivisionName),
+      locality: cleanText(source.legalJurisdiction?.locality),
+    },
     playabilityProfile,
     title: cleanText(source.title) || fallback.title,
     shortDescription: cleanText(source.shortDescription) || fallback.shortDescription,
@@ -473,6 +552,7 @@ export const buildDynamicCaseTemplateSnapshot = (dynamicCase = {}) => {
     : [],
   complexity: dynamicCase.complexity,
   caseCountry: dynamicCase.caseCountry || null,
+  legalJurisdiction: dynamicCase.legalJurisdiction || null,
   courtName: dynamicCase.courtName,
   plaintiffName: dynamicCase.plaintiffName,
   defendantName: dynamicCase.defendantName,
@@ -550,7 +630,7 @@ export const generateDynamicCaseState = async ({
     retryAttempts: 1,
     throwOnError: isCurrentEvents,
     usageLabel: "dynamicCase.generate",
-    promptCacheKey: "la:dynamic-case:v2",
+    promptCacheKey: "la:dynamic-case:v3",
     serviceTier: "priority",
     onUsage,
     systemPrompt:
@@ -572,6 +652,10 @@ export const generateDynamicCaseState = async ({
         "Give each side discrete subjective courtroomPositions. Each position must express one concise claim, use an evidencePool id when linking proof, and must not reveal objective hidden truth.",
         "Give each side at least one relevant evidence item that is availableAtStart when complexity is 1; do not make missing or hard-to-get material necessary for an intro opponent's core theory.",
         "Treat caseCountry as immutable input. Do not move the matter to another country or return a competing country value.",
+        "Choose a real, existing subdivision and locality within caseCountry and return them in legalJurisdiction. Never invent a geographic place name.",
+        "Use real place names consistently throughout the case, including stories, openings, evidence descriptions, and the court setting whenever location is relevant.",
+        "Keep people, private addresses, buildings, and businesses fictional; a real place name must not turn a fictional party into a real person or organization.",
+        "Use an actual court name only when confident it exists. Otherwise use a generic court type identified by the real locality without presenting it as a verified institution.",
         ...(scenarioHint
           ? [
               "Treat scenarioHint as a binding promise made to the player. Build the dispute around that premise and challenge without copying its wording mechanically.",
@@ -590,6 +674,11 @@ export const generateDynamicCaseState = async ({
         title: "string",
         shortDescription: "string",
         courtName: "string",
+        legalJurisdiction: {
+          subdivisionCode: "official subdivision code when known",
+          subdivisionName: "real, existing state, province, region, or equivalent",
+          locality: "real, existing city or locality",
+        },
         practiceArea: "string",
         primaryCategory: "string",
         underlyingCategorySlug: "string",

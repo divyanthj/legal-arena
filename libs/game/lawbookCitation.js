@@ -29,7 +29,10 @@ export const pickRuleMentions = (argument, rules) => {
       return (
         (hasDistinctiveTitleMatch &&
           matchingTitleTokens.length >= requiredTitleMatches) ||
-        lowerArgument.includes(rule.id.replace(/-/g, " "))
+        lowerArgument.includes(rule.id.replace(/[-:]/g, " ")) ||
+        [rule.citation, rule.provisionLabel]
+          .filter(Boolean)
+          .some((value) => lowerArgument.includes(String(value).toLowerCase()))
       );
     })
     .map((rule) => rule.id)

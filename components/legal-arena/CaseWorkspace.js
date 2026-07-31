@@ -25,6 +25,11 @@ import {
 } from "@/libs/game/settlementAuthority";
 import { getNegotiationProfile } from "@/libs/game/negotiationProfile.mjs";
 import {
+  buildCareerDevelopments,
+  buildResolutionAftermath,
+  normalizeCareerNarrative,
+} from "@/libs/game/careerNarrative.mjs";
+import {
   getAdjournmentRemaining,
   hasAdjournmentRequestForRound,
 } from "@/libs/game/adjournment";
@@ -1375,8 +1380,17 @@ export default function CaseWorkspace({
     category: caseSession.primaryCategory,
     complexity: caseSession.complexity,
     side: caseSession.playerSide,
+    law_source: caseSession.lawSource || "rulebook",
     ...extra,
   });
+  const applicableLawAnalyticsParams = (law, extra = {}) =>
+    caseAnalyticsParams({
+      law_id: law?.id || "",
+      law_source_type: law?.sourceType || caseSession.lawSource || "rulebook",
+      provision_label: law?.provisionLabel || "",
+      instrument_title: law?.instrumentTitle || "",
+      ...extra,
+    });
   const tourAnalyticsContext = useMemo(
     () => ({
       mode: analyticsMode,
@@ -1697,10 +1711,12 @@ export default function CaseWorkspace({
       category: caseSession.primaryCategory,
       complexity: caseSession.complexity,
       side: caseSession.playerSide,
+      law_source: caseSession.lawSource || "rulebook",
     });
   }, [
     analyticsMode,
     caseSession.complexity,
+    caseSession.lawSource,
     caseSession.playerSide,
     caseSession.primaryCategory,
     caseSession.status,
@@ -2704,6 +2720,13 @@ export default function CaseWorkspace({
     : `${opponentPartyName} is preparing a response...`;
   const sideBadgeLabel = `Representing ${playerPartyName}`;
   const sideContextLabel = `${playerRoleLabel} side`;
+  const legalPlaceLabel = [
+    caseSession.legalJurisdiction?.locality,
+    caseSession.legalJurisdiction?.subdivisionName,
+  ]
+    .map((item) => String(item || "").trim())
+    .filter((item, index, items) => item && items.indexOf(item) === index)
+    .join(", ");
   const playerRepresentationLabel = `You represent ${playerPartyName} (${playerRoleLabel}).`;
   const interviewContextLabel = isInterview
     ? `Interviewing ${playerInterviewSubjectName}.`
@@ -2817,6 +2840,10 @@ export default function CaseWorkspace({
     (!cleanDraftList(factSheetDraft.desiredRelief).length && "Add requested relief") ||
     "Review and finalize fact sheet";
   const isCourtroom = !isInterview && !isSettlement && !isSettled && !isExited && !isVerdict;
+  const applicableLaws =
+    isCourtroom && caseSession.lockedApplicableLaws?.length
+      ? caseSession.lockedApplicableLaws
+      : caseSession.applicableLaws || [];
   const courtroomDeadlineTime = caseSession.courtroomDeadlineAt
     ? new Date(caseSession.courtroomDeadlineAt).getTime()
     : null;
@@ -2876,6 +2903,23 @@ export default function CaseWorkspace({
     cleanIntakePartySpeech(caseSession.clientMemoryExcerpt) ||
     cleanIntakePartySpeech(caseSession.premise?.openingStatement) ||
     cleanIntakePartySpeech(caseSession.premise?.overview);
+  const careerNarrative = normalizeCareerNarrative(
+    caseSession.careerNarrative,
+    caseSession
+  );
+  const careerDevelopments =
+    Array.isArray(caseSession.careerDevelopments) &&
+    caseSession.careerDevelopments.length
+      ? caseSession.careerDevelopments
+      : buildCareerDevelopments({
+          caseSession,
+          factSheet: caseSession.factSheet,
+          careerNarrative,
+        });
+  const latestCareerDevelopment =
+    careerDevelopments[careerDevelopments.length - 1] || null;
+  const resolutionAftermath =
+    caseSession.resolutionAftermath || buildResolutionAftermath({ caseSession });
   const firstDraftItem = (...lists) =>
     lists.flatMap((list) => cleanDraftList(list)).find(Boolean) || "";
 
@@ -2951,6 +2995,37 @@ export default function CaseWorkspace({
     guidedInteractionRef.current?.advance("courtroom-composer");
   };
 
+  const applicableLawSnippet = () => {
+    if (caseSession.lawSource === "real") {
+      const law = applicableLaws.find((item) => item?.sourceType === "real");
+
+      if (!law) {
+        return "";
+      }
+
+      const provision = String(law.citation || law.provisionLabel || "").trim();
+      const instrument = String(law.instrumentTitle || "").trim();
+      const authority =
+        provision && instrument && !provision.toLowerCase().includes(instrument.toLowerCase())
+          ? `${provision} of ${instrument}`
+          : provision || instrument || String(law.title || "").trim();
+      const relevance = String(law.relevanceSummary || law.displayText || "").trim();
+
+      if (!authority) {
+        return relevance;
+      }
+
+      return relevance
+        ? `Under ${authority}, ${lowerSentenceContinuation(relevance)}`
+        : `The applicable provision is ${authority}.`;
+    }
+
+    const rule =
+      visibleLawbookRules.find((item) => !item.universal) || visibleLawbookRules[0];
+
+    return rule ? `Under ${rule.title}, ${rule.principle}` : "";
+  };
+
   const openingStatementSnippet = () => {
     const theory = firstDraftItem(factSheetDraft.theory, factSheetDraft.summary);
     const strongestFact = firstDraftItem(
@@ -2960,8 +3035,7 @@ export default function CaseWorkspace({
     );
     const liveRisk = firstDraftItem(factSheetDraft.risks, factSheetDraft.disputedFacts);
     const relief = firstDraftItem(factSheetDraft.desiredRelief);
-    const rule =
-      visibleLawbookRules.find((item) => !item.universal) || visibleLawbookRules[0];
+    const law = applicableLawSnippet();
 
     return [
       `May it please the Court. I represent ${sentenceCasePartyName(playerPartyName)}.`,
@@ -2971,7 +3045,7 @@ export default function CaseWorkspace({
             courtFactText(strongestFact)
           )}`
         : "",
-      rule ? `Under ${rule.title}, ${rule.principle}` : "",
+      law,
       liveRisk
         ? `The other side may point to ${lowerSentenceContinuation(
             courtFactText(liveRisk)
@@ -3024,19 +3098,15 @@ export default function CaseWorkspace({
       : "";
   };
 
-  const lawbookSnippet = () => {
-    const rule =
-      visibleLawbookRules.find((item) => !item.universal) || visibleLawbookRules[0];
-
-    return rule ? `Under ${rule.title}, ${rule.principle}` : "";
-  };
-
   const argumentQuickTools = [
     ["Opening statement", openingStatementSnippet()],
     ["Add strongest fact", strongestFactSnippet()],
     ["Address risk", riskResponseSnippet()],
     ["Handle proof gap", proofGapSnippet()],
-    ["Cite lawbook", lawbookSnippet()],
+    [
+      caseSession.lawSource === "real" ? "Cite applicable law" : "Cite lawbook",
+      applicableLawSnippet(),
+    ],
   ].filter((tool) => tool[1]);
   const courtroomWitnesses = Array.isArray(caseSession.courtroomWitnesses)
     ? caseSession.courtroomWitnesses
@@ -5175,6 +5245,8 @@ export default function CaseWorkspace({
               </div>
 
               <div data-section-nav-target="resolution-inspiration">
+                {renderCareerAftermath()}
+
                 <CurrentEventInspirationCard
                   inspiration={caseSession.currentEventInspiration}
                 />
@@ -6340,6 +6412,132 @@ export default function CaseWorkspace({
     </div>
   );
 
+  const renderApplicableLawsSection = (className = "") => (
+    <details
+      className={`group/applicable overflow-hidden rounded-2xl border border-sky-200/15 bg-sky-200/[0.045] ${className}`}
+      onToggle={(event) => {
+        if (event.target !== event.currentTarget || !event.currentTarget.open) return;
+        trackGoal(
+          "applicable_laws_opened",
+          caseAnalyticsParams({
+            surface: "case_file",
+            law_count: applicableLaws.length,
+          })
+        );
+      }}
+    >
+      <summary className="flex cursor-pointer list-none items-center gap-3 p-4">
+        <HeroIcons.ScaleIcon className="h-4 w-4 shrink-0 text-sky-200" />
+        <span className="min-w-0 flex-1 text-sm font-semibold text-sky-100">
+          ({applicableLaws.length} applicable {applicableLaws.length === 1 ? "law" : "laws"})
+        </span>
+        <HeroIcons.ChevronDownIcon className="h-4 w-4 shrink-0 text-white/40 transition group-open/applicable:rotate-180" />
+      </summary>
+      <div className="border-t border-sky-200/10 p-4">
+        <div>
+          <p className="arena-kicker text-sky-200">Applicable laws</p>
+          <p className="mt-2 text-xs leading-5 text-white/48">
+            Automatically matched to the facts currently visible in your case file.
+          </p>
+        </div>
+      {caseSession.lawResearchWarning ? (
+        <div className="mt-3 rounded-xl border border-amber-200/20 bg-amber-200/[0.07] p-3 text-xs leading-5 text-amber-100">
+          {caseSession.lawResearchWarning}
+        </div>
+      ) : null}
+      {caseSession.lawSource === "real" ? (
+        <p className="mt-3 text-xs leading-5 text-white/42">
+          Game research may be incomplete or become outdated. Verify wording and status using
+          the linked official source.
+        </p>
+      ) : null}
+      <div className="mt-3 space-y-2">
+        {applicableLaws.length ? (
+          applicableLaws.map((law) => (
+            <details
+              key={law.id}
+              className="group/law overflow-hidden rounded-xl border border-white/10 bg-black/20"
+              onToggle={(event) => {
+                if (event.target !== event.currentTarget || !event.currentTarget.open) return;
+                trackGoal(
+                  "applicable_law_opened",
+                  applicableLawAnalyticsParams(law, { surface: "case_file" })
+                );
+              }}
+            >
+              <summary className="flex cursor-pointer list-none items-start gap-3 p-3">
+                <HeroIcons.ScaleIcon className="mt-0.5 h-4 w-4 shrink-0 text-sky-200" />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-semibold leading-5 text-white">
+                    {law.title || `${law.provisionLabel} — ${law.instrumentTitle}`}
+                  </span>
+                  <span className="mt-1 block text-xs leading-5 text-white/55">
+                    {law.relevanceSummary || law.displayText}
+                  </span>
+                </span>
+                <HeroIcons.ChevronDownIcon className="mt-0.5 h-4 w-4 shrink-0 text-white/40 transition group-open/law:rotate-180" />
+              </summary>
+              <div className="border-t border-white/8 px-3 pb-3 pt-2">
+                {law.sourceType === "real" ? (
+                  <>
+                    <p className="text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-white/38">
+                      Authoritative wording · {law.originalLanguage || "source language"}
+                    </p>
+                    <p dir="auto" className="mt-2 whitespace-pre-wrap text-sm leading-6 text-white/72">
+                      {law.originalText}
+                    </p>
+                    {law.englishTranslation ? (
+                      <>
+                        <p className="mt-4 text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-white/38">
+                          AI-generated English translation
+                        </p>
+                        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-white/62">
+                          {law.englishTranslation}
+                        </p>
+                      </>
+                    ) : null}
+                    <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-white/42">
+                      <span>{law.citation}</span>
+                      {law.retrievedAt ? (
+                        <span>Retrieved {new Date(law.retrievedAt).toLocaleDateString()}</span>
+                      ) : null}
+                    </div>
+                    {law.sourceUrl ? (
+                      <a
+                        href={law.sourceUrl}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        className="mt-3 inline-flex text-xs font-semibold text-sky-200 underline underline-offset-4"
+                        onClick={() =>
+                          trackGoal(
+                            "applicable_law_source_opened",
+                            applicableLawAnalyticsParams(law, { surface: "case_file" })
+                          )
+                        }
+                      >
+                        Open official source
+                      </a>
+                    ) : null}
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm leading-6 text-white/72">{law.principle}</p>
+                    <p className="mt-3 text-sm leading-6 text-white/52">{law.guidance}</p>
+                  </>
+                )}
+              </div>
+            </details>
+          ))
+        ) : (
+          <div className="rounded-xl border border-dashed border-white/10 p-3 text-sm text-white/45">
+            No applicable laws have been verified yet.
+          </div>
+        )}
+      </div>
+      </div>
+    </details>
+  );
+
   const factSheetSections = [
     {
       key: "theory",
@@ -6399,6 +6597,392 @@ export default function CaseWorkspace({
     },
   ];
 
+  const factSheetLawPointEntries = factSheetSections.flatMap((section) =>
+    cleanDraftList(factSheetDraft[section.key]).map((pointText, pointIndex) => ({
+      sectionKey: section.key,
+      pointText,
+      pointIndex,
+      key: `${section.key}:${pointText.trim().toLocaleLowerCase()}`,
+    }))
+  );
+  const applicableLawsByFactSheetPoint = new Map(
+    factSheetLawPointEntries.map((point) => [point.key, []])
+  );
+  const lawMatchTokens = (value = "") =>
+    new Set(
+      String(value || "")
+        .toLocaleLowerCase()
+        .replace(/[^a-z0-9\s]/g, " ")
+        .split(/\s+/)
+        .filter(
+          (token) =>
+            token.length > 3 &&
+            ![
+              "about",
+              "after",
+              "before",
+              "their",
+              "there",
+              "these",
+              "those",
+              "which",
+              "would",
+              "applicable",
+              "section",
+            ].includes(token)
+        )
+    );
+  const addLawToFactSheetPoint = (pointKey, law) => {
+    const current = applicableLawsByFactSheetPoint.get(pointKey);
+    if (current && !current.some((item) => item.id === law.id)) {
+      current.push(law);
+    }
+  };
+
+  applicableLaws.forEach((law) => {
+    let linked = false;
+    (law.factSheetReferences || []).forEach((reference) => {
+      const pointKey = `${String(reference?.sectionKey || "").trim()}:${String(
+        reference?.pointText || ""
+      )
+        .trim()
+        .toLocaleLowerCase()}`;
+      if (applicableLawsByFactSheetPoint.has(pointKey)) {
+        addLawToFactSheetPoint(pointKey, law);
+        linked = true;
+      }
+    });
+
+    if (linked || !factSheetLawPointEntries.length) {
+      return;
+    }
+
+    const lawTokens = lawMatchTokens(
+      [
+        law.title,
+        law.provisionLabel,
+        law.instrumentTitle,
+        law.relevanceSummary,
+        law.displayText,
+        law.principle,
+      ].join(" ")
+    );
+    const rankedPoints = factSheetLawPointEntries
+      .map((point) => {
+        const pointTokens = lawMatchTokens(point.pointText);
+        const score = [...pointTokens].filter((token) => lawTokens.has(token)).length;
+        return { point, score };
+      })
+      .sort(
+        (left, right) =>
+          right.score - left.score || left.point.pointIndex - right.point.pointIndex
+      );
+    addLawToFactSheetPoint(rankedPoints[0].point.key, law);
+  });
+
+  const getApplicableLawsForFactSheetPoint = (sectionKey, pointText) =>
+    applicableLawsByFactSheetPoint.get(
+      `${sectionKey}:${String(pointText || "").trim().toLocaleLowerCase()}`
+    ) || [];
+
+  const fallbackLawEffectForSection = (sectionKey) => {
+    if (["theory", "supportingFacts", "corroboratedFacts", "desiredRelief"].includes(sectionKey)) {
+      return "supports";
+    }
+    if (["risks", "missingEvidence"].includes(sectionKey)) {
+      return "undermines";
+    }
+    return "context";
+  };
+
+  const getLawEffectForFactSheetPoint = (law, sectionKey, pointText) => {
+    const normalizedPointText = String(pointText || "").trim().toLocaleLowerCase();
+    const reference = (law?.factSheetReferences || []).find(
+      (item) =>
+        String(item?.sectionKey || "").trim() === sectionKey &&
+        String(item?.pointText || "").trim().toLocaleLowerCase() === normalizedPointText
+    );
+    const effect = String(reference?.effect || "").trim().toLocaleLowerCase();
+
+    return {
+      effect: ["supports", "undermines", "context"].includes(effect)
+        ? effect
+        : fallbackLawEffectForSection(sectionKey),
+      summary: String(reference?.effectSummary || "").trim(),
+    };
+  };
+
+  const getFactSheetPointLawEffect = (laws, sectionKey, pointText) => {
+    const effects = new Set(
+      laws.map((law) => getLawEffectForFactSheetPoint(law, sectionKey, pointText).effect)
+    );
+    if (effects.has("supports") && effects.has("undermines")) return "mixed";
+    if (effects.has("undermines")) return "undermines";
+    if (effects.has("supports")) return "supports";
+    return "context";
+  };
+
+  const factSheetLawEffectUi = {
+    supports: {
+      label: "Favors point",
+      Icon: HeroIcons.CheckCircleIcon,
+      badge: "border-emerald-200/20 bg-emerald-200/[0.09] text-emerald-200",
+      container: "border-emerald-200/20 bg-emerald-200/[0.035]",
+    },
+    undermines: {
+      label: "Challenges point",
+      Icon: HeroIcons.ExclamationTriangleIcon,
+      badge: "border-rose-200/20 bg-rose-200/[0.09] text-rose-200",
+      container: "border-rose-200/20 bg-rose-200/[0.035]",
+    },
+    mixed: {
+      label: "Mixed effect",
+      Icon: HeroIcons.ArrowsRightLeftIcon,
+      badge: "border-amber-200/20 bg-amber-200/[0.09] text-amber-200",
+      container: "border-amber-200/20 bg-amber-200/[0.035]",
+    },
+    context: {
+      label: "Legal context",
+      Icon: HeroIcons.ScaleIcon,
+      badge: "border-sky-200/20 bg-sky-200/[0.09] text-sky-100",
+      container: "border-sky-200/15 bg-sky-200/[0.035]",
+    },
+  };
+
+  const getFactSheetSectionMetrics = (sectionKey) => {
+    const points = factSheetLawPointEntries.filter(
+      (point) => point.sectionKey === sectionKey
+    );
+    const coveredPoints = points.filter(
+      (point) => (applicableLawsByFactSheetPoint.get(point.key) || []).length > 0
+    );
+    const distinctLawIds = new Set(
+      coveredPoints.flatMap((point) =>
+        (applicableLawsByFactSheetPoint.get(point.key) || []).map((law) => law.id)
+      )
+    );
+
+    return {
+      availablePoints: points.length,
+      requiredPoints: 1,
+      distinctLaws: distinctLawIds.size,
+      coveredPoints: coveredPoints.length,
+    };
+  };
+
+  const renderFactSheetSectionMetrics = (section) => {
+    const metrics = getFactSheetSectionMetrics(section.key);
+    const lawCoverageExplanation =
+      "Distinct applicable laws / points they apply to.";
+
+    return (
+      <span className="mt-0.5 flex items-center justify-center gap-1.5 text-[0.58rem] font-semibold text-white/45">
+        <span
+          className="inline-flex items-center gap-0.5"
+          title="Available points / required points"
+          aria-label={`${metrics.availablePoints} available points out of ${metrics.requiredPoints} required`}
+        >
+          <HeroIcons.DocumentTextIcon className="h-2.5 w-2.5" aria-hidden="true" />
+          {metrics.availablePoints}/{metrics.requiredPoints}
+        </span>
+        {metrics.distinctLaws > 0 ? (
+          <>
+            <span aria-hidden="true" className="text-white/20">
+              ·
+            </span>
+            <span
+              className="inline-flex items-center gap-0.5 text-sky-100/65"
+              data-tooltip-id="fact-sheet-law-coverage-tooltip"
+              data-tooltip-content={lawCoverageExplanation}
+              aria-label={`${metrics.distinctLaws} distinct applicable laws linked to ${metrics.coveredPoints} points`}
+            >
+              <HeroIcons.ScaleIcon className="h-2.5 w-2.5" aria-hidden="true" />
+              {metrics.distinctLaws}/{metrics.coveredPoints}
+            </span>
+          </>
+        ) : null}
+      </span>
+    );
+  };
+
+  const renderFactSheetPointLaws = (laws, sectionKey, pointText) => (
+    <div className="border-t border-sky-200/10 px-3 pb-3 pt-2">
+      {caseSession.lawResearchWarning ? (
+        <div className="mb-2 rounded-lg border border-amber-200/20 bg-amber-200/[0.07] p-2.5 text-xs leading-5 text-amber-100">
+          {caseSession.lawResearchWarning}
+        </div>
+      ) : null}
+      {caseSession.lawSource === "real" ? (
+        <p className="mb-2 text-xs leading-5 text-white/42">
+          Game research may become outdated. Verify against the linked official source.
+        </p>
+      ) : null}
+      <div className="space-y-2">
+        {laws.map((law) => {
+          const lawEffect = getLawEffectForFactSheetPoint(law, sectionKey, pointText);
+          const effectUi = factSheetLawEffectUi[lawEffect.effect];
+          const EffectIcon = effectUi.Icon;
+
+          return (
+          <details
+            key={law.id}
+            className="group/law overflow-hidden rounded-xl border border-white/10 bg-black/20"
+            onToggle={(event) => {
+              if (event.target !== event.currentTarget || !event.currentTarget.open) return;
+              trackGoal(
+                "applicable_law_opened",
+                applicableLawAnalyticsParams(law, {
+                  surface: "fact_sheet_point",
+                  fact_sheet_section: sectionKey,
+                  effect: lawEffect.effect,
+                })
+              );
+            }}
+          >
+            <summary className="flex cursor-pointer list-none items-start gap-3 p-3">
+              <HeroIcons.ScaleIcon className="mt-0.5 h-4 w-4 shrink-0 text-sky-200" />
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold leading-5 text-white">
+                  {law.title || `${law.provisionLabel} — ${law.instrumentTitle}`}
+                </span>
+                <span
+                  className={`mt-2 inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[0.65rem] font-semibold ${effectUi.badge}`}
+                >
+                  <EffectIcon className="h-3 w-3" aria-hidden="true" />
+                  {effectUi.label}
+                </span>
+                {lawEffect.summary ? (
+                  <span className="mt-2 block text-xs leading-5 text-white/68">
+                    {lawEffect.summary}
+                  </span>
+                ) : null}
+                <span className="mt-1 block text-xs leading-5 text-white/55">
+                  {law.relevanceSummary || law.displayText}
+                </span>
+              </span>
+              <HeroIcons.ChevronDownIcon className="mt-0.5 h-4 w-4 shrink-0 text-white/40 transition group-open/law:rotate-180" />
+            </summary>
+            <div className="border-t border-white/8 px-3 pb-3 pt-2">
+              {law.sourceType === "real" ? (
+                <>
+                  <p className="text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-white/38">
+                    Authoritative wording · {law.originalLanguage || "source language"}
+                  </p>
+                  <p dir="auto" className="mt-2 whitespace-pre-wrap text-sm leading-6 text-white/72">
+                    {law.originalText}
+                  </p>
+                  {law.englishTranslation ? (
+                    <>
+                      <p className="mt-4 text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-white/38">
+                        AI-generated English translation
+                      </p>
+                      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-white/62">
+                        {law.englishTranslation}
+                      </p>
+                    </>
+                  ) : null}
+                  <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-white/42">
+                    <span>{law.citation}</span>
+                    {law.retrievedAt ? (
+                      <span>Retrieved {new Date(law.retrievedAt).toLocaleDateString()}</span>
+                    ) : null}
+                  </div>
+                  {law.sourceUrl ? (
+                    <a
+                      href={law.sourceUrl}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="mt-3 inline-flex text-xs font-semibold text-sky-200 underline underline-offset-4"
+                      onClick={() =>
+                        trackGoal(
+                          "applicable_law_source_opened",
+                          applicableLawAnalyticsParams(law, {
+                            surface: "fact_sheet_point",
+                            fact_sheet_section: sectionKey,
+                            effect: lawEffect.effect,
+                          })
+                        )
+                      }
+                    >
+                      Open official source
+                    </a>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  <p className="text-sm leading-6 text-white/72">{law.principle}</p>
+                  <p className="mt-3 text-sm leading-6 text-white/52">{law.guidance}</p>
+                </>
+              )}
+            </div>
+          </details>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  const renderMobileFactSheetFooter = () => (
+    <div className="shrink-0 border-t border-white/[0.06] bg-[#070908] p-4 sm:p-5">
+      {isInterview ? (
+        <div className="rounded-2xl border border-white/[0.07] bg-amber-200/[0.045] p-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-200">
+            Before court
+          </p>
+          <p className="mt-2 text-sm leading-6 text-white/62">
+            Check each section above. When your theory, proof, risks, and requested relief
+            match the intake record, finalize the fact sheet.
+          </p>
+          <button
+            type="button"
+            className="btn mt-3 min-h-0 w-full border-amber-200/35 bg-amber-200 px-4 py-3 text-sm font-semibold text-black hover:border-amber-100 hover:bg-amber-100 disabled:opacity-60"
+            onClick={handleFactSheetPrimaryAction}
+            disabled={factSheetPrimaryActionDisabled}
+          >
+            {settlementAuthorityReady
+              ? `Send ${negotiationIntentLabel} First`
+              : awaitingSettlementResponse
+              ? "Awaiting Response"
+              : isIntakeLocked
+              ? "Waiting for Opponent"
+              : pendingAction === "finalize"
+              ? "Finalizing Fact Sheet..."
+              : "Finalize Fact Sheet"}
+          </button>
+          {renderSettleButton(
+            "btn mt-2 min-h-0 w-full border-emerald-200/25 bg-emerald-200/[0.08] px-4 py-3 text-sm font-semibold text-emerald-50 hover:border-emerald-200/50 hover:bg-emerald-200/[0.12] disabled:opacity-60"
+          )}
+          {pendingAction === "finalize" ? (
+            <div className="mt-3">
+              <LoadingBar label="Finalizing fact sheet" />
+            </div>
+          ) : null}
+          {finalizeFeedback?.text ? (
+            <p
+              className={`mt-3 text-xs leading-5 ${
+                finalizeFeedback.tone === "error"
+                  ? "text-rose-200"
+                  : "text-emerald-200"
+              }`}
+            >
+              {finalizeFeedback.text}
+            </p>
+          ) : null}
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-sky-200/12 bg-sky-200/[0.045] p-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-200">
+            Court reference
+          </p>
+          <p className="mt-2 text-sm leading-6 text-white/62">
+            Use these points to ground your next argument in facts, proof, risks, and
+            requested relief.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+
   const renderFactSheetSection = (section) => {
     const items = ensureDraftList(factSheetDraft[section.key]);
     const completedItems = cleanDraftList(items);
@@ -6439,6 +7023,70 @@ export default function CaseWorkspace({
             <div className="space-y-3">
               {items.map((item, itemIndex) => {
                 const bulletTone = getFactSheetItemTone(section.key, item);
+                const pointLaws = getApplicableLawsForFactSheetPoint(
+                  section.key,
+                  item
+                );
+                const pointLabel =
+                  section.key === "missingEvidence"
+                    ? formatMissingEvidenceLabel(item)
+                    : item;
+                const pointLawEffect = getFactSheetPointLawEffect(
+                  pointLaws,
+                  section.key,
+                  item
+                );
+                const pointEffectUi = factSheetLawEffectUi[pointLawEffect];
+                const PointEffectIcon = pointEffectUi.Icon;
+
+                if (pointLaws.length) {
+                  return (
+                    <details
+                      key={`${section.key}-${itemIndex}`}
+                      className={`group/point overflow-hidden rounded-xl border ${pointEffectUi.container}`}
+                      onToggle={(event) => {
+                        if (event.target !== event.currentTarget || !event.currentTarget.open) return;
+                        trackGoal(
+                          "applicable_laws_opened",
+                          caseAnalyticsParams({
+                            surface: "fact_sheet_point",
+                            layout: "desktop",
+                            fact_sheet_section: section.key,
+                            law_count: pointLaws.length,
+                            effect: pointLawEffect,
+                          })
+                        );
+                      }}
+                    >
+                      <summary className="flex cursor-pointer list-none items-start gap-3 p-3">
+                        <span
+                          className={`mt-2.5 h-1.5 w-1.5 shrink-0 rounded-full ${
+                            factSheetBulletToneClass[bulletTone] ||
+                            factSheetBulletToneClass.secondary
+                          }`}
+                        />
+                        <span className="min-w-0 flex-1 text-sm leading-7 text-white/78">
+                          {pointLabel}
+                        </span>
+                        <span className="mt-0.5 flex shrink-0 flex-col items-end gap-1">
+                          <span
+                            className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[0.65rem] font-semibold ${pointEffectUi.badge}`}
+                            title={`${pointEffectUi.label} under the linked law${pointLaws.length === 1 ? "" : "s"}`}
+                          >
+                            <PointEffectIcon className="h-3 w-3" aria-hidden="true" />
+                            {pointEffectUi.label}
+                          </span>
+                          <span className="text-xs font-semibold text-sky-100">
+                            ({pointLaws.length} applicable{" "}
+                            {pointLaws.length === 1 ? "law" : "laws"})
+                          </span>
+                        </span>
+                        <HeroIcons.ChevronDownIcon className="mt-1.5 h-4 w-4 shrink-0 text-white/40 transition group-open/point:rotate-180" />
+                      </summary>
+                      {renderFactSheetPointLaws(pointLaws, section.key, item)}
+                    </details>
+                  );
+                }
 
                 return (
                   <div
@@ -6452,9 +7100,7 @@ export default function CaseWorkspace({
                     />
                     <div className="min-w-0 flex-1">
                       <p className="text-sm leading-7 text-white/78">
-                        {section.key === "missingEvidence"
-                          ? formatMissingEvidenceLabel(item)
-                          : item}
+                        {pointLabel}
                       </p>
                       {isInterview && section.key === "missingEvidence" ? (
                         <div className="mt-2 flex flex-wrap gap-2">
@@ -6567,9 +7213,7 @@ export default function CaseWorkspace({
         <span className="mt-1.5 block line-clamp-1 text-[0.65rem] font-semibold leading-tight text-white/78">
           {factSheetSectionCompactLabel[section.key] || section.title}
         </span>
-        <span className="mt-1 block text-[0.62rem] text-white/42">
-          {sectionCount}/{Math.max(sectionCount, 1)}
-        </span>
+        {renderFactSheetSectionMetrics(section)}
       </button>
     );
   };
@@ -6623,12 +7267,79 @@ export default function CaseWorkspace({
         { key: "file", label: "Case file", target: "workspace-case-file" },
         { key: "lawbook", label: "Lawbook", target: "workspace-lawbook" },
       ]
-    : [
+      : [
         { key: "overview", label: "Overview", target: "workspace-overview" },
         { key: "interview", label: "Client interview", target: "intake-interview" },
         { key: "file", label: "Fact sheet", target: "workspace-case-file" },
         { key: "lawbook", label: "Lawbook", target: "workspace-lawbook" },
       ];
+
+  const renderCareerAftermath = () => {
+    if (analyticsMode !== "solo" || !resolutionAftermath) return null;
+
+    const aftermathTone =
+      resolutionAftermath.tone === "rose"
+        ? {
+            border: "border-rose-300/20",
+            background: "bg-rose-300/[0.055]",
+            accent: "text-rose-200",
+            icon: "border-rose-300/20 bg-rose-300/10 text-rose-100",
+          }
+        : resolutionAftermath.tone === "amber"
+          ? {
+              border: "border-amber-200/20",
+              background: "bg-amber-200/[0.055]",
+              accent: "text-amber-200",
+              icon: "border-amber-200/20 bg-amber-200/10 text-amber-100",
+            }
+          : {
+              border: "border-emerald-300/20",
+              background: "bg-emerald-300/[0.055]",
+              accent: "text-emerald-200",
+              icon: "border-emerald-300/20 bg-emerald-300/10 text-emerald-100",
+            };
+
+    return (
+      <section
+        className={`mt-6 rounded-2xl border p-4 sm:p-5 ${aftermathTone.border} ${aftermathTone.background}`}
+        aria-label="Career aftermath"
+      >
+        <div className="flex items-start gap-3">
+          <span
+            className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl border ${aftermathTone.icon}`}
+          >
+            <HeroIcons.BriefcaseIcon className="h-5 w-5" aria-hidden="true" />
+          </span>
+          <div className="min-w-0">
+            <p className={`arena-kicker ${aftermathTone.accent}`}>
+              {resolutionAftermath.eyebrow || "Career aftermath"}
+            </p>
+            <h3 className="mt-2 text-xl font-black leading-tight text-white sm:text-2xl">
+              {resolutionAftermath.title}
+            </h3>
+          </div>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          <div className="rounded-xl border border-white/8 bg-black/18 p-3">
+            <p className="text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-white/42">
+              Client consequence
+            </p>
+            <p className="mt-2 text-sm font-semibold leading-6 text-white/72">
+              {resolutionAftermath.clientResponse}
+            </p>
+          </div>
+          <div className="rounded-xl border border-white/8 bg-black/18 p-3">
+            <p className="text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-white/42">
+              Reputation consequence
+            </p>
+            <p className="mt-2 text-sm font-semibold leading-6 text-white/72">
+              {resolutionAftermath.careerImpact}
+            </p>
+          </div>
+        </div>
+      </section>
+    );
+  };
 
   return (
     <main
@@ -6679,6 +7390,12 @@ export default function CaseWorkspace({
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-2 px-2">
             <CountryBadge caseCountry={caseSession.caseCountry} className="shrink-0" />
+            {legalPlaceLabel ? (
+              <span className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-white/10 bg-white/[0.035] px-2.5 py-1 text-xs font-semibold text-white/62">
+                <HeroIcons.MapPinIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                {legalPlaceLabel}
+              </span>
+            ) : null}
             <span
               className={`min-w-0 max-w-full truncate rounded-lg border px-2.5 py-1 text-xs font-semibold ${
                 caseSession.playerSide === "opponent"
@@ -6725,14 +7442,16 @@ export default function CaseWorkspace({
                 <HeroIcons.ClipboardDocumentListIcon className="h-4 w-4" aria-hidden="true" />
                 Fact Sheet
               </button>
-              <button
-                type="button"
-                className="flex items-center justify-center gap-1.5 py-3 transition hover:text-white"
-                onClick={() => setShowMobileLawbookDialog(true)}
-              >
-                <HeroIcons.BookOpenIcon className="h-4 w-4" aria-hidden="true" />
-                Lawbook
-              </button>
+              {caseSession.lawSource !== "real" ? (
+                <button
+                  type="button"
+                  className="flex items-center justify-center gap-1.5 py-3 transition hover:text-white"
+                  onClick={() => setShowMobileLawbookDialog(true)}
+                >
+                  <HeroIcons.BookOpenIcon className="h-4 w-4" aria-hidden="true" />
+                  Lawbook
+                </button>
+              ) : null}
             </div>
           ) : null}
         </div>
@@ -6791,6 +7510,12 @@ export default function CaseWorkspace({
 
               <div className="flex flex-wrap items-center gap-2 lg:justify-end">
                 <CountryBadge caseCountry={caseSession.caseCountry} />
+                {legalPlaceLabel ? (
+                  <span className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-white/10 bg-white/[0.035] px-2.5 py-1 text-xs font-semibold text-white/62">
+                    <HeroIcons.MapPinIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                    {legalPlaceLabel}
+                  </span>
+                ) : null}
                 <span
                   className={`min-w-0 max-w-xs truncate rounded-lg border px-2.5 py-1 text-xs font-semibold ${
                     caseSession.playerSide === "opponent"
@@ -6936,6 +7661,66 @@ export default function CaseWorkspace({
             ) : null}
           </div>
         </div>
+
+        {analyticsMode === "solo" && !isVerdict && !isSettled && !isExited ? (
+          <section className="overflow-hidden rounded-2xl border border-amber-200/18 bg-[linear-gradient(135deg,rgba(251,191,36,0.075),rgba(255,255,255,0.018)_48%,rgba(52,211,153,0.045))]">
+            <div className="grid gap-4 p-4 sm:p-5 lg:grid-cols-[minmax(0,1.25fr)_minmax(18rem,0.75fr)] lg:items-center">
+              <div className="flex min-w-0 items-start gap-3">
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-amber-200/20 bg-amber-200/10 text-amber-100">
+                  <HeroIcons.BriefcaseIcon className="h-5 w-5" aria-hidden="true" />
+                </span>
+                <div className="min-w-0">
+                  <p className="arena-kicker text-amber-200">
+                    Career thread · Chapter {careerNarrative.chapterNumber}
+                  </p>
+                  <p className="mt-1 text-xs font-semibold text-white/42">
+                    {careerNarrative.chapterTitle} · {careerNarrative.roleTitle}
+                  </p>
+                  <h2 className="mt-3 text-lg font-black leading-tight text-white sm:text-xl">
+                    {latestCareerDevelopment?.title || "A new matter reaches your desk"}
+                  </h2>
+                  <p className="mt-2 max-w-3xl text-sm font-semibold leading-6 text-white/66">
+                    {latestCareerDevelopment?.body || careerNarrative.origin}
+                  </p>
+                  {careerDevelopments.length > 1 ? (
+                    <details className="mt-3 group">
+                      <summary className="cursor-pointer list-none text-xs font-semibold text-amber-100/72 transition hover:text-amber-100">
+                        View {careerDevelopments.length} developments
+                        <HeroIcons.ChevronDownIcon
+                          className="ml-1.5 inline h-3.5 w-3.5 transition group-open:rotate-180"
+                          aria-hidden="true"
+                        />
+                      </summary>
+                      <ol className="mt-3 space-y-2 border-l border-amber-200/16 pl-4">
+                        {careerDevelopments.map((development) => (
+                          <li key={development.key}>
+                            <p className="text-xs font-semibold text-white/74">
+                              {development.title}
+                            </p>
+                            <p className="mt-0.5 text-xs leading-5 text-white/45">
+                              {development.body}
+                            </p>
+                          </li>
+                        ))}
+                      </ol>
+                    </details>
+                  ) : null}
+                </div>
+              </div>
+              <div className="rounded-xl border border-white/8 bg-black/18 p-3.5">
+                <p className="text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-white/40">
+                  What this case means
+                </p>
+                <p className="mt-2 text-sm font-semibold leading-6 text-white/72">
+                  {careerNarrative.stakes}
+                </p>
+                <p className="mt-2 text-xs leading-5 text-amber-100/58">
+                  {careerNarrative.careerQuestion}
+                </p>
+              </div>
+            </div>
+          </section>
+        ) : null}
 
             <div
               className={`grid min-w-0 gap-6 ${
@@ -7350,7 +8135,9 @@ export default function CaseWorkspace({
                   </div>
                 </section>
 
-                {renderLawbookPanel("sm:hidden", "mobile-lawbook-details")}
+                {caseSession.lawSource !== "real"
+                  ? renderLawbookPanel("sm:hidden", "mobile-lawbook-details")
+                  : null}
 
                 <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-white/10 bg-black/92 px-3 pb-[calc(env(safe-area-inset-bottom)+0.45rem)] pt-2 shadow-[0_-18px_50px_rgba(0,0,0,0.45)] backdrop-blur-xl">
                   <div className="mx-auto grid max-w-md grid-cols-4 gap-1">
@@ -8386,6 +9173,7 @@ export default function CaseWorkspace({
             )}
 
             {(isInterview || isCourtroom) &&
+              caseSession.lawSource !== "real" &&
               renderLawbookPanel("hidden xl:block", "desktop-lawbook-details")}
 
             {isVerdict && (
@@ -8471,6 +9259,8 @@ export default function CaseWorkspace({
                   </div>
 
                   <div data-section-nav-target="resolution-inspiration">
+                    {renderCareerAftermath()}
+
                     <CurrentEventInspirationCard
                       inspiration={caseSession.currentEventInspiration}
                     />
@@ -8743,9 +9533,7 @@ export default function CaseWorkspace({
                             <span className="line-clamp-1 text-[0.58rem] font-semibold leading-tight">
                               {factSheetSectionCompactLabel[section.key] || section.title}
                             </span>
-                            <span className="text-[0.58rem] text-white/42">
-                              {sectionCount}/{Math.max(sectionCount, 1)}
-                            </span>
+                            {renderFactSheetSectionMetrics(section)}
                           </button>
                         );
                       })}
@@ -8899,6 +9687,7 @@ export default function CaseWorkspace({
                           <span className="line-clamp-1 text-[0.58rem] font-semibold leading-tight">
                             {factSheetSectionCompactLabel[section.key] || section.title}
                           </span>
+                          {renderFactSheetSectionMetrics(section)}
                         </button>
                       );
                     })}
@@ -8929,6 +9718,9 @@ export default function CaseWorkspace({
 
                 <div className="mt-5 space-y-3">
                   {factSheetSections.map(renderFactSheetSection)}
+                  {!factSheetLawPointEntries.length && applicableLaws.length
+                    ? renderApplicableLawsSection()
+                    : null}
 
                   {isInterview && (
                     <div className="space-y-3">
@@ -9043,7 +9835,7 @@ export default function CaseWorkspace({
                   </div>
                 </div>
               </>
-            ) : isSettlement || isSettled || isCourtroom ? null : (
+            ) : isSettlement || isSettled || isCourtroom || caseSession.lawSource === "real" ? null : (
               <div id="lawbook-details" className="arena-surface">
                 <details className="group" open>
                   <summary className="list-none cursor-pointer p-6">
@@ -9077,6 +9869,7 @@ export default function CaseWorkspace({
             )}
           </aside>
           {(isInterview || isCourtroom) &&
+            caseSession.lawSource !== "real" &&
             renderLawbookPanel("hidden sm:block xl:hidden", "tablet-lawbook-details")}
         </div>
       </section>
@@ -9265,7 +10058,7 @@ export default function CaseWorkspace({
                 </div>
               </div>
 
-            <div className="arena-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-4 sm:p-5">
+            <div className="arena-scroll flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-4 sm:p-5">
               <div className="rounded-xl border border-white/[0.07] bg-white/[0.025] px-3.5 py-3">
                 <p className="text-sm italic leading-6 text-white/56">
                   {activeMobileFactSheetSection.description}
@@ -9278,6 +10071,75 @@ export default function CaseWorkspace({
                       activeMobileFactSheetSection.key,
                       item
                     );
+                    const pointLaws = getApplicableLawsForFactSheetPoint(
+                      activeMobileFactSheetSection.key,
+                      item
+                    );
+                    const pointLabel =
+                      activeMobileFactSheetSection.key === "missingEvidence"
+                        ? formatMissingEvidenceLabel(item)
+                        : item;
+                    const pointLawEffect = getFactSheetPointLawEffect(
+                      pointLaws,
+                      activeMobileFactSheetSection.key,
+                      item
+                    );
+                    const pointEffectUi = factSheetLawEffectUi[pointLawEffect];
+                    const PointEffectIcon = pointEffectUi.Icon;
+
+                    if (pointLaws.length) {
+                      return (
+                        <details
+                          key={`${activeMobileFactSheetSection.key}-dialog-${itemIndex}`}
+                          className={`group/point overflow-hidden rounded-xl border ${pointEffectUi.container}`}
+                          onToggle={(event) => {
+                            if (event.target !== event.currentTarget || !event.currentTarget.open) return;
+                            trackGoal(
+                              "applicable_laws_opened",
+                              caseAnalyticsParams({
+                                surface: "fact_sheet_point",
+                                layout: "mobile",
+                                fact_sheet_section: activeMobileFactSheetSection.key,
+                                law_count: pointLaws.length,
+                                effect: pointLawEffect,
+                              })
+                            );
+                          }}
+                        >
+                          <summary className="flex cursor-pointer list-none items-start gap-3 p-4">
+                            <span
+                              className={`mt-2 h-1.5 w-1.5 shrink-0 rounded-full ${
+                                factSheetBulletToneClass[bulletTone] ||
+                                factSheetBulletToneClass.secondary
+                              }`}
+                            />
+                            <span className="min-w-0 flex-1 text-sm font-semibold leading-6 text-white/80">
+                              {pointLabel}
+                            </span>
+                            <span className="mt-0.5 flex shrink-0 flex-col items-end gap-1">
+                              <span
+                                className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[0.65rem] font-semibold ${pointEffectUi.badge}`}
+                                title={`${pointEffectUi.label} under the linked law${pointLaws.length === 1 ? "" : "s"}`}
+                              >
+                                <PointEffectIcon className="h-3 w-3" aria-hidden="true" />
+                                {pointEffectUi.label}
+                              </span>
+                              <span className="text-xs font-semibold text-sky-100">
+                                ({pointLaws.length} applicable{" "}
+                                {pointLaws.length === 1 ? "law" : "laws"})
+                              </span>
+                            </span>
+                            <HeroIcons.ChevronDownIcon className="mt-1 h-4 w-4 shrink-0 text-white/40 transition group-open/point:rotate-180" />
+                          </summary>
+                          {renderFactSheetPointLaws(
+                            pointLaws,
+                            activeMobileFactSheetSection.key,
+                            item
+                          )}
+                        </details>
+                      );
+                    }
+
                     return (
                       <div
                         key={`${activeMobileFactSheetSection.key}-dialog-${itemIndex}`}
@@ -9291,9 +10153,7 @@ export default function CaseWorkspace({
                         />
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-semibold leading-6 text-white/80">
-                            {activeMobileFactSheetSection.key === "missingEvidence"
-                              ? formatMissingEvidenceLabel(item)
-                              : item}
+                            {pointLabel}
                           </p>
                           {isInterview && activeMobileFactSheetSection.key === "missingEvidence" ? (
                             <div className="mt-2 flex flex-wrap gap-2">
@@ -9326,63 +10186,6 @@ export default function CaseWorkspace({
                   {activeMobileFactSheetSection.empty}
                 </div>
               )}
-              {isInterview ? (
-                <div className="mt-4 rounded-2xl border border-white/[0.07] bg-amber-200/[0.045] p-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-200">
-                    Before court
-                  </p>
-                  <p className="mt-2 text-sm leading-6 text-white/62">
-                    Check each section above. When your theory, proof, risks, and requested relief
-                    match the intake record, finalize the fact sheet.
-                  </p>
-                  <button
-                    type="button"
-                    className="btn mt-3 min-h-0 w-full border-amber-200/35 bg-amber-200 px-4 py-3 text-sm font-semibold text-black hover:border-amber-100 hover:bg-amber-100 disabled:opacity-60"
-                    onClick={handleFactSheetPrimaryAction}
-                    disabled={factSheetPrimaryActionDisabled}
-                  >
-                    {settlementAuthorityReady
-                      ? `Send ${negotiationIntentLabel} First`
-                      : awaitingSettlementResponse
-                      ? "Awaiting Response"
-                      : isIntakeLocked
-                      ? "Waiting for Opponent"
-                      : pendingAction === "finalize"
-                      ? "Finalizing Fact Sheet..."
-                      : "Finalize Fact Sheet"}
-                  </button>
-                  {renderSettleButton(
-                    "btn mt-2 min-h-0 w-full border-emerald-200/25 bg-emerald-200/[0.08] px-4 py-3 text-sm font-semibold text-emerald-50 hover:border-emerald-200/50 hover:bg-emerald-200/[0.12] disabled:opacity-60"
-                  )}
-                  {pendingAction === "finalize" ? (
-                    <div className="mt-3">
-                      <LoadingBar label="Finalizing fact sheet" />
-                    </div>
-                  ) : null}
-                  {finalizeFeedback?.text ? (
-                    <p
-                      className={`mt-3 text-xs leading-5 ${
-                        finalizeFeedback.tone === "error"
-                          ? "text-rose-200"
-                          : "text-emerald-200"
-                      }`}
-                    >
-                      {finalizeFeedback.text}
-                    </p>
-                  ) : null}
-                </div>
-              ) : (
-                <div className="mt-4 rounded-2xl border border-sky-200/12 bg-sky-200/[0.045] p-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-200">
-                    Court reference
-                  </p>
-                  <p className="mt-2 text-sm leading-6 text-white/62">
-                    Use these points to ground your next argument in facts, proof, risks, and
-                    requested relief.
-                          </p>
-                        </div>
-                      )}
-
                       {latestEvidenceProductionQuestions.length > 0 ? (
                         <div className="mt-3 rounded-xl border border-amber-200/18 bg-amber-200/[0.055] p-3">
                           <div className="flex items-start gap-3">
@@ -9415,6 +10218,7 @@ export default function CaseWorkspace({
                         </div>
                       ) : null}
                     </div>
+                    {renderMobileFactSheetFooter()}
             </>
           ) : null}
         </div>
@@ -9698,6 +10502,10 @@ export default function CaseWorkspace({
       ) : null}
       <Tooltip
         id="settlement-authority-tooltip"
+        className="z-[70] !max-w-xs !rounded-lg !border !border-white/10 !bg-[#141414] !px-4 !py-3 !text-sm !leading-5 !text-white !opacity-100 shadow-xl"
+      />
+      <Tooltip
+        id="fact-sheet-law-coverage-tooltip"
         className="z-[70] !max-w-xs !rounded-lg !border !border-white/10 !bg-[#141414] !px-4 !py-3 !text-sm !leading-5 !text-white !opacity-100 shadow-xl"
       />
     </main>

@@ -1,0 +1,132 @@
+
+> ship-fast-code@0.1.0 dev
+> next dev -H 0.0.0.0 -p 3000
+
+  ▲ Next.js 14.2.35
+  - Local:        http://localhost:3000
+  - Network:      http://0.0.0.0:3000
+  - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 1362ms
+ ○ Compiling /_not-found ...
+
+🌼   [35mdaisyUI[39m [2m4.10.1[22m
+├─ [32m✔︎[39m 3 themes added[2m		https://daisyui.com/docs/themes[22m
+╰─ [32m★[39m [0mStar daisyUI on GitHub[0m	[2mhttps://github.com/saadeghi/daisyui[22m
+
+ ✓ Compiled /_not-found in 3.9s (1409 modules)
+ GET /_next/static/webpack/14a41d1ae1f17aed.webpack.hot-update.json 404 in 4299ms
+ ○ Compiling /dashboard ...
+ ✓ Compiled /dashboard in 6.6s (2335 modules)
+ GET /dashboard 200 in 6192ms
+ GET /_next/static/webpack/14a41d1ae1f17aed.webpack.hot-update.json 404 in 6814ms
+ GET /dashboard 200 in 684ms
+ ○ Compiling /api/players/avatar/[playerId] ...
+ ✓ Compiled /api/players/avatar/[playerId] in 564ms (1709 modules)
+ GET /dashboard 200 in 9730ms
+ GET /api/players/avatar/6a41f0aa485177a20e890fa9?v=1782885976199 200 in 2285ms
+ ✓ Compiled /api/auth/[...nextauth] in 206ms (1715 modules)
+ ✓ Compiled (1717 modules)
+ GET /api/players/avatar/69e8df9c5452c0821bdfd6d9?v=1778348211121 200 in 2988ms
+ GET /api/players/law-source 200 in 553ms
+ ✓ Compiled /favicon.ico in 192ms (1746 modules)
+ GET /favicon.ico 200 in 372ms
+ GET /api/players/law-source 200 in 451ms
+ GET /api/auth/session 200 in 1351ms
+ GET /api/auth/session 200 in 52ms
+ ✓ Compiled /api/auth/session-status in 146ms (1748 modules)
+ GET /api/auth/session-status 200 in 261ms
+ ✓ Compiled /api/onboarding/dashboard-welcome in 158ms (1750 modules)
+ POST /api/onboarding/dashboard-welcome 200 in 268ms
+ ○ Compiling /dashboard/cases/[caseId] ...
+ ✓ Compiled /icon.png in 1986ms (2590 modules)
+ GET /icon.png 200 in 875ms
+ GET /dashboard/cases/security-deposit-after-a-broken-lease-return-4476f7?_rsc=wv4e0 200 in 265ms
+ GET /api/auth/session-status 200 in 71ms
+ GET /dashboard/cases/security-deposit-fight-over-a-broken-blind-and-paint-touch-u-fac4e5 200 in 310ms
+ ✓ Compiled /api/auth/[...nextauth] in 216ms (1772 modules)
+ ✓ Compiled (1774 modules)
+ GET /api/auth/session 200 in 569ms
+ GET /api/auth/session 200 in 48ms
+ ✓ Compiled /api/players/avatar/[playerId] in 169ms (1776 modules)
+ ○ Compiling /_error ...
+ ✓ Compiled /_error in 1142ms (2814 modules)
+ ✓ Compiled in 1ms (1816 modules)
+ POST /api/cases/security-deposit-fight-over-a-broken-blind-and-paint-touch-u-fac4e5/client-portrait 500 in 2197ms
+ ✓ Compiled in 0ms (1816 modules)
+ GET /api/auth/session-status 200 in 1871ms
+ GET /api/players/avatar/69e8df9c5452c0821bdfd6d9?v=1778348211121 200 in 2168ms
+ GET /dashboard/cases/security-deposit-fight-over-a-broken-blind-and-paint-touch-u-fac4e5?_rsc=hsg34 200 in 1035ms
+ GET /dashboard/cases/security-deposit-fight-over-a-broken-blind-and-paint-touch-u-fac4e5?_rsc=hsg34 200 in 177ms
+ GET /dashboard/cases/security-deposit-fight-over-a-broken-blind-and-paint-touch-u-fac4e5?_rsc=hsg34 200 in 177ms
+ GET /dashboard 200 in 3847ms
+ GET /api/players/avatar/69e8df9c5452c0821bdfd6d9?v=1778348211121 200 in 385ms
+ ✓ Compiled /api/players/law-source in 180ms (1817 modules)
+ GET /api/players/avatar/6a41f0aa485177a20e890fa9?v=1782885976199 200 in 762ms
+ GET /api/auth/session 200 in 389ms
+ GET /api/players/law-source 200 in 426ms
+ GET /api/auth/session 200 in 42ms
+ GET /api/auth/session-status 200 in 72ms
+ GET /api/players/law-source 200 in 65ms
+ GET /dashboard/cases/march-to-parliament-on-exam-irregularities-23c51a 200 in 432ms
+ GET /api/players/avatar/69e8df9c5452c0821bdfd6d9?v=1778348211121 200 in 394ms
+ ○ Compiling /api/auth/[...nextauth] ...
+ ✓ Compiled /api/auth/[...nextauth] in 859ms (1780 modules)
+ ✓ Compiled (1791 modules)
+ GET /api/auth/session 200 in 1450ms
+ GET /api/players/case-report-preferences 200 in 1486ms
+ GET /api/auth/session 200 in 40ms
+ ✓ Compiled /api/auth/session-status in 240ms (1793 modules)
+ GET /dashboard/cases/march-to-parliament-on-exam-irregularities-23c51a?_rsc=fozci 200 in 370ms
+ GET /api/cases/next?sourceCaseId=march-to-parliament-on-exam-irregularities-23c51a 200 in 1777ms
+ ✓ Compiled in 1ms (1793 modules)
+ ✓ Compiled in 0ms (1793 modules)
+ ✓ Compiled in 0ms (1793 modules)
+ GET /api/award-evaluations/case/6a63c2d1f15ada876a23c51a 200 in 2407ms
+ GET /api/players/case-report-preferences 200 in 940ms
+ GET /api/auth/session-status 200 in 945ms
+ GET /api/case-reports/caseSession/6a63c2d1f15ada876a23c51a 200 in 2441ms
+ ✓ Compiled in 0ms (1793 modules)
+ GET /api/award-evaluations/case/6a63c2d1f15ada876a23c51a 200 in 422ms
+ GET /api/case-reports/caseSession/6a63c2d1f15ada876a23c51a 200 in 409ms
+ GET /api/cases/next?sourceCaseId=march-to-parliament-on-exam-irregularities-23c51a 200 in 1080ms
+ GET /api/award-evaluations/case/6a63c2d1f15ada876a23c51a 200 in 74ms
+ GET /dashboard/cases/security-deposit-fight-over-a-broken-blind-and-paint-touch-u-fac4e5 200 in 333ms
+ ○ Compiling /api/auth/[...nextauth] ...
+ ✓ Compiled /api/auth/[...nextauth] in 1060ms (1778 modules)
+ ✓ Compiled in 1ms (1780 modules)
+ ✓ Compiled in 0ms (1780 modules)
+ ✓ Compiled in 1ms (1780 modules)
+ GET /api/auth/session 200 in 1949ms
+ GET /api/auth/session 200 in 51ms
+ ✓ Compiled /api/players/avatar/[playerId] in 165ms (1782 modules)
+ GET /dashboard/cases/security-deposit-fight-over-a-broken-blind-and-paint-touch-u-fac4e5?_rsc=hsg34 200 in 1066ms
+ ✓ Compiled (1784 modules)
+ GET /api/auth/session-status 200 in 599ms
+ GET /api/players/avatar/69e8df9c5452c0821bdfd6d9?v=1778348211121 200 in 949ms
+[portrait-usage] {
+  caseId: '6a6c3335c99cd1cdf8fac4e5',
+  target: 'client',
+  model: 'gpt-image-2',
+  quality: 'low',
+  reused: false,
+  generationMs: 18258,
+  resizeMs: 15,
+  storageMs: 420,
+  persistenceMs: 38,
+  totalMs: 18897
+}
+ POST /api/cases/security-deposit-fight-over-a-broken-blind-and-paint-touch-u-fac4e5/client-portrait 200 in 21504ms
+ GET /api/cases/security-deposit-fight-over-a-broken-blind-and-paint-touch-u-fac4e5/client-portrait?v=1785516325384 200 in 530ms
+ ✓ Compiled /dashboard/cases/[caseId]/settlement in 472ms (2769 modules)
+ GET /dashboard/cases/missing-phone-after-office-party-1c7f07/settlement 200 in 1693ms
+ GET /api/auth/session 200 in 46ms
+ GET /api/auth/session 200 in 45ms
+ GET /api/auth/session-status 200 in 79ms
+ GET /api/cases/missing-phone-after-office-party-1c7f07/client-portrait?target=opponent&v=1784877540739 200 in 922ms
+ GET /api/cases/missing-phone-after-office-party-1c7f07/client-portrait?v=1784877115552 200 in 1012ms
+ GET /api/players/avatar/69e8df9c5452c0821bdfd6d9?v=1778348211121 200 in 371ms
+ ✓ Compiled in 408ms (997 modules)
+ ✓ Compiled in 288ms (997 modules)
+[?25h

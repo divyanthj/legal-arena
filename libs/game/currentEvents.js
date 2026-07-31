@@ -324,7 +324,7 @@ export const repairCurrentEventAnonymization = async ({
       "You anonymize a fictional legal-strategy case. Return the complete corrected case as the top-level JSON object only: do not wrap it in correctedCase, repairedCase, generatedCase, case, result, or data. Preserve every existing key, array entry, legal controversy, balance, complexity, and evidence link.",
     userPrompt: JSON.stringify({
       task:
-        "Replace every protected real-world person, party, and organization name with an invented country-plausible name. Preserve dates, amounts, locations, quotations, and other case details unless changing one is necessary for readability.",
+        "Replace every protected real-world person, party, and organization name with an invented country-plausible name. Preserve real geographic place names, dates, amounts, quotations, and other case details unless changing one is necessary for readability.",
       protectedTerms: collectCurrentEventProtectedTerms(brief),
       detectedLeaks: leaks,
       generatedCase,
