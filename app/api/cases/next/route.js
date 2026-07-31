@@ -140,6 +140,7 @@ export async function POST(req) {
         categorySlug: recommendation.categorySlug,
         complexity: recommendation.complexity,
         countryCode: sourceCase.caseCountry?.code || "US",
+        lawSource: sourceCase.lawSource || "rulebook",
         continuationOfCaseId: sourceCase._id,
         continuationTeaserKey: teaser.key,
         scenarioHint: buildTeaserScenarioHint(teaser),

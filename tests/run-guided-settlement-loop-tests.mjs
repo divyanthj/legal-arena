@@ -87,7 +87,7 @@ assert.match(
 );
 assert.match(
   challengesSource,
-  /clientMemory, settlementAssistant, \.\.\.publicParticipant/
+  /clientMemory,[\s\S]*?settlementAssistant,[\s\S]*?\.\.\.publicParticipant/
 );
 assert.match(challengesSource, /settlementAssistant: participant\.settlementAssistant \|\| null/);
 assert.match(

@@ -20,6 +20,11 @@ import {
   getPlayerCaseCountryPreference,
   setPlayerCaseCountryPreference,
 } from "@/libs/game/countryPreference";
+import {
+  getPlayerLawSourcePreference,
+  setPlayerLawSourcePreference,
+} from "@/libs/game/lawSourcePreference";
+import { normalizeLawSource } from "@/libs/game/lawSource";
 
 export const maxDuration = 300;
 
@@ -95,16 +100,28 @@ export async function POST(req) {
     if (body?.countryCode && !isValidCountryCode(body.countryCode)) {
       return NextResponse.json({ error: "Choose a supported country." }, { status: 400 });
     }
+    if (body?.lawSource && !normalizeLawSource(body.lawSource)) {
+      return NextResponse.json({ error: "Choose a valid law source." }, { status: 400 });
+    }
     if (body?.countryCode) {
       await setPlayerCaseCountryPreference({
         userId: session.user.id,
         countryCode: body.countryCode,
       });
     }
+    if (body?.lawSource) {
+      await setPlayerLawSourcePreference({
+        userId: session.user.id,
+        lawSource: body.lawSource,
+      });
+    }
     const countryCode =
       normalizeCountryCode(body?.countryCode) ||
       (await getPlayerCaseCountryPreference(session.user.id)) ||
       detectCountryCodeFromHeaders(req.headers);
+    const lawSource =
+      normalizeLawSource(body?.lawSource) ||
+      (await getPlayerLawSourcePreference(session.user.id));
     if (access.requiresTrialClaim) {
       claimedTrialCaseId = new mongoose.Types.ObjectId();
       const claim = await claimEvergreenSoloTrial({
@@ -131,6 +148,7 @@ export async function POST(req) {
       categorySlug: body?.categorySlug,
       complexity: access.requiresTrialClaim ? 1 : body?.complexity,
       countryCode,
+      lawSource,
       freeGameplayCampaignAccess: access.freeGameplayCampaignAccess,
       newcomerAssist: Boolean(access.requiresTrialClaim),
     });

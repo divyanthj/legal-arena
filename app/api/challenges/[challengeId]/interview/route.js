@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { getRequestSession } from "@/libs/api-auth";
 import { continueChallengeInterview } from "@/libs/game/challenges";
 
+export const maxDuration = 300;
+
 export async function POST(req, { params }) {
   const { session, error: authError } = await getRequestSession(req);
   if (authError) return authError;

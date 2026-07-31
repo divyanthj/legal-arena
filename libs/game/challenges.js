@@ -51,6 +51,12 @@ import {
   generateDynamicCaseState,
 } from "./dynamicCase";
 import { buildCaseCountry } from "./countries";
+import {
+  generateLegalJurisdiction,
+  refreshApplicableLaws,
+  mergeApplicableLaws,
+} from "./applicableLaws";
+import { resolveLawSource } from "./lawSource";
 import { DEFAULT_CATEGORY_SLUG } from "./categories";
 import {
   buildJudgeProfile,
@@ -1008,6 +1014,18 @@ const buildParticipantCaseSession = ({ challenge, participant, otherParticipant 
         ? "settled"
         : "interview",
     lawbookVersion: challenge.lawbookVersion,
+    lawSource: resolveLawSource(challenge.lawSource),
+    caseCountry: challenge.caseCountry,
+    legalJurisdiction: challenge.legalJurisdiction,
+    applicableLaws:
+      challenge.status === "courtroom" &&
+      (challenge.participants || []).every((item) => item.status === "ready") &&
+      challenge.lockedApplicableLaws?.length
+        ? challenge.lockedApplicableLaws
+        : participant.applicableLaws || [],
+    lawResearchStatus: participant.lawResearchStatus || challenge.lawResearchStatus || "ready",
+    lawResearchWarning:
+      participant.lawResearchWarning || challenge.lawResearchWarning || "",
     maxCourtRounds: challenge.maxCourtRounds,
     judgeProfile: challenge.judgeProfile,
     premise: {
@@ -1162,6 +1180,7 @@ export const createChallenge = async ({
   categorySlug = DEFAULT_CATEGORY_SLUG,
   complexity = 1,
   countryCode = "US",
+  lawSource = "rulebook",
 }) => {
   await connectMongo();
 
@@ -1261,6 +1280,15 @@ export const createChallenge = async ({
       ],
     };
   });
+  const challengeCountry =
+    template.caseCountry || buildCaseCountry(countryCode, { fallback: true });
+  const legalJurisdiction =
+    template.legalJurisdiction ||
+    (await generateLegalJurisdiction({
+      caseCountry: challengeCountry,
+      template,
+      userId: initiatorId,
+    }));
 
   const challenge = new Challenge({
     initiatorId: initiator._id,
@@ -1274,7 +1302,9 @@ export const createChallenge = async ({
     primaryCategory: template.primaryCategory,
     negotiationProfile: getNegotiationProfile(template),
     complexity: template.complexity,
-    caseCountry: template.caseCountry || null,
+    caseCountry: challengeCountry,
+    lawSource: resolveLawSource(lawSource),
+    legalJurisdiction,
     currentEventProvenance,
     lawbookVersion: LAWBOOK_VERSION,
     maxCourtRounds: Math.max(3, template.complexity + 1),
@@ -1296,6 +1326,24 @@ export const createChallenge = async ({
   });
 
   ensureChallengeSlug(challenge);
+  for (const participant of challenge.participants) {
+    const participantSession = buildParticipantCaseSession({
+      challenge,
+      participant,
+      otherParticipant: challenge.participants.find(
+        (candidate) => !isSameId(candidate.userId, participant.userId)
+      ),
+    });
+    const lawResult = await refreshApplicableLaws({
+      caseSession: participantSession,
+      factSheet: participant.factSheet,
+      transcript: participant.interviewTranscript,
+      userId: toObjectIdString(participant.userId),
+    });
+    participant.applicableLaws = lawResult.laws;
+    participant.lawResearchStatus = lawResult.status;
+    participant.lawResearchWarning = lawResult.warning;
+  }
   await challenge.save();
 
   try {
@@ -1568,6 +1616,9 @@ const applyChallengeInterviewResult = ({ challenge, userId, question, result }) 
     relatedFactIds: result.relatedFactIds || [],
   });
   setParticipantFactSheet(challenge, participant, result.nextFactSheet);
+  participant.applicableLaws = result.applicableLaws || participant.applicableLaws || [];
+  participant.lawResearchStatus = result.lawResearchStatus || "ready";
+  participant.lawResearchWarning = result.lawResearchWarning || "";
   syncChallengeMemoryContentions(challenge);
   if (result.caseAssessment) {
     setParticipantCaseAssessment(challenge, participant, result.caseAssessment);
@@ -1692,6 +1743,11 @@ export const markChallengeReady = async ({ userId, challengeId, factSheet }) => 
   const resumingAdjournment = Boolean(challenge.adjournment?.active);
   const allReady = challenge.participants.every((item) => item.status === "ready");
   const plaintiffReady = participant.side === "client" && !resumingAdjournment;
+  if (allReady) {
+    challenge.lockedApplicableLaws = mergeApplicableLaws(
+      ...(challenge.participants || []).map((item) => item.applicableLaws || [])
+    );
+  }
   if (allReady || plaintiffReady) {
     if (resumingAdjournment) resolveActiveAdjournment(challenge);
     challenge.status = "courtroom";
@@ -2803,6 +2859,13 @@ const buildCourtroomTimeoutContext = (challenge) => {
     complexity: challenge.complexity,
     judgeProfile: challenge.judgeProfile || null,
     maxCourtRounds: challenge.maxCourtRounds,
+    lawSource: resolveLawSource(challenge.lawSource),
+    applicableLaws:
+      challenge.lockedApplicableLaws?.length
+        ? challenge.lockedApplicableLaws
+        : mergeApplicableLaws(
+            ...(challenge.participants || []).map((item) => item.applicableLaws || [])
+          ),
     scores: {
       initiator: getChallengeScoreByLabel(challenge, "initiator"),
       challenged: getChallengeScoreByLabel(challenge, "challenged"),
@@ -3405,7 +3468,17 @@ export const buildChallengePayload = async ({ challenge, viewerUserId }) => {
   const publicChallenge = {
     ...plainChallenge,
     participants: (plainChallenge.participants || []).map((participant) => {
-      const { clientMemory, settlementAssistant, ...publicParticipant } = participant;
+      const {
+        clientMemory,
+        settlementAssistant,
+        factSheet,
+        caseAssessment,
+        interviewTranscript,
+        applicableLaws,
+        lawResearchStatus,
+        lawResearchWarning,
+        ...publicParticipant
+      } = participant;
       return publicParticipant;
     }),
   };
@@ -3608,6 +3681,16 @@ export const buildChallengePayload = async ({ challenge, viewerUserId }) => {
           score: participant.score || 0,
           verdict: participant.verdict || "",
           factSheet: participant.factSheet,
+          applicableLaws:
+            payloadStatus === "courtroom" &&
+            (plainChallenge.participants || []).every((item) => item.status === "ready") &&
+            plainChallenge.lockedApplicableLaws?.length
+              ? plainChallenge.lockedApplicableLaws
+              : participant.applicableLaws || [],
+          lawResearchStatus:
+            participant.lawResearchStatus || plainChallenge.lawResearchStatus || "ready",
+          lawResearchWarning:
+            participant.lawResearchWarning || plainChallenge.lawResearchWarning || "",
           caseAssessment: participant.caseAssessment,
           interviewTranscript: participant.interviewTranscript || [],
           readyAt: participant.readyAt,

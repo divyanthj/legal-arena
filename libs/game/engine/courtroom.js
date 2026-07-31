@@ -578,6 +578,10 @@ export const buildCounselContext = ({ caseSession, template, rules }) => {
       name: getPartyName(safeTemplate, getOpposingSide(playerSide)),
     },
     publicCaseFile: caseSession.factSheet,
+    applicableLawShortlist:
+      caseSession.lockedApplicableLaws?.length
+        ? caseSession.lockedApplicableLaws
+        : caseSession.applicableLaws || [],
     admittedWitnessTestimony: buildAdmittedWitnessRecord(caseSession),
     proofStrategy: buildProofStrategyContext({ caseSession }),
     lawbookRules: rules,
@@ -664,6 +668,10 @@ export const buildCourtroomAgentContext = ({
       playerCaseFile: caseSession.factSheet,
       opponentCaseFile: opponentPortfolio,
       lawbookRules: rules,
+      applicableLawShortlist:
+        caseSession.lockedApplicableLaws?.length
+          ? caseSession.lockedApplicableLaws
+          : caseSession.applicableLaws || [],
       score: caseSession.score,
       judgeProfile: caseSession.judgeProfile || null,
       recentCourtroomTranscript: caseSession.courtroomTranscript.slice(-6),

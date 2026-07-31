@@ -132,6 +132,16 @@ const participantSchema = mongoose.Schema(
       default: null,
       private: true,
     },
+    applicableLaws: {
+      type: [mongoose.Schema.Types.Mixed],
+      default: [],
+    },
+    lawResearchStatus: {
+      type: String,
+      enum: ["ready", "refreshing", "unavailable", "stale"],
+      default: "ready",
+    },
+    lawResearchWarning: { type: String, default: "", trim: true },
     clientPortrait: {
       type: portraitSchema,
       default: () => ({}),
@@ -438,6 +448,25 @@ const challengeSchema = mongoose.Schema(
       code: { type: String, trim: true, uppercase: true, default: "" },
       name: { type: String, trim: true, default: "" },
     },
+    lawSource: {
+      type: String,
+      enum: ["rulebook", "real"],
+      default: "rulebook",
+    },
+    legalJurisdiction: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
+    lockedApplicableLaws: {
+      type: [mongoose.Schema.Types.Mixed],
+      default: [],
+    },
+    lawResearchStatus: {
+      type: String,
+      enum: ["ready", "refreshing", "unavailable", "stale"],
+      default: "ready",
+    },
+    lawResearchWarning: { type: String, default: "", trim: true },
     currentEventProvenance: {
       type: mongoose.Schema.Types.Mixed,
       default: null,

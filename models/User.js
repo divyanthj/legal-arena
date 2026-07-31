@@ -204,6 +204,12 @@ const userSchema = mongoose.Schema(
       default: "",
       private: true,
     },
+    preferredLawSource: {
+      type: String,
+      enum: ["rulebook", "real"],
+      default: "rulebook",
+      private: true,
+    },
     aiUsageTotals: {
       type: mongoose.Schema.Types.Mixed,
       default: () => ({}),

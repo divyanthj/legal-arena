@@ -1,6 +1,6 @@
 ﻿import Link from "next/link";
 import Image from "next/image";
-import { NewspaperIcon } from "@heroicons/react/24/outline";
+import { ScaleIcon } from "@heroicons/react/24/outline";
 import connectMongo from "@/libs/mongoose";
 import CaseTemplate from "@/models/CaseTemplate";
 import { getCategoryTitle } from "@/libs/game/categories";
@@ -17,8 +17,7 @@ import WhatsNewDialog from "@/components/legal-arena/WhatsNewDialog";
 
 export const dynamic = "force-dynamic";
 
-// Keep launch banners reusable without presenting stale "what's new" messaging.
-const SHOW_HEADLINES_LAUNCH_BANNER = false;
+const SHOW_LATEST_UPDATES_BANNER = true;
 
 const searchIntentKeywords = [
   "Ace Attorney alternative",
@@ -463,24 +462,24 @@ export default async function Page() {
               </Link>
             </div>
           ) : null}
-          {SHOW_HEADLINES_LAUNCH_BANNER ? (
+          {SHOW_LATEST_UPDATES_BANNER ? (
             <div className="arena-surface-soft mx-auto mb-8 max-w-5xl overflow-hidden border-amber-200/30 bg-amber-200/[0.065] shadow-[0_22px_60px_rgba(245,158,11,0.08)]">
               <div className="flex flex-col gap-5 px-5 py-5 text-left sm:px-6 md:flex-row md:items-center md:justify-between">
                 <div className="flex min-w-0 items-start gap-4">
                   <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-amber-200/25 bg-amber-200/10 text-amber-100" aria-hidden="true">
-                    <NewspaperIcon className="h-5 w-5" />
+                    <ScaleIcon className="h-5 w-5" />
                   </span>
                   <div className="min-w-0">
                     <p className="text-xs font-bold uppercase tracking-[0.22em] text-amber-100/76">
-                      New category — Headlines
+                      New — Actual laws
                     </p>
                     <h2 className="mt-2 text-xl font-semibold leading-tight text-white sm:text-2xl">
-                      Argue the issues shaping your country.
+                      You can use actual laws now.
                     </h2>
                     <p className="mt-2 max-w-2xl text-sm leading-6 text-amber-50/72">
-                      Headlines turns the latest major reporting into fictionalized legal
-                      disputes with country-specific stakes. Inspiration sources unlock
-                      after the matter is resolved.
+                      Choose Actual laws or the Game rulebook. Relevant laws now attach to
+                      the facts you uncover, explain how they affect your case, and follow
+                      you from client intake into court.
                     </p>
                   </div>
                 </div>
@@ -489,10 +488,10 @@ export default async function Page() {
                     href="/dashboard"
                     className="arena-btn-light inline-flex min-h-12 items-center justify-center px-5 py-3 text-sm"
                     data-landing-event="landing_cta_clicked"
-                    data-landing-source="headlines_launch_banner"
+                    data-landing-source="actual_laws_launch_banner"
                     data-landing-destination="dashboard"
                   >
-                    Play Headlines
+                    Start a Case
                   </Link>
                   <WhatsNewDialog buttonLabel="See what's new" />
                 </div>

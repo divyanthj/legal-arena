@@ -219,6 +219,12 @@ const challengeToCaseSession = (challenge = {}) => {
     negotiationProfile: challenge.negotiationProfile || null,
     complexity: challenge.complexity,
     caseCountry: challenge.caseCountry || null,
+    lawSource: challenge.lawSource || "rulebook",
+    legalJurisdiction: challenge.legalJurisdiction || null,
+    applicableLaws: viewer.applicableLaws || challenge.lockedApplicableLaws || [],
+    lockedApplicableLaws: challenge.lockedApplicableLaws || [],
+    lawResearchStatus: viewer.lawResearchStatus || challenge.lawResearchStatus || "ready",
+    lawResearchWarning: viewer.lawResearchWarning || challenge.lawResearchWarning || "",
     currentEventInspiration: challenge.currentEventInspiration || null,
     playerSide: viewer.side,
     playerUserId: viewer.userId || "",
@@ -449,6 +455,13 @@ export default function ChallengeWorkspace({ initialChallenge }) {
   const requestedPortraitsRef = useRef(new Set());
   const challengeRef = getChallengeRef(challenge);
   const viewer = challenge.viewer || {};
+  const legalPlaceLabel = [
+    challenge.legalJurisdiction?.locality,
+    challenge.legalJurisdiction?.subdivisionName,
+  ]
+    .map((item) => String(item || "").trim())
+    .filter((item, index, items) => item && items.indexOf(item) === index)
+    .join(", ");
   const isPendingInvite =
     challenge.status === "pending" &&
     String(challenge.challenged?.userId) === String(viewer.userId);
@@ -566,6 +579,12 @@ export default function ChallengeWorkspace({ initialChallenge }) {
             <div className="mt-6 flex flex-wrap items-center gap-2">
               <span className="arena-pill px-3 py-1 text-xs font-semibold">PVP Challenge</span>
               <CountryBadge caseCountry={challenge.caseCountry} />
+              {legalPlaceLabel ? (
+                <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.035] px-3 py-1 text-xs font-semibold text-white/62">
+                  <HeroIcons.MapPinIcon className="h-3.5 w-3.5" aria-hidden="true" />
+                  {legalPlaceLabel}
+                </span>
+              ) : null}
               <span className="arena-status-caution rounded-full px-3 py-1 text-xs font-semibold">
                 {statusLabel[challenge.status] || challenge.status}
               </span>

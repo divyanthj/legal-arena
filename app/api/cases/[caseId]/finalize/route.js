@@ -91,6 +91,7 @@ export async function POST(req, { params }) {
       caseSession.caseAssessment = lockedAssessment;
     }
     caseSession.status = "courtroom";
+    caseSession.lockedApplicableLaws = caseSession.applicableLaws || [];
     resolveActiveAdjournment(caseSession);
 
     const openingResult = await ensurePlaintiffCourtOpening({

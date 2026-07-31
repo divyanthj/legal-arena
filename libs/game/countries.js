@@ -44,7 +44,10 @@ export const getCountryFlavorGuidance = (caseCountry, categorySlug = "") => {
   const country = buildCaseCountry(caseCountry?.code || caseCountry, { fallback: true });
   const common = [
     `Set the entire matter in ${country.name}.`,
-    "Use culturally plausible contemporary names, organizations, occupations, locations, court naming, currency, records, communication channels, social context, and everyday institutions.",
+    "Use culturally plausible contemporary names, organizations, occupations, court naming, currency, records, communication channels, social context, and everyday institutions.",
+    "Use only real, existing geographic place names for subdivisions, cities, towns, districts, neighborhoods, streets, and landmarks. Never invent or lightly disguise a geographic name.",
+    "Keep parties, businesses, buildings, and private addresses fictional unless the input explicitly identifies a public institution or public place.",
+    "Choose one real locality and subdivision, keep every location reference internally consistent with them, and include the locality naturally in the case story.",
     "Country changes the story flavor, not the requested category, complexity, evidence budget, or game rules.",
     "Write in English; a locally familiar term may appear only when its meaning is clear from context.",
     "Use broad real-world-inspired legal themes without inventing statute numbers, quoting nonexistent provisions, or claiming exact legal accuracy.",

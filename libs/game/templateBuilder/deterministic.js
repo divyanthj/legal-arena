@@ -127,7 +127,28 @@ export const buildDeterministicInterviewBlueprint = (facts = [], storyContext = 
     facts.flatMap((fact) => fact.followUpQuestions || [])
   ).slice(0, 14);
   const defendantQuestions = uniqueList(
-    [...facts].reverse().flatMap((fact) => fact.followUpQuestions || [])
+    [...facts]
+      .sort((left, right) => factPriorityScore(right) - factPriorityScore(left))
+      .flatMap((fact, index) => {
+        const topic = String(fact.label || "this issue")
+          .trim()
+          .replace(/[.?!]+$/, "")
+          .toLowerCase();
+
+        if (index % 3 === 0) {
+          return [`How do you respond to the claimant's account of ${topic}?`];
+        }
+
+        if (index % 3 === 1) {
+          return [
+            `What records, messages, photographs, or witnesses support your defense concerning ${topic}?`,
+          ];
+        }
+
+        return [
+          `Which parts of the claimant's account of ${topic} do you dispute, and why?`,
+        ];
+      })
   ).slice(0, 14);
 
   return {

@@ -477,8 +477,6 @@ export const resolveFactSheetOpenQuestions = ({
 }) =>
   dedupeSuggestedQuestions(
     [
-      ...(patchOpenQuestions || []),
-      ...(currentOpenQuestions || []),
       ...buildOpenQuestions(
         template,
         playerSide,
@@ -486,6 +484,8 @@ export const resolveFactSheetOpenQuestions = ({
         discoveredEvidenceIds,
         Math.max(limit * 4, 8)
       ),
+      ...(patchOpenQuestions || []),
+      ...(currentOpenQuestions || []),
     ],
     {
       excludedQuestions: blockedQuestions,

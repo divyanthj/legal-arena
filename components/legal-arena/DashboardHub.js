@@ -31,6 +31,10 @@ import CountryFlagPicker, {
   CountryBadge,
   useCaseCountrySelection,
 } from "@/components/legal-arena/CountryFlagPicker";
+import LawSourceToggle, {
+  useLawSourceSelection,
+} from "@/components/legal-arena/LawSourceToggle";
+import { getCareerChapter } from "@/libs/game/careerNarrative.mjs";
 
 const statusLabel = {
   interview: "Intake",
@@ -1466,6 +1470,7 @@ export default function DashboardHub({
     selectionSource: countrySelectionSource,
     selectCountry,
   } = useCaseCountrySelection(detectedCountryCode, detectedCountrySource);
+  const { lawSource: selectedLawSource, selectLawSource } = useLawSourceSelection();
   const [selectedCategory, setSelectedCategory] = useState(
     nextCaseRecommendation?.categorySlug || categories[0]?.slug || ""
   );
@@ -1675,6 +1680,7 @@ export default function DashboardHub({
   const winStreakProgress = Math.min(progression.wins, streakGoal);
   const winStreakPercent = Math.max(10, Math.round((winStreakProgress / streakGoal) * 100));
   const playerLevel = Math.max(1, Math.floor((progression.overallXp || 0) / 250) + 1);
+  const careerChapter = getCareerChapter(progression);
   const currentLevelXp = (progression.overallXp || 0) % 250;
   const nextLevelProgressPercent = Math.max(8, Math.min(100, currentLevelXp / 2.5));
   const playerComplexityCap = getPlayerComplexityCap(playerLevel);
@@ -1911,6 +1917,7 @@ export default function DashboardHub({
       generation_mode: dynamicStart ? "dynamic" : "template",
       country: dynamicStart ? selectedCountryCode : "",
       country_source: dynamicStart ? countrySelectionSource : "",
+      law_source: selectedLawSource,
     });
     const startedAt = Date.now();
     const creationRequest = {
@@ -1966,9 +1973,11 @@ export default function DashboardHub({
               categorySlug: dynamicCategory,
               complexity: dynamicComplexity,
               countryCode: selectedCountryCode,
+              lawSource: selectedLawSource,
             }
           : {
               caseTemplateId,
+              lawSource: selectedLawSource,
             }
       );
 
@@ -1983,6 +1992,7 @@ export default function DashboardHub({
         side: caseSession.playerSide,
         generation_mode: dynamicStart ? "dynamic" : "template",
         country: caseSession.caseCountry?.code || (dynamicStart ? selectedCountryCode : ""),
+        law_source: caseSession.lawSource || selectedLawSource,
         free_trial: Boolean(isFreeTrialCase),
       });
       if (isFreeTrialCase) {
@@ -2779,7 +2789,8 @@ export default function DashboardHub({
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-base font-semibold">{userName}</p>
                         <p className="mt-1 text-sm text-amber-200/82">
-                          {currentLeaderboardEntry ? `Rank #${currentLeaderboardEntry.rank}` : "Rookie Advocate"}
+                          {careerChapter.roleTitle}
+                          {currentLeaderboardEntry ? ` · Rank #${currentLeaderboardEntry.rank}` : ""}
                         </p>
                         <p className="mt-1 text-xs text-white/52">
                           {progression.wins || 0} Wins | {progression.settlements || 0} Settlements
@@ -2838,6 +2849,9 @@ export default function DashboardHub({
                           <p className="truncate text-lg font-semibold text-white">{userName}</p>
                           <p className="mt-0.5 text-sm text-white/62">
                             Level {playerLevel} | {progression.overallXp || 0} XP
+                          </p>
+                          <p className="mt-1 text-xs font-semibold text-amber-200/72">
+                            Chapter {careerChapter.number}: {careerChapter.title}
                           </p>
                         </div>
                         <ButtonAccount />
@@ -3051,7 +3065,8 @@ export default function DashboardHub({
                         </p>
                         <p className="mt-2 inline-flex items-center gap-2 text-amber-200">
                           <HeroIcons.TrophyIcon className="h-5 w-5" aria-hidden="true" />
-                          {currentLeaderboardEntry ? `Rank #${currentLeaderboardEntry.rank}` : "Rookie Advocate"}
+                          {careerChapter.roleTitle}
+                          {currentLeaderboardEntry ? ` · Rank #${currentLeaderboardEntry.rank}` : ""}
                         </p>
                       </div>
                     </div>
@@ -3087,7 +3102,10 @@ export default function DashboardHub({
                       </div>
                     </div>
                     <div className="mt-10 rounded-2xl border border-emerald-300/12 bg-emerald-300/[0.055] p-5">
-                      <p className="text-lg leading-8 text-white/82">
+                      <p className="text-xs font-black uppercase tracking-[0.15em] text-emerald-200/72">
+                        Career chapter {careerChapter.number} · {careerChapter.title}
+                      </p>
+                      <p className="mt-3 text-lg leading-8 text-white/82">
                         <span className="mr-3 text-3xl font-serif text-emerald-300/75">“</span>
                         {playerEncouragementNote}
                         <span className="ml-2 text-3xl font-serif text-emerald-300/75">”</span>
@@ -3236,6 +3254,19 @@ export default function DashboardHub({
                           });
                         }}
                       />
+                      <div className="mt-3">
+                        <LawSourceToggle
+                          value={selectedLawSource}
+                          disabled={creating}
+                          onChange={(lawSource) => {
+                            selectLawSource(lawSource);
+                            trackGoal("case_law_source_selected", {
+                              law_source: lawSource,
+                              source: "solo_case_picker",
+                            });
+                          }}
+                        />
+                      </div>
                       <p className="mt-2 text-xs leading-5 text-white/44">
                         Names, setting, dispute details, and portraits will reflect this country.
                       </p>

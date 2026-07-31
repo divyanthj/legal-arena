@@ -298,7 +298,7 @@ assert.doesNotMatch(
 );
 assert.match(
   workspaceSource,
-  /arena-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain/
+  /arena-scroll flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain/
 );
 assert.doesNotMatch(workspaceSource, /min-h-\[21\.25rem\]/);
 

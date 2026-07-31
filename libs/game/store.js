@@ -43,6 +43,8 @@ import {
 } from "./profileSummary";
 import { normalizeOnboarding } from "./onboarding";
 import { sanitizeFactSheet } from "./factSheetSanitizer";
+import { generateLegalJurisdiction, refreshApplicableLaws } from "./applicableLaws";
+import { resolveLawSource } from "./lawSource";
 import { ensureClientMemory, rebuildFactSheetFromTranscript } from "./engine";
 import { generateClientMemoryExcerpt } from "./clientMemory";
 import {
@@ -51,6 +53,12 @@ import {
 } from "./sessionUsage";
 import { buildPublicWitnessPayload } from "./witnesses";
 import { buildPublicCurrentEventInspiration } from "./currentEvents";
+import {
+  buildCaseCareerNarrative,
+  buildCareerDevelopments,
+  buildResolutionAftermath,
+  normalizeCareerNarrative,
+} from "./careerNarrative.mjs";
 
 const toPlain = (doc) => (doc?.toJSON ? doc.toJSON() : doc);
 const stripUsageEntries = (usage = {}) => {
@@ -836,6 +844,16 @@ export const buildCasePayload = (caseSession, templateOverride = null) => {
     playerSide,
     opponentPartyName,
   });
+  if (plainCase.status === "interview" && template) {
+    factSheet.openQuestions = buildSuggestedQuestionsForSide(template, playerSide, {
+      excludedFactIds: factSheet.discoveredFactIds || [],
+      excludedEvidenceIds: factSheet.discoveredEvidenceIds || [],
+      excludedQuestions: (plainCase.interviewTranscript || [])
+        .filter((entry) => entry.role === "player")
+        .map((entry) => entry.text),
+      limit: 3,
+    });
+  }
   const clientMemoryExcerpt = String(plainCase.clientMemoryExcerpt || "").trim();
   const settlement = plainCase.settlement || {};
   const settlementTranscript = Array.isArray(settlement.transcript)
@@ -856,9 +874,42 @@ export const buildCasePayload = (caseSession, templateOverride = null) => {
     ["verdict", "settled"].includes(plainCase.status) ||
     settlement.status === "settled" ||
     settlement.resolution === "settled";
+  const careerNarrative = normalizeCareerNarrative(
+    plainCase.careerNarrative,
+    {
+      ...plainCase,
+      template,
+      playerPartyName,
+      opponentPartyName,
+    }
+  );
+  const careerDevelopments = buildCareerDevelopments({
+    caseSession: {
+      ...plainCase,
+      template,
+      factSheet,
+      playerPartyName,
+      opponentPartyName,
+    },
+    factSheet,
+    careerNarrative,
+  });
+  const resolutionAftermath = buildResolutionAftermath({
+    caseSession: {
+      ...plainCase,
+      template,
+      factSheet,
+      playerPartyName,
+      opponentPartyName,
+      careerNarrative,
+    },
+  });
 
   return {
     ...plainCase,
+    careerNarrative,
+    careerDevelopments,
+    resolutionAftermath,
     negotiationProfile: getNegotiationProfile(plainCase),
     courtroomWitnesses,
     settlement: {
@@ -1013,6 +1064,7 @@ export const createCaseSession = async ({
   categorySlug = DEFAULT_CATEGORY_SLUG,
   complexity = 1,
   countryCode = "US",
+  lawSource = "rulebook",
   freeGameplayCampaignAccess = null,
   newcomerAssist = false,
   continuationOfCaseId = null,
@@ -1070,6 +1122,11 @@ export const createCaseSession = async ({
       negotiationProfile: getNegotiationProfile(dynamicCase),
       complexity: dynamicCase.complexity,
       caseCountry,
+      lawSource: resolveLawSource(lawSource),
+      legalJurisdiction: dynamicCase.legalJurisdiction || {
+        countryCode: caseCountry.code,
+        countryName: caseCountry.name,
+      },
       currentEventProvenance: dynamicCase.currentEventProvenance || null,
       playerSide,
       status: "interview",
@@ -1146,11 +1203,31 @@ export const createCaseSession = async ({
       },
     });
 
+    caseSession.careerNarrative = {
+      ...buildCaseCareerNarrative({
+        caseSession,
+        progression,
+        continuationOfCaseId,
+        continuationTeaserKey,
+      }),
+      startedAt: new Date().toISOString(),
+    };
+
     ensureCaseSessionSlug(caseSession);
     caseSession.judgeProfile = buildJudgeProfile({
       caseSessionId: caseSession._id || caseSession.id || caseSession.slug,
       complexity: dynamicCase.complexity,
     });
+    const initialLawResult = await refreshApplicableLaws({
+      caseSession,
+      factSheet: caseSession.factSheet,
+      transcript: caseSession.interviewTranscript,
+      userId,
+      onUsage: usageCollector.record,
+    });
+    caseSession.applicableLaws = initialLawResult.laws;
+    caseSession.lawResearchStatus = initialLawResult.status;
+    caseSession.lawResearchWarning = initialLawResult.warning;
     appendUsageEntriesToCaseSession(caseSession, usageCollector.entries);
     await caseSession.save();
 
@@ -1186,6 +1263,15 @@ export const createCaseSession = async ({
     playerSide === "opponent" ? "defendant" : "plaintiff"
   );
   const desiredRelief = buildDesiredReliefForSide(template, playerSide);
+  const fixedCaseCountry =
+    template.caseCountry || buildCaseCountry(countryCode, { fallback: true });
+  const legalJurisdiction =
+    template.legalJurisdiction ||
+    (await generateLegalJurisdiction({
+      caseCountry: fixedCaseCountry,
+      template,
+      userId,
+    }));
 
   if (!availability.unlocked) {
     throw new Error(availability.blockReason);
@@ -1202,6 +1288,9 @@ export const createCaseSession = async ({
     primaryCategory: template.primaryCategory,
     negotiationProfile: getNegotiationProfile(template),
     complexity: template.complexity,
+    caseCountry: fixedCaseCountry,
+    lawSource: resolveLawSource(lawSource),
+    legalJurisdiction,
     playerSide,
     status: "interview",
     playerImage: user?.image || "",
@@ -1272,6 +1361,16 @@ export const createCaseSession = async ({
     },
   });
 
+  caseSession.careerNarrative = {
+    ...buildCaseCareerNarrative({
+      caseSession,
+      progression,
+      continuationOfCaseId,
+      continuationTeaserKey,
+    }),
+    startedAt: new Date().toISOString(),
+  };
+
   ensureCaseSessionSlug(caseSession);
   caseSession.judgeProfile = buildJudgeProfile({
     caseSessionId: caseSession._id || caseSession.id || caseSession.slug,
@@ -1302,6 +1401,16 @@ export const createCaseSession = async ({
       caseSession.clientMemoryExcerpt
     );
   }
+  const initialLawResult = await refreshApplicableLaws({
+    caseSession,
+    factSheet: caseSession.factSheet,
+    transcript: caseSession.interviewTranscript,
+    userId,
+    onUsage: usageCollector.record,
+  });
+  caseSession.applicableLaws = initialLawResult.laws;
+  caseSession.lawResearchStatus = initialLawResult.status;
+  caseSession.lawResearchWarning = initialLawResult.warning;
   appendUsageEntriesToCaseSession(caseSession, usageCollector.entries);
   await caseSession.save();
 

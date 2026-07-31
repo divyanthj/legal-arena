@@ -14,6 +14,7 @@ import CountryFlagPicker, {
   CountryBadge,
   useCaseCountrySelection,
 } from "./CountryFlagPicker";
+import LawSourceToggle, { useLawSourceSelection } from "./LawSourceToggle";
 
 const difficultyOptions = [
   {
@@ -80,6 +81,7 @@ export default function ChallengeButton({
     selectionSource: countrySelectionSource,
     selectCountry,
   } = useCaseCountrySelection(detectedCountryCode, detectedCountrySource);
+  const { lawSource: selectedLawSource, selectLawSource } = useLawSourceSelection();
 
   const selectedCategoryMeta = useMemo(
     () =>
@@ -130,6 +132,7 @@ export default function ChallengeButton({
       complexity: selectedDifficulty,
       country: selectedCountryCode,
       country_source: countrySelectionSource,
+      law_source: selectedLawSource,
     });
     try {
       const response = await apiClient.post("/challenges", {
@@ -137,6 +140,7 @@ export default function ChallengeButton({
         categorySlug: selectedCategory,
         complexity: selectedDifficulty,
         countryCode: selectedCountryCode,
+        lawSource: selectedLawSource,
       });
       const challenge = response.challenge;
       trackGoal("pvp_challenge_sent", {
@@ -144,6 +148,7 @@ export default function ChallengeButton({
         category: selectedCategory,
         complexity: selectedDifficulty,
         country: response.challenge.caseCountry?.code || selectedCountryCode,
+        law_source: response.challenge.lawSource || selectedLawSource,
       });
       toast.success("Challenge sent.");
       guidedInteractionRef.current?.pulse("success");
@@ -159,6 +164,7 @@ export default function ChallengeButton({
         category: selectedCategory,
         complexity: selectedDifficulty,
         country: selectedCountryCode,
+        law_source: selectedLawSource,
       });
       toast.error(error?.message || "Could not create challenge.");
     } finally {
@@ -252,6 +258,19 @@ export default function ChallengeButton({
                           });
                         }}
                       />
+                      <div className="mt-3">
+                        <LawSourceToggle
+                          value={selectedLawSource}
+                          disabled={creating}
+                          onChange={(lawSource) => {
+                            selectLawSource(lawSource);
+                            trackGoal("pvp_law_source_selected", {
+                              law_source: lawSource,
+                              source: "challenge_picker",
+                            });
+                          }}
+                        />
+                      </div>
                       <p className="mt-2 text-xs font-medium leading-5 text-white/62">
                         This setting is locked for both players once the challenge is sent.
                       </p>

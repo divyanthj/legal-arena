@@ -1,0 +1,313 @@
+ ⚠ Cross origin request detected from 127.0.0.1 to /_next/* resource. In a future major version of Next.js, you will need to explicitly configure "allowedDevOrigins" in next.config to allow this.
+Read more: https://nextjs.org/docs/app/api-reference/config/next-config-js/allowedDevOrigins
+request to https://fonts.googleapis.com/css2?family=Inter+Tight:wght@600;700;800&display=swap failed, reason: 
+
+Retrying 1/3...
+request to https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap failed, reason: 
+
+Retrying 1/3...
+request to https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:wght@500;600&display=swap failed, reason: 
+
+Retrying 1/3...
+request to https://fonts.googleapis.com/css2?family=Inter+Tight:wght@600;700;800&display=swap failed, reason: 
+
+Retrying 2/3...
+request to https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap failed, reason: 
+
+Retrying 2/3...
+request to https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:wght@500;600&display=swap failed, reason: 
+
+Retrying 2/3...
+request to https://fonts.googleapis.com/css2?family=Inter+Tight:wght@600;700;800&display=swap failed, reason: 
+
+Retrying 3/3...
+request to https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap failed, reason: 
+
+Retrying 3/3...
+request to https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:wght@500;600&display=swap failed, reason: 
+
+Retrying 3/3...
+FetchError: request to https://fonts.googleapis.com/css2?family=Inter+Tight:wght@600;700;800&display=swap failed, reason: 
+    at ClientRequest.<anonymous> (C:\projects\legal-arena\node_modules\next\dist\compiled\node-fetch\index.js:1:66160)
+    at ClientRequest.emit (node:events:508:28)
+    at emitErrorEvent (node:_http_client:108:11)
+    at TLSSocket.socketErrorListener (node:_http_client:575:5)
+    at TLSSocket.emit (node:events:508:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  type: 'system',
+  errno: 'EACCES',
+  code: 'EACCES'
+}
+ ⨯ Failed to download `Inter Tight` from Google Fonts. Using fallback font instead.
+
+Failed to fetch `Inter Tight` from Google Fonts.}
+FetchError: request to https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap failed, reason: 
+    at ClientRequest.<anonymous> (C:\projects\legal-arena\node_modules\next\dist\compiled\node-fetch\index.js:1:66160)
+    at ClientRequest.emit (node:events:508:28)
+    at emitErrorEvent (node:_http_client:108:11)
+    at TLSSocket.socketErrorListener (node:_http_client:575:5)
+    at TLSSocket.emit (node:events:508:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  type: 'system',
+  errno: 'EACCES',
+  code: 'EACCES'
+}
+ ⨯ Failed to download `Inter` from Google Fonts. Using fallback font instead.
+
+Failed to fetch `Inter` from Google Fonts.}
+FetchError: request to https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:wght@500;600&display=swap failed, reason: 
+    at ClientRequest.<anonymous> (C:\projects\legal-arena\node_modules\next\dist\compiled\node-fetch\index.js:1:66160)
+    at ClientRequest.emit (node:events:508:28)
+    at emitErrorEvent (node:_http_client:108:11)
+    at TLSSocket.socketErrorListener (node:_http_client:575:5)
+    at TLSSocket.emit (node:events:508:28)
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  type: 'system',
+  errno: 'EACCES',
+  code: 'EACCES'
+}
+ ⨯ Failed to download `IBM Plex Serif` from Google Fonts. Using fallback font instead.
+
+Failed to fetch `IBM Plex Serif` from Google Fonts.}
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+[next-auth][warn][NEXTAUTH_URL] 
+https://next-auth.js.org/warnings#nextauth_url
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ ⚠ The "images.domains" configuration is deprecated. Please use "images.remotePatterns" configuration instead.
+[next-auth][warn][NEXTAUTH_URL] 
+https://next-auth.js.org/warnings#nextauth_url
+[next-auth][warn][NEXTAUTH_URL] 
+https://next-auth.js.org/warnings#nextauth_url
+MongoServerSelectionError: connect EACCES 159.41.181.46:27017
+    at Topology.selectServer (C:\projects\legal-arena\node_modules\mongodb\lib\sdam\topology.js:327:38)
+    at async Topology._connect (C:\projects\legal-arena\node_modules\mongodb\lib\sdam\topology.js:200:28)
+    at async Topology.connect (C:\projects\legal-arena\node_modules\mongodb\lib\sdam\topology.js:152:13)
+    at async topologyConnect (C:\projects\legal-arena\node_modules\mongodb\lib\mongo_client.js:264:17)
+    at async MongoClient._connect (C:\projects\legal-arena\node_modules\mongodb\lib\mongo_client.js:277:13)
+    at async MongoClient.connect (C:\projects\legal-arena\node_modules\mongodb\lib\mongo_client.js:202:13) {
+  errorLabelSet: Set(0) {},
+  reason: TopologyDescription {
+    type: 'ReplicaSetNoPrimary',
+    servers: Map(3) {
+      'ac-byzhk6a-shard-00-00.4sdnusp.mongodb.net:27017' => [ServerDescription],
+      'ac-byzhk6a-shard-00-01.4sdnusp.mongodb.net:27017' => [ServerDescription],
+      'ac-byzhk6a-shard-00-02.4sdnusp.mongodb.net:27017' => [ServerDescription]
+    },
+    stale: false,
+    compatible: true,
+    heartbeatFrequencyMS: 10000,
+    localThresholdMS: 15,
+    setName: 'atlas-yxmux4-shard-0',
+    maxElectionId: null,
+    maxSetVersion: null,
+    commonWireVersion: 0,
+    logicalSessionTimeoutMinutes: null
+  },
+  code: undefined,
+  [cause]: MongoNetworkError: connect EACCES 159.41.181.46:27017
+      at TLSSocket.<anonymous> (C:\projects\legal-arena\node_modules\mongodb\lib\cmap\connect.js:286:44)
+      at Object.onceWrapper (node:events:623:26)
+      at TLSSocket.emit (node:events:508:28)
+      at emitErrorNT (node:internal/streams/destroy:170:8)
+      at emitErrorCloseNT (node:internal/streams/destroy:129:3)
+      at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+    errorLabelSet: Set(1) { 'ResetPool' },
+    beforeHandshake: false,
+    [cause]: Error: connect EACCES 159.41.181.46:27017
+        at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1645:16) {
+      errno: -4092,
+      code: 'EACCES',
+      syscall: 'connect',
+      address: '159.41.181.46',
+      port: 27017
+    }
+  }
+}
+ ⨯ unhandledRejection: MongoServerSelectionError: connect EACCES 159.41.181.46:27017
+    at Topology.selectServer (C:\projects\legal-arena\node_modules\mongodb\lib\sdam\topology.js:327:38)
+    at async Topology._connect (C:\projects\legal-arena\node_modules\mongodb\lib\sdam\topology.js:200:28)
+    at async Topology.connect (C:\projects\legal-arena\node_modules\mongodb\lib\sdam\topology.js:152:13)
+    at async topologyConnect (C:\projects\legal-arena\node_modules\mongodb\lib\mongo_client.js:264:17)
+    at async MongoClient._connect (C:\projects\legal-arena\node_modules\mongodb\lib\mongo_client.js:277:13)
+    at async MongoClient.connect (C:\projects\legal-arena\node_modules\mongodb\lib\mongo_client.js:202:13) {
+  errorLabelSet: Set(0) {},
+  reason: TopologyDescription {
+    type: 'ReplicaSetNoPrimary',
+    servers: Map(3) {
+      'ac-byzhk6a-shard-00-00.4sdnusp.mongodb.net:27017' => [ServerDescription],
+      'ac-byzhk6a-shard-00-01.4sdnusp.mongodb.net:27017' => [ServerDescription],
+      'ac-byzhk6a-shard-00-02.4sdnusp.mongodb.net:27017' => [ServerDescription]
+    },
+    stale: false,
+    compatible: true,
+    heartbeatFrequencyMS: 10000,
+    localThresholdMS: 15,
+    setName: 'atlas-yxmux4-shard-0',
+    maxElectionId: null,
+    maxSetVersion: null,
+    commonWireVersion: 0,
+    logicalSessionTimeoutMinutes: null
+  },
+  code: undefined,
+  [cause]: MongoNetworkError: connect EACCES 159.41.181.46:27017
+      at TLSSocket.<anonymous> (C:\projects\legal-arena\node_modules\mongodb\lib\cmap\connect.js:286:44)
+      at Object.onceWrapper (node:events:623:26)
+      at TLSSocket.emit (node:events:508:28)
+      at emitErrorNT (node:internal/streams/destroy:170:8)
+      at emitErrorCloseNT (node:internal/streams/destroy:129:3)
+      at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+    errorLabelSet: Set(1) { 'ResetPool' },
+    beforeHandshake: false,
+    [cause]: Error: connect EACCES 159.41.181.46:27017
+        at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1645:16) {
+      errno: -4092,
+      code: 'EACCES',
+      syscall: 'connect',
+      address: '159.41.181.46',
+      port: 27017
+    }
+  }
+}
+ ⨯ unhandledRejection: MongoServerSelectionError: connect EACCES 159.41.181.46:27017
+    at Topology.selectServer (C:\projects\legal-arena\node_modules\mongodb\lib\sdam\topology.js:327:38)
+    at async Topology._connect (C:\projects\legal-arena\node_modules\mongodb\lib\sdam\topology.js:200:28)
+    at async Topology.connect (C:\projects\legal-arena\node_modules\mongodb\lib\sdam\topology.js:152:13)
+    at async topologyConnect (C:\projects\legal-arena\node_modules\mongodb\lib\mongo_client.js:264:17)
+    at async MongoClient._connect (C:\projects\legal-arena\node_modules\mongodb\lib\mongo_client.js:277:13)
+    at async MongoClient.connect (C:\projects\legal-arena\node_modules\mongodb\lib\mongo_client.js:202:13) {
+  errorLabelSet: Set(0) {},
+  reason: TopologyDescription {
+    type: 'ReplicaSetNoPrimary',
+    servers: Map(3) {
+      'ac-byzhk6a-shard-00-00.4sdnusp.mongodb.net:27017' => [ServerDescription],
+      'ac-byzhk6a-shard-00-01.4sdnusp.mongodb.net:27017' => [ServerDescription],
+      'ac-byzhk6a-shard-00-02.4sdnusp.mongodb.net:27017' => [ServerDescription]
+    },
+    stale: false,
+    compatible: true,
+    heartbeatFrequencyMS: 10000,
+    localThresholdMS: 15,
+    setName: 'atlas-yxmux4-shard-0',
+    maxElectionId: null,
+    maxSetVersion: null,
+    commonWireVersion: 0,
+    logicalSessionTimeoutMinutes: null
+  },
+  code: undefined,
+  [cause]: MongoNetworkError: connect EACCES 159.41.181.46:27017
+      at TLSSocket.<anonymous> (C:\projects\legal-arena\node_modules\mongodb\lib\cmap\connect.js:286:44)
+      at Object.onceWrapper (node:events:623:26)
+      at TLSSocket.emit (node:events:508:28)
+      at emitErrorNT (node:internal/streams/destroy:170:8)
+      at emitErrorCloseNT (node:internal/streams/destroy:129:3)
+      at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+    errorLabelSet: Set(1) { 'ResetPool' },
+    beforeHandshake: false,
+    [cause]: Error: connect EACCES 159.41.181.46:27017
+        at TCPConnectWrap.afterConnect [as oncomplete] (node:net:1645:16) {
+      errno: -4092,
+      code: 'EACCES',
+      syscall: 'connect',
+      address: '159.41.181.46',
+      port: 27017
+    }
+  }
+}
+Image with src "/_next/static/media/icon.ba81cf86.png" is smaller than 40x40. Consider removing the "placeholder" property to improve performance.
+[next-auth][warn][NEXTAUTH_URL] 
+https://next-auth.js.org/warnings#nextauth_url
+[next-auth][warn][NEXTAUTH_URL] 
+https://next-auth.js.org/warnings#nextauth_url
+[next-auth][warn][NEXTAUTH_URL] 
+https://next-auth.js.org/warnings#nextauth_url
+[next-auth][warn][NEXTAUTH_URL] 
+https://next-auth.js.org/warnings#nextauth_url
+ ⨯ TypeError: Cannot read properties of undefined (reading 'call')
+    at Object.__webpack_require__ [as require] (C:\projects\legal-arena\.next\server\webpack-runtime.js:33:43)
+    at JSON.parse (<anonymous>)
+    at JSON.parse (<anonymous>)
+digest: "277807974"
+TypeError: Cannot read properties of undefined (reading 'call')
+    at Object.__webpack_require__ [as require] (C:\projects\legal-arena\.next\server\webpack-runtime.js:33:43)
+    at require (C:\projects\legal-arena\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:40:20064)
+    at C:\projects\legal-arena\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:108376
+    at ea (C:\projects\legal-arena\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:108583)
+    at C:\projects\legal-arena\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:110813
+    at Object._fromJSON (C:\projects\legal-arena\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:111370)
+    at JSON.parse (<anonymous>)
+    at ec (C:\projects\legal-arena\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:109078)
+    at eo (C:\projects\legal-arena\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:108123)
+    at C:\projects\legal-arena\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:115291
+    at C:\projects\legal-arena\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:115308
+    at C:\projects\legal-arena\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:115341
+    at C:\projects\legal-arena\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:115358
+    at t (C:\projects\legal-arena\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:115581)
+ ⨯ TypeError: Cannot read properties of undefined (reading 'call')
+    at Object.__webpack_require__ [as require] (C:\projects\legal-arena\.next\server\webpack-runtime.js:33:43)
+    at require (C:\projects\legal-arena\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:40:20064)
+    at C:\projects\legal-arena\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:108376
+    at ea (C:\projects\legal-arena\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:108583)
+    at C:\projects\legal-arena\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:110813
+    at Object._fromJSON (C:\projects\legal-arena\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:111370)
+    at JSON.parse (<anonymous>)
+    at ec (C:\projects\legal-arena\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:109078)
+    at eo (C:\projects\legal-arena\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:108123)
+    at C:\projects\legal-arena\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:115291
+    at C:\projects\legal-arena\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:115308
+    at C:\projects\legal-arena\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:115341
+    at C:\projects\legal-arena\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:115358
+    at t (C:\projects\legal-arena\node_modules\next\dist\compiled\next-server\app-page.runtime.dev.js:35:115581) {
+  page: '/dashboard'
+}
+Mongoose Client Error: Could not connect to any servers in your MongoDB Atlas cluster. One common reason is that you're trying to access the database from an IP that isn't whitelisted. Make sure your current IP address is on your Atlas cluster's IP whitelist: https://www.mongodb.com/docs/atlas/security-whitelist/
+next-auth jwt lookup failed MongooseServerSelectionError: Could not connect to any servers in your MongoDB Atlas cluster. One common reason is that you're trying to access the database from an IP that isn't whitelisted. Make sure your current IP address is on your Atlas cluster's IP whitelist: https://www.mongodb.com/docs/atlas/security-whitelist/
+    at _handleConnectionErrors (C:\projects\legal-arena\node_modules\mongoose\lib\connection.js:816:11)
+    at NativeConnection.openUri (C:\projects\legal-arena\node_modules\mongoose\lib\connection.js:791:11) {
+  reason: TopologyDescription {
+    type: 'ReplicaSetNoPrimary',
+    servers: Map(3) {
+      'ac-byzhk6a-shard-00-00.4sdnusp.mongodb.net:27017' => [ServerDescription],
+      'ac-byzhk6a-shard-00-01.4sdnusp.mongodb.net:27017' => [ServerDescription],
+      'ac-byzhk6a-shard-00-02.4sdnusp.mongodb.net:27017' => [ServerDescription]
+    },
+    stale: false,
+    compatible: true,
+    heartbeatFrequencyMS: 10000,
+    localThresholdMS: 15,
+    setName: 'atlas-yxmux4-shard-0',
+    maxElectionId: null,
+    maxSetVersion: null,
+    commonWireVersion: 0,
+    logicalSessionTimeoutMinutes: null
+  },
+  code: undefined
+}
+next-auth jwt lookup failed MongooseServerSelectionError: Could not connect to any servers in your MongoDB Atlas cluster. One common reason is that you're trying to access the database from an IP that isn't whitelisted. Make sure your current IP address is on your Atlas cluster's IP whitelist: https://www.mongodb.com/docs/atlas/security-whitelist/
+    at _handleConnectionErrors (C:\projects\legal-arena\node_modules\mongoose\lib\connection.js:816:11)
+    at NativeConnection.openUri (C:\projects\legal-arena\node_modules\mongoose\lib\connection.js:791:11) {
+  reason: TopologyDescription {
+    type: 'ReplicaSetNoPrimary',
+    servers: Map(3) {
+      'ac-byzhk6a-shard-00-00.4sdnusp.mongodb.net:27017' => [ServerDescription],
+      'ac-byzhk6a-shard-00-01.4sdnusp.mongodb.net:27017' => [ServerDescription],
+      'ac-byzhk6a-shard-00-02.4sdnusp.mongodb.net:27017' => [ServerDescription]
+    },
+    stale: false,
+    compatible: true,
+    heartbeatFrequencyMS: 10000,
+    localThresholdMS: 15,
+    setName: 'atlas-yxmux4-shard-0',
+    maxElectionId: null,
+    maxSetVersion: null,
+    commonWireVersion: 0,
+    logicalSessionTimeoutMinutes: null
+  },
+  code: undefined
+}

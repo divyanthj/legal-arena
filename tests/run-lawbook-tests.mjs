@@ -95,4 +95,18 @@ assert.deepEqual(
   ["identity-must-be-reliable"]
 );
 
+assert.deepEqual(
+  pickRuleMentions("Section 44 of the Housing Act controls this dispute.", [
+    {
+      id: "real:housing-44",
+      title: "Section 44 — Housing Act",
+      citation: "Housing Act, Section 44",
+      provisionLabel: "Section 44",
+      instrumentTitle: "Housing Act",
+      tags: [],
+    },
+  ]),
+  ["real:housing-44"]
+);
+
 console.log("Lawbook tests passed");

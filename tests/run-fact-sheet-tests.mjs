@@ -295,6 +295,16 @@ assert.match(caseWorkspaceSource, /const nextCase = updateCaseFromResponse\(resp
 assert.match(caseWorkspaceSource, /triggerFactSheetProgress\(progressDelta\)/);
 assert.match(caseWorkspaceSource, /recentFactSheetProgress\[sectionKey\]/);
 assert.match(caseWorkspaceSource, /renderFactSheetProgressBadge\(section\.key\)/);
+assert.match(
+  caseWorkspaceSource,
+  /arena-scroll flex min-h-0 flex-1 flex-col overflow-y-auto/
+);
+assert.match(
+  caseWorkspaceSource,
+  /const renderMobileFactSheetFooter = \(\) => \([\s\S]*shrink-0 border-t/
+);
+assert.match(caseWorkspaceSource, /\{renderMobileFactSheetFooter\(\)\}/);
+assert.doesNotMatch(caseWorkspaceSource, /mt-auto h-8 shrink-0/);
 assert.doesNotMatch(caseWorkspaceSource, /factSheetProgressTimeoutRef/);
 assert.doesNotMatch(caseWorkspaceSource, /setTimeout\(\(\) => \{\s*setRecentFactSheetProgress\(\{\}\)/);
 assert.match(globalsCssSource, /\.arena-fact-progress-pop/);

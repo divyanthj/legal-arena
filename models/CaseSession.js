@@ -546,6 +546,10 @@ const caseSessionSchema = mongoose.Schema(
       type: mongoose.Schema.Types.Mixed,
       default: null,
     },
+    careerNarrative: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
     complexity: {
       type: Number,
       default: 1,
@@ -558,6 +562,33 @@ const caseSessionSchema = mongoose.Schema(
     caseCountry: {
       code: { type: String, trim: true, uppercase: true, default: "" },
       name: { type: String, trim: true, default: "" },
+    },
+    lawSource: {
+      type: String,
+      enum: ["rulebook", "real"],
+      default: "rulebook",
+    },
+    legalJurisdiction: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
+    applicableLaws: {
+      type: [mongoose.Schema.Types.Mixed],
+      default: [],
+    },
+    lockedApplicableLaws: {
+      type: [mongoose.Schema.Types.Mixed],
+      default: [],
+    },
+    lawResearchStatus: {
+      type: String,
+      enum: ["ready", "refreshing", "unavailable", "stale"],
+      default: "ready",
+    },
+    lawResearchWarning: {
+      type: String,
+      default: "",
+      trim: true,
     },
     currentEventProvenance: {
       type: mongoose.Schema.Types.Mixed,
