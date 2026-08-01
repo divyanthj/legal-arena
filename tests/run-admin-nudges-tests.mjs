@@ -108,6 +108,11 @@ assert.match(serviceSource, /overrideWarnings/);
 assert.match(serviceSource, /ADMIN_NUDGE_TYPE/);
 assert.match(serviceSource, /message: draft\.message/);
 assert.match(serviceSource, /getAdminNudgeDirectoryData/);
+assert.match(
+  serviceSource,
+  /import ["']@\/models\/AwardDefinition["'];/,
+  "admin nudge analysis must register AwardDefinition before populating awardDefinitionId"
+);
 
 for (const routePath of [
   "../app/api/admin/nudges/analyze/route.js",

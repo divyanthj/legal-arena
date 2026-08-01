@@ -7,6 +7,7 @@ import { sendCustomEmail } from "@/libs/emailSender";
 import User from "@/models/User";
 import CaseSession from "@/models/CaseSession";
 import Challenge from "@/models/Challenge";
+import "@/models/AwardDefinition";
 import PlayerAward from "@/models/PlayerAward";
 import EmailNudgeLog from "@/models/EmailNudgeLog";
 import EmailSuppression from "@/models/EmailSuppression";
