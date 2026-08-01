@@ -1,5 +1,6 @@
 await import("./run-email-nudges-tests.mjs");
 await import("./run-admin-nudges-tests.mjs");
+await import("./run-email-tracking-tests.mjs");
 await import("./run-case-assembly-loading-tests.mjs");
 await import("./run-guided-interaction-tests.mjs");
 await import("./run-dashboard-welcome-tests.mjs");

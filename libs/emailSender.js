@@ -117,6 +117,7 @@ export async function sendBroadcastEmail({
       to: recipient.email,
       subject,
       text,
+      trackingCampaign: type,
       html: emailTemplate({
         title: subject,
         content: bodyText,
@@ -182,6 +183,7 @@ export async function sendMagicLinkEmail({ email, url }) {
       footer: "This sign-in link expires shortly for your security.",
     }),
     from: process.env.RESEND_AUTH_FROM || config.email.fromNoReply,
+    trackingCampaign: "magic_link",
   });
 }
 
@@ -248,6 +250,7 @@ export async function sendFreeAccessGrantedEmail({
         "This secure sign-in link expires in 24 hours. If this was unexpected, you can ignore this email.",
     }),
     from: config.email.fromSupport,
+    trackingCampaign: "free_access_granted",
   });
 }
 
@@ -308,6 +311,7 @@ export async function sendFreeAccessRevokedEmail({
         "This secure sign-in link expires in 24 hours.",
     }),
     from: config.email.fromSupport,
+    trackingCampaign: "free_access_revoked",
   });
 }
 
@@ -362,6 +366,7 @@ export async function sendChallengeInviteEmail({
         "This secure sign-in link expires in 24 hours. The challenge invite expires in 7 days.",
     }),
     from: config.email.fromSupport,
+    trackingCampaign: "challenge_invite",
   });
 }
 
@@ -415,6 +420,7 @@ export async function sendChallengeAcceptedEmail({
       footer: "This secure sign-in link expires in 24 hours.",
     }),
     from: config.email.fromSupport,
+    trackingCampaign: "challenge_accepted",
   });
 }
 
@@ -433,6 +439,7 @@ export async function sendLeadWelcomeEmail(email) {
       content: text,
       ctaLabel: `Visit ${config.appName}`,
     }),
+    trackingCampaign: "lead_welcome",
   });
 }
 

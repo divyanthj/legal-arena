@@ -944,6 +944,7 @@ export const runRetentionEmailNudges = async ({
       subject: emailContent.subject,
       text: emailContent.text,
       html: emailContent.html,
+      trackingCampaign: result.candidate.type,
     });
 
     await recordSentNudge({
