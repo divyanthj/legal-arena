@@ -26,7 +26,7 @@ export {
 } from "./currentEventsCore.mjs";
 
 const CURRENT_EVENTS_MODEL =
-  process.env.OPENAI_CURRENT_EVENTS_MODEL?.trim() || "gpt-5.4";
+  process.env.OPENAI_CURRENT_EVENTS_MODEL?.trim() || "gpt-5.6-terra";
 
 const cleanText = cleanCurrentEventText;
 
@@ -113,10 +113,11 @@ const discoverHotButtonCandidates = async ({
   userId,
   onUsage,
   now,
+  model = CURRENT_EVENTS_MODEL,
 }) => {
   const result = await requestWebGroundedStructuredCompletion({
     userId,
-    model: CURRENT_EVENTS_MODEL,
+    model,
     maxTokens: 4000,
     usageLabel: `currentEvents.discover.${window.scope}.${window.days}`,
     onUsage,
@@ -179,10 +180,11 @@ const buildDetailedEventBrief = async ({
   scopeInstruction,
   userId,
   onUsage,
+  model = CURRENT_EVENTS_MODEL,
 }) => {
   const result = await requestWebGroundedStructuredCompletion({
     userId,
-    model: CURRENT_EVENTS_MODEL,
+    model,
     maxTokens: 2200,
     usageLabel: `currentEvents.research.${window.scope}.${window.days}`,
     onUsage,
@@ -245,6 +247,7 @@ export const researchCurrentEvent = async ({
   userId = "system",
   onUsage,
   now = new Date(),
+  model = CURRENT_EVENTS_MODEL,
 } = {}) => {
   const country = buildCaseCountry(countryCode, { fallback: true });
 
@@ -270,6 +273,7 @@ export const researchCurrentEvent = async ({
         userId,
         onUsage,
         now,
+        model,
       });
 
       for (const candidate of candidates.slice(0, 3)) {
@@ -282,6 +286,7 @@ export const researchCurrentEvent = async ({
           scopeInstruction,
           userId,
           onUsage,
+          model,
         });
         if (isEligibleBrief(brief) && brief.sources.length >= 2) return brief;
       }
@@ -310,10 +315,11 @@ export const repairCurrentEventAnonymization = async ({
   leaks,
   userId,
   onUsage,
+  model = CURRENT_EVENTS_MODEL,
 } = {}) =>
   requestStructuredCompletion({
     userId,
-    model: CURRENT_EVENTS_MODEL,
+    model,
     temperature: 0.2,
     maxTokens: 3200,
     retryAttempts: 1,

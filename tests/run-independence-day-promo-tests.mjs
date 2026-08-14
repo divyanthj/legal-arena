@@ -7,27 +7,27 @@ import {
   isIndependenceDayPromoActive,
 } from "../libs/independenceDayPromo.js";
 
-assert.equal(INDEPENDENCE_DAY_PROMO.code, "4THJULY");
-assert.equal(INDEPENDENCE_DAY_PROMO.discountPercent, 30);
-assert.equal(INDEPENDENCE_DAY_PROMO.endsAt, "2026-07-07T23:59:00.000Z");
+assert.equal(INDEPENDENCE_DAY_PROMO.code, "INDIA");
+assert.equal(INDEPENDENCE_DAY_PROMO.discountPercent, 25);
+assert.equal(INDEPENDENCE_DAY_PROMO.endsAt, "2026-08-17T23:59:00.000Z");
 
 assert.equal(
-  isIndependenceDayPromoActive(new Date("2026-07-07T23:58:59.999Z")),
+  isIndependenceDayPromoActive(new Date("2026-08-17T23:58:59.999Z")),
   true
 );
 assert.equal(
-  isIndependenceDayPromoActive(new Date("2026-07-07T23:59:00.000Z")),
+  isIndependenceDayPromoActive(new Date("2026-08-17T23:59:00.000Z")),
   false
 );
 assert.equal(
-  getActiveIndependenceDayDiscountCode(new Date("2026-07-07T23:58:00.000Z")),
-  "4THJULY"
+  getActiveIndependenceDayDiscountCode(new Date("2026-08-17T23:58:00.000Z")),
+  "INDIA"
 );
 assert.equal(
-  getActiveIndependenceDayDiscountCode(new Date("2026-07-08T00:00:00.000Z")),
+  getActiveIndependenceDayDiscountCode(new Date("2026-08-18T00:00:00.000Z")),
   null
 );
-assert.equal(getDiscountedPrice(15.99), 11.19);
+assert.equal(getDiscountedPrice(15.99), 11.99);
 
 const landingPageSource = await readFile(
   new URL("../app/page.js", import.meta.url),
@@ -50,19 +50,15 @@ const promoBannerSource = await readFile(
   "utf8"
 );
 
-assert.doesNotMatch(landingPageSource, /IndependenceDayPromoBanner/);
+assert.match(landingPageSource, /IndependenceDayPromoBanner/);
 assert.doesNotMatch(landingPageSource, /Brand new UI/);
 assert.match(landingPageSource, /WhatsNewDialog/);
-assert.match(promoBannerSource, /INDEPENDENCE DAY OFFER/);
-assert.match(promoBannerSource, /Your courtroom\. Your arguments\. Your verdict\./);
-assert.match(promoBannerSource, /every\s+argument is yours to make/);
-assert.match(promoBannerSource, /Sale ends in/);
-assert.match(promoBannerSource, /window\.setInterval/);
-assert.doesNotMatch(promoBannerSource, /label: "Sec"/);
-assert.match(promoBannerSource, /grid-cols-3/);
-assert.match(promoBannerSource, /return null/);
-assert.match(promoBannerSource, /Claim My 30% Off/);
-assert.doesNotMatch(promoBannerSource, /23:59 UTC/);
+assert.match(promoBannerSource, /Happy Independence Day, India!/);
+assert.match(promoBannerSource, /25% off/);
+assert.match(promoBannerSource, />\s*INDIA\s*</);
+assert.match(promoBannerSource, /Ends Aug 17, 23:59 UTC/);
+assert.match(promoBannerSource, /India Independence Day offer/);
+assert.doesNotMatch(promoBannerSource, /Sale ends in|window\.setInterval|30% off/);
 assert.match(checkoutRouteSource, /getActiveIndependenceDayDiscountCode/);
 assert.match(
   checkoutRouteSource,
@@ -86,7 +82,7 @@ assert.match(
 assert.match(paywallSource, /<HeroIcons\.CheckIcon/);
 assert.match(
   paywallSource,
-  /Independence Day offer: get 30% off the full game\. No code needed -\s+your discount is ready at checkout\./
+  /India Independence Day offer: get 25% off the full game\. Use code\s+INDIA at checkout by August 17, 23:59 UTC\./
 );
 assert.doesNotMatch(paywallSource, /early-access build/i);
 assert.doesNotMatch(paywallSource, /lifetime access/i);
@@ -106,7 +102,6 @@ assert.doesNotMatch(
   configSource,
   /Immediate access to the full Legal Arena build|All future early-access updates included/
 );
-assert.doesNotMatch(paywallSource, /23:59 UTC/);
 assert.doesNotMatch(paywallSource, /auto-applies/);
 assert.match(paywallSource, /setPromoActive\(isIndependenceDayPromoActive\(\)\)/);
 

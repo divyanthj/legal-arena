@@ -22,6 +22,10 @@ assert.match(gptSource, /usage\?\.input_cached_tokens/);
 assert.match(gptSource, /const cacheHitRate = getPromptCacheHitRate\(usage\)/);
 assert.match(gptSource, /cacheHitRate,/);
 assert.match(gptSource, /promptCacheKey:/);
+assert.match(gptSource, /export const buildReasoningPayload =/);
+assert.match(gptSource, /isGpt56Model\(model\) \? "none" : ""/);
+assert.match(gptSource, /\.\.\.buildReasoningPayload\(\{ model, reasoningEffort \}\)/);
+assert.match(gptSource, /reasoningEffort: requestBody\?\.reasoning\?\.effort \|\| ""/);
 
 assert.match(engineSource, /import \{ createHash \} from "node:crypto"/);
 assert.match(engineSource, /const buildGameplayPromptCacheKey =/);

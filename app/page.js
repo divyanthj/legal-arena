@@ -10,9 +10,11 @@ import {
   getFreeGameplayCampaignStatus,
 } from "@/libs/adminOps";
 import { getSEOTags } from "@/libs/seo";
+import { isIndependenceDayPromoActive } from "@/libs/independenceDayPromo";
 import config from "@/config";
 import LandingCategoryCarousel from "@/components/legal-arena/LandingCategoryCarousel";
 import LandingAnalytics from "@/components/legal-arena/LandingAnalytics";
+import IndependenceDayPromoBanner from "@/components/legal-arena/IndependenceDayPromoBanner";
 import WhatsNewDialog from "@/components/legal-arena/WhatsNewDialog";
 
 export const dynamic = "force-dynamic";
@@ -382,6 +384,9 @@ export default async function Page() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(homepageSchema) }}
       />
       <header className="sticky top-0 z-40 border-b border-white/10 bg-[#050505]/88 backdrop-blur-xl">
+        {isIndependenceDayPromoActive() ? (
+          <IndependenceDayPromoBanner />
+        ) : null}
         <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 md:px-8">
           <Link href="/" className="inline-flex items-center gap-3" aria-label="Legal Arena home">
             <Image

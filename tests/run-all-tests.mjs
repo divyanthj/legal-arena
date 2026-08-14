@@ -22,6 +22,7 @@ await import("./run-interview-language-regression-tests.mjs");
 await import("./run-side-aware-suggested-questions-tests.mjs");
 await import("./run-case-assessment-tests.mjs");
 await import("./run-gpt-cache-tests.mjs");
+await import("./run-model-routing-tests.mjs");
 await import("./run-ai-usage-tests.mjs");
 await import("./run-courtroom-difficulty-tests.mjs");
 await import("./run-courtroom-evidence-gating-tests.mjs");

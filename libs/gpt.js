@@ -4,8 +4,9 @@ import { recordAIUsageEvent } from "@/libs/aiUsage";
 
 const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
 const OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses";
-const DEFAULT_MODEL = process.env.OPENAI_MODEL?.trim() || "gpt-5.4";
+const DEFAULT_MODEL = process.env.OPENAI_MODEL?.trim() || "gpt-5.6-terra";
 const usesResponsesApi = (model = "") => /^gpt-5/i.test(model);
+const isGpt56Model = (model = "") => /^gpt-5\.6(?:-|$)/i.test(model);
 const usesMaxCompletionTokens = (model = "") =>
   /^gpt-5/i.test(model) || /^o[134]/i.test(model);
 const buildTokenPayload = (model, maxTokens) =>
@@ -15,6 +16,14 @@ const buildTokenPayload = (model, maxTokens) =>
 const buildResponsesStructuredFormat = () => ({
   type: "json_object",
 });
+
+export const buildReasoningPayload = ({ model = "", reasoningEffort = "" } = {}) => {
+  const effort =
+    String(reasoningEffort || "").trim().toLowerCase() ||
+    (isGpt56Model(model) ? "none" : "");
+
+  return effort ? { reasoning: { effort } } : {};
+};
 
 export const getPromptCacheHitRate = ({
   inputTokens = 0,
@@ -345,6 +354,7 @@ export const requestStructuredCompletion = async ({
   onUsage,
   promptCacheKey = "",
   serviceTier = "",
+  reasoningEffort = "",
 }) => {
   if (!process.env.OPENAI_API_KEY) {
     if (throwOnError) {
@@ -373,6 +383,7 @@ export const requestStructuredCompletion = async ({
           text: {
             format: buildResponsesStructuredFormat(),
           },
+          ...buildReasoningPayload({ model, reasoningEffort }),
           user: userId,
           ...serviceTierPayload,
           ...(promptCacheKey
@@ -459,6 +470,7 @@ export const requestStructuredCompletion = async ({
         promptCacheKey: promptCacheKey ? String(promptCacheKey).trim().slice(0, 64) : "",
         cacheHitRate,
         requestedServiceTier,
+        reasoningEffort: requestBody?.reasoning?.effort || "",
         serviceTier: actualServiceTier,
         isPriority: actualServiceTier === "priority",
         responseId: String(data?.id || ""),
@@ -603,6 +615,7 @@ export const requestWebGroundedStructuredCompletion = async ({
   onUsage,
   serviceTier = "",
   retryAttempts = 1,
+  reasoningEffort = "",
 }) => {
   if (!process.env.OPENAI_API_KEY) {
     const error = new Error("OPENAI_API_KEY is not configured.");
@@ -633,6 +646,7 @@ export const requestWebGroundedStructuredCompletion = async ({
       ),
       tools: [{ type: "web_search" }],
       include: ["web_search_call.action.sources"],
+      ...buildReasoningPayload({ model, reasoningEffort }),
       user: userId,
       ...(serviceTier ? { service_tier: requestedServiceTier } : {}),
     };
@@ -698,6 +712,7 @@ export const requestWebGroundedStructuredCompletion = async ({
       promptCacheKey: "",
       cacheHitRate: getPromptCacheHitRate(usage),
       requestedServiceTier,
+      reasoningEffort: requestBody?.reasoning?.effort || "",
       serviceTier: String(data?.service_tier || requestedServiceTier || "unknown"),
       isPriority:
         String(data?.service_tier || requestedServiceTier).toLowerCase() ===

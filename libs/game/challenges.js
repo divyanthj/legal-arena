@@ -50,6 +50,7 @@ import {
   buildDynamicCaseTemplateSnapshot,
   generateDynamicCaseState,
 } from "./dynamicCase";
+import { CASE_CREATION_MODEL } from "./aiModels";
 import { buildCaseCountry } from "./countries";
 import {
   generateLegalJurisdiction,
@@ -1098,6 +1099,7 @@ const ensureParticipantClientMemory = async ({ challenge, participant, otherPart
     template: challenge.templateSnapshot,
     playerSide: participant.side,
     userId,
+    model: CASE_CREATION_MODEL,
   });
 
   if (result.clientMemory && result.created) {
@@ -1106,6 +1108,7 @@ const ensureParticipantClientMemory = async ({ challenge, participant, otherPart
       partyName: getPartyName(challenge.templateSnapshot, participant.side),
       playerSide: participant.side,
       userId,
+      model: CASE_CREATION_MODEL,
     });
     setParticipantClientMemory(
       challenge,
@@ -1240,6 +1243,7 @@ export const createChallenge = async ({
       playerLevel: dynamicDifficulty.playerLevel,
       userId: initiatorId,
       countryCode: caseCountry.code,
+      model: CASE_CREATION_MODEL,
     });
     currentEventProvenance = dynamicCase.currentEventProvenance || null;
 
@@ -1288,6 +1292,7 @@ export const createChallenge = async ({
       caseCountry: challengeCountry,
       template,
       userId: initiatorId,
+      model: CASE_CREATION_MODEL,
     }));
 
   const challenge = new Challenge({
@@ -1339,6 +1344,7 @@ export const createChallenge = async ({
       factSheet: participant.factSheet,
       transcript: participant.interviewTranscript,
       userId: toObjectIdString(participant.userId),
+      model: CASE_CREATION_MODEL,
     });
     participant.applicableLaws = lawResult.laws;
     participant.lawResearchStatus = lawResult.status;

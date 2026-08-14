@@ -9,7 +9,7 @@ import { buildTemplateFromStoryArtifact } from "./templateBuilder";
 const DEFAULT_GENERATION_MODEL =
   process.env.OPENAI_GENERATION_MODEL?.trim() ||
   process.env.OPENAI_MODEL?.trim() ||
-  "gpt-5.4";
+  "gpt-5.6-terra";
 
 const isFastGenerationProfile = (value = "") =>
   ["fast", "rebalance"].includes(String(value || "").trim().toLowerCase());

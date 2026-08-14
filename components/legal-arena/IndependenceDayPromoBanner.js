@@ -1,88 +1,42 @@
-"use client";
-
-import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import { INDEPENDENCE_DAY_PROMO } from "@/libs/independenceDayPromo";
-
-const getTimeRemaining = () => {
-  const endsAt = new Date(INDEPENDENCE_DAY_PROMO.endsAt).getTime();
-  const totalMs = Math.max(0, endsAt - Date.now());
-  const totalSeconds = Math.floor(totalMs / 1000);
-
-  return {
-    totalMs,
-    days: Math.floor(totalSeconds / 86400),
-    hours: Math.floor((totalSeconds % 86400) / 3600),
-    minutes: Math.floor((totalSeconds % 3600) / 60),
-    seconds: totalSeconds % 60,
-  };
-};
-
-const CountdownUnit = ({ value, label }) => (
-  <div className="min-w-[4.25rem] rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-center">
-    <div className="text-2xl font-black tabular-nums leading-none text-white">
-      {String(value).padStart(2, "0")}
-    </div>
-    <div className="mt-1 text-[0.62rem] font-semibold uppercase tracking-[0.16em] text-sky-100/58">
-      {label}
-    </div>
-  </div>
-);
-
 export default function IndependenceDayPromoBanner() {
-  const [timeRemaining, setTimeRemaining] = useState(() => getTimeRemaining());
-
-  useEffect(() => {
-    const intervalId = window.setInterval(() => {
-      setTimeRemaining(getTimeRemaining());
-    }, 1000);
-
-    return () => window.clearInterval(intervalId);
-  }, []);
-
-  const countdownUnits = useMemo(
-    () => [
-      { label: "Days", value: timeRemaining.days },
-      { label: "Hours", value: timeRemaining.hours },
-      { label: "Min", value: timeRemaining.minutes },
-    ],
-    [timeRemaining]
-  );
-
-  if (timeRemaining.totalMs <= 0) {
-    return null;
-  }
-
   return (
-    <div className="arena-surface-soft mx-auto mb-8 flex max-w-5xl flex-col gap-5 border-sky-200/24 bg-sky-200/[0.06] px-5 py-4 text-left md:flex-row md:items-center md:justify-between">
-      <div className="min-w-0">
-        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-sky-100/78">
-          INDEPENDENCE DAY OFFER
-        </p>
-        <h2 className="mt-2 text-xl font-semibold leading-tight text-white">
-          Your courtroom. Your arguments. Your verdict.
-        </h2>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-sky-50/78">
-          Get 30% off lifetime access and step into an AI courtroom where every
-          argument is yours to make.
-        </p>
+    <aside
+      aria-label="India Independence Day offer"
+      className="relative overflow-hidden border-b border-white/10 bg-[#080808]"
+    >
+      <div
+        className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-[#ff9933] via-white to-[#138808]"
+        aria-hidden="true"
+      />
+      <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+        <div className="absolute -left-12 top-1/2 h-20 w-40 -translate-y-1/2 rounded-full bg-[#ff9933]/10 blur-3xl" />
+        <div className="absolute -right-12 top-1/2 h-20 w-40 -translate-y-1/2 rounded-full bg-[#138808]/10 blur-3xl" />
       </div>
-      <div className="flex w-full shrink-0 flex-col gap-3 md:w-auto md:items-end">
-        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-sky-100/72">
-          Sale ends in
-        </p>
-        <div className="grid w-full grid-cols-3 gap-2 md:w-auto">
-          {countdownUnits.map((unit) => (
-            <CountdownUnit key={unit.label} {...unit} />
-          ))}
-        </div>
-        <Link
-          href="/dashboard"
-          className="arena-btn-light inline-flex w-full justify-center px-5 py-3 text-sm md:w-auto"
+
+      <div className="relative mx-auto flex max-w-7xl items-center justify-center gap-3 px-5 py-2.5 text-center text-xs sm:text-sm md:px-8">
+        <span
+          className="hidden h-7 w-7 shrink-0 overflow-hidden rounded-full border border-white/20 shadow-[0_0_18px_rgba(255,255,255,0.08)] sm:grid"
+          aria-hidden="true"
         >
-          Claim My 30% Off
-        </Link>
+          <span className="bg-[#ff9933]" />
+          <span className="relative bg-white">
+            <span className="absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#000080]" />
+          </span>
+          <span className="bg-[#138808]" />
+        </span>
+        <p className="flex flex-wrap items-center justify-center gap-x-1.5 gap-y-1 leading-5 text-white/74">
+          <strong className="font-semibold text-white">
+            Happy Independence Day, India!
+          </strong>
+          <span>Celebrate with</span>
+          <strong className="font-semibold text-white">25% off</strong>
+          <span>using code</span>
+          <code className="rounded-md border border-white/16 bg-white/[0.07] px-2 py-0.5 font-mono text-xs font-bold tracking-[0.14em] text-white shadow-sm">
+            INDIA
+          </code>
+          <span className="text-white/48">· Ends Aug 17, 23:59 UTC</span>
+        </p>
       </div>
-    </div>
+    </aside>
   );
 }

@@ -281,6 +281,7 @@ export const ensureClientMemory = async ({
   playerSide,
   userId,
   onUsage,
+  model = CLIENT_MEMORY_MODEL,
 }) => {
   if (hasUsableClientMemory(caseSession?.clientMemory)) {
     return { clientMemory: caseSession.clientMemory, created: false };
@@ -300,7 +301,7 @@ export const ensureClientMemory = async ({
   try {
     const aiResult = await requestStructuredCompletion({
       userId,
-      model: CLIENT_MEMORY_MODEL,
+      model,
       temperature: 0.45,
       maxTokens: 1200,
       retryAttempts: 1,
@@ -309,7 +310,7 @@ export const ensureClientMemory = async ({
         caseSession,
         phase: "intake",
         family: "clientMemory",
-        model: CLIENT_MEMORY_MODEL,
+        model,
       }),
       onUsage,
       systemPrompt:

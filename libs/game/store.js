@@ -24,6 +24,7 @@ import {
   buildDynamicCaseTemplateSnapshot,
   generateDynamicCaseState,
 } from "./dynamicCase";
+import { CASE_CREATION_MODEL } from "./aiModels";
 import { buildCaseCountry } from "./countries";
 import {
   buildPublicLeaderboardEntry,
@@ -1092,6 +1093,7 @@ export const createCaseSession = async ({
       onUsage: usageCollector.record,
       countryCode: caseCountry.code,
       scenarioHint,
+      model: CASE_CREATION_MODEL,
     });
     const template = buildDynamicCaseTemplateSnapshot(dynamicCase);
     template.dynamicDifficulty = dynamicDifficulty;
@@ -1224,6 +1226,7 @@ export const createCaseSession = async ({
       transcript: caseSession.interviewTranscript,
       userId,
       onUsage: usageCollector.record,
+      model: CASE_CREATION_MODEL,
     });
     caseSession.applicableLaws = initialLawResult.laws;
     caseSession.lawResearchStatus = initialLawResult.status;
@@ -1271,6 +1274,7 @@ export const createCaseSession = async ({
       caseCountry: fixedCaseCountry,
       template,
       userId,
+      model: CASE_CREATION_MODEL,
     }));
 
   if (!availability.unlocked) {
@@ -1383,6 +1387,7 @@ export const createCaseSession = async ({
     playerSide,
     userId,
     onUsage: usageCollector.record,
+    model: CASE_CREATION_MODEL,
   });
   if (clientMemoryResult.clientMemory) {
     caseSession.clientMemory = clientMemoryResult.clientMemory;
@@ -1394,6 +1399,7 @@ export const createCaseSession = async ({
       fallback: openingStatement,
       userId,
       onUsage: usageCollector.record,
+      model: CASE_CREATION_MODEL,
     });
     applyClientMemoryOpeningToCaseSession(
       caseSession,
@@ -1407,6 +1413,7 @@ export const createCaseSession = async ({
     transcript: caseSession.interviewTranscript,
     userId,
     onUsage: usageCollector.record,
+    model: CASE_CREATION_MODEL,
   });
   caseSession.applicableLaws = initialLawResult.laws;
   caseSession.lawResearchStatus = initialLawResult.status;

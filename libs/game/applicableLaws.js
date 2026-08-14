@@ -13,6 +13,10 @@ const MODEL =
   process.env.OPENAI_LEGAL_RESEARCH_MODEL?.trim() ||
   process.env.OPENAI_GAMEPLAY_MODEL?.trim() ||
   "gpt-5.4-mini";
+const REAL_LAW_MODEL =
+  process.env.OPENAI_LEGAL_RESEARCH_MODEL?.trim() ||
+  process.env.OPENAI_CURRENT_EVENTS_MODEL?.trim() ||
+  "gpt-5.6-terra";
 const MAX_APPLICABLE_LAWS = 8;
 const MAX_SOURCE_BYTES = 4_000_000;
 
@@ -87,6 +91,7 @@ export const generateLegalJurisdiction = async ({
   template = {},
   userId,
   onUsage,
+  model = MODEL,
 }) => {
   const base = {
     countryCode: caseCountry?.code || "",
@@ -98,7 +103,7 @@ export const generateLegalJurisdiction = async ({
   try {
     const result = await requestStructuredCompletion({
       userId,
-      model: MODEL,
+      model,
       maxTokens: 300,
       retryAttempts: 1,
       usageLabel: "applicableLaws.jurisdiction",
@@ -181,6 +186,7 @@ export const selectApplicableRulebookLaws = async ({
   transcript,
   userId,
   onUsage,
+  model = MODEL,
 }) => {
   const rules = getLawbookRules();
   const valid = new Map(rules.map((rule) => [rule.id, rule]));
@@ -188,7 +194,7 @@ export const selectApplicableRulebookLaws = async ({
   try {
     const result = await requestStructuredCompletion({
       userId,
-      model: MODEL,
+      model,
       maxTokens: 900,
       retryAttempts: 1,
       usageLabel: "applicableLaws.rulebook",
@@ -347,13 +353,11 @@ export const researchApplicableRealLaws = async ({
   transcript,
   userId,
   onUsage,
+  model = REAL_LAW_MODEL,
 }) => {
   const result = await requestWebGroundedStructuredCompletion({
     userId,
-    model:
-      process.env.OPENAI_LEGAL_RESEARCH_MODEL?.trim() ||
-      process.env.OPENAI_CURRENT_EVENTS_MODEL?.trim() ||
-      "gpt-5.4",
+    model,
     maxTokens: 5000,
     retryAttempts: 1,
     usageLabel: "applicableLaws.real",

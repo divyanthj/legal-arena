@@ -145,8 +145,8 @@ export function DevelopmentAccessPanel({
 
       {promoActive ? (
         <div className="arena-surface-soft mt-6 rounded-2xl border border-sky-200/20 bg-sky-200/10 p-4 text-sm font-semibold leading-7 text-sky-50">
-          Independence Day offer: get 30% off the full game. No code needed -
-          your discount is ready at checkout.
+          India Independence Day offer: get 25% off the full game. Use code
+          INDIA at checkout by August 17, 23:59 UTC.
         </div>
       ) : null}
 

@@ -45,6 +45,7 @@ export const generateClientMemoryExcerpt = async ({
   userId,
   promptCacheKey = "",
   onUsage,
+  model = CLIENT_MEMORY_EXCERPT_MODEL,
 } = {}) => {
   const clientStory = normalizeClientMemoryText(clientMemory);
 
@@ -55,7 +56,7 @@ export const generateClientMemoryExcerpt = async ({
   try {
     const aiResult = await requestStructuredCompletion({
       userId,
-      model: CLIENT_MEMORY_EXCERPT_MODEL,
+      model,
       temperature: 0.35,
       maxTokens: 360,
       retryAttempts: 1,

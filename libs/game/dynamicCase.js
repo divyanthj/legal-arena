@@ -1,6 +1,7 @@
 import "server-only";
 
 import { requestStructuredCompletion } from "@/libs/gpt";
+import { CASE_CREATION_MODEL } from "./aiModels";
 import {
   DEFAULT_CATEGORY_SLUG,
   getCategoryBySlug,
@@ -20,12 +21,6 @@ import {
   repairCurrentEventAnonymization,
   researchCurrentEvent,
 } from "./currentEvents";
-
-const DYNAMIC_CASE_MODEL =
-  process.env.OPENAI_DYNAMIC_CASE_MODEL?.trim() ||
-  process.env.OPENAI_GENERATION_MODEL?.trim() ||
-  process.env.OPENAI_MODEL?.trim() ||
-  "gpt-5.4-mini";
 
 const REAL_PLACE_FALLBACKS = Object.freeze({
   AE: { subdivisionName: "Dubai", locality: "Dubai", courtName: "Dubai Courts" },
@@ -603,6 +598,7 @@ export const generateDynamicCaseState = async ({
   onUsage,
   countryCode = "US",
   scenarioHint = "",
+  model = CASE_CREATION_MODEL,
 } = {}) => {
   const category = getCategoryBySlug(categorySlug) || getCategoryBySlug(DEFAULT_CATEGORY_SLUG);
   const normalizedComplexity = clampComplexity(complexity);
@@ -619,12 +615,13 @@ export const generateDynamicCaseState = async ({
         countryCode: caseCountry.code,
         userId,
         onUsage,
+        model,
       })
     : null;
 
   let aiResult = await requestStructuredCompletion({
     userId,
-    model: DYNAMIC_CASE_MODEL,
+    model,
     temperature: 0.85,
     maxTokens: 2600,
     retryAttempts: 1,
@@ -797,6 +794,7 @@ export const generateDynamicCaseState = async ({
         leaks: initialLeaks,
         userId,
         onUsage,
+        model,
       });
       aiResult = applyCurrentEventAnonymizationRepair(aiResult, repairResult);
       if (!hasPlayableCurrentEventCaseShape(aiResult)) {

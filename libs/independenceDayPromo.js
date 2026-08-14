@@ -1,7 +1,7 @@
 export const INDEPENDENCE_DAY_PROMO = {
-  code: "4THJULY",
-  discountPercent: 30,
-  endsAt: "2026-07-07T23:59:00.000Z",
+  code: "INDIA",
+  discountPercent: 25,
+  endsAt: "2026-08-17T23:59:00.000Z",
 };
 
 export const isIndependenceDayPromoActive = (now = new Date()) => {
